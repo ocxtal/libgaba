@@ -48,34 +48,32 @@ DECLARE_FUNC(BASE, SUFFIX)(
 	}
 
 	/** fill-in */ {
-		if(stat == CONT) {
-			/** init direction and vector */
-			fill_decl(c, k, r);
-			fill_init(c, k, r);
+		/** init direction and vector */
+		fill_decl(c, k, r);
+		fill_init(c, k, r);
 
-			stat = CAP;
-			while(c.i <= c.alim && c.j <= c.blim) {
-				fill_former_body(c, k, r);
-				if(dir(r) == TOP) {
-					fill_go_down(c, k, r);
-				} else {
-					fill_go_right(c, k, r);
-				}
-				fill_latter_body(c, k, r);
-
-				if(fill_check_term(c, k, r)) {
-					stat = TERM; break;
-				}
-				if(fill_check_chain(c, k, r)) {
-					stat = CHAIN; break;
-				}
-				if(fill_check_mem(c, k, r)) {
-					stat = MEM; break;
-				}
+		stat = CAP;
+		while(c.i <= c.alim && c.j <= c.blim) {
+			fill_former_body(c, k, r);
+			if(dir(r) == TOP) {
+				fill_go_down(c, k, r);
+			} else {
+				fill_go_right(c, k, r);
 			}
+			fill_latter_body(c, k, r);
 
-			fill_finish(c, k, r);
+			if(fill_check_term(c, k, r)) {
+				stat = TERM; break;
+			}
+			if(fill_check_chain(c, k, r)) {
+				stat = CHAIN; break;
+			}
+			if(fill_check_mem(c, k, r)) {
+				stat = MEM; break;
+			}
 		}
+
+		fill_finish(c, k, r);
 	}
 
 	/** chain */ {

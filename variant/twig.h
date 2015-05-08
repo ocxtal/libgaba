@@ -106,20 +106,20 @@
  */
 #define twig_linear_fill_finish(c, k, r) { \
 	if(ALG != NW) { \
-		VEC_STORE(mat, maxv); \
+		VEC_STORE(c.pdp, maxv); \
 		VEC_ASSIGN(tmp1, maxv); \
 		for(i = 1; i < BW; i++) { \
 			VEC_SHIFT_R(tmp1); \
 			VEC_MAX(maxv, tmp1, maxv); \
 		} \
-		VEC_STORE(mat, maxv); \
+		VEC_STORE(c.pdp, maxv); \
 	} \
 	VEC_SET(zv, k.min); \
-	VEC_STORE(mat, zv); \
-	VEC_STORE(mat, pv); \
-	VEC_STORE(mat, zv); \
-	VEC_STORE(mat, p); \
-	VEC_STORE(mat, zv); \
+	VEC_STORE(c.pdp, zv); \
+	VEC_STORE(c.pdp, pv); \
+	VEC_STORE(c.pdp, zv); \
+	VEC_STORE(c.pdp, p); \
+	VEC_STORE(c.pdp, zv); \
 }
 
 /**

@@ -50,13 +50,14 @@
  * @brief determines the next direction of the lane in the dynamic algorithm.
  */
 #define branch_linear_dir_exp(r, c) ( \
-	VEC_MSB(v) > VEC_LSB(v) \
+	(VEC_MSB(v) > VEC_LSB(v)) ? TOP : LEFT \
 )
 
 /**
  * @macro branch_linear_fill_decl
  */
 #define branch_linear_fill_decl(c, k, r) \
+	dir_t r; \
 	cell_vec_t mv;		/** (m, m, m, ..., m) */ \
 	cell_vec_t xv;		/** (x, x, x, ..., x) */ \
 	cell_vec_t gv;		/** (g, g, g, ..., g) */ \
@@ -73,6 +74,7 @@
  * @macro branch_linear_fill_init
  */
 #define branch_linear_fill_init(c, k, r) { \
+	dir_init(r); \
 	VEC_SET(mv, k.m); \
 	VEC_SET(xv, k.x); \
 	VEC_SET(gv, k.gi); \
@@ -153,7 +155,7 @@
  * @macro branch_linear_fill_check_term
  */
 #define branch_linear_fill_check_term(c, k, r) ( \
-	ALG == XSEA && VEC_CENTER(v) + k.tx - VEC_CENTER(maxv) < 0 \
+	k.alg == XSEA && VEC_CENTER(v) + k.tx - VEC_CENTER(maxv) < 0 \
 )
 
 /**
@@ -175,7 +177,7 @@
  * @macro branch_linear_fill_finish
  */
 #define branch_linear_fill_finish(c, k, r) { \
-	if(ALG != NW) { \
+	if(k.alg != NW) { \
 		VEC_STORE(c.pdp, maxv); \
 		VEC_ASSIGN(tmp1, maxv); \
 		for(i = 1; i < BW; i++) { \

@@ -1,7 +1,7 @@
 
 /**
  * @file naive.h
- * @brief macros for naive algorithms
+ * @brief macros for the naive algorithm
  */
 #ifndef _NAIVE_H_INCLUDED
 #define _NAIVE_H_INCLUDED
@@ -48,14 +48,18 @@
  * @macro naive_linear_dir_exp, naive_affine_dir_exp
  * @brief determines the next direction in the dynamic banded algorithm.
  */
-#define naive_linear_dir_exp(r, c)	( *((cell_t *)c.pdp-1) > *((cell_t *)c.pdp-BW) ? TOP : LEFT )
-#define naive_affine_dir_exp(r, c)	( *((cell_t *)c.pdp-2*BW-1) > *((cell_t *)c.pdp-3*BW) ? TOP : LEFT )
+#define naive_linear_dir_exp(r, c) ( \
+	*((cell_t *)c.pdp-1) > *((cell_t *)c.pdp-BW) ? TOP : LEFT \
+)
+#define naive_affine_dir_exp(r, c) ( \
+	*((cell_t *)c.pdp-2*BW-1) > *((cell_t *)c.pdp-3*BW) ? TOP : LEFT \
+)
 
 /**
  * @macro naive_linear_fill_decl
  */
 #define naive_linear_fill_decl(c, k, r) \
-	dir_init(r); \
+	dir_t r; \
 	cell_t xacc = 0;
 
 /**
@@ -63,6 +67,7 @@
  * @brief initialize fill-in step context
  */
 #define naive_linear_fill_init(c, k, r) { \
+	dir_init(r);
 	for(c.q = 0; c.q < c.v.clen; c.q++) { \
 		*((cell_t *)c.pdp) = _read(c.v.pv, c.q, c.v.size); \
 		c.pdp += sizeof(cell_t); \
@@ -105,12 +110,16 @@
 		rd_fetch(c.a, (c.i-c.q)-1); \
 		rd_fetch(c.b, (c.j+c.q)-1); \
 		d = ((cell_t *)c.pdp)[naive_linear_topleft(r, c)] + (rd_cmp(c.a, c.b) ? k.m : k.x); \
-		t = (c.q == -BW/2 && dir(r) == LEFT) \
-			? SEA_CELL_MIN \
-			: (((cell_t *)c.pdp)[naive_linear_top(r, c)] + k.gi); \
-		l = (c.q == BW/2-1 && dir(r) == TOP) \
-			? SEA_CELL_MIN \
-			: (((cell_t *)c.pdp)[naive_linear_left(r, c)] + k.gi); \
+		t = ((cell_t *)c.pdp)[naive_linear_top(r, c)] + k.gi; \
+		l = ((cell_t *)c.pdp)[naive_linear_left(r, c)] + k.gi; \
+		if(c.q == -BW/2) { \
+			if(dir(r) == LEFT) { t = CELL_MIN; } \
+			if(dir2(r) == LL) { d = CELL_MIN; } \
+		} \
+		if(c.q == BW/2-1) { \
+			if(dir(r) == TOP) { t = CELL_MIN; } \
+			if(dir2(r) == TT) { d = CELL_MIN; } \
+		} \
 		*((cell_t *)c.pdp) = d = MAX4(d, t, l, k.min); \
 		c.pdp += sizeof(cell_t); \
 		if(k.alg != NW && d >= c.max) { \
