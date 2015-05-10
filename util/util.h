@@ -8,7 +8,7 @@
 #ifndef _UTIL_H_INCLUDED
 #define _UTIL_H_INCLUDED
 
-#include "sea.h"
+#include "../include/sea.h"
 
 /**
  * Constants representing algorithms
@@ -30,6 +30,19 @@
 #define COP(x, y, band)				( (x) + (y) )
 #define COQ(x, y, band) 			( ((y)-(x))>>1 )
 #define INSIDE(x, y, p, q, band)	( (COX(p, q, band) < (x)) && (COY(p, q, band) < (y)) )
+
+/**
+ * char vector shift operations
+ */
+#define PUSHQ(x, y) { \
+	VEC_CHAR_SHIFT_L(y, y); \
+	VEC_CHAR_INSERT_LSB(y, x); \
+}
+
+#define PUSHT(x, y) { \
+	VEC_CHAR_SHIFT_R(y, y); \
+	VEC_CHAR_INSERT_MSB(y, x); \
+}
 
 /**
  * @enum _STATE
@@ -80,32 +93,51 @@ _read(void *ptr, int64_t pos, size_t size)
 #define JOIN4(i,j,k,l)					i##j##k##l
 
 /**
+ * @macro Q
+ * @brief string quotation
+ */
+#define Q(a)							#a
+
+/**
+ * @macro QUOTE
+ * @brief an wrapper of Q
+ */
+#define QUOTE(a)						Q(a)
+
+/**
  * function name composition macros.
  */
 
+
+/**
+ * @macro HEADER_WITH_SUFFIX
+ * @brief an wrapper macro of JOIN2
+ */
+#define HEADER_WITH_SUFFIX(a,b)			JOIN2(a,b)
+
 /**
  * @macro FUNC_WITH_SUFFIX
- * @brief an wrapper macro of JOIN2, for the use of function name composition.
+ * @brief an wrapper macro of JOIN3, for the use of function name composition.
  */
-#define FUNC_WITH_SUFFIX(a,b)			JOIN2(a,b)
+#define FUNC_WITH_SUFFIX(a,b,c)			JOIN3(a,b,c)
 
 /**
  * @macro DECLARE_FUNC
  * @brief a function declaration macro for static (local in a file) functions.
  */
-#define DECLARE_FUNC(file, opt) 		static FUNC_WITH_SUFFIX(file, opt)
+#define DECLARE_FUNC(file, var, opt) 	static FUNC_WITH_SUFFIX(file, var, opt)
 
 /**
  * @macro DECLARE_FUNC_GLOBAL
  * @brief a function declaration macro for global functions.
  */
-#define DECLARE_FUNC_GLOBAL(file, opt)	FUNC_WITH_SUFFIX(file, opt)
+#define DECLARE_FUNC_GLOBAL(file, var, opt)	FUNC_WITH_SUFFIX(file, var, opt)
 
 /**
  * @macro CALL_FUNC
  * @brief a function call macro, which is an wrap of a function name composition macro.
  */
-#define CALL_FUNC(file, opt)			FUNC_WITH_SUFFIX(file, opt)
+#define CALL_FUNC(file, var, opt)			FUNC_WITH_SUFFIX(file, var, opt)
 
 /**
  * @macro func_next
@@ -125,7 +157,7 @@ _read(void *ptr, int64_t pos, size_t size)
  * @macro LABEL
  * @brief a label declaration macro.
  */
-#define LABEL(file, label) 				FUNC_WITH_SUFFIX(file, label)
+#define LABEL(file, var, label) 			FUNC_WITH_SUFFIX(file, var, label)
 
 /* boolean */
 #define TRUE 			( 1 )

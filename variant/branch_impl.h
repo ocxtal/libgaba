@@ -6,18 +6,26 @@
 #ifndef _BRANCH_H_INCLUDED
 #define _BRANCH_H_INCLUDED
 
-#include "sea.h"
-#include "util.h"
-#include "naive.h"
-#include "arch/b8c32.h"
+#include "../arch/b16c32.h"
+#include "../include/sea.h"
+#include "../util/util.h"
+#include <stdint.h>
+#include "naive_impl.h"
 
 /**
  * @typedef cell_t
  * @brief cell type in the branch algorithms
  */
 #ifdef cell_t
-#undef cell_t
-#define cell_t 		int16_t
+
+	#undef cell_t
+	#undef CELL_MIN
+	#undef CELL_MAX
+
+	#define cell_t 		int16_t
+	#define CELL_MIN	( INT16_MIN )
+	#define CELL_MAX	( INT16_MAX )
+
 #endif
 
 /**
@@ -39,11 +47,12 @@
  * @macro (internal) branch_linear_topq, ...
  * @brief coordinate calculation helper macros
  */
-#define branch_linear_topq			naive_linear_topq
-#define branch_linear_leftq			naive_linear_leftq
-#define branch_linear_top 			naive_linear_top
-#define branch_linear_left 			naive_linear_left
-#define branch_linear_topleft 		naive_linear_topleft
+#define branch_linear_topq(r, c)			naive_linear_topq(r, c)
+#define branch_linear_leftq(r, c)			naive_linear_leftq(r, c)
+#define branch_linear_topleftq(r, c)		naive_linear_topleftq(r, c)
+#define branch_linear_top(r, c) 			naive_linear_top(r, c)
+#define branch_linear_left(r, c) 			naive_linear_left(r, c)
+#define branch_linear_topleft(r, c) 		naive_linear_topleft(r, c)
 
 /**
  * @macro branch_linear_dir_exp
@@ -58,17 +67,17 @@
  */
 #define branch_linear_fill_decl(c, k, r) \
 	dir_t r; \
-	cell_vec_t mv;		/** (m, m, m, ..., m) */ \
-	cell_vec_t xv;		/** (x, x, x, ..., x) */ \
-	cell_vec_t gv;		/** (g, g, g, ..., g) */ \
-	char_vec_t wq;		/** a buffer for seq.a */ \
-	char_vec_t wt;		/** a buffer for seq.b */ \
-	cell_vec_t v;		/** score vector */ \
-	cell_vec_t pv;		/** previous score vector */ \
-	cell_vec_t tmp1;	/** temporary */ \
-	cell_vec_t tmp2;	/** temporary */ \
-	cell_vec_t maxv;	/** a vector which holds maximum scores */ \
- 	cell_vec_t zv;		/** zero vector for the SW algorithm */
+	DECLARE_VEC_CELL(mv);			/** (m, m, m, ..., m) */ \
+	DECLARE_VEC_CELL(xv);			/** (x, x, x, ..., x) */ \
+	DECLARE_VEC_CELL(gv);			/** (g, g, g, ..., g) */ \
+	DECLARE_VEC_CHAR_REG(wq);		/** a buffer for seq.a */ \
+	DECLARE_VEC_CHAR_REG(wt);		/** a buffer for seq.b */ \
+	DECLARE_VEC_CELL_REG(v);		/** score vector */ \
+	DECLARE_VEC_CELL_REG(pv);		/** previous score vector */ \
+	DECLARE_VEC_CELL_REG(tmp1);		/** temporary */ \
+	DECLARE_VEC_CELL_REG(tmp2);		/** temporary */ \
+	DECLARE_VEC_CELL_REG(maxv);		/** a vector which holds maximum scores */ \
+ 	DECLARE_VEC_CELL_REG(zv);		/** zero vector for the SW algorithm */
 
 /**
  * @macro branch_linear_fill_init
@@ -86,7 +95,7 @@
 		VEC_INSERT_MSB(v, _read(c.v.pv, c.q, c.v.size)); \
 	} \
 	dir_next(r, c); \
-	VEC_STORE(c.pdp, v);
+	VEC_STORE(c.pdp, v); \
 	VEC_ASSIGN(pv, v); \
 	VEC_SET(v, CELL_MIN); \
 	for(c.q = 0; c.q < c.v.plen; c.q++) { \
@@ -115,7 +124,7 @@
 	VEC_INSERT_MSB(tmp2, CELL_MIN); \
 	c.j++; \
 	rd_fetch(c.b, c.j+BW/2); \
-	PUSHT(rd_decode(c.b)); \
+	PUSHT(rd_decode(c.b), wt); \
 }
 
 /**
@@ -130,7 +139,7 @@
 	VEC_INSERT_LSB(tmp2, CELL_MIN); \
 	c.i++; \
 	rd_fetch(c.a, c.i+BW/2); \
-	PUSHQ(rd_decode(c.a)); \
+	PUSHQ(rd_decode(c.a), wq); \
 }
 
 /**
@@ -180,8 +189,8 @@
 	if(k.alg != NW) { \
 		VEC_STORE(c.pdp, maxv); \
 		VEC_ASSIGN(tmp1, maxv); \
-		for(i = 1; i < BW; i++) { \
-			VEC_SHIFT_R(tmp1); \
+		for(c.q = 1; c.q < BW; c.q++) { \
+			VEC_SHIFT_R(tmp1, tmp1); \
 			VEC_MAX(maxv, tmp1, maxv); \
 		} \
 		VEC_STORE(c.pdp, maxv); \
@@ -191,7 +200,7 @@
 /**
  * @macro branch_linear_chain_push_ivec
  */
-#define branch_linear_chain_push_ivec(c, k, r) { \
+#define branch_linear_chain_push_ivec(c, v) { \
 	dir_t r; \
 	dir_term(r, c); \
 	if(dir2(r) == TOP) { \
@@ -215,7 +224,7 @@
  */
 #define branch_linear_search_max_score(c, k) { \
 	int64_t i, j, p = c.p, q; \
-	cell_t *pl = pb + ADDR(c.p+1, -BW/2); \
+	cell_t *pl = pb + ADDR(c.p+1, -BW/2, BW); \
 	cell_t *pt; \
 	cell_t max = *(pl + BW); \
 	dir_t r; \

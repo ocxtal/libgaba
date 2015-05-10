@@ -6,14 +6,17 @@
 #ifndef _NAIVE_H_INCLUDED
 #define _NAIVE_H_INCLUDED
 
-#include "sea.h"
-#include "util.h"
+#include "../include/sea.h"
+#include "../include/util.h"
+#include <stdint.h>
 
 /**
  * @macro cell_t
  * @brief cell type in the naive algorithms, alias to `(signed) int32_t'.
  */
 #define cell_t 		int32_t
+#define CELL_MIN	( INT32_MIN + 10 )
+#define CELL_MAX	( INT32_MAX - 10 )
 
 /**
  * @macro BW
@@ -34,15 +37,17 @@
  */
 #define naive_linear_topq(r, c)		( - !dir(r) )
 #define naive_linear_leftq(r, c)	( dir(r) )
+#define naive_linear_topleftq(r, c)	( !dir(r) + (dir2(r)>>1) )
 #define naive_linear_top(r, c)		( -BW + naive_linear_topq(r, c) )
 #define naive_linear_left(r, c)		( -BW + naive_linear_leftq(r, c) )
-#define naive_linear_topleft(r, c)	( -2 * BW + !dir(r) + (dir2(r)>>1) )
+#define naive_linear_topleft(r, c)	( -2 * BW + naive_linear_topleftq(r, c) )
 
-#define naive_affine_topq(r, c)		( - !dir(r) )
-#define naive_affine_leftq(r, c)	( dir(r) )
+#define naive_affine_topq(r, c)		naive_linear_topq(r, c)
+#define naive_affine_leftq(r, c)	naive_linear_leftq(r, c)
+#define naive_affine_topleftq(r, c)	naive_linear_topleftq(r, c)
 #define naive_affine_top(r, c)		( -3 * BW + naive_affine_topq(r, c) )
 #define naive_affine_left(r, c)		( -3 * BW + naive_affine_leftq(r, c) )
-#define naive_affine_topleft(r, c)	( -6 * BW + !dir(r) + (dir2(r)>>1) )
+#define naive_affine_topleft(r, c)	( -6 * BW + naive_affine_topleftq(r, c) )
 
 /**
  * @macro naive_linear_dir_exp, naive_affine_dir_exp
@@ -67,7 +72,7 @@
  * @brief initialize fill-in step context
  */
 #define naive_linear_fill_init(c, k, r) { \
-	dir_init(r);
+	dir_init(r); \
 	for(c.q = 0; c.q < c.v.clen; c.q++) { \
 		*((cell_t *)c.pdp) = _read(c.v.pv, c.q, c.v.size); \
 		c.pdp += sizeof(cell_t); \
@@ -115,8 +120,7 @@
 		if(c.q == -BW/2) { \
 			if(dir(r) == LEFT) { t = CELL_MIN; } \
 			if(dir2(r) == LL) { d = CELL_MIN; } \
-		} \
-		if(c.q == BW/2-1) { \
+		} else if(c.q == BW/2-1) { \
 			if(dir(r) == TOP) { t = CELL_MIN; } \
 			if(dir2(r) == TT) { d = CELL_MIN; } \
 		} \
@@ -197,6 +201,7 @@
  * @macro naive_linear_trace_decl
  */
 #define naive_linear_trace_decl(c, k, l) \
+	dir_t r; \
 	cell_t *p = pb + ADDR(c.mp - sp, c.mq, BW); \
 	cell_t score = *p;
 

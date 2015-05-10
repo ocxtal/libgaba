@@ -6,19 +6,27 @@
 #ifndef _TWIG_H_INCLUDED
 #define _TWIG_H_INCLUDED
 
-#include "sea.h"
-#include "util.h"
-#include "naive.h"
-#include "branch.h"
-#include "arch/b8c16.h"
+#include "../arch/b8c16.h"
+#include "../include/sea.h"
+#include "../util/util.h"
+#include <stdint.h>
+#include "naive_impl.h"
+#include "branch_impl.h"
 
 /**
  * @typedef cell_t
  * @brief cell type in the twig algorithms
  */
 #ifdef cell_t
-#undef cell_t
-#define cell_t 		int8_t
+
+	#undef cell_t
+	#undef CELL_MIN
+	#undef CELL_MAX
+
+	#define cell_t 		int8_t
+	#define CELL_MIN	( INT8_MIN )
+	#define CELL_MAX	( INT8_MAX )
+
 #endif
 
 /**
@@ -40,11 +48,12 @@
  * @macro (internal) twig_linear_topq, ...
  * @brief coordinate calculation helper macros
  */
-#define twig_linear_topq			naive_linear_topq
-#define twig_linear_leftq			naive_linear_leftq
-#define twig_linear_top 			naive_linear_top
-#define twig_linear_left 			naive_linear_left
-#define twig_linear_topleft 		naive_linear_topleft
+#define twig_linear_topq(r, c)			naive_linear_topq(r, c)
+#define twig_linear_leftq(r, c)			naive_linear_leftq(r, c)
+#define twig_linear_topleftq(r, c)		naive_linear_topleftq(r, c)
+#define twig_linear_top(r, c) 			naive_linear_top(r, c)
+#define twig_linear_left(r, c) 			naive_linear_left(r, c)
+#define twig_linear_topleft(r, c) 		naive_linear_topleft(r, c)
 
 /**
  * @macro twig_linear_dir_exp
@@ -105,11 +114,11 @@
  * @macro twig_linear_fill_finish
  */
 #define twig_linear_fill_finish(c, k, r) { \
-	if(ALG != NW) { \
+	if(k.alg != NW) { \
 		VEC_STORE(c.pdp, maxv); \
 		VEC_ASSIGN(tmp1, maxv); \
-		for(i = 1; i < BW; i++) { \
-			VEC_SHIFT_R(tmp1); \
+		for(c.q = 1; c.q < BW; c.q++) { \
+			VEC_SHIFT_R(tmp1, tmp1); \
 			VEC_MAX(maxv, tmp1, maxv); \
 		} \
 		VEC_STORE(c.pdp, maxv); \
@@ -118,14 +127,14 @@
 	VEC_STORE(c.pdp, zv); \
 	VEC_STORE(c.pdp, pv); \
 	VEC_STORE(c.pdp, zv); \
-	VEC_STORE(c.pdp, p); \
+	VEC_STORE(c.pdp, pv); \
 	VEC_STORE(c.pdp, zv); \
 }
 
 /**
  * @macro twig_linear_chain_push_ivec
  */
-#define twig_linear_chain_push_ivec(c, k, r) { \
+#define twig_linear_chain_push_ivec(c, v) { \
 	dir_t r; \
 	dir_term(r, c); \
 	if(dir2(r) == TOP) { \

@@ -9,12 +9,12 @@
  *
  */
 #include <stdlib.h>				/** for `NULL' */
-#include "sea.h"				/** global declarations */
-#include "util.h"				/** internal declarations */
+#include "include/sea.h"		/** global declarations */
+#include "util/util.h"			/** internal declarations */
 #include "variant/variant.h"	/** dynamic programming variants */
 
 int32_t
-DECLARE_FUNC(BASE, SUFFIX)(
+DECLARE_FUNC(BASE, VARIANT, SUFFIX)(
 	sea_ctx_t const *ctx,
 	sea_proc_t *proc)
 {
@@ -30,17 +30,16 @@ DECLARE_FUNC(BASE, SUFFIX)(
 
 	/** make the dp pointer aligned */ {
 		int64_t a = k.memaln;
-		c.pdp = ((c.pdp + a - 1) / a) * a;
+		c.pdp = (void *)((((uint64_t)c.pdp + a - 1) / a) * a);
 	}
 
 	/** variable declarations */
 	int64_t sp = c.p;
 	cell_t *pb = (cell_t *)(c.pdp + bpl(c));
-	dir_t r;
 	int8_t stat = CONT;
 
 	/** check direction array size */
-	if((k.flags & SEA_FLAG_MASK_DP) == SEA_DYNAMIC) {
+	if((k.flags & SEA_FLAGS_MASK_DP) == SEA_DYNAMIC) {
 		if((c.dp.ep - c.pdp) / bpl(c) > ((uint8_t *)c.dr.ep - c.pdr)) {
 			size_t s = 2 * (c.dr.ep - c.dr.sp);
 			c.dr.ep = (c.dr.sp = (void *)realloc(c.dr.sp, s)) + s;
@@ -78,6 +77,7 @@ DECLARE_FUNC(BASE, SUFFIX)(
 
 	/** chain */ {
 		sea_ivec_t v;
+		void *spdp = c.pdp;
 		int32_t ret = SEA_SUCCESS;
 
 		if(stat == CONT) {
@@ -93,7 +93,7 @@ DECLARE_FUNC(BASE, SUFFIX)(
 
 			/** chain */
 			chain_push_ivec(c, v);
-			ret = CALL_FUNC(BASE, SUFFIX)(ctx, &c);
+			ret = CALL_FUNC(BASE, VARIANT , SUFFIX)(ctx, &c);
 
 			/** pop */
 			free(c.dp.sp);
@@ -101,7 +101,7 @@ DECLARE_FUNC(BASE, SUFFIX)(
 		} else if(stat == CHAIN) {
 			/** chain to alternatve algorithm */
 			chain_push_ivec(c, v);
-			ret = func_next(k, CALL_FUNC(BASE, SUFFIX))(ctx, &c);
+			ret = func_next(k, CALL_FUNC(BASE, VARIANT, SUFFIX))(ctx, &c);
 		} else if(stat == CAP) {
 			/** chain to the cap algorithm */
 			chain_push_ivec(c, v);
@@ -124,6 +124,9 @@ DECLARE_FUNC(BASE, SUFFIX)(
 				}
 			}
 		}
+
+		/** restore pdp */
+		c.pdp = spdp;
 
 		/** check return status */
 		if(ret != SEA_SUCCESS) {

@@ -7,15 +7,8 @@
 #ifndef _VARIANT_H_INCLUDED
 #define _VARIANT_H_INCLUDED
 
-#include "sea.h"
-#include "util.h"
-#include "naive.h"
-// #include "twig.h"
-// #include "branch.h"
-// #include "trunk.h"
-// #include "balloon.h"
-// #include "bulge.h"
-// #include "cap.h"
+#include "../include/sea.h"
+#include "../util/util.h"
 
 /**
  * defaults
@@ -95,6 +88,11 @@ uint8_t _pop_2bit8packed(uint8_t const *p, int64_t pos);
  */
 #define rd_cmp(r1, r2)	( (r1).b == (r2).b )
 
+/**
+ * @macro rd_decode
+ * @brief get a cached char
+ */
+#define rd_decode(r)	( (r).b )
 /**
  * @macro rd_close
  * @brief fill the instance with zero.
@@ -353,53 +351,55 @@ typedef struct _dir dir_t;
 #endif /* #if _DP == SEA_DYNAMIC */
 
 
+/**
+ * variant selector
+ */
+#define HEADER(base)			QUOTE(HEADER_WITH_SUFFIX(base, _impl.h))
+#include HEADER(BASE)
+
 #if _SCORE == SEA_LINEAR_GAP_COST
 
-	#define bpl					FUNC_WITH_SUFFIX(BASE, _linear_bpl)
-	#define dir_exp				FUNC_WITH_SUFFIX(BASE, _linear_dir_exp)
-	#define fill_decl			FUNC_WITH_SUFFIX(BASE, _linear_fill_decl)
-	#define fill_init			FUNC_WITH_SUFFIX(BASE, _linear_fill_init)
-	#define fill_former_body	FUNC_WITH_SUFFIX(BASE, _linear_fill_former_body)
-	#define fill_go_down		FUNC_WITH_SUFFIX(BASE, _linear_fill_go_down)
-	#define fill_go_right		FUNC_WITH_SUFFIX(BASE, _linear_fill_go_right)
-	#define fill_latter_body	FUNC_WITH_SUFFIX(BASE, _linear_fill_latter_body)
-	#define fill_check_term		FUNC_WITH_SUFFIX(BASE, _linear_fill_check_term)
-	#define fill_check_chain	FUNC_WITH_SUFFIX(BASE, _linear_fill_check_chain)
-	#define fill_check_mem		FUNC_WITH_SUFFIX(BASE, _linear_fill_check_mem)
-	#define fill_finish			FUNC_WITH_SUFFIX(BASE, _linear_fill_finish)
-	#define chain_push_ivec		FUNC_WITH_SUFFIX(BASE, _linear_chain_push_ivec)
-	#define search_terminal		FUNC_WITH_SUFFIX(BASE, _linear_search_terminal)
-	#define search_max_score	FUNC_WITH_SUFFIX(BASE, _linear_search_max_score)
-	#define trace_decl			FUNC_WITH_SUFFIX(BASE, _linear_trace_decl)
-	#define trace_init			FUNC_WITH_SUFFIX(BASE, _linear_trace_init)
-	#define trace_body			FUNC_WITH_SUFFIX(BASE, _linear_trace_body)
-	#define trace_finish		FUNC_WITH_SUFFIX(BASE, _linear_trace_finish)
+	#define VARIANT				_linear
 
 #elif _SCORE == SEA_AFFINE_GAP_COST
 
-	#define bpl					FUNC_WITH_SUFFIX(BASE, _affine_bpl)
-	#define dir_exp				FUNC_WITH_SUFFIX(BASE, _affine_dir_exp)
-	#define fill_init			FUNC_WITH_SUFFIX(BASE, _affine_fill_init)
-	#define fill_former_body	FUNC_WITH_SUFFIX(BASE, _affine_fill_former_body)
-	#define fill_go_down		FUNC_WITH_SUFFIX(BASE, _affine_fill_go_down)
-	#define fill_go_right		FUNC_WITH_SUFFIX(BASE, _affine_fill_go_right)
-	#define fill_latter_body	FUNC_WITH_SUFFIX(BASE, _affine_fill_latter_body)
-	#define fill_check_term		FUNC_WITH_SUFFIX(BASE, _affine_fill_check_term)
-	#define fill_check_chain	FUNC_WITH_SUFFIX(BASE, _affine_fill_check_chain)
-	#define fill_check_mem		FUNC_WITH_SUFFIX(BASE, _affine_fill_check_mem)
-	#define fill_finish			FUNC_WITH_SUFFIX(BASE, _affine_fill_finish)
-	#define chain_push_ivec		FUNC_WITH_SUFFIX(BASE, _affine_chain_push_ivec)
-	#define search_terminal		FUNC_WITH_SUFFIX(BASE, _affine_search_terminal)
-	#define search_max_score	FUNC_WITH_SUFFIX(BASE, _affine_search_max_score)
-	#define trace_init			FUNC_WITH_SUFFIX(BASE, _affine_trace_init)
-	#define trace_body			FUNC_WITH_SUFFIX(BASE, _affine_trace_body)
-	#define trace_finish		FUNC_WITH_SUFFIX(BASE, _affine_trace_finish)
+	#define VARIANT				_affine
 
 #else /* #if _SCORE == SEA_LINEAR_GAP_COST */
 
 	#error "_SCORE must be SEA_LINEAR_GAP_COST or SEA_AFFINE_GAP_COST."
 
 #endif /* #if _SCORE == SEA_LINEAR_GAP_COST */
+
+#define bpl					FUNC_WITH_SUFFIX(BASE, VARIANT, _bpl)
+#define dir_exp				FUNC_WITH_SUFFIX(BASE, VARIANT, _dir_exp)
+#define fill_decl			FUNC_WITH_SUFFIX(BASE, VARIANT, _fill_decl)
+#define fill_init			FUNC_WITH_SUFFIX(BASE, VARIANT, _fill_init)
+#define fill_former_body	FUNC_WITH_SUFFIX(BASE, VARIANT, _fill_former_body)
+#define fill_go_down		FUNC_WITH_SUFFIX(BASE, VARIANT, _fill_go_down)
+#define fill_go_right		FUNC_WITH_SUFFIX(BASE, VARIANT, _fill_go_right)
+#define fill_latter_body	FUNC_WITH_SUFFIX(BASE, VARIANT, _fill_latter_body)
+#define fill_check_term		FUNC_WITH_SUFFIX(BASE, VARIANT, _fill_check_term)
+#define fill_check_chain	FUNC_WITH_SUFFIX(BASE, VARIANT, _fill_check_chain)
+#define fill_check_mem		FUNC_WITH_SUFFIX(BASE, VARIANT, _fill_check_mem)
+#define fill_finish			FUNC_WITH_SUFFIX(BASE, VARIANT, _fill_finish)
+#define chain_push_ivec		FUNC_WITH_SUFFIX(BASE, VARIANT, _chain_push_ivec)
+#define search_terminal		FUNC_WITH_SUFFIX(BASE, VARIANT, _search_terminal)
+#define search_max_score	FUNC_WITH_SUFFIX(BASE, VARIANT, _search_max_score)
+#define trace_decl			FUNC_WITH_SUFFIX(BASE, VARIANT, _trace_decl)
+#define trace_init			FUNC_WITH_SUFFIX(BASE, VARIANT, _trace_init)
+#define trace_body			FUNC_WITH_SUFFIX(BASE, VARIANT, _trace_body)
+#define trace_finish		FUNC_WITH_SUFFIX(BASE, VARIANT, _trace_finish)
+
+
+// #include "naive.h"
+// #include "twig.h"
+// #include "branch.h"
+// #include "trunk.h"
+// #include "balloon.h"
+// #include "bulge.h"
+// #include "cap.h"
+
 
 #endif /* #ifndef _VARIANT_H_INCLUDED */
 

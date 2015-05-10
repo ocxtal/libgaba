@@ -6,9 +6,9 @@
 #ifndef _BALLOON_H_INCLUDED
 #define _BALLOON_H_INCLUDED
 
-#include "sea.h"
-#include "util.h"
-#include "naive.h"
+#include "../include/sea.h"
+#include "../util/util.h"
+#include "naive_impl.h"
 
 /**
  * the cell_t and the BW macros are inherited from `naive.h'.
@@ -29,9 +29,10 @@
  */
 #define balloon_linear_topq(r, c) 		naive_linear_topq(r, c)
 #define balloon_linear_leftq(r, c) 		naive_linear_leftq(r, c)
-#define balloon_linear_top(r, c)		
-#define balloon_linear_left(r, c)
-#define balloon_linear_topleft(r, c)
+#define balloon_linear_topleftq(r, c)	naive_linear_topleftq(r, c)
+// #define balloon_linear_top(r, c)		( - eq - 1 + balloon_linear_topq(r, c) )
+// #define balloon_linear_left(r, c)		( - eq - 1 + balloon_linear_leftq(r, c) )
+// #define balloon_linear_topleft(r, c)	( - eq - peq - 2 + balloon_linear_topleftq(r, c) )
 
 /**
  * @macro (internal) balloon_linear_dir_next
@@ -39,9 +40,9 @@
 #define balloon_linear_dir_next(rt, rb, c) { \
 	(rt).d = balloon_linear_dir_exp_top(rt, c); \
 	(rb).d = balloon_linear_dir_exp_bottom(rb, c); \
-	(c).pdf[(c).p++] = (rt).d; \
+	(c).pdr[(c).p++] = (rt).d; \
 	(rt).d2 = ((rt).d<<1) | ((rt).d2>>1); \
-	(rb).d2 = ((rb).d<<1) | ((rb).d2>>1); \	
+	(rb).d2 = ((rb).d<<1) | ((rb).d2>>1); \
 }
 
 /**
@@ -49,16 +50,16 @@
  * @brief determine the next direction in the dynamic banded algorithm.
  */
 #define balloon_linear_dir_exp_top(r, c) ( \
-	(pc[0] > max - c.tb) ? LEFT : TOP \
+	(pc[0] > max - k.tb) ? LEFT : TOP \
 )
 #define balloon_linear_dir_exp(r, c) 	balloon_linear_dir_exp_top(r, c)
 
 /**
  * @macro balloon_linear_dir_exp_bottom
  */
-#define balloon_linear_dir_exp_bottom(r, c) { \
-	(pc[eq-1] > max - c.tb) ? TOP : LEFT \
-}
+#define balloon_linear_dir_exp_bottom(r, c) ( \
+	(pc[eq-1] > max - k.tb) ? TOP : LEFT \
+)
 
 /**
  * @macro balloon_linear_fill_decl
@@ -118,20 +119,20 @@
  * @macro balloon_linear_fill_latter_body
  */
 #define balloon_linear_fill_latter_body(c, k, r) { \
+	cell_t d, t, l; \
 	max = CELL_MIN; \
 	for(c.q = 0; c.q < eq; c.q++) { \
 		rd_fetch(c.a, c.i-c.q); \
 		rd_fetch(c.b, c.j+c.q); \
-		d = pp[balloon_linear_topleft(c, r)] + (rd_cmp(c.a, c.b) ? k.m : k.x); \
-		t = pc[balloon_linear_top(c, r)] + k.gi; \
-		l = pc[balloon_linear_left(c, r)] + k.gi; \
+		d = pp[c.q + balloon_linear_topleftq(r, c)] + (rd_cmp(c.a, c.b) ? k.m : k.x); \
+		t = pc[c.q + balloon_linear_topq(r, c)] + k.gi; \
+		l = pc[c.q + balloon_linear_leftq(r, c)] + k.gi; \
 		if(c.q == 0) { \
 			if(dir(r) == LEFT) { t = CELL_MIN; } \
-			if(dir2(r) == LEFT) { d = CELL_MIN; } \
-		} \
-		if(c.q == eq-1) { \
-			if(dir(b) = TOP) { l = CELL_MIN; } \
-			if(dir2(b) = TT) { d = CELL_MIN; } \
+			if(dir2(r) == LL) { d = CELL_MIN; } \
+		} else if(c.q == eq-1) { \
+			if(dir(b) == TOP) { l = CELL_MIN; } \
+			if(dir2(b) == TT) { d = CELL_MIN; } \
 		} \
 		*((cell_t *)c.pdp) = d = MAX4(d, t, l, k.min); \
 		c.pdp += sizeof(cell_t); \
@@ -141,7 +142,8 @@
 	} \
 	*((cell_t *)c.pdp) = eq; \
 	c.pdp += sizeof(cell_t); \
-	if(k.alg != NW) && max >= c.max) { \
+	pp = pc; pc = (cell_t *)c.pdp; \
+	if(k.alg != NW && max >= c.max) { \
 		c.max = max; \
 		c.mi = c.i-mq; c.mj = c.j+mq; \
 		c.mp = c.p; c.mq = mq; \
@@ -183,7 +185,7 @@
 	c.p--; c.j--; /** always comes from top */ \
 	*((cell_t *)c.pdp) = BW; /** correct the lane width */ \
 	c.pdp += sizeof(cell_t); \
-	*((cell_t *)c.pdp-2) = CELL_MIN; /** fill BW-th cell with min */ \
+	*((cell_t *)c.pdp-2) = CELL_MIN; /** fill the BW-th cell with min */ \
 	v.size = sizeof(cell_t); \
 	v.clen = BW; \
 	v.plen = BW; \
@@ -195,35 +197,82 @@
  * @macro balloon_linear_search_terminal
  */
 #define balloon_linear_search_terminal(c, k) { \
+	c.mi = c.alen; \
+	c.mj = c.blen; \
+	c.mp = COP(c.mi, c.mj, BW); \
+	c.mq = COQ(c.mi, c.mj, BW) - COQ(c.i, c.j, BW); \
 }
 
 /**
  * @macro balloon_linear_search_max_score
  */
 #define balloon_linear_search_max_score(c, k) { \
+	c.alen = c.mi; \
+	c.blen = c.mj; \
 }
 
 /**
  * @macro balloon_linear_trace_decl
  */
-#define balloon_linear_trace_decl(c, k, r)
+#define balloon_linear_trace_decl(c, k, r) \
+	dir_t r; \
+	cell_t *p, *pp, *pc; \
+	cell_t score;
 
 /**
  * @macro balloon_linear_trace_init
  */
 #define balloon_linear_trace_init(c, k, r) { \
+	dir_term(r, c); \
+	p = (cell_t *)c.pdp - ((cell_t *)c.pdp)[-1] - 1; \
+	pc = p - p[-1] - 1; \
+	pp = pc - pc[-1] - 1; \
+	score = p[c.mq]; \
+	rd_fetch(c.a, c.mi-1); \
+	rd_fetch(c.b, c.mj-1); \
 }
 
 /**
  * @macro balloon_linear_trace_body
  */
 #define balloon_linear_trace_body(c, k, r) { \
+	dir_prev(r, c); \
+	cell_t diag = pp[c.mq + balloon_linear_topleftq(r, c)]; \
+	cell_t sc = rd_cmp(c.a, c.b) ? k.m : k.x; \
+	cell_t h, v; \
+	if(score == (diag + sc)) { \
+		p = pp; pc = p - p[-1] - 1; pp = pc - pc[-1] - 1; \
+		c.mq += balloon_linear_topleftq(r, c); \
+		dir_prev(r, c); \
+		c.mi--; rd_fetch(c.a, c.mi-1); \
+		c.mj--; rd_fetch(c.b, c.mj-1); \
+		if(sc == k.m) { wr_pushm(c.l); } else { wr_pushx(c.l); } \
+		if(k.alg == SW && score <= sc) { \
+			return SEA_TERMINATED; \
+		} \
+		score = diag; \
+	} else if(score == ((h = pc[c.mq + balloon_linear_leftq(r, c)]) + k.gi)) { \
+		p = pc; pc = pp; pp = pc - pc[-1] - 1; \
+		c.mq += balloon_linear_leftq(r, c); \
+		c.mi--; rd_fetch(c.a, c.mi-1); \
+		wr_pushd(c.l); \
+		score = h; \
+	} else if(score == ((v = pc[c.mq + balloon_linear_topq(r, c)]) + k.gi)) { \
+		p = pc; pc = pp; pp = pc - pc[-1] - 1; \
+		c.mq += balloon_linear_topq(r, c); \
+		c.mj--; rd_fetch(c.b, c.mj-1); \
+		wr_pushd(c.l); \
+		score = v; \
+	} else { \
+		return SEA_ERROR_OUT_OF_BAND; \
+	} \
 }
 
 /**
  * @macro balloon_linear_trace_finish
  */
 #define balloon_linear_trace_finish(c, k, r) { \
+	/** blank */ \
 }
 
 #endif /* #ifndef _BALLOON_H_INCLUDED */
