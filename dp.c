@@ -107,9 +107,6 @@ DECLARE_FUNC(BASE, VARIANT, SUFFIX)(
 			chain_push_ivec(c, v);
 			ret = k.f->cap(ctx, &c);
 		} else if(stat == TERM) {
-			/** initialize traceback */
-			wr_init(c.l, c.p); proc->l = c.l;
-
 			/** search */
 			if(k.alg == NW) {
 				search_terminal(c, k);
@@ -123,6 +120,14 @@ DECLARE_FUNC(BASE, VARIANT, SUFFIX)(
 					return SEA_SUCCESS;
 				}
 			}
+
+			/** トレースしない場合はここでリターン */
+			if(k->f.pushm == NULL) {			/** 汚い実装 */
+				return SEA_SUCCESS;
+			}
+
+			/** initialize traceback */
+			wr_init(c.l, c.p); proc->l = c.l;
 		}
 
 		/** restore pdp */

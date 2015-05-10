@@ -21,56 +21,14 @@
  */
 
 /**
- * @fn _pop_ascii
- * @brief retrieve an ascii character from ((uint8_t *)p)[pos].
- * @detail implemented in `io.s'.
- */
-uint8_t _pop_ascii(uint8_t const *p, int64_t pos);
-
-/**
- * @fn _pop_4bit
- * @brief retrieve a 4-bit encoded base from ((uint8_t *)p)[pos].
- * @detail implemented in `io.s'.
- */
-uint8_t _pop_4bit(uint8_t const *p, int64_t pos);
-
-/**
- * @fn _pop_2bit
- * @brief retrieve a 2-bit encoded base from ((uint8_t *)p)[pos].
- * @detail implemented in `io.s'.
- */
-uint8_t _pop_2bit(uint8_t const *p, int64_t pos);
-
-/**
- * @fn _pop_4bit8packed
- * @brief retrieve a packed 4-bit encoded base from ((uint8_t *)p)[pos/2].
- * @detail implemented in `io.s'.
- */
-uint8_t _pop_4bit8packed(uint8_t const *p, int64_t pos);
-
-/**
- * @fn _pop_2bit8packed
- * @brief retrieve a packed 2-bit encoded base from ((uint8_t *)p)[pos/4].
- * @detail implemented in `io.s'.
- */
-uint8_t _pop_2bit8packed(uint8_t const *p, int64_t pos);
-
-/**
  * @macro rd_init
  * @brief initialize a sequence reader instance.
  */
-#define rd_init(r, type, base, spos) { \
+#define rd_init(r, fp, base, spos) { \
 	(r).p = (void *)base; \
 	(r).spos = spos; \
 	(r).b = 0; \
-	switch(type) { \
-		case SEA_SEQ_ASCII:			(r).pop = _pop_ascii; break; \
-		case SEA_SEQ_4BIT: 			(r).pop = _pop_4bit; break; \
-		case SEA_SEQ_2BIT: 			(r).pop = _pop_2bit; break; \
-		case SEA_SEQ_4BIT8PACKED: 	(r).pop = _pop_4bit8packed; break; \
-		case SEA_SEQ_2BIT8PACKED: 	(r).pop = _pop_2bit8packed; break; \
-		default: (r).pop = NULL; break; \
-	} \
+	(r).pop = fp; \
 }
 
 /**
@@ -109,39 +67,6 @@ uint8_t _pop_2bit8packed(uint8_t const *p, int64_t pos);
  */
 
 /**
- * @fn _pushm_ascii, pushx_ascii, _pushi_ascii, _pushd_ascii
- * @brief push a match (mismatch, ins, del) character to p[pos]
- * @detail implemented in `io.s'.
- * @return the next pos.
- */
-int64_t _pushm_ascii(uint8_t *p, int64_t pos);
-int64_t _pushx_ascii(uint8_t *p, int64_t pos);
-int64_t _pushi_ascii(uint8_t *p, int64_t pos);
-int64_t _pushd_ascii(uint8_t *p, int64_t pos);
-
-/**
- * @fn _pushm_cigar, _pushx_cigar, _pushi_cigar, _pushd_cigar
- * @brief append a match (mismatch, ins, del) to p[pos].
- * @detail implemented in `io.s'.
- * @return the next pos.
- */
-int64_t _pushm_cigar(uint8_t *p, int64_t pos);
-int64_t _pushx_cigar(uint8_t *p, int64_t pos);
-int64_t _pushi_cigar(uint8_t *p, int64_t pos);
-int64_t _pushd_cigar(uint8_t *p, int64_t pos);
-
-/**
- * @fn _pushm_dir, _pushx_dir, _pushi_dir, _pushd_dir
- * @brief append a direction string to p[pos].
- * @detail implemented in `io.s'.
- * @return the next pos.
- */
-int64_t _pushm_dir(uint8_t *p, int64_t pos);
-int64_t _pushx_dir(uint8_t *p, int64_t pos);
-int64_t _pushi_dir(uint8_t *p, int64_t pos);
-int64_t _pushd_dir(uint8_t *p, int64_t pos);
-
-/**
  * @enum _ALN_CHAR
  * @brief alignment character, used in ascii output format.
  */
@@ -156,35 +81,13 @@ enum _ALN_CHAR {
  * @macro wr_init
  * @brief initialize an alignment writer instance.
  */
-#define wr_init(w, type) { \
+#define wr_init(w, k) { \
 	(w).p = NULL; \
 	(w).pos = 0; \
-	switch(type) { \
-		case SEA_ALN_ASCII: \
-			(w).pushm = _pushm_ascii; \
-			(w).pushx = _pushx_ascii; \
-			(w).pushi = _pushi_ascii; \
-			(w).pushd = _pushd_ascii; \
-			break; \
-		case SEA_ALN_CIGAR: \
-			(w).pushm = _pushm_cigar; \
-			(w).pushx = _pushx_cigar; \
-			(w).pushi = _pushi_cigar; \
-			(w).pushd = _pushd_cigar; \
-			break; \
-		case SEA_ALN_DIR: \
-			(w).pushm = _pushm_dir; \
-			(w).pushx = _pushx_dir; \
-			(w).pushi = _pushi_dir; \
-			(w).pushd = _pushd_dir; \
-			break; \
-		default: \
-			(w).pushm = NULL; \
-			(w).pushx = NULL; \
-			(w).pushi = NULL; \
-			(w).pushd = NULL; \
-			break; \
-	} \
+	(w).pushm = (k)->f.pushm; \
+	(w).pushx = (k)->f.pushx; \
+	(w).pushi = (k)->f.pushi; \
+	(w).pushd = (k)->f.pushd; \
 }
 
 /**

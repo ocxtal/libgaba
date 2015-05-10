@@ -56,6 +56,78 @@ enum _STATE {
 };
 
 /**
+ * io functions
+ */
+
+/**
+ * @fn _pop_ascii
+ * @brief retrieve an ascii character from ((uint8_t *)p)[pos].
+ * @detail implemented in `io.s'.
+ */
+uint8_t _pop_ascii(uint8_t const *p, int64_t pos);
+
+/**
+ * @fn _pop_4bit
+ * @brief retrieve a 4-bit encoded base from ((uint8_t *)p)[pos].
+ * @detail implemented in `io.s'.
+ */
+uint8_t _pop_4bit(uint8_t const *p, int64_t pos);
+
+/**
+ * @fn _pop_2bit
+ * @brief retrieve a 2-bit encoded base from ((uint8_t *)p)[pos].
+ * @detail implemented in `io.s'.
+ */
+uint8_t _pop_2bit(uint8_t const *p, int64_t pos);
+
+/**
+ * @fn _pop_4bit8packed
+ * @brief retrieve a packed 4-bit encoded base from ((uint8_t *)p)[pos/2].
+ * @detail implemented in `io.s'.
+ */
+uint8_t _pop_4bit8packed(uint8_t const *p, int64_t pos);
+
+/**
+ * @fn _pop_2bit8packed
+ * @brief retrieve a packed 2-bit encoded base from ((uint8_t *)p)[pos/4].
+ * @detail implemented in `io.s'.
+ */
+uint8_t _pop_2bit8packed(uint8_t const *p, int64_t pos);
+
+/**
+ * @fn _pushm_ascii, pushx_ascii, _pushi_ascii, _pushd_ascii
+ * @brief push a match (mismatch, ins, del) character to p[pos]
+ * @detail implemented in `io.s'.
+ * @return the next pos.
+ */
+int64_t _pushm_ascii(uint8_t *p, int64_t pos);
+int64_t _pushx_ascii(uint8_t *p, int64_t pos);
+int64_t _pushi_ascii(uint8_t *p, int64_t pos);
+int64_t _pushd_ascii(uint8_t *p, int64_t pos);
+
+/**
+ * @fn _pushm_cigar, _pushx_cigar, _pushi_cigar, _pushd_cigar
+ * @brief append a match (mismatch, ins, del) to p[pos].
+ * @detail implemented in `io.s'.
+ * @return the next pos.
+ */
+int64_t _pushm_cigar(uint8_t *p, int64_t pos);
+int64_t _pushx_cigar(uint8_t *p, int64_t pos);
+int64_t _pushi_cigar(uint8_t *p, int64_t pos);
+int64_t _pushd_cigar(uint8_t *p, int64_t pos);
+
+/**
+ * @fn _pushm_dir, _pushx_dir, _pushi_dir, _pushd_dir
+ * @brief append a direction string to p[pos].
+ * @detail implemented in `io.s'.
+ * @return the next pos.
+ */
+int64_t _pushm_dir(uint8_t *p, int64_t pos);
+int64_t _pushx_dir(uint8_t *p, int64_t pos);
+int64_t _pushi_dir(uint8_t *p, int64_t pos);
+int64_t _pushd_dir(uint8_t *p, int64_t pos);
+
+/**
  * @fn _read
  */
 int32_t static inline

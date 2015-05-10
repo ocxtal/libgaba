@@ -49,34 +49,6 @@ typedef 	int8_t		sea_sint_t;			/** sea_sint_t: for small values */
 #define SEA_SINT_MAX 	( INT8_MAX )
 
 /**
- * @brief flags : option flag bit fields
- *
- * @detail
- * option flags are used in the sea_init API and some more internal functions
- * to represent options of alignment functions. the flags are represented in 
- * 32-bit length bit fields. the meaning of each field is following:
- *
- *  31 .. 20, 19 .. 18, 17 .. 14, 13 .. 10, 9 ..... 6,
- * +--------------------------------------------------+
- * | unused |   PROC  |   ALN   |   SEQ   | BANDWIDTH |
- * +--------------------------------------------------+
- *
- *  5 .. 4, 3 .. 2, 1 .. 0
- * +----------------------+
- * |  DP  |  COST |  ALG  |
- * +----------------------+
- *
- * The meaning of each field is:
- * PROC (19..18)	processor options. use this option when offload computation to GPUs.
- * ALN (17..14)		the output formatting.
- * SEQ (13..10)		the input sequence formatting.
- * BANDWIDTH (9..6) the band width in the banded dynamic programming.
- * DP (5..4)		the dynamic programming option. select the banded DP or the full DP.
- * COST (3..2)		cost option. select one from the linear-gap cost, the affine-gap cost, and the unit cost.
- * ALG (1..0)		algorithm option. select one from the Smith-Waterman (local), the Needleman-Wunsch (global), the seed-and-extend alignment.
- */
-
-/**
  * @enum sea_flags_pos
  *
  * @brief (internal) positions of option flag bit field.
@@ -85,11 +57,9 @@ enum sea_flags_pos {
 	SEA_FLAGS_POS_ALG 		= 0,
 	SEA_FLAGS_POS_COST 		= 3,
 	SEA_FLAGS_POS_DP 		= 5,
-	SEA_FLAGS_POS_POLICY 	= 8,
-	SEA_FLAGS_POS_BANDWIDTH = 10,
-	SEA_FLAGS_POS_SEQ 		= 14,
-	SEA_FLAGS_POS_ALN 		= 16,
-	SEA_FLAGS_POS_PROC 		= 18
+	SEA_FLAGS_POS_SEQ_A 	= 14,
+	SEA_FLAGS_POS_SEQ_B		= 16,
+	SEA_FLAGS_POS_ALN 		= 18
 };
 
 /**
@@ -101,11 +71,9 @@ enum sea_flags_mask {
 	SEA_FLAGS_MASK_ALG 		= 0x07<<SEA_FLAGS_POS_ALG,
 	SEA_FLAGS_MASK_COST		= 0x03<<SEA_FLAGS_POS_COST,
 	SEA_FLAGS_MASK_DP		= 0x07<<SEA_FLAGS_POS_DP,
-	SEA_FLAGS_MASK_POLICY	= 0x03<<SEA_FLAGS_POS_POLICY,
-	SEA_FLAGS_MASK_BANDWIDTH= 0x0f<<SEA_FLAGS_POS_BANDWIDTH,
-	SEA_FLAGS_MASK_SEQ		= 0x03<<SEA_FLAGS_POS_SEQ,
-	SEA_FLAGS_MASK_ALN		= 0x03<<SEA_FLAGS_POS_ALN,
-	SEA_FLAGS_MASK_PROC 	= 0x03<<SEA_FLAGS_POS_PROC
+	SEA_FLAGS_MASK_SEQ_A	= 0x03<<SEA_FLAGS_POS_SEQ_A,
+	SEA_FLAGS_MASK_SEQ_B	= 0x03<<SEA_FLAGS_POS_SEQ_B,
+	SEA_FLAGS_MASK_ALN		= 0x03<<SEA_FLAGS_POS_ALN
 };
 
 /**
@@ -127,8 +95,7 @@ enum sea_flags_alg {
  */
 enum sea_flags_cost {
 	SEA_AFFINE_GAP_COST 	= 1<<SEA_FLAGS_POS_COST,
-	SEA_LINEAR_GAP_COST 	= 2<<SEA_FLAGS_POS_COST,
-	SEA_UNIT_COST 			= 3<<SEA_FLAGS_POS_COST
+	SEA_LINEAR_GAP_COST 	= 2<<SEA_FLAGS_POS_COST
 };
 
 /**
@@ -137,46 +104,36 @@ enum sea_flags_cost {
  * @brief (API) constants of the DP option.
  */
 enum sea_flags_dp {
-	SEA_FULL				= 1<<SEA_FLAGS_POS_DP,
-	SEA_BANDED				= 2<<SEA_FLAGS_POS_DP,
-	SEA_DYNAMIC				= 3<<SEA_FLAGS_POS_DP,
-	SEA_GUIDED				= 4<<SEA_FLAGS_POS_DP
+	SEA_DYNAMIC				= 1<<SEA_FLAGS_POS_DP,
+	SEA_GUIDED				= 2<<SEA_FLAGS_POS_DP
 };
 
 /**
- * @enum sea_flags_policy
- *
- * @brief (API) constants of the search policy, exact or heuristic.
- */
-enum sea_flags_policy {
-	SEA_EXACT 				= 1<<SEA_FLAGS_POS_POLICY,
-	SEA_HEURISTIC			= 2<<SEA_FLAGS_POS_POLICY
-};
-
-/**
- * @enum sea_flags_bandwidth
- *
- * @brief (API) constants of the bandwidth option.
- */
-enum sea_flags_bandwidth {
-	SEA_BANDWIDTH_16 		= 1<<SEA_FLAGS_POS_BANDWIDTH,
-	SEA_BANDWIDTH_32 		= 2<<SEA_FLAGS_POS_BANDWIDTH,
-	SEA_BANDWIDTH_64 		= 3<<SEA_FLAGS_POS_BANDWIDTH,
-	SEA_BANDWIDTH_128 		= 4<<SEA_FLAGS_POS_BANDWIDTH
-};
-
-/**
- * @enum sea_flags_seq
+ * @enum sea_flags_seq_a
  *
  * @brief (API) constants of the sequence format option.
  */
-enum sea_flags_seq {
-	SEA_SEQ_ASCII 			= 1<<SEA_FLAGS_POS_SEQ,
-	SEA_SEQ_4BIT 			= 2<<SEA_FLAGS_POS_SEQ,
-	SEA_SEQ_2BIT 			= 3<<SEA_FLAGS_POS_SEQ,
-	SEA_SEQ_4BIT8PACKED 	= 4<<SEA_FLAGS_POS_SEQ,
-	SEA_SEQ_2BIT8PACKED 	= 5<<SEA_FLAGS_POS_SEQ,
-	SEA_SEQ_1BIT64PACKED 	= 6<<SEA_FLAGS_POS_SEQ
+enum sea_flags_seq_a {
+	SEA_SEQ_A_ASCII 		= 1<<SEA_FLAGS_POS_SEQ_A,
+	SEA_SEQ_A_4BIT 			= 2<<SEA_FLAGS_POS_SEQ_A,
+	SEA_SEQ_A_2BIT 			= 3<<SEA_FLAGS_POS_SEQ_A,
+	SEA_SEQ_A_4BIT8PACKED 	= 4<<SEA_FLAGS_POS_SEQ_A,
+	SEA_SEQ_A_2BIT8PACKED 	= 5<<SEA_FLAGS_POS_SEQ_A,
+	SEA_SEQ_A_1BIT64PACKED 	= 6<<SEA_FLAGS_POS_SEQ_A
+};
+
+/**
+ * @enum sea_flags_seq_b
+ *
+ * @brief (API) constants of the sequence format option.
+ */
+enum sea_flags_seq_a {
+	SEA_SEQ_B_ASCII 		= 1<<SEA_FLAGS_POS_SEQ_B,
+	SEA_SEQ_B_4BIT 			= 2<<SEA_FLAGS_POS_SEQ_B,
+	SEA_SEQ_B_2BIT 			= 3<<SEA_FLAGS_POS_SEQ_B,
+	SEA_SEQ_B_4BIT8PACKED 	= 4<<SEA_FLAGS_POS_SEQ_B,
+	SEA_SEQ_B_2BIT8PACKED 	= 5<<SEA_FLAGS_POS_SEQ_B,
+	SEA_SEQ_B_1BIT64PACKED 	= 6<<SEA_FLAGS_POS_SEQ_B
 };
 
 /**
@@ -360,10 +317,10 @@ struct sea_funcs {
 	int32_t (*trunk)(			/*!< diag 32bit */
 		struct sea_context const *ctx,
 		struct sea_process *proc);
-	int32_t (*bulge)(			/*!< 32bit bulge (guided balloon) algorithm */
+	int32_t (*balloon)(			/*!< 32bit balloon algorithm */
 		struct sea_context const *ctx,
 		struct sea_process *proc);
-	int32_t (*balloon)(			/*!< 32bit balloon algorithm */
+	int32_t (*bulge)(			/*!< 32bit bulge (guided balloon) algorithm */
 		struct sea_context const *ctx,
 		struct sea_process *proc);
 	int32_t (*cap)(				/*!< 32bit cap algorithm */
@@ -404,7 +361,6 @@ struct sea_context {
 	uint32_t flags;		/*!< a bitfield of option flags */
 	int8_t m;			/*!< a dynamic programming cost: match */
 	int8_t x;			/*!< a dynamic programming cost: mismatch */
-	int8_t g;			/*!< same as gi (redundant) */
 	int8_t gi;			/*!< a dynamic programming cost: gap open (in the affine-gap cost) or gap cost per base (in the linear-gap cost) */
 	int8_t ge;			/*!< a dynamic programming cost: gap extension */
 	int8_t mask;		/*!< a dynamic programming cost: mask length (in the mask-match algorithm) */
@@ -417,8 +373,8 @@ struct sea_context {
 	int32_t min;		/*!< (in) lower bound of the score */
 	uint32_t alg;		/*!< algorithm flag (same as (ctx->flags) & SEA_FLAG_MASK_ALG) */
 
-	int32_t isize;		/*!< initial matsize */
-	int32_t memaln;		/*!< memory alignment size (default: 32) */
+	size_t isize;		/*!< initial matsize */
+	size_t memaln;		/*!< memory alignment size (default: 32) */
 };
 
 /**
@@ -451,7 +407,9 @@ extern "C" {
  * @param[in] x :  mismatch cost. (x < m)
  * @param[in] gi : gap open cost. (or just gap cost in the linear-gap cost) (2gi <= x)
  * @param[in] ge : gap extension cost. (ge <= 0) valid only in the affine-gap cost. the total penalty of the gap with length L is gi + (L - 1)*ge.
- * @param[in] xdrop : xdrop threshold. (xdrop > 0) valid only in the seed-and-extend alignment. the extension is terminated when the score S meets S < max - xdrop.
+ * @param[in] tx : xdrop threshold. (xdrop > 0) valid only in the seed-and-extend alignment. the extension is terminated when the score S meets S < max - xdrop.
+ * @param[in] tc : balloon switch threshold.
+ * @param[in] tb : balloon termination threshold.
  *
  * @return a pointer to sea_context structure.
  *
@@ -463,7 +421,9 @@ sea_ctx_t *sea_init(
 	int8_t x,
 	int8_t gi,
 	int8_t ge,
-	int32_t xdrop);
+	int32_t tx,
+	int32_t tc,
+	int32_t tb);
 
 /**
  * @fn sea_init_fp
@@ -488,14 +448,6 @@ sea_ctx_t *sea_init_fp(
 	int32_t (*sea_sea)(			/*!< diag 8bit */
 		struct sea_context *ctx,
 		struct sea_process *proc),
-//	int32_t (*sea_sea)(
-//		sea_res_t *aln,
-//		sea_ctx_t *ctx,
-//		sea_proc_t val),
-//	sea_int_t (*sea_matsize)(
-//		sea_int_t alen,
-//		sea_int_t blen,
-//		sea_int_t bandwidth),
 	int8_t m,
 	int8_t x,
 	int8_t gi,
