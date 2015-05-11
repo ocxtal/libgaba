@@ -21,6 +21,8 @@ def configure(conf):
 	conf.recurse('arch')
 #	conf.recurse('variant')
 
+	conf.env.append_value('CFLAGS', '-g')
+
 	from itertools import product
 	for (v, c, d) in product(variants, cost, dp):
 		conf.env.append_value('OBJ', v + suffix(c, d))
@@ -43,9 +45,13 @@ def build(bld):
 				'DP=' + dp_flag[d],
 				'SUFFIX=' + suffix(c, d)])
 
-
 	bld.shlib(
 		source = 'sea.c',
 		target = 'sea',
 		use = bld.env.OBJ)
+
+	bld.program(
+		source = 'test.c',
+		target = 'test',
+		use = 'sea')
 

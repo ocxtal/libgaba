@@ -83,12 +83,14 @@
  * @macro branch_linear_fill_init
  */
 #define branch_linear_fill_init(c, k, r) { \
+	c.i -= BW/2; /** convert to the local coordinate*/ \
+	c.j += BW/2; \
 	dir_init(r); \
 	VEC_SET(mv, k.m); \
 	VEC_SET(xv, k.x); \
 	VEC_SET(gv, k.gi); \
 	VEC_SET(maxv, CELL_MIN); \
-	VEC_SET(zv, 0); \
+	VEC_SET(zv, k.alg == SW ? 0 : CELL_MIN); \
 	VEC_SET(v, CELL_MIN); \
 	for(c.q = 0; c.q < c.v.clen; c.q++) { \
 		VEC_SHIFT_R(v, v); \
@@ -103,6 +105,16 @@
 		VEC_INSERT_MSB(v, _read(c.v.cv, c.q, c.v.size)); \
 	} \
 	VEC_STORE(c.pdp, v); \
+	VEC_CHAR_SETZERO(wq); \
+	VEC_CHAR_SETONES(wt); \
+	for(c.q = 0; c.q < BW/2; c.q++) { \
+		rd_fetch(c.a, c.i+c.q); \
+		PUSHQ(rd_decode(c.a), wq); \
+	} \
+	for(c.q = 0; c.q < BW/2-1; c.q++) { \
+		rd_fetch(c.b, c.j-c.q); \
+		PUSHT(rd_decode(c.b), wt); \
+	} \
 }
 
 /**
@@ -123,7 +135,7 @@
 	VEC_SHIFT_R(tmp2, v); \
 	VEC_INSERT_MSB(tmp2, CELL_MIN); \
 	c.j++; \
-	rd_fetch(c.b, c.j+BW/2); \
+	rd_fetch(c.b, c.j+BW/2-1); \
 	PUSHT(rd_decode(c.b), wt); \
 }
 

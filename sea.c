@@ -30,13 +30,13 @@ int32_t
 	},
 	{
 		{NULL, NULL, NULL, NULL, NULL, NULL},
-		{naive_linear_dynamic, twig_linear_dynamic, branch_linear_dynamic, trunk_linear_dynamic, balloon_linear_dynamic, NULL, NULL},
-		{naive_linear_guided, twig_linear_guided, branch_linear_guided, trunk_linear_guided, balloon_linear_guided, NULL, NULL}
+		{naive_linear_dynamic, twig_linear_dynamic, branch_linear_dynamic, trunk_linear_dynamic, balloon_linear_dynamic, balloon_linear_dynamic, balloon_linear_dynamic},
+		{naive_linear_guided, twig_linear_guided, branch_linear_guided, trunk_linear_guided, balloon_linear_guided, balloon_linear_guided, balloon_linear_guided}
 	},
 	{
 		{NULL, NULL, NULL, NULL, NULL, NULL},
-		{naive_affine_dynamic, twig_affine_dynamic, branch_affine_dynamic, trunk_affine_dynamic, balloon_affine_dynamic, NULL, NULL},
-		{naive_affine_guided, twig_affine_guided, branch_affine_guided, trunk_affine_guided, balloon_affine_guided, NULL, NULL}
+		{naive_affine_dynamic, twig_affine_dynamic, branch_affine_dynamic, trunk_affine_dynamic, balloon_affine_dynamic, balloon_affine_dynamic, balloon_affine_dynamic},
+		{naive_affine_guided, twig_affine_guided, branch_affine_guided, trunk_affine_guided, balloon_affine_guided, balloon_affine_guided, balloon_affine_guided}
 	}
 };
 
@@ -141,6 +141,10 @@ sea_init_flags_vals(
 	int32_t int_flags = flags;		/* internal copy of the flags */
 	int32_t error_label = SEA_ERROR;
 
+	if((int_flags & SEA_FLAGS_MASK_ALG) == 0) {
+		return SEA_ERROR_UNSUPPORTED_ALG;
+	}
+
 	/** default: affine-gap cost */
 	if((int_flags & SEA_FLAGS_MASK_COST) == 0) {
 		int_flags = (int_flags & ~SEA_FLAGS_MASK_COST) | SEA_AFFINE_GAP_COST;
@@ -192,7 +196,6 @@ sea_init_flags_vals(
 	ctx->tb = tb;
 
 	ctx->bw = 32;			/** fixed!! */
-
 	if((int_flags & SEA_FLAGS_MASK_ALG) == SEA_SW) {
 		ctx->min = 0;
 	} else {
@@ -418,8 +421,6 @@ struct sea_result *sea_align(
 {
 	int32_t i;
 	int8_t bw = ctx->bw;
-	int8_t m  = ctx->m,
-		   gi = ctx->gi;
 	int32_t *iv;
 	struct sea_process c;
 	struct sea_result *r = NULL;
@@ -461,21 +462,29 @@ struct sea_result *sea_align(
 	 */
 
 	/** initialize init vector */
-	AMALLOC(iv, 2*bw, 1);
+	AMALLOC(iv, bw, 16);
 	c.v.pv = iv;
-	c.v.cv = iv + bw;
-	c.v.clen = c.v.plen = bw;
+	c.v.cv = iv + bw/2;
+	c.v.clen = c.v.plen = bw/2;
 	c.v.size = sizeof(int32_t);
-	#define _Q(x)		( (x) - bw/2 )
-	for(i = 0; i < bw; i++) {
-		((int32_t *)c.v.pv)[i] = -gi + (_Q(i) < 0 ? -_Q(i) : _Q(i)+1) * (2 * gi - m);
-		((int32_t *)c.v.cv)[i] =       (_Q(i) < 0 ? -_Q(i) : _Q(i)  ) * (2 * gi - m);
+	#define _Q(x)		( (x) - bw/4 )
+	for(i = 0; i < bw/2; i++) {
+		((int32_t *)c.v.pv)[i] = -ctx->gi + (_Q(i) < 0 ? -_Q(i) : _Q(i)+1) * (2 * ctx->gi - ctx->m);
+		((int32_t *)c.v.cv)[i] =            (_Q(i) < 0 ? -_Q(i) : _Q(i)  ) * (2 * ctx->gi - ctx->m);
 	}
 	#undef _Q
 
+	/** initialize coordinates */
+	c.i = bw/4;						/** the top-right cell of the lane */
+	c.j = -bw/4;
+	c.p = 0;
+	c.q = 0;
+	c.mi = c.mj = 0;
+	c.mp = c.mq = 0;
+
 	/** initialize sequence reader */
-	rd_init(c.a, ctx->f->popa, apos, alen);
-	rd_init(c.b, ctx->f->popb, bpos, blen);
+	rd_init(c.a, ctx->f->popa, a, apos);
+	rd_init(c.b, ctx->f->popb, b, bpos);
 	c.alen = alen;
 	c.blen = blen;
 	c.alim = c.alen - bw/2;
@@ -501,18 +510,9 @@ struct sea_result *sea_align(
 	c.dr.ep = (c.pdr = c.dr.sp) + c.size;
 
 	/**
-	 * initialize coordinates
-	 */
-	c.i = c.j = 0;
-	c.p = c.q = 0;
-	c.mi = c.mj = 0;
-	c.mp = c.mq = 0;
-
-	/**
 	 * initialize max
 	 */
 	c.max = 0;
-
 
 	/* do alignment */
 	error_label = ctx->f->twig(ctx, &c);

@@ -9,6 +9,7 @@
 #define _UTIL_H_INCLUDED
 
 #include "../include/sea.h"
+#include <stdio.h>
 
 /**
  * function declarations
@@ -220,7 +221,7 @@ enum _ALN_CHAR {
 	if((w).p != NULL) { \
 		free((w).p); (w).p = NULL; \
 	} \
-	(w).p = malloc(sizeof(uint8_t) * s); \
+	(w).p = malloc(sizeof(struct sea_result) + sizeof(uint8_t) * s); \
 	(w).pos = s; \
 	(w).size = s; \
 }
@@ -517,6 +518,33 @@ _read(void *ptr, int64_t pos, size_t size)
 #define WHITE(x)		"\x1b[37m" \
 						x \
 						"\x1b[39m"
+
+/**
+ * @macro dbprintf
+ */
+#define dbprintf(fmt, ...) { \
+	fprintf(stderr, fmt, __VA_ARGS__); \
+}
+
+/**
+ * @macro debug
+ */
+#define debug(...) { \
+	debug_impl(__VA_ARGS__, ""); \
+}
+#define debug_impl(fmt, ...) { \
+	dbprintf("[%s] %s(%d) " fmt "%s\n", __FILE__, __func__, __LINE__, __VA_ARGS__); \
+}
+
+/**
+ * @macro log
+ */
+#define log(...) { \
+	log_impl(__VA_ARGS__, ""); \
+}
+#define log_impl(fmt, ...) { \
+	dbprintf("[%s] " fmt "%s\n", __func__, __VA_ARGS__); \
+}
 
 #endif /* #ifndef _UTIL_H_INCLUDED */
 
