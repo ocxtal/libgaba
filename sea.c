@@ -19,14 +19,10 @@
  	#include <alloca.h>
 #endif
 
-/**
- * function declarations
- * naive, twig, branch, trunk, balloon, bulge, cap
- */
-sea_int_t
-(*func_table)(
+int32_t
+(*func_table[3][3][7])(
 	struct sea_context const *ctx,
-	struct sea_process *proc)[3][3][7] = {
+	struct sea_process *proc) = {
 	{
 		{NULL, NULL, NULL, NULL, NULL, NULL, NULL},
 		{NULL, NULL, NULL, NULL, NULL, NULL, NULL},
@@ -130,7 +126,7 @@ void aligned_free(void *ptr)
  *
  * @sa sea_init, sea_init_fp
  */
-static sea_int_t
+static int32_t
 sea_init_flags_vals(
 	struct sea_context *ctx,
 	int32_t flags,
@@ -142,8 +138,8 @@ sea_init_flags_vals(
 	int32_t tc,
 	int32_t tb)
 {
-	sea_int_t int_flags = flags;		/* internal copy of the flags */
-	sea_int_t error_label = SEA_ERROR;
+	int32_t int_flags = flags;		/* internal copy of the flags */
+	int32_t error_label = SEA_ERROR;
 
 	/** default: affine-gap cost */
 	if((int_flags & SEA_FLAGS_MASK_COST) == 0) {
@@ -200,7 +196,7 @@ sea_init_flags_vals(
 	if((int_flags & SEA_FLAGS_MASK_ALG) == SEA_SW) {
 		ctx->min = 0;
 	} else {
-		ctx->min = SEA_CELL_MIN;
+		ctx->min = INT32_MIN + 10;
 	}
 	ctx->alg = int_flags & SEA_FLAGS_MASK_ALG;
 
@@ -213,39 +209,6 @@ sea_init_flags_vals(
 	/* push flags to the context */
 	ctx->flags = int_flags;
 
-	error_label = SEA_SUCCESS;
-	return(error_label);
-}
-
-/**
- * @fn sea_init_io
- *
- * @brief initialize sea_io_funcs structure.
- *
- * @param[ref] io : a pointer to struct sea_io_funcs.
- * @param[in] flags : option flags.
- *
- * @return SEA_SUCCESS if proper pointers are set, corresponding error number if failed.
- */
-sea_int_t sea_init_io(
-	struct sea_io_funcs *io,
-	sea_int_t flags)
-{
-	sea_int_t error_label = SEA_ERROR;
-
-	switch(flags & SEA_FLAGS_MASK_SEQ) {
-		default:
-			io->_pop = NULL;
-			break;
-	}
-	switch(flags & SEA_FLAGS_MASK_ALN) {
-		default:
-			io->_pushm = NULL;
-			io->_pushx = NULL;
-			io->_pushi = NULL;
-			io->_pushd = NULL;
-			break;
-	}
 	error_label = SEA_SUCCESS;
 	return(error_label);
 }
@@ -278,7 +241,7 @@ struct sea_context *sea_init(
 	int32_t tb)
 {
 	struct sea_context *ctx = NULL;
-	sea_int_t error_label = SEA_ERROR;
+	int32_t error_label = SEA_ERROR;
 
 
 	/** malloc sea_context */
@@ -289,7 +252,7 @@ struct sea_context *sea_init(
 	}
 
 	/** init value fields of sea_context */
-	if((error_label = sea_init_flags_vals(&ctx, flags, m, x, gi, ge, tx, tc, tb)) != SEA_SUCCESS) {
+	if((error_label = sea_init_flags_vals(ctx, flags, m, x, gi, ge, tx, tc, tb)) != SEA_SUCCESS) {
 		goto _sea_init_error_handler;
 	}
 
@@ -301,8 +264,8 @@ struct sea_context *sea_init(
 	/**
 	 * initialize sea_funcs.
 	 */
-	ctx.f = (struct sea_funcs *)malloc(sizeof(struct sea_funcs));
-	if(ctx.f == NULL) {
+	ctx->f = (struct sea_funcs *)malloc(sizeof(struct sea_funcs));
+	if(ctx->f == NULL) {
 		error_label = SEA_ERROR_OUT_OF_MEM;
 		goto _sea_init_error_handler;
 	}
@@ -310,18 +273,18 @@ struct sea_context *sea_init(
 	/**
 	 * initialize alignment functions
 	 */
-	sea_int_t cost_idx = (ctx.flags & SEA_FLAGS_MASK_COST) >> SEA_FLAGS_POS_COST;
-	sea_int_t dp_idx = (ctx.flags & SEA_FLAGS_MASK_DP) >> SEA_FLAGS_POS_DP;
+	int32_t cost_idx = (ctx->flags & SEA_FLAGS_MASK_COST) >> SEA_FLAGS_POS_COST;
+	int32_t dp_idx = (ctx->flags & SEA_FLAGS_MASK_DP) >> SEA_FLAGS_POS_DP;
 
-	ctx->f.twig    = func_table[cost_idx][dp_idx][1];
-	ctx->f.branch  = func_table[cost_idx][dp_idx][2];
-	ctx->f.trunk   = func_table[cost_idx][dp_idx][3];
-	ctx->f.balloon = func_table[cost_idx][dp_idx][4];
-	ctx->f.bulge   = func_table[cost_idx][dp_idx][5];
-	ctx->f.cap     = func_table[cost_idx][dp_idx][6];
+	ctx->f->twig    = func_table[cost_idx][dp_idx][1];
+	ctx->f->branch  = func_table[cost_idx][dp_idx][2];
+	ctx->f->trunk   = func_table[cost_idx][dp_idx][3];
+	ctx->f->balloon = func_table[cost_idx][dp_idx][4];
+	ctx->f->bulge   = func_table[cost_idx][dp_idx][5];
+	ctx->f->cap     = func_table[cost_idx][dp_idx][6];
 
-	if(ctx->f.twig == NULL || ctx->f.branch == NULL || ctx->f.trunk == NULL
-		|| ctx->f.balloon == NULL || ctx->f.bulge == NULL || ctx->f.cap == NULL) {
+	if(ctx->f->twig == NULL || ctx->f->branch == NULL || ctx->f->trunk == NULL
+		|| ctx->f->balloon == NULL || ctx->f->bulge == NULL || ctx->f->cap == NULL) {
 		error_label = SEA_ERROR_INVALID_ARGS;
 		goto _sea_init_error_handler;
 	}
@@ -329,27 +292,27 @@ struct sea_context *sea_init(
 	/**
 	 * set seq a reader
 	 */
-	switch(ctx.flags & SEA_FLAGS_MASK_SEQ_A) {
-		case SEA_SEQ_ASCII:
-			ctx->f.popa = _pop_ascii;
+	switch(ctx->flags & SEA_FLAGS_MASK_SEQ_A) {
+		case SEA_SEQ_A_ASCII:
+			ctx->f->popa = _pop_ascii;
 			break;
-		case SEA_SEQ_4BIT:
-			ctx->f.popa = _pop_4bit;
+		case SEA_SEQ_A_4BIT:
+			ctx->f->popa = _pop_4bit;
 			break;
-		case SEA_SEQ_2BIT:
-			ctx->f.popa = _pop_2bit;
+		case SEA_SEQ_A_2BIT:
+			ctx->f->popa = _pop_2bit;
 			break;
-		case SEA_SEQ_4BIT8PACKED:
-			ctx->f.popa = _pop_4bit8packed;
+		case SEA_SEQ_A_4BIT8PACKED:
+			ctx->f->popa = _pop_4bit8packed;
 			break;
-		case SEA_SEQ_2BIT8PACKED:
-			ctx->f.popa = _pop_2bit8packed;
+		case SEA_SEQ_A_2BIT8PACKED:
+			ctx->f->popa = _pop_2bit8packed;
 			break;
 		default:
-			ctx->f.popa = NULL;
+			ctx->f->popa = NULL;
 			break;
 	}
-	if(ctx->f.popa == NULL) {
+	if(ctx->f->popa == NULL) {
 		error_label = SEA_ERROR_INVALID_ARGS;
 		goto _sea_init_error_handler;
 	}
@@ -357,78 +320,74 @@ struct sea_context *sea_init(
 	/**
 	 * seq b
 	 */
-	switch((ctx.flags & SEA_FLAGS_MASK_SEQ_B) >> (SEA_FLAGS_POS_SEQ_B - SEA_FLAGS_POS_SEQ_A)) {
-		case SEA_SEQ_ASCII:
-			ctx->f.popb = _pop_ascii;
+	switch(ctx->flags & SEA_FLAGS_MASK_SEQ_B) {
+		case SEA_SEQ_B_ASCII:
+			ctx->f->popb = _pop_ascii;
 			break;
-		case SEA_SEQ_4BIT:
-			ctx->f.popb = _pop_4bit;
+		case SEA_SEQ_B_4BIT:
+			ctx->f->popb = _pop_4bit;
 			break;
-		case SEA_SEQ_2BIT:
-			ctx->f.popb = _pop_2bit;
+		case SEA_SEQ_B_2BIT:
+			ctx->f->popb = _pop_2bit;
 			break;
-		case SEA_SEQ_4BIT8PACKED:
-			ctx->f.popb = _pop_4bit8packed;
+		case SEA_SEQ_B_4BIT8PACKED:
+			ctx->f->popb = _pop_4bit8packed;
 			break;
-		case SEA_SEQ_2BIT8PACKED:
-			ctx->f.popb = _pop_2bit8packed;
+		case SEA_SEQ_B_2BIT8PACKED:
+			ctx->f->popb = _pop_2bit8packed;
 			break;
 		default:
-			ctx->f.popb = NULL;
+			ctx->f->popb = NULL;
 			break;
 	}
-	if(ctx->f.popb == NULL) {
+	if(ctx->f->popb == NULL) {
 		error_label = SEA_ERROR_INVALID_ARGS;
 		goto _sea_init_error_handler;
 	}
 
-	switch((ctx.flags & SEA_FLAGS_MASK_ALN)) {
+	switch((ctx->flags & SEA_FLAGS_MASK_ALN)) {
 		case SEA_ALN_ASCII:
-			f.pushm = _pushm_ascii;
-			f.pushx = _pushx_ascii;
-			f.pushi = _pushi_ascii;
-			f.pushd = _pushd_ascii;
+			ctx->f->pushm = _pushm_ascii;
+			ctx->f->pushx = _pushx_ascii;
+			ctx->f->pushi = _pushi_ascii;
+			ctx->f->pushd = _pushd_ascii;
 			break;
 		case SEA_ALN_CIGAR:
-			f.pushm = _pushm_cigar;
-			f.pushx = _pushx_cigar;
-			f.pushi = _pushi_cigar;
-			f.pushd = _pushd_cigar;
+			ctx->f->pushm = _pushm_cigar;
+			ctx->f->pushx = _pushx_cigar;
+			ctx->f->pushi = _pushi_cigar;
+			ctx->f->pushd = _pushd_cigar;
 			break;
 		case SEA_ALN_DIR:
-			f.pushm = _pushm_dir;
-			f.pushx = _pushx_dir;
-			f.pushi = _pushi_dir;
-			f.pushd = _pushd_dir;
+			ctx->f->pushm = _pushm_dir;
+			ctx->f->pushx = _pushx_dir;
+			ctx->f->pushi = _pushi_dir;
+			ctx->f->pushd = _pushd_dir;
 			break;
 		default:
-			f.pushm = NULL;
-			f.pushx = NULL;
-			f.pushi = NULL;
-			f.pushd = NULL;
+			ctx->f->pushm = NULL;
+			ctx->f->pushx = NULL;
+			ctx->f->pushi = NULL;
+			ctx->f->pushd = NULL;
 			break;
 	}
-	if(ctx->f.pushm == NULL || ctx->f.pushx == NULL
-		|| ctx->f.pushi == NULL || ctx->f.pushd == NULL) {
+	if(ctx->f->pushm == NULL || ctx->f->pushx == NULL
+		|| ctx->f->pushi == NULL || ctx->f->pushd == NULL) {
 		error_label = SEA_ERROR_INVALID_ARGS;
 		goto _sea_init_error_handler;
 	}
-
-	ctx->error_label = SEA_SUCCESS;
-	return ctx;
+	return(ctx);
 
 _sea_init_error_handler:
 	if(ctx != NULL) {
-		if(ctx.f != NULL) {
-			free(ctx.f);
-			ctx.f = NULL;
+		if(ctx->f != NULL) {
+			free(ctx->f);
+			ctx->f = NULL;
 		}
 		memset(ctx, 0, sizeof(struct sea_context));
-
-		/** set error label (the value can be retrieved with sea_get_error) */
-		ctx->error_label = error_label;
+		ctx->alg = error_label;
 	}
-	return ctx;
+	return(ctx);
 }
 
 /**
@@ -449,112 +408,157 @@ _sea_init_error_handler:
  * @sa sea_init
  */
 struct sea_result *sea_align(
-	sea_ctx_t *ctx,
+	sea_ctx_t const *ctx,
 	void const *a,
-	sea_int_t apos,
-	sea_int_t alen,
+	int64_t apos,
+	int64_t alen,
 	void const *b,
-	sea_int_t bpos,
-	sea_int_t blen)
+	int64_t bpos,
+	int64_t blen)
 {
-	sea_int_t i;
-	sea_int_t bw = ctx->param.bandwidth;
-	sea_int_t m  = ctx->param.m,
-			  gi = ctx->param.gi;
-	sea_int_t alnsize;					/** size of struct sea_result and alignment string */
-//	sea_int_t matsize;					/** size of dynamic programming matrix */
-//	sea_int_t const masize = 256;		/** size of memory alignment */
-	struct sea_result *aln = NULL;
-	struct sea_vals val;
-	sea_int_t error_label = SEA_ERROR;
+	int32_t i;
+	int8_t bw = ctx->bw;
+	int8_t m  = ctx->m,
+		   gi = ctx->gi;
+	int32_t *iv;
+	struct sea_process c;
+	struct sea_result *r = NULL;
+	int32_t error_label = SEA_ERROR;
 
 	/* check if ctx points to valid context */
 	if(ctx == NULL) {
 		error_label = SEA_ERROR_INVALID_CONTEXT;
 		goto _sea_error_handler;
 	}
+
 	/* check if the pointers, start position values, extension length values are proper. */
 	if(a == NULL || b == NULL || apos < 0 || alen < 0 || bpos < 0 || blen < 0) {
 		error_label = SEA_ERROR_INVALID_ARGS;
 		goto _sea_error_handler;
 	}
 
-	/* calculate the size of sea_result (a structure to hold alignment results) */
-	alnsize = sizeof(char) * (alen + blen + ctx->param.bandwidth + 1) + sizeof(struct sea_result);
-
-	/* malloc memory of sea_result */
-	aln = (struct sea_result *)malloc(alnsize);
-	if(aln == NULL) {
-		error_label = SEA_ERROR_OUT_OF_MEM;
-		goto _sea_error_handler;
-	}
-	/* clean up sea_result */
-	aln->aln = (void *)((struct sea_result *)aln + 1);
-	((char *)(aln->aln))[0] = 0;					/** aln->aln[0] = '\0'; */
-	aln->score = 0;
-	aln->a = a; aln->apos = apos; aln->alen = alen;
-	aln->b = b; aln->bpos = bpos; aln->blen = blen;
-	aln->len = alnsize;
-	aln->ctx = ctx;
-
 	/**
 	 * if one of the length is zero, returns with score = 0 and aln = "".
 	 */
 	if(alen == 0 || blen == 0) {
-		aln->alen = aln->blen = aln->len = 0;
-		return aln;
+		r = (struct sea_result *)malloc(sizeof(struct sea_result) + 1);
+		r->a = a;
+		r->apos = apos;
+		r->alen = alen;
+		r->b = b;
+		r->bpos = bpos;
+		r->blen = blen;
+		r->len = 0;
+		r->score = 0;
+		r->aln = (void *)(r + 1);
+		*((uint8_t *)r->aln) = '\0';
+		r->ctx = ctx;
+		return(r);
 	}
 
-	/* initialize sea_vals */
-	AMALLOC(val.init, 2*bw, 1);
+	/**
+	 * initialize local context
+	 */
+
+	/** initialize init vector */
+	AMALLOC(iv, 2*bw, 1);
+	c.v.pv = iv;
+	c.v.cv = iv + bw;
+	c.v.clen = c.v.plen = bw;
+	c.v.size = sizeof(int32_t);
 	#define _Q(x)		( (x) - bw/2 )
 	for(i = 0; i < bw; i++) {
-		val.init[i]    = -gi + (_Q(i) < 0 ? -_Q(i) : _Q(i)+1) * (2 * gi - m);
-		val.init[i+bw] =       (_Q(i) < 0 ? -_Q(i) : _Q(i)  ) * (2 * gi - m);
+		((int32_t *)c.v.pv)[i] = -gi + (_Q(i) < 0 ? -_Q(i) : _Q(i)+1) * (2 * gi - m);
+		((int32_t *)c.v.cv)[i] =       (_Q(i) < 0 ? -_Q(i) : _Q(i)  ) * (2 * gi - m);
 	}
 	#undef _Q
 
-	/* malloc memory of the DP matrix */
-//	matsize = ctx->fp._sea_matsize(alen, blen, bw);
-//	matsize = ((matsize + masize - 1) / masize) * masize;
-	AMALLOC(val.mat, ctx->param.init_matsize, ctx->param.memaln);
-	if(val.mat == NULL) {
+	/** initialize sequence reader */
+	rd_init(c.a, ctx->f->popa, apos, alen);
+	rd_init(c.b, ctx->f->popb, bpos, blen);
+	c.alen = alen;
+	c.blen = blen;
+	c.alim = c.alen - bw/2;
+	c.blim = c.blen - bw/2;
+
+	/** initialize alignment writer */
+	wr_init(c.l, ctx->f);
+
+	/** initialize memory */
+	c.size = ctx->isize;
+	AMALLOC(c.dp.sp, c.size, ctx->memaln);
+	if(c.dp.sp == NULL) {
 		error_label = SEA_ERROR_OUT_OF_MEM;
 		goto _sea_error_handler;
 	}
-	val.matsize = ctx->param.init_matsize;
-	val.spos.i = val.spos.j = 0;					/** (0, 0) */
-	val.spos.p = val.spos.q = 0;					/** (0, 0) */
-	val.epos.i = val.epos.j = 0;
-	val.epos.p = val.epos.q = 0;
-	val.max = 0;									/** score at (0, 0) */
+	c.dp.ep = (c.pdp = c.dp.sp) + c.size;
+
+	AMALLOC(c.dr.sp, c.size, ctx->memaln);
+	if(c.dr.sp == NULL) {
+		error_label = SEA_ERROR_OUT_OF_MEM;
+		goto _sea_error_handler;
+	}
+	c.dr.ep = (c.pdr = c.dr.sp) + c.size;
+
+	/**
+	 * initialize coordinates
+	 */
+	c.i = c.j = 0;
+	c.p = c.q = 0;
+	c.mi = c.mj = 0;
+	c.mp = c.mq = 0;
+
+	/**
+	 * initialize max
+	 */
+	c.max = 0;
+
 
 	/* do alignment */
-//	error_label = ctx->fp._sea_sea(aln, ctx->param, mat);
-	if(ctx->diag8._sea_sea != NULL) {
-		error_label = ctx->diag8._sea_sea(aln, ctx, val); /** chain: diag8 -> diag16 -> diag32 */
-	} else {
-		error_label = ctx->naive._sea_sea(aln, ctx, val); /** chain disabled */
-	}
+	error_label = ctx->f->twig(ctx, &c);
 	if(error_label != SEA_SUCCESS) {
 		goto _sea_error_handler;					/** when the path went out of the band */
 	}
 
-	/* clean DP matrix */
-	AFREE(val.mat, 2*ctx->param.init_matsize);
-	AFREE(val.init, bw);
+	/* finishing */
+	r = (struct sea_result *)c.l.p;
+	c.l.p = (uint8_t *)(r + 1);
+	r->aln = (void *)c.l.p;
+	r->len = c.l.size - c.l.pos;
+	for(i = 0; i < r->len; i++) {
+		c.l.p[i] = c.l.p[c.l.pos+i];
+	}
+	c.l.p[i] = '\0';
+	r->a = a;
+	r->b = b;
+	r->apos = apos;
+	r->bpos = bpos;
+	r->alen = c.alen;
+	r->blen = c.blen;
+	r->score = c.max;
+	r->ctx = ctx;
 
-	return aln;
+	/* clean DP matrix */
+	AFREE(iv, 2*bw);
+	AFREE(c.dp.sp, ctx->isize);
+	AFREE(c.dr.sp, ctx->isize);
+
+	return(r);
 
 _sea_error_handler:
-	if(aln != NULL) {
-//		aln->a = aln->b = aln->aln = NULL;
-		((char *)(aln->aln))[0] = 0;
-		aln->len = error_label;
-		aln->score = 0;
-		aln->apos = aln->bpos = aln->alen = aln->blen = 0;
-	}
-	return aln;
+	r = (struct sea_result *)malloc(sizeof(struct sea_result) + 1);
+	r->a = NULL;
+	r->apos = 0;
+	r->alen = 0;
+	r->b = NULL;
+	r->bpos = 0;
+	r->blen = 0;
+	r->len = 0;
+	r->score = error_label;
+	r->aln = (void *)(r + 1);
+	*((uint8_t *)r->aln) = '\0';
+	r->ctx = ctx;
+	return(r);
 }
 
 /**
@@ -567,16 +571,13 @@ _sea_error_handler:
  *
  * @return error number, defined in sea_error
  */
-sea_int_t sea_get_error_num(
+int sea_get_error_num(
 	sea_ctx_t *ctx,
 	struct sea_result *aln)
 {
-	sea_int_t error_label = SEA_SUCCESS;
-	if(ctx != NULL) {
-		error_label = ctx->error_label;
-	}
+	int32_t error_label = SEA_SUCCESS;
 	if(aln != NULL) {
-		error_label = aln->len;
+		error_label = aln->score;
 	}
 	return error_label;
 }

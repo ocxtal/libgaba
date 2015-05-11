@@ -5,14 +5,14 @@ def options(opt):
 	pass
 
 def configure(conf):
-	conf.env.append_value('CFLAGS', '-msse4.1')
+	conf.load('gas')
 
+	conf.env.append_value('CFLAGS', '-msse4.1')
 	conf.env.append_value('OBJ', 'io')
 
 def build(bld):
-	"""
-	bld.objects(
+	bld(
 		source = 'io.s',
-		features = 'c',
+		features = 'asm',
 		target = 'io')
-	"""
+	pass

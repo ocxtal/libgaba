@@ -38,86 +38,86 @@ __pop_2bit8packed:
 	# ascii
 	.globl __pushm_ascii
 __pushm_ascii:
+	addq $-1, %rsi
 	movb $77, (%rdi, %rsi)
 	movq %rsi, %rax
-	addq $-1, %rax
 	ret
 
 	.globl __pushx_ascii
 __pushx_ascii:
+	addq $-1, %rsi
 	movb $88, (%rdi, %rsi)
 	movq %rsi, %rax
-	addq $-1, %rax
 	ret
 
 	.globl __pushi_ascii
 __pushi_ascii:
+	addq $-1, %rsi
 	movb $73, (%rdi, %rsi)
 	movq %rsi, %rax
-	addq $-1, %rax
 	ret
 
 	.globl __pushd_ascii
 __pushd_ascii:
+	addq $-1, %rsi
 	movb $68, (%rdi, %rsi)
 	movq %rsi, %rax
-	addq $-1, %rax
 	ret
 
 	# cigar
 	.globl __pushm_cigar
 __pushm_cigar:
+	addq $-1, %rsi
 	movb $77, (%rdi, %rsi)
 	movq %rsi, %rax
-	addq $-1, %rax
 	ret
 
 	.globl __pushx_cigar
 __pushx_cigar:
+	addq $-1, %rsi
 	movb $88, (%rdi, %rsi)
 	movq %rsi, %rax
-	addq $-1, %rax
 	ret
 
 	.globl __pushi_cigar
 __pushi_cigar:
+	addq $-1, %rsi
 	movb $73, (%rdi, %rsi)
 	movq %rsi, %rax
-	addq $-1, %rax
 	ret
 
 	.globl __pushd_cigar
 __pushd_cigar:
+	addq $-1, %rsi
 	movb $68, (%rdi, %rsi)
 	movq %rsi, %rax
-	addq $-1, %rax
 	ret
 
 	# direction string
 	.globl __pushm_dir
 __pushm_dir:
-	movb $77, (%rdi, %rsi)
+	addq $-2, %rsi
+	movw $1, (%rdi, %rsi)
 	movq %rsi, %rax
-	addq $-1, %rax
 	ret
 
 	.globl __pushx_dir
 __pushx_dir:
-	movb $88, (%rdi, %rsi)
+	addq $-2, %rsi
+	movw $1, (%rdi, %rsi)
 	movq %rsi, %rax
-	addq $-1, %rax
 	ret
 
 	.globl __pushi_dir
 __pushi_dir:
-	movb $73, (%rdi, %rsi)
+	addq $-1, %rsi
+	movb $1, (%rdi, %rsi)
 	movq %rsi, %rax
-	addq $-1, %rax
 	ret
 
 	.globl __pushd_dir
 __pushd_dir:
-	movb $68, (%rdi, %rsi)
+	addq $-1, %rsi
+	movb $0, (%rdi, %rsi)
 	movq %rsi, %rax
-	addq $-1, %rax
 	ret

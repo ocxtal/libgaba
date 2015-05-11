@@ -33,8 +33,11 @@
 namespace sea {
 #endif
 
+#include <stdlib.h>							/** NULL and size_t */
+
 /** deprecated */
 /* fixme: use config.h instead of hard coding */
+#if 0
 #include <stdint.h>
 typedef 	int64_t 	sea_int_t;			/**< sea_int_t: for general integer variables. must be signed, 32-bit integer or larger. */
 #define SEA_INT_MIN 	( INT64_MIN )
@@ -47,6 +50,7 @@ typedef 	int32_t 	sea_cell_t;			/**< sea_cell_t: for cell values in DP matrices.
 typedef 	int8_t		sea_sint_t;			/** sea_sint_t: for small values */
 #define SEA_SINT_MIN 	( INT8_MIN )
 #define SEA_SINT_MAX 	( INT8_MAX )
+#endif
 
 /**
  * @enum sea_flags_pos
@@ -127,7 +131,7 @@ enum sea_flags_seq_a {
  *
  * @brief (API) constants of the sequence format option.
  */
-enum sea_flags_seq_a {
+enum sea_flags_seq_b {
 	SEA_SEQ_B_ASCII 		= 1<<SEA_FLAGS_POS_SEQ_B,
 	SEA_SEQ_B_4BIT 			= 2<<SEA_FLAGS_POS_SEQ_B,
 	SEA_SEQ_B_2BIT 			= 3<<SEA_FLAGS_POS_SEQ_B,
@@ -186,7 +190,7 @@ struct sea_result {
 	int64_t alen;			/*!< alignment length on a. the alignment interval is a[apos]..a[apos+alen-1] */
 	int64_t bpos;			/*!< alignment start position on b. */
 	int64_t blen;			/*!< alignment length on b. the alignment interval is b[bpos]..b[bpos+blen-1] */
-	struct sea_context *ctx;/*!< a pointer to a alignment context structure. */
+	struct sea_context const *ctx;/*!< a pointer to a alignment context structure. */
 };
 
 /**
@@ -291,8 +295,8 @@ struct sea_process {
 	int64_t i, j, p, q;			/*!< temporary */
 	int64_t mi, mj, mp, mq;		/*!< maximum score position */
 	int64_t size;				/*!< default malloc size */
-	int32_t bw;					/*!< bandwidth */
 	int32_t max;				/*!< (inout) current maximum score */
+//	int32_t bw;					/*!< bandwidth */
 };
 
 /**
@@ -366,10 +370,10 @@ struct sea_context {
 	int8_t mask;		/*!< a dynamic programming cost: mask length (in the mask-match algorithm) */
 	
 	int8_t k;			/*!< heuristic search length stretch ratio. (default is k = 4) */
-	int32_t tx;			/*!< xdrop threshold. see sea_init for more details */
-	int32_t tc;			/*!< chain threshold */
-	int32_t tb; 		/*!< balloon termination threshold. */
-	int32_t bw;			/*!< the width of the band. */
+	int8_t bw;			/*!< the width of the band. */
+	int16_t tx;			/*!< xdrop threshold. see sea_init for more details */
+	int16_t tc;			/*!< chain threshold */
+	int16_t tb; 		/*!< balloon termination threshold. */
 	int32_t min;		/*!< (in) lower bound of the score */
 	uint32_t alg;		/*!< algorithm flag (same as (ctx->flags) & SEA_FLAG_MASK_ALG) */
 
@@ -426,35 +430,6 @@ sea_ctx_t *sea_init(
 	int32_t tb);
 
 /**
- * @fn sea_init_fp
- *
- * @brief (internal) constructs and initializes an alignment context.
- *
- * @param[in] flags : option flags.
- * @param[in] sea_sea : a pointer to an alignment function.
- * @param[in] sea_matsize : a pointer to a function which calculates a size of a matrix.
- * @param[in] m : match award in the Dynamic Programming. (m >= 0)
- * @param[in] x :  mismatch cost. (x < m)
- * @param[in] gi : gap open cost. (or just gap cost in the linear-gap cost) (2gi <= x)
- * @param[in] ge : gap extension cost. (ge <= 0) valid only in the affine-gap cost. the total penalty of the gap with length L is gi + (L - 1)*ge.
- * @param[in] xdrop : xdrop threshold. (xdrop > 0) valid only in the seed-and-extend alignment. the extension is terminated when the score S meets S < max - xdrop.
- *
- * @return a pointer to sea_context structure.
- *
- * @sa sea_free, sea_sea
- */
-sea_ctx_t *sea_init_fp(
-	int32_t flags,
-	int32_t (*sea_sea)(			/*!< diag 8bit */
-		struct sea_context *ctx,
-		struct sea_process *proc),
-	int8_t m,
-	int8_t x,
-	int8_t gi,
-	int8_t ge,
-	int32_t xdrop);
-
-/**
  * @fn sea_align
  *
  * @brief (API) alignment function. 
@@ -472,7 +447,7 @@ sea_ctx_t *sea_init_fp(
  * @sa sea_init
  */
 sea_res_t *sea_align(
-	sea_ctx_t *ctx,
+	sea_ctx_t const *ctx,
 	void const *a,
 	int64_t apos,
 	int64_t alen,

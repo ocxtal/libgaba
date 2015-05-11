@@ -13,137 +13,8 @@
 /**
  * defaults
  */
-#define _DP 			SEA_DYNAMIC
-#define _SCORE 			SEA_LINEAR_GAP_COST
-
-/**
- * sequence reader implementations
- */
-
-/**
- * @macro rd_init
- * @brief initialize a sequence reader instance.
- */
-#define rd_init(r, fp, base, spos) { \
-	(r).p = (void *)base; \
-	(r).spos = spos; \
-	(r).b = 0; \
-	(r).pop = fp; \
-}
-
-/**
- * @macro rd_fetch
- * @brief fetch a decoded base into r.b.
- */
-#define rd_fetch(r, pos) { \
-	(r).b = (r).pop((r).p, (r).spos + pos); \
-}
-
-/**
- * @macro rd_cmp
- * @brief compare two fetched bases.
- * @return true if two bases are the same, false otherwise.
- */
-#define rd_cmp(r1, r2)	( (r1).b == (r2).b )
-
-/**
- * @macro rd_decode
- * @brief get a cached char
- */
-#define rd_decode(r)	( (r).b )
-/**
- * @macro rd_close
- * @brief fill the instance with zero.
- */
-#define rd_close(r) { \
-	(r).p = NULL; \
-	(r).spos = 0; \
-	(r).b = 0; \
-	(r).pop = NULL; \
-}
-
-/**
- * alignment writer implementations
- */
-
-/**
- * @enum _ALN_CHAR
- * @brief alignment character, used in ascii output format.
- */
-enum _ALN_CHAR {
-	MCHAR = 'M',
-	XCHAR = 'X',
-	ICHAR = 'I',
-	DCHAR = 'D'
-};
-
-/**
- * @macro wr_init
- * @brief initialize an alignment writer instance.
- */
-#define wr_init(w, k) { \
-	(w).p = NULL; \
-	(w).pos = 0; \
-	(w).pushm = (k)->f.pushm; \
-	(w).pushx = (k)->f.pushx; \
-	(w).pushi = (k)->f.pushi; \
-	(w).pushd = (k)->f.pushd; \
-}
-
-/**
- * @macro wr_alloc
- * @brief allocate a memory for the alignment string.
- */
-#define wr_alloc(w, size) { \
-	if((w).p != NULL) { \
-		free((w).p); (w).p = NULL; \
-	} \
-	(w).p = malloc(sizeof(uint8_t) * size); \
-	(w).pos = size - 1; \
-	(w).size = size; \
-}
-
-/**
- * @macro wr_pushm, wr_pushx, wr_pushi, wr_pushd
- * @brief push an alignment character
- */
-#define wr_pushm(w) { \
-	(w).pos = (w).pushm((w).p, (w).pos); \
-}
-#define wr_pushx(w) { \
-	(w).pos = (w).pushx((w).p, (w).pos); \
-}
-#define wr_pushi(w) { \
-	(w).pos = (w).pushi((w).p, (w).pos); \
-}
-#define wr_pushd(w) { \
-	(w).pos = (w).pushd((w).p, (w).pos); \
-}
-
-/**
- * @macro wr_finish
- * @brief finish the instance (move the content of the array to the front)
- */
-#define wr_finish(w) { \
-	int64_t i, j; \
-	for(i = (w).pos, j = 0; i < (w).size; i++, j++) { \
-		(w).p[j] = (w).p[i]; \
-	} \
-	(w).p[j] = 0; \
-}
-
-/**
- * @macro wr_close
- * @brief free malloc'd memory and fill the instance with zero.
- */
-#define wr_close(w) { \
-	if((w).p != NULL) { \
-		free((w).p); (w).p = NULL; \
-	} \
-	(w).pos = 0; \
-	(w).pushm = (w).pushx = (w).pushi = (w).pushd = NULL; \
-}
-
+// #define DP 				SEA_DYNAMIC
+// #define COST 			SEA_LINEAR_GAP_COST
 
 /**
  * direction determiner variants
@@ -245,13 +116,13 @@ typedef struct _dir dir_t;
 /**
  * macro aliasing
  */
-#if _DP == SEA_DYNAMIC
+#if DP == SEA_DYNAMIC
 	#define dir_next 			dir_next_dynamic
-#elif _DP == SEA_GUIDED
+#elif DP == SEA_GUIDED
 	#define dir_next 			dir_next_guided
-#else /* #if _DP == SEA_DYNAMIC */
-	#error "_DP must be SEA_DYNAMIC or SEA_GUIDED."
-#endif /* #if _DP == SEA_DYNAMIC */
+#else /* #if DP == SEA_DYNAMIC */
+	#error "DP must be SEA_DYNAMIC or SEA_GUIDED."
+#endif /* #if DP == SEA_DYNAMIC */
 
 
 /**
@@ -260,39 +131,39 @@ typedef struct _dir dir_t;
 #define HEADER(base)			QUOTE(HEADER_WITH_SUFFIX(base, _impl.h))
 #include HEADER(BASE)
 
-#if _SCORE == SEA_LINEAR_GAP_COST
+#if COST == SEA_LINEAR_GAP_COST
 
-	#define VARIANT				_linear
+	#define COST_SUFFIX 		_linear
 
-#elif _SCORE == SEA_AFFINE_GAP_COST
+#elif COST == SEA_AFFINE_GAP_COST
 
-	#define VARIANT				_affine
+	#define COST_SUFFIX 		_affine
 
-#else /* #if _SCORE == SEA_LINEAR_GAP_COST */
+#else /* #if COST == SEA_LINEAR_GAP_COST */
 
-	#error "_SCORE must be SEA_LINEAR_GAP_COST or SEA_AFFINE_GAP_COST."
+	#error "COST must be SEA_LINEAR_GAP_COST or SEA_AFFINE_GAP_COST."
 
-#endif /* #if _SCORE == SEA_LINEAR_GAP_COST */
+#endif /* #if COST == SEA_LINEAR_GAP_COST */
 
-#define bpl					FUNC_WITH_SUFFIX(BASE, VARIANT, _bpl)
-#define dir_exp				FUNC_WITH_SUFFIX(BASE, VARIANT, _dir_exp)
-#define fill_decl			FUNC_WITH_SUFFIX(BASE, VARIANT, _fill_decl)
-#define fill_init			FUNC_WITH_SUFFIX(BASE, VARIANT, _fill_init)
-#define fill_former_body	FUNC_WITH_SUFFIX(BASE, VARIANT, _fill_former_body)
-#define fill_go_down		FUNC_WITH_SUFFIX(BASE, VARIANT, _fill_go_down)
-#define fill_go_right		FUNC_WITH_SUFFIX(BASE, VARIANT, _fill_go_right)
-#define fill_latter_body	FUNC_WITH_SUFFIX(BASE, VARIANT, _fill_latter_body)
-#define fill_check_term		FUNC_WITH_SUFFIX(BASE, VARIANT, _fill_check_term)
-#define fill_check_chain	FUNC_WITH_SUFFIX(BASE, VARIANT, _fill_check_chain)
-#define fill_check_mem		FUNC_WITH_SUFFIX(BASE, VARIANT, _fill_check_mem)
-#define fill_finish			FUNC_WITH_SUFFIX(BASE, VARIANT, _fill_finish)
-#define chain_push_ivec		FUNC_WITH_SUFFIX(BASE, VARIANT, _chain_push_ivec)
-#define search_terminal		FUNC_WITH_SUFFIX(BASE, VARIANT, _search_terminal)
-#define search_max_score	FUNC_WITH_SUFFIX(BASE, VARIANT, _search_max_score)
-#define trace_decl			FUNC_WITH_SUFFIX(BASE, VARIANT, _trace_decl)
-#define trace_init			FUNC_WITH_SUFFIX(BASE, VARIANT, _trace_init)
-#define trace_body			FUNC_WITH_SUFFIX(BASE, VARIANT, _trace_body)
-#define trace_finish		FUNC_WITH_SUFFIX(BASE, VARIANT, _trace_finish)
+#define bpl					LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _bpl)
+#define dir_exp				LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _dir_exp)
+#define fill_decl			LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _fill_decl)
+#define fill_init			LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _fill_init)
+#define fill_former_body	LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _fill_former_body)
+#define fill_go_down		LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _fill_go_down)
+#define fill_go_right		LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _fill_go_right)
+#define fill_latter_body	LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _fill_latter_body)
+#define fill_check_term		LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _fill_check_term)
+#define fill_check_chain	LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _fill_check_chain)
+#define fill_check_mem		LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _fill_check_mem)
+#define fill_finish			LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _fill_finish)
+#define chain_push_ivec		LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _chain_push_ivec)
+#define search_terminal		LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _search_terminal)
+#define search_max_score	LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _search_max_score)
+#define trace_decl			LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _trace_decl)
+#define trace_init			LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _trace_init)
+#define trace_body			LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _trace_body)
+#define trace_finish		LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _trace_finish)
 
 
 // #include "naive.h"

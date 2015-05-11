@@ -13,8 +13,15 @@
 #include "util/util.h"			/** internal declarations */
 #include "variant/variant.h"	/** dynamic programming variants */
 
+/**
+ * ctxとprocはthread localにしたい。
+ * gccのtlsで十分か?
+ * fiberと組み合わせると破綻する。これをうまく扱う方法はあるか?
+ * 
+ */
+
 int32_t
-DECLARE_FUNC(BASE, VARIANT, SUFFIX)(
+DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 	sea_ctx_t const *ctx,
 	sea_proc_t *proc)
 {
@@ -93,7 +100,7 @@ DECLARE_FUNC(BASE, VARIANT, SUFFIX)(
 
 			/** chain */
 			chain_push_ivec(c, v);
-			ret = CALL_FUNC(BASE, VARIANT , SUFFIX)(ctx, &c);
+			ret = CALL_FUNC(BASE, SUFFIX)(ctx, &c);
 
 			/** pop */
 			free(c.dp.sp);
@@ -101,7 +108,7 @@ DECLARE_FUNC(BASE, VARIANT, SUFFIX)(
 		} else if(stat == CHAIN) {
 			/** chain to alternatve algorithm */
 			chain_push_ivec(c, v);
-			ret = func_next(k, CALL_FUNC(BASE, VARIANT, SUFFIX))(ctx, &c);
+			ret = func_next(k, CALL_FUNC(BASE, SUFFIX))(ctx, &c);
 		} else if(stat == CAP) {
 			/** chain to the cap algorithm */
 			chain_push_ivec(c, v);
@@ -122,12 +129,12 @@ DECLARE_FUNC(BASE, VARIANT, SUFFIX)(
 			}
 
 			/** トレースしない場合はここでリターン */
-			if(k->f.pushm == NULL) {			/** 汚い実装 */
+			if(k.f->pushm == NULL) {			/** 汚い実装 */
 				return SEA_SUCCESS;
 			}
 
 			/** initialize traceback */
-			wr_init(c.l, c.p); proc->l = c.l;
+			wr_alloc(c.l, c.p); proc->l = c.l;
 		}
 
 		/** restore pdp */

@@ -11,6 +11,112 @@
 #include "../include/sea.h"
 
 /**
+ * function declarations
+ * naive, twig, branch, trunk, balloon, bulge, cap
+ */
+int32_t
+naive_linear_dynamic(
+	struct sea_context const *ctx,
+	struct sea_process *proc);
+int32_t
+naive_affine_dynamic(
+	struct sea_context const *ctx,
+	struct sea_process *proc);
+int32_t
+naive_linear_guided(
+	struct sea_context const *ctx,
+	struct sea_process *proc);
+int32_t
+naive_affine_guided(
+	struct sea_context const *ctx,
+	struct sea_process *proc);
+
+int32_t
+twig_linear_dynamic(
+	struct sea_context const *ctx,
+	struct sea_process *proc);
+int32_t
+twig_affine_dynamic(
+	struct sea_context const *ctx,
+	struct sea_process *proc);
+int32_t
+twig_linear_guided(
+	struct sea_context const *ctx,
+	struct sea_process *proc);
+int32_t
+twig_affine_guided(
+	struct sea_context const *ctx,
+	struct sea_process *proc);
+
+int32_t
+branch_linear_dynamic(
+	struct sea_context const *ctx,
+	struct sea_process *proc);
+int32_t
+branch_affine_dynamic(
+	struct sea_context const *ctx,
+	struct sea_process *proc);
+int32_t
+branch_linear_guided(
+	struct sea_context const *ctx,
+	struct sea_process *proc);
+int32_t
+branch_affine_guided(
+	struct sea_context const *ctx,
+	struct sea_process *proc);
+
+int32_t
+trunk_linear_dynamic(
+	struct sea_context const *ctx,
+	struct sea_process *proc);
+int32_t
+trunk_affine_dynamic(
+	struct sea_context const *ctx,
+	struct sea_process *proc);
+int32_t
+trunk_linear_guided(
+	struct sea_context const *ctx,
+	struct sea_process *proc);
+int32_t
+trunk_affine_guided(
+	struct sea_context const *ctx,
+	struct sea_process *proc);
+
+int32_t
+balloon_linear_dynamic(
+	struct sea_context const *ctx,
+	struct sea_process *proc);
+int32_t
+balloon_affine_dynamic(
+	struct sea_context const *ctx,
+	struct sea_process *proc);
+int32_t
+balloon_linear_guided(
+	struct sea_context const *ctx,
+	struct sea_process *proc);
+int32_t
+balloon_affine_guided(
+	struct sea_context const *ctx,
+	struct sea_process *proc);
+
+int32_t
+bulge_linear_dynamic(
+	struct sea_context const *ctx,
+	struct sea_process *proc);
+int32_t
+bulge_affine_dynamic(
+	struct sea_context const *ctx,
+	struct sea_process *proc);
+int32_t
+bulge_linear_guided(
+	struct sea_context const *ctx,
+	struct sea_process *proc);
+int32_t
+bulge_affine_guided(
+	struct sea_context const *ctx,
+	struct sea_process *proc);
+
+/**
  * Constants representing algorithms
  *
  * Notice: This constants must be consistent with the sea_flags_alg in sea.h.
@@ -30,6 +136,135 @@
 #define COP(x, y, band)				( (x) + (y) )
 #define COQ(x, y, band) 			( ((y)-(x))>>1 )
 #define INSIDE(x, y, p, q, band)	( (COX(p, q, band) < (x)) && (COY(p, q, band) < (y)) )
+
+
+/**
+ * sequence reader implementations
+ */
+
+/**
+ * @macro rd_init
+ * @brief initialize a sequence reader instance.
+ */
+#define rd_init(r, fp, base, sp) { \
+	(r).p = (void *)base; \
+	(r).spos = sp; \
+	(r).b = 0; \
+	(r).pop = fp; \
+}
+
+/**
+ * @macro rd_fetch
+ * @brief fetch a decoded base into r.b.
+ */
+#define rd_fetch(r, pos) { \
+	(r).b = (r).pop((r).p, (r).spos + pos); \
+}
+
+/**
+ * @macro rd_cmp
+ * @brief compare two fetched bases.
+ * @return true if two bases are the same, false otherwise.
+ */
+#define rd_cmp(r1, r2)	( (r1).b == (r2).b )
+
+/**
+ * @macro rd_decode
+ * @brief get a cached char
+ */
+#define rd_decode(r)	( (r).b )
+/**
+ * @macro rd_close
+ * @brief fill the instance with zero.
+ */
+#define rd_close(r) { \
+	(r).p = NULL; \
+	(r).spos = 0; \
+	(r).b = 0; \
+	(r).pop = NULL; \
+}
+
+/**
+ * alignment writer implementations
+ */
+
+/**
+ * @enum _ALN_CHAR
+ * @brief alignment character, used in ascii output format.
+ */
+enum _ALN_CHAR {
+	MCHAR = 'M',
+	XCHAR = 'X',
+	ICHAR = 'I',
+	DCHAR = 'D'
+};
+
+/**
+ * @macro wr_init
+ * @brief initialize an alignment writer instance.
+ */
+#define wr_init(w, f) { \
+	(w).p = NULL; \
+	(w).pos = 0; \
+	(w).pushm = (f)->pushm; \
+	(w).pushx = (f)->pushx; \
+	(w).pushi = (f)->pushi; \
+	(w).pushd = (f)->pushd; \
+}
+
+/**
+ * @macro wr_alloc
+ * @brief allocate a memory for the alignment string.
+ */
+#define wr_alloc(w, s) { \
+	if((w).p != NULL) { \
+		free((w).p); (w).p = NULL; \
+	} \
+	(w).p = malloc(sizeof(uint8_t) * s); \
+	(w).pos = s; \
+	(w).size = s; \
+}
+
+/**
+ * @macro wr_pushm, wr_pushx, wr_pushi, wr_pushd
+ * @brief push an alignment character
+ */
+#define wr_pushm(w) { \
+	(w).pos = (w).pushm((w).p, (w).pos); \
+}
+#define wr_pushx(w) { \
+	(w).pos = (w).pushx((w).p, (w).pos); \
+}
+#define wr_pushi(w) { \
+	(w).pos = (w).pushi((w).p, (w).pos); \
+}
+#define wr_pushd(w) { \
+	(w).pos = (w).pushd((w).p, (w).pos); \
+}
+
+/**
+ * @macro wr_finish
+ * @brief finish the instance (move the content of the array to the front)
+ */
+#define wr_finish(w) { \
+	int64_t i, j; \
+	for(i = (w).pos, j = 0; i < (w).size; i++, j++) { \
+		(w).p[j] = (w).p[i]; \
+	} \
+	(w).p[j] = 0; \
+}
+
+/**
+ * @macro wr_close
+ * @brief free malloc'd memory and fill the instance with zero.
+ */
+#define wr_close(w) { \
+	if((w).p != NULL) { \
+		free((w).p); (w).p = NULL; \
+	} \
+	(w).pos = 0; \
+	(w).pushm = (w).pushx = (w).pushi = (w).pushd = NULL; \
+}
 
 /**
  * char vector shift operations
@@ -189,27 +424,33 @@ _read(void *ptr, int64_t pos, size_t size)
 
 /**
  * @macro FUNC_WITH_SUFFIX
- * @brief an wrapper macro of JOIN3, for the use of function name composition.
+ * @brief an wrapper macro of JOIN2, for the use of function name composition.
  */
-#define FUNC_WITH_SUFFIX(a,b,c)			JOIN3(a,b,c)
+#define FUNC_WITH_SUFFIX(a,b)			JOIN2(a,b)
+
+/**
+ * @macro LABEL_WITH_SUFFIX
+ * @breif an wrapper of JOIN3
+ */
+#define LABEL_WITH_SUFFIX(a,b,c)		JOIN3(a,b,c)
 
 /**
  * @macro DECLARE_FUNC
  * @brief a function declaration macro for static (local in a file) functions.
  */
-#define DECLARE_FUNC(file, var, opt) 	static FUNC_WITH_SUFFIX(file, var, opt)
+#define DECLARE_FUNC(file, opt) 		static FUNC_WITH_SUFFIX(file, opt)
 
 /**
  * @macro DECLARE_FUNC_GLOBAL
  * @brief a function declaration macro for global functions.
  */
-#define DECLARE_FUNC_GLOBAL(file, var, opt)	FUNC_WITH_SUFFIX(file, var, opt)
+#define DECLARE_FUNC_GLOBAL(file, opt)	FUNC_WITH_SUFFIX(file, opt)
 
 /**
  * @macro CALL_FUNC
  * @brief a function call macro, which is an wrap of a function name composition macro.
  */
-#define CALL_FUNC(file, var, opt)			FUNC_WITH_SUFFIX(file, var, opt)
+#define CALL_FUNC(file, opt)			FUNC_WITH_SUFFIX(file, opt)
 
 /**
  * @macro func_next
@@ -229,7 +470,7 @@ _read(void *ptr, int64_t pos, size_t size)
  * @macro LABEL
  * @brief a label declaration macro.
  */
-#define LABEL(file, var, label) 			FUNC_WITH_SUFFIX(file, var, label)
+#define LABEL(file, opt, label) 		LABEL_WITH_SUFFIX(file, opt, label)
 
 /* boolean */
 #define TRUE 			( 1 )
