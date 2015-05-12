@@ -44,7 +44,11 @@
 /**
  * @macro cap_linear_fill_init
  */
-#define cap_linear_fill_init(c, k, r)			naive_linear_fill_init(c, k, r)
+#define cap_linear_fill_init(c, k, r) { \
+	naive_linear_fill_init(c, k, r); \
+	c.alim = c.alen; \
+	c.blim = c.blen; \
+}
 
 /**
  * @macro cap_linear_fill_former_body
@@ -71,12 +75,13 @@
 		*((cell_t *)c.pdp) = k.min; \
 		c.pdp += sizeof(cell_t); \
 	} \
-	for(c.q = -lb; c.q < ub; c.q++) { \
+	for(c.q = lb; c.q < ub; c.q++) { \
 		rd_fetch(c.a, (c.i-c.q)-1); \
 		rd_fetch(c.b, (c.j+c.q)-1); \
-		d = ((cell_t *)c.pdp)[naive_linear_topleft(r, c)] + (rd_cmp(c.a, c.b) ? k.m : k.x); \
-		t = ((cell_t *)c.pdp)[naive_linear_top(r, c)] + k.gi; \
-		l = ((cell_t *)c.pdp)[naive_linear_left(r, c)] + k.gi; \
+		debug("d(%d), t(%d), l(%d)", ((cell_t *)c.pdp)[cap_linear_topleft(r, c)], ((cell_t *)c.pdp)[cap_linear_top(r, c)], ((cell_t *)c.pdp)[cap_linear_left(r, c)]); \
+		d = ((cell_t *)c.pdp)[cap_linear_topleft(r, c)] + (rd_cmp(c.a, c.b) ? k.m : k.x); \
+		t = ((cell_t *)c.pdp)[cap_linear_top(r, c)] + k.gi; \
+		l = ((cell_t *)c.pdp)[cap_linear_left(r, c)] + k.gi; \
 		if(c.q == -BW/2) { \
 			if(dir(r) == LEFT) { t = CELL_MIN; } \
 			if(dir2(r) == LL) { d = CELL_MIN; } \
@@ -123,7 +128,7 @@
 /**
  * @macro cap_linear_chain_push_ivec
  */
-#define cap_linear_chain_push_ivec(c, v)		naive_linear_chain_push_ivec(c, v)
+#define cap_linear_chain_push_ivec(c)			naive_linear_chain_push_ivec(c)
 
 /**
  * @macro cap_linear_search_terminal

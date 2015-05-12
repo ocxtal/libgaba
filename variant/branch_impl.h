@@ -85,7 +85,9 @@
 #define branch_linear_fill_init(c, k, r) { \
 	c.i -= BW/2; /** convert to the local coordinate*/ \
 	c.j += BW/2; \
-	dir_init(r); \
+	c.alim = c.alen - BW/2; \
+	c.blim = c.blen - BW/2; \
+	dir_init(r, c.pdr[c.p-1]); \
 	VEC_SET(mv, k.m); \
 	VEC_SET(xv, k.x); \
 	VEC_SET(gv, k.gi); \
@@ -96,7 +98,6 @@
 		VEC_SHIFT_R(v, v); \
 		VEC_INSERT_MSB(v, _read(c.v.pv, c.q, c.v.size)); \
 	} \
-	dir_next(r, c); \
 	VEC_STORE(c.pdp, v); \
 	VEC_ASSIGN(pv, v); \
 	VEC_SET(v, CELL_MIN); \
@@ -213,18 +214,14 @@
 /**
  * @macro branch_linear_chain_push_ivec
  */
-#define branch_linear_chain_push_ivec(c, v) { \
+#define branch_linear_chain_push_ivec(c) { \
 	dir_t r; \
-	dir_term(r, c); \
-	if(dir2(r) == TOP) { \
-		c.j--; \
-	} else { \
-		c.i--; \
-	} \
-	v.size = sizeof(cell_t); \
-	v.clen = v.plen = BW; \
-	v.cv = (cell_t *)c.pdp - 3*BW; \
-	v.pv = (cell_t *)c.pdp - 4*BW; \
+	c.i += BW/2; \
+	c.j -= BW/2; \
+	c.v.size = sizeof(cell_t); \
+	c.v.clen = c.v.plen = BW; \
+	c.v.cv = (cell_t *)c.pdp - 3*BW; \
+	c.v.pv = (cell_t *)c.pdp - 4*BW; \
 }
 
 /**

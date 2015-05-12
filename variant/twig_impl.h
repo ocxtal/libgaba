@@ -123,30 +123,35 @@
 		} \
 		VEC_STORE(c.pdp, maxv); \
 	} \
-	VEC_SET(zv, k.min); \
+	VEC_SET(zv, CELL_MIN); \
 	VEC_STORE(c.pdp, zv); \
 	VEC_STORE(c.pdp, pv); \
 	VEC_STORE(c.pdp, zv); \
-	VEC_STORE(c.pdp, pv); \
+	VEC_STORE(c.pdp, v); \
 	VEC_STORE(c.pdp, zv); \
 }
 
 /**
  * @macro twig_linear_chain_push_ivec
  */
-#define twig_linear_chain_push_ivec(c, v) { \
+#define twig_linear_chain_push_ivec(c) { \
 	dir_t r; \
+	c.i += BW; /** BW == 16 */ \
+	c.j -= BW; \
+	c.v.size = sizeof(cell_t); \
+	c.v.clen = c.v.plen = 2*BW; \
+	c.v.cv = (cell_t *)c.pdp - 5*BW/2; \
+	c.v.pv = (cell_t *)c.pdp - 9*BW/2; \
+}
+
+/**
 	dir_term(r, c); \
 	if(dir2(r) == TOP) { \
 		c.j--; \
 	} else { \
 		c.i--; \
 	} \
-	v.size = sizeof(cell_t); \
-	v.clen = v.plen = BW; \
-	v.cv = (cell_t *)c.pdp - 5*BW/2; \
-	v.pv = (cell_t *)c.pdp - 9*BW/2; \
-}
+*/
 
 /**
  * @macro twig_linear_search_terminal

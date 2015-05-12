@@ -57,9 +57,11 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 
 	/** fill-in */ {
 		/** init direction and vector */
+		cell_t *curr = (cell_t *)c.pdp;		/** debug */
 		fill_decl(c, k, r);
 		fill_init(c, k, r);
-		debug("init");
+		debug("init: r(%d)", dir2(r));
+		print_lane(curr, c.pdp);
 
 		stat = CAP;
 		while(c.i <= c.alim && c.j <= c.blim) {
@@ -68,10 +70,10 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 
 			fill_former_body(c, k, r);
 			if(dir(r) == TOP) {
-				debug("go down");
+				debug("go down: r(%d)", dir2(r));
 				fill_go_down(c, k, r);
 			} else {
-				debug("go right");
+				debug("go right: r(%d)", dir2(r));
 				fill_go_right(c, k, r);
 			}
 			fill_latter_body(c, k, r);
@@ -98,7 +100,6 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 	}
 
 	/** chain */ {
-		sea_ivec_t v;
 		void *spdp = c.pdp;
 		int32_t ret = SEA_SUCCESS;
 
@@ -116,7 +117,9 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 			debug("mem: c.size(%llu)", c.size);
 
 			/** chain */
-			chain_push_ivec(c, v);
+			chain_push_ivec(c);
+			print_lane(c.v.pv, c.v.pv + c.v.plen*sizeof(cell_t));
+			print_lane(c.v.cv, c.v.cv + c.v.clen*sizeof(cell_t));
 			ret = CALL_FUNC(BASE, SUFFIX)(ctx, &c);
 
 			/** pop */
@@ -125,12 +128,16 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 		} else if(stat == CHAIN) {
 			/** chain to alternatve algorithm */
 			debug("chain: %p", func_next(k, CALL_FUNC(BASE, SUFFIX)));
-			chain_push_ivec(c, v);
+			chain_push_ivec(c);
+			print_lane(c.v.pv, c.v.pv + c.v.plen*sizeof(cell_t));
+			print_lane(c.v.cv, c.v.cv + c.v.clen*sizeof(cell_t));
 			ret = func_next(k, CALL_FUNC(BASE, SUFFIX))(ctx, &c);
 		} else if(stat == CAP) {
 			/** chain to the cap algorithm */
 			debug("cap: %p", k.f->cap);
-			chain_push_ivec(c, v);
+			chain_push_ivec(c);
+			print_lane(c.v.pv, c.v.pv + c.v.plen*sizeof(cell_t));
+			print_lane(c.v.cv, c.v.cv + c.v.clen*sizeof(cell_t));
 			ret = k.f->cap(ctx, &c);
 		} else if(stat == TERM) {
 			/** search */
@@ -176,15 +183,18 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 		trace_init(c, k, r);
 		if(sp == 0) {
 			while(c.mi > 0 && c.mj > 0) {
+				debug("%lld, %lld, %lld, %lld", c.mi, c.mj, c.mp, c.mq);
 				trace_body(c, k, r);
 			}
 			while(c.mi > 0) { c.mi--; wr_pushd(c.l); }
 			while(c.mj > 0) { c.mj--; wr_pushi(c.l); }
 		} else {
 			while(c.mp > sp) {
+				debug("%lld, %lld, %lld, %lld", c.mi, c.mj, c.mp, c.mq);
 				trace_body(c, k, r);
 			}
 		}
+		debug("trace finish: c.p(%lld)", c.p);
 		trace_finish(c, k, r);
 	}
 

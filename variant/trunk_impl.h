@@ -87,6 +87,11 @@
  * @macro trunk_linear_fill_init
  */
 #define trunk_linear_fill_init(c, k, r) { \
+	c.i -= BW/2; \
+	c.j += BW/2; \
+	c.alim = c.alen - BW/2; \
+	c.blim = c.blen - BW/2; \
+	dir_init(r, c.pdr[c.p-1]); \
 	VEC_SET(mggv, k.m - 2*k.gi); \
 	VEC_SET(xggv, k.x - 2*k.gi); \
 	VEC_SET_LHALF(dv, k.m - 2*k.gi); \
@@ -176,7 +181,9 @@
 /**
  * @macro trunk_linear_chain_push_ivec
  */
-#define trunk_linear_chain_push_ivec(c, v) { \
+#define trunk_linear_chain_push_ivec(c) { \
+	c.i += BW/2; \
+	c.j -= BW/2; \
 }
 
 /**

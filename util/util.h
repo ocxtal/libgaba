@@ -117,6 +117,23 @@ bulge_affine_guided(
 	struct sea_context const *ctx,
 	struct sea_process *proc);
 
+int32_t
+cap_linear_dynamic(
+	struct sea_context const *ctx,
+	struct sea_process *proc);
+int32_t
+cap_affine_dynamic(
+	struct sea_context const *ctx,
+	struct sea_process *proc);
+int32_t
+cap_linear_guided(
+	struct sea_context const *ctx,
+	struct sea_process *proc);
+int32_t
+cap_affine_guided(
+	struct sea_context const *ctx,
+	struct sea_process *proc);
+
 /**
  * Constants representing algorithms
  *
@@ -364,21 +381,6 @@ int64_t _pushi_dir(uint8_t *p, int64_t pos);
 int64_t _pushd_dir(uint8_t *p, int64_t pos);
 
 /**
- * @fn _read
- */
-int32_t static inline
-_read(void *ptr, int64_t pos, size_t size)
-{
-	switch(size) {
-		case 1: return((int32_t)(((int8_t *)ptr)[pos]));
-		case 2: return((int32_t)(((int16_t *)ptr)[pos]));
-		case 4: return((int32_t)(((int32_t *)ptr)[pos]));
-		case 8: return((int32_t)(((int64_t *)ptr)[pos]));
-		default: return 0;
-	}
-}
-
-/**
  * string concatenation macros
  */
 
@@ -547,12 +549,13 @@ _read(void *ptr, int64_t pos, size_t size)
 	len += sprintf(c+len, "["); \
 	while(p != t) { \
 		len += sprintf(c+len, "%d,", *--t); \
-		if(len > (size - 10)) { \
+		if(len > (size - 20)) { \
 			size *= 2; \
 			c = realloc(c, size); \
 		} \
 	} \
-	c[len-1] = ']'; \
+	c[len == 1 ? 1 : len-1] = ']'; \
+	c[len == 1 ? 2 : len] = '\0'; \
 	debug("lane(%s)", c); \
 	free(c); \
 }
@@ -565,6 +568,29 @@ _read(void *ptr, int64_t pos, size_t size)
 }
 #define log_impl(fmt, ...) { \
 	dbprintf("[%s] " fmt "%s\n", __func__, __VA_ARGS__); \
+}
+
+/**
+ * @fn _read
+ */
+int32_t static inline
+_read_impl(void *ptr, int64_t pos, size_t size)
+{
+	switch(size) {
+		case 1: return((int32_t)(((int8_t *)ptr)[pos]));
+		case 2: return((int32_t)(((int16_t *)ptr)[pos]));
+		case 4: return((int32_t)(((int32_t *)ptr)[pos]));
+		case 8: return((int32_t)(((int64_t *)ptr)[pos]));
+		default: return 0;
+	}
+}
+
+int32_t static inline
+_read(void *ptr, int64_t pos, size_t size)
+{
+	int32_t r = _read_impl(ptr, pos, size);
+	debug("_read: r(%d) at %p, %lld, %d", r, ptr, pos, (int32_t)size);
+	return(r);
 }
 
 #endif /* #ifndef _UTIL_H_INCLUDED */

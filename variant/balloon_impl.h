@@ -74,8 +74,8 @@
  * @macro balloon_linear_fill_init
  */
 #define balloon_linear_fill_init(c, k, r) { \
-	dir_init(r); \
-	dir_init(b); \
+	dir_init(r, c.pdr[c.p-1]); \
+	dir_init(b, c.pdr[c.p-1]); \
 	pc = c.pdp; \
 	for(c.q = 0, eq = c.v.plen; c.q < eq; c.q++) { \
 		*((cell_t *)c.pdp) = _read(c.v.pv, c.q, c.v.size); \
@@ -181,16 +181,16 @@
 /**
  * @macro balloon_linear_chain_push_ivec
  */
-#define balloon_linear_chain_push_ivec(c, v) { \
+#define balloon_linear_chain_push_ivec(c) { \
 	c.p--; c.j--; /** always comes from top */ \
 	*((cell_t *)c.pdp) = BW; /** correct the lane width */ \
 	c.pdp += sizeof(cell_t); \
 	*((cell_t *)c.pdp-2) = CELL_MIN; /** fill the BW-th cell with min */ \
-	v.size = sizeof(cell_t); \
-	v.clen = BW; \
-	v.plen = BW; \
-	v.cv = (cell_t *)c.pdp - BW - 1; \
-	v.pv = (cell_t *)v.cv - BW - 1; \
+	c.v.size = sizeof(cell_t); \
+	c.v.clen = BW; \
+	c.v.plen = BW; \
+	c.v.cv = (cell_t *)c.pdp - BW - 1; \
+	c.v.pv = (cell_t *)c.v.cv - BW - 1; \
 }
 
 /**

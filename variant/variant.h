@@ -55,9 +55,9 @@ typedef struct _dir dir_t;
  * @macro dir_init
  * @brief initialize _dir struct
  */
-#define dir_init(r) { \
-	(r).d = LEFT; \
-	(r).d2 = LL; \
+#define dir_init(r, dir) { \
+	(r).d = (dir); \
+	(r).d2 = (dir)<<1; \
 }
 
 /**

@@ -72,12 +72,15 @@
  * @brief initialize fill-in step context
  */
 #define naive_linear_fill_init(c, k, r) { \
-	dir_init(r); \
+	c.i -= BW/2; \
+	c.j += BW/2; \
+	c.alim = c.alen - BW/2; \
+	c.blim = c.blen - BW/2; \
+	dir_init(r, c.pdr[c.p-1]); \
 	for(c.q = 0; c.q < c.v.clen; c.q++) { \
 		*((cell_t *)c.pdp) = _read(c.v.pv, c.q, c.v.size); \
 		c.pdp += sizeof(cell_t); \
 	} \
-	dir_next(r, c); \
 	for(c.q = 0; c.q < c.v.plen; c.q++) { \
 		*((cell_t *)c.pdp) = _read(c.v.cv, c.q, c.v.size); \
 		c.pdp += sizeof(cell_t); \
@@ -165,18 +168,14 @@
 /**
  * @macro naive_linear_chain_push_ivec
  */
-#define naive_linear_chain_push_ivec(c, v) { \
+#define naive_linear_chain_push_ivec(c) { \
 	dir_t r; \
-	dir_term(r, c); \
-	if(dir2(r) == TOP) { \
-		c.j--; \
-	} else { \
-		c.i--; \
-	} \
-	v.size = sizeof(cell_t); \
-	v.clen = v.plen = BW; \
-	v.cv = (cell_t *)c.pdp - BW; \
-	v.pv = (cell_t *)c.pdp - 2*BW; \
+	c.i += BW/2; \
+	c.j -= BW/2; \
+	c.v.size = sizeof(cell_t); \
+	c.v.clen = c.v.plen = BW; \
+	c.v.cv = (cell_t *)c.pdp - BW; \
+	c.v.pv = (cell_t *)c.pdp - 2*BW; \
 }
 
 /**
