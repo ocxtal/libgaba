@@ -537,6 +537,27 @@ _read(void *ptr, int64_t pos, size_t size)
 }
 
 /**
+ * @macro print_lane
+ */
+#define print_lane(p1, p2) { \
+	cell_t *p = p1, *t = p2; \
+	char *c = NULL; \
+	int len = 0, size = 128; \
+	c = malloc(size); \
+	len += sprintf(c+len, "["); \
+	while(p != t) { \
+		len += sprintf(c+len, "%d,", *--t); \
+		if(len > (size - 10)) { \
+			size *= 2; \
+			c = realloc(c, size); \
+		} \
+	} \
+	c[len-1] = ']'; \
+	debug("lane(%s)", c); \
+	free(c); \
+}
+
+/**
  * @macro log
  */
 #define log(...) { \

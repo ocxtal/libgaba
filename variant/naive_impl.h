@@ -95,23 +95,23 @@
  * @macro naive_linear_fill_go_down
  */
 #define naive_linear_fill_go_down(c, k, r) { \
- 	c.j++; \
+	c.j++; \
 }
 
 /**
  * @macro naive_linear_fill_go_right
  */
 #define naive_linear_fill_go_right(c, k, r) { \
- 	c.i++; \
+	c.i++; \
 }
 
 /**
  * @macro naive_linear_fill_latter_body
  */
 #define naive_linear_fill_latter_body(c, k, r) { \
- 	cell_t t, d, l; \
- 	xacc = 0; \
- 	for(c.q = -BW/2; c.q < BW/2; c.q++) { \
+	cell_t t, d, l; \
+	xacc = 0; \
+	for(c.q = -BW/2; c.q < BW/2; c.q++) { \
 		rd_fetch(c.a, (c.i-c.q)-1); \
 		rd_fetch(c.b, (c.j+c.q)-1); \
 		d = ((cell_t *)c.pdp)[naive_linear_topleft(r, c)] + (rd_cmp(c.a, c.b) ? k.m : k.x); \
@@ -200,7 +200,7 @@
 /**
  * @macro naive_linear_trace_decl
  */
-#define naive_linear_trace_decl(c, k, l) \
+#define naive_linear_trace_decl(c, k, r) \
 	dir_t r; \
 	cell_t *p = pb + ADDR(c.mp - sp, c.mq, BW); \
 	cell_t score = *p;

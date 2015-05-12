@@ -14,7 +14,6 @@
 #include "util/util.h"			/** internal declarations */
 #include "variant/variant.h"	/** dynamic programming variants */
 
-
 int32_t
 DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 	sea_ctx_t const *ctx,
@@ -64,6 +63,7 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 
 		stat = CAP;
 		while(c.i <= c.alim && c.j <= c.blim) {
+			cell_t *curr = (cell_t *)c.pdp;		/** debug */
 			debug("%lld, %lld, %lld, %lld", c.i, c.j, c.p, c.q);
 
 			fill_former_body(c, k, r);
@@ -88,6 +88,9 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 				debug("mem");
 				stat = MEM; break;
 			}
+
+			/** debug */
+			print_lane(curr, c.pdp);
 		}
 
 		debug("finish: stat(%d)", stat);

@@ -21,6 +21,7 @@
 #define _SIMD_INCLUDED
 
 #include <smmintrin.h>
+#include <stdint.h>
 
 /**
  * register declarations. 
@@ -190,6 +191,22 @@
 }
 
 /**
+ * print vector
+ */
+#define VEC_PRINT(s, v) { \
+	int8_t b[32]; \
+	void *p = (void *)b; \
+	VEC_STORE(p, v); \
+	fprintf(s, \
+		"[%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d," \
+		"%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d]\n", \
+		b[31], b[30], b[29], b[28], b[27], b[26], b[25], b[24], \
+		b[23], b[22], b[21], b[20], b[19], b[18], b[17], b[16], \
+		b[15], b[14], b[13], b[12], b[11], b[10], b[9], b[8], \
+		b[7], b[6], b[5], b[4], b[3], b[2], b[1], b[0]); \
+}
+
+/**
  * char vector operations
  */
 #define VEC_CHAR_SHIFT_R(a, b) { \
@@ -206,6 +223,10 @@
 
 #define VEC_CHAR_INSERT_LSB(x, y) { \
 	VEC_INSERT_LSB(x, y); \
+}
+
+#define VEC_CHAR_PRINT(s, v) { \
+	VEC_PRINT(s, v); \
 }
 
 #endif /* #ifndef _SIMD_INCLUDED */

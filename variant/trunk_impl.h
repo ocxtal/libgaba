@@ -48,19 +48,25 @@
  * @macro (internal) trunk_linear_topq, ...
  * @brief coordinate calculation helper macros
  */
-#define trunk_linear_topq			naive_linear_topq
-#define trunk_linear_leftq			naive_linear_leftq
-#define trunk_linear_top 			naive_linear_top
-#define trunk_linear_left 			naive_linear_left
-#define trunk_linear_topleft 		naive_linear_topleft
+#define trunk_linear_topq(r, c)		naive_linear_topq(r, c)
+#define trunk_linear_leftq(r, c)	naive_linear_leftq(r, c)
+#define trunk_linear_top(r, c) 		naive_linear_top(r, c)
+#define trunk_linear_left(r, c)		naive_linear_left(r, c)
+#define trunk_linear_topleft(r, c)	naive_linear_topleft(r, c)
 
 /**
  * @macro trunk_linear_dir_exp
  * @brief determines the next direction of the lane in the dynamic algorithm.
- *
- * sseレジスタにアクセスできないといけない。
  */
-#define trunk_linear_dir_exp(r, c)	( scu > scl )
+#define trunk_linear_dir_exp(r, c) ( \
+	scl += ((dir(r) == TOP \
+		? VEC_MSB(dv) \
+		: VEC_MSB(dh)) + k.gi), \
+	scu += ((dir(r) == TOP \
+		? VEC_LSB(dv) \
+		: VEC_LSB(dh)) + k.gi), \
+	scu > scl \
+)
 
 /**
  * @macro trunk_linear_fill_decl
@@ -90,7 +96,6 @@
 	max = 0; \
 	score = 0; \
 	scl = scu = (2*k.gi - k.m) * BW/2; \
-	dir_next(r, c); \
 }
 
 /**
@@ -132,13 +137,6 @@
 	VEC_SUB(dh, tmp, dv); \
 	VEC_ASSIGN(dv, dv_); \
 	VEC_STORE_DVDH(c.pdp, dv, dh); \
-	if(dir(r) == TOP) { \
-		VEC_ASSIGN(tmp, dv); \
-	} else { \
-		VEC_ASSIGN(tmp, dh); \
-	} \
-	scl += (VEC_MSB(tmp) + k.gi); \
-	scu += (VEC_LSB(tmp) + k.gi); \
 	score += (VEC_CENTER(tmp) + k.gi); \
 	if(k.alg != NW && score >= max) { \
 		max = score; \

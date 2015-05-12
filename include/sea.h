@@ -98,8 +98,8 @@ enum sea_flags_alg {
  * @brief (API) constants of cost option.
  */
 enum sea_flags_cost {
-	SEA_AFFINE_GAP_COST 	= 1<<SEA_FLAGS_POS_COST,
-	SEA_LINEAR_GAP_COST 	= 2<<SEA_FLAGS_POS_COST
+	SEA_LINEAR_GAP_COST 	= 1<<SEA_FLAGS_POS_COST,
+	SEA_AFFINE_GAP_COST 	= 2<<SEA_FLAGS_POS_COST
 };
 
 /**

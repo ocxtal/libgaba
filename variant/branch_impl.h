@@ -108,11 +108,11 @@
 	VEC_CHAR_SETZERO(wq); \
 	VEC_CHAR_SETONES(wt); \
 	for(c.q = 0; c.q < BW/2; c.q++) { \
-		rd_fetch(c.a, c.i+c.q); \
+		rd_fetch(c.a, c.q); \
 		PUSHQ(rd_decode(c.a), wq); \
 	} \
 	for(c.q = 0; c.q < BW/2-1; c.q++) { \
-		rd_fetch(c.b, c.j-c.q); \
+		rd_fetch(c.b, c.q); \
 		PUSHT(rd_decode(c.b), wt); \
 	} \
 }
@@ -121,6 +121,7 @@
  * @macro branch_linear_fill_former_body
  */
 #define branch_linear_fill_former_body(c, k, r) { \
+	debug("%d, %d, %d", VEC_MSB(v), VEC_CENTER(v), VEC_LSB(v)); \
 	dir_next(r, c); \
 }
 
