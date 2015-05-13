@@ -10,6 +10,7 @@
  */
 #include <stdio.h>
 #include <stdlib.h>				/** for `NULL' */
+#include <string.h>				/** for memcpy */
 #include "include/sea.h"		/** global declarations */
 #include "util/util.h"			/** internal declarations */
 #include "variant/variant.h"	/** dynamic programming variants */
@@ -77,6 +78,10 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 			}
 			fill_latter_body(c, k, r);
 
+			/** debug */
+			debug("%lld, %lld, %lld, %lld, usage(%zu)", c.i, c.j, c.p, c.q, (size_t)(c.pdp - (void *)pb));
+			print_lane(curr, c.pdp);
+
 			if(fill_check_term(c, k, r)) {
 				debug("term");
 				stat = TERM; break;
@@ -85,14 +90,17 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 				debug("chain");
 				stat = CHAIN; break;
 			}
+			if(fill_check_alt(c, k, r)) {
+				debug("alt");
+				stat = ALT; break;
+			}
 			if(fill_check_mem(c, k, r)) {
 				debug("mem");
 				stat = MEM; break;
 			}
-
-			/** debug */
-			debug("%lld, %lld, %lld, %lld", c.i, c.j, c.p, c.q);
-			print_lane(curr, c.pdp);
+		}
+		if(stat == CAP) {
+			debug("edge violation: c.i(%lld), c.alim(%lld), c.j(%lld), c.blim(%lld)", c.i, c.alim, c.j, c.blim);
 		}
 
 		debug("finish: stat(%d)", stat);
@@ -113,7 +121,9 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 			/** push */
 			mdp = c.dp;			/** push memory context to mdp */
 			c.size *= 2;		/** twice the memory */
-			c.dp.ep = (c.dp.sp = c.pdp = malloc(c.size)) + c.size;
+			c.dp.ep = (c.dp.sp = malloc(c.size)) + c.size;
+			memcpy(c.dp.sp, (cell_t *)c.pdp - 2*BW, sizeof(cell_t) * 2*BW);
+			c.pdp = (cell_t *)c.dp.sp + 2*BW;
 			debug("mem: c.size(%llu)", c.size);
 
 			/** chain */
@@ -126,12 +136,19 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 			free(c.dp.sp);
 			c.dp = mdp;
 		} else if(stat == CHAIN) {
-			/** chain to alternatve algorithm */
+			/** chain to the next algorithm */
 			debug("chain: %p", func_next(k, CALL_FUNC(BASE, SUFFIX)));
 			chain_push_ivec(c);
 			print_lane(c.v.pv, c.v.pv + c.v.plen*sizeof(cell_t));
 			print_lane(c.v.cv, c.v.cv + c.v.clen*sizeof(cell_t));
 			ret = func_next(k, CALL_FUNC(BASE, SUFFIX))(ctx, &c);
+		} else if(stat == ALT) {
+			/** chain to the alternative algorithm */
+			debug("alt: %p", func_alt(k, CALL_FUNC(BASE, SUFFIX)));
+			chain_push_ivec(c);
+			print_lane(c.v.pv, c.v.pv + c.v.plen*sizeof(cell_t));
+			print_lane(c.v.cv, c.v.cv + c.v.clen*sizeof(cell_t));
+			ret = func_alt(k, CALL_FUNC(BASE, SUFFIX))(ctx, &c);			
 		} else if(stat == CAP) {
 			/** chain to the cap algorithm */
 			debug("cap: %p", k.f->cap);
@@ -156,6 +173,7 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 					return SEA_SUCCESS;
 				}
 			}
+			debug("trace from: %lld, %lld, %lld, %lld", c.mi, c.mj, c.mp, c.mq);
 
 			/** トレースしない場合はここでリターン */
 			if(k.f->pushm == NULL) {			/** 汚い実装 */

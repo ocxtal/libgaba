@@ -327,8 +327,9 @@ enum _STATE {
 	CONT 	= 0,
 	MEM 	= 1,
 	CHAIN 	= 2,
-	CAP 	= 3,
-	TERM 	= 4
+	ALT 	= 3,
+	CAP 	= 4,
+	TERM 	= 5
 };
 
 /**
@@ -482,14 +483,14 @@ int64_t _pushd_dir(uint8_t *p, int64_t pos);
  * @macro func_next
  */
 #define func_next(k, ptr) ( \
-	(k.f->twig == ptr) ? k.f->branch : ((k.f->trunk == ptr) ? k.f->balloon : k.f->trunk) \
+	(k.f->twig == ptr) ? k.f->branch : k.f->trunk \
 )
 
 /**
- * @macro func_alternative
+ * @macro func_alt
  */
-#define func_alternative(k, ptr) ( \
-	(k.f->trunk == ptr) ? k.f->balloon : k.f->trunk \
+#define func_alt(k, ptr) ( \
+	(k.f->balloon == ptr) ? k.f->trunk : k.f->balloon \
 )
 
 /**
@@ -574,7 +575,7 @@ int64_t _pushd_dir(uint8_t *p, int64_t pos);
 		if(*--t <= CELL_MIN) { \
 			len += sprintf(str+len, "-oo,"); \
 		} else if(*t >= CELL_MAX) { \
-			len += sprintf(str+len, "oo"); \
+			len += sprintf(str+len, "oo,"); \
 		} else { \
 			len += sprintf(str+len, "%d,", *t); \
 		} \

@@ -71,7 +71,19 @@
 /**
  * @macro twig_linear_fill_init
  */
-#define twig_linear_fill_init(c, k, r)			branch_linear_fill_init(c, k, r)
+#define twig_linear_fill_init(c, k, r) { \
+	branch_linear_fill_init_intl(c, k, r); \
+	VEC_CHAR_SETZERO(wq); \
+	VEC_CHAR_SETONES(wt); \
+	for(c.q = 0; c.q < BW/2; c.q++) { \
+		rd_fetch(c.a, c.q); \
+		PUSHQ(rd_decode(c.a), wq); \
+	} \
+	for(c.q = 0; c.q < BW/2-1; c.q++) { \
+		rd_fetch(c.b, c.q); \
+		PUSHT(rd_decode(c.b), wt); \
+	} \
+}
 
 /**
  * @macro twig_linear_fill_former_body
@@ -102,6 +114,11 @@
  * @macro twig_linear_fill_check_chain
  */
 #define twig_linear_fill_check_chain(c, k, r) 	branch_linear_fill_check_chain(c, k, r)
+
+/**
+ * @macro twig_linear_fill_check_alt
+ */
+#define twig_linear_fill_check_alt(c, k, r)		( 0 )
 
 /**
  * @macro twig_linear_fill_check_mem

@@ -46,8 +46,8 @@
  */
 #define cap_linear_fill_init(c, k, r) { \
 	naive_linear_fill_init(c, k, r); \
-	c.alim = c.alen + BW/2; \
-	c.blim = c.blen + BW/2; \
+	c.alim = c.alen + BW - 1; \
+	c.blim = c.blen + BW; \
 }
 
 /**
@@ -71,9 +71,13 @@
 #define cap_linear_fill_latter_body(c, k, r) { \
 	cell_t t, d, l; \
 	lb = c.i-c.alen, ub = c.blen-c.j+1; \
+	debug("fill: lb(%lld), ub(%lld)", lb, ub); \
+	if(lb < -BW/2) { lb = -BW/2; } \
+	if(ub > BW/2) { ub = BW/2; } \
 	for(c.q = -BW/2; c.q < lb; c.q++) { \
 		*((cell_t *)c.pdp) = k.min; \
 		c.pdp += sizeof(cell_t); \
+		debug("write"); \
 	} \
 	for(c.q = lb; c.q < ub; c.q++) { \
 		rd_fetch(c.a, (c.i-c.q)-1); \
@@ -98,6 +102,7 @@
 	for(c.q = ub; c.q < BW/2; c.q++) { \
 		*((cell_t *)c.pdp) = k.min; \
 		c.pdp += sizeof(cell_t); \
+		debug("write"); \
 	} \
 }
 
@@ -105,13 +110,18 @@
  * @macro cap_linear_fill_check_term
  */
 #define cap_linear_fill_check_term(c, k, r) ( \
-	lb >= ub \
+	lb >= ub - 1 \
 )
 
 /**
  * @macro cap_linear_fill_check_chain
  */
 #define cap_linear_fill_check_chain(c, k, r)	( 0 )
+
+/**
+ * @macro cap_linear_fill_check_alt
+ */
+#define cap_linear_fill_check_alt(c, k, r)		( 0 )
 
 /**
  * @macro cap_linear_fill_check_mem

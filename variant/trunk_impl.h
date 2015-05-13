@@ -90,7 +90,7 @@
 	c.i -= BW/2; \
 	c.j += BW/2; \
 	c.alim = c.alen - BW/2; \
-	c.blim = c.blen - BW/2; \
+	c.blim = c.blen - BW/2 + 1; \
 	dir_init(r, c.pdr[c.p]); \
 	VEC_SET(mggv, k.m - 2*k.gi); \
 	VEC_SET(xggv, k.x - 2*k.gi); \
@@ -160,7 +160,12 @@
 /**
  * @macro trunk_linear_fill_check_chain
  */
-#define trunk_linear_fill_check_chain(c, k, r) ( \
+#define trunk_linear_fill_check_chain(c, k, r)		( 0 )
+
+/**
+ * @macro trunk_linear_fill_check_alt
+ */
+#define trunk_linear_fill_check_alt(c, k, r) ( \
 	   (scl > score - k.tc) \
 	|| (scu > score - k.tc) \
 )

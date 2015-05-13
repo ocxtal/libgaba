@@ -74,6 +74,8 @@
  * @macro balloon_linear_fill_init
  */
 #define balloon_linear_fill_init(c, k, r) { \
+	c.alim = c.alen; \
+	c.blim = c.blen - BW + 1; \
 	dir_init(r, c.pdr[c.p]); \
 	dir_init(b, c.pdr[c.p]); \
 	pc = c.pdp; \
@@ -158,9 +160,14 @@
 )
 
 /**
- * @macor balloon_linear_fill_check_chain
+ * @macro balloon_linear_fill_check_chain
  */
-#define balloon_linear_fill_check_chain(c, k, r) ( \
+#define balloon_linear_fill_check_chain(c, k, r)		( 0 )
+
+/**
+ * @macro balloon_linear_fill_check_alt
+ */
+#define balloon_linear_fill_check_alt(c, k, r) ( \
 	eq < BW \
 )
 

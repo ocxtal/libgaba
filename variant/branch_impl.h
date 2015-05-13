@@ -80,13 +80,13 @@
  	DECLARE_VEC_CELL_REG(zv);		/** zero vector for the SW algorithm */
 
 /**
- * @macro branch_linear_fill_init
+ * @macro (internal) branch_linear_fill_init_intl
  */
-#define branch_linear_fill_init(c, k, r) { \
+#define branch_linear_fill_init_intl(c, k, r) { \
 	c.i -= BW/2; /** convert to the local coordinate*/ \
 	c.j += BW/2; \
 	c.alim = c.alen - BW/2; \
-	c.blim = c.blen - BW/2; \
+	c.blim = c.blen - BW/2 + 1; \
 	dir_init(r, c.pdr[c.p]); \
 	VEC_SET(mv, k.m); \
 	VEC_SET(xv, k.x); \
@@ -106,14 +106,19 @@
 		VEC_INSERT_MSB(v, _read(c.v.cv, c.q, c.v.size)); \
 	} \
 	VEC_STORE(c.pdp, v); \
-	VEC_CHAR_SETZERO(wq); \
-	VEC_CHAR_SETONES(wt); \
-	for(c.q = 0; c.q < BW/2; c.q++) { \
-		rd_fetch(c.a, c.q); \
+}
+
+/**
+ * @macro branch_linear_fill_init
+ */
+#define branch_linear_fill_init(c, k, r) { \
+	branch_linear_fill_init_intl(c, k, r); \
+	for(c.q = -BW/2; c.q < BW/2; c.q++) { \
+		rd_fetch(c.a, c.i+c.q); \
 		PUSHQ(rd_decode(c.a), wq); \
 	} \
-	for(c.q = 0; c.q < BW/2-1; c.q++) { \
-		rd_fetch(c.b, c.q); \
+	for(c.q = -BW/2; c.q < BW/2-1; c.q++) { \
+		rd_fetch(c.b, c.j+c.q); \
 		PUSHT(rd_decode(c.b), wt); \
 	} \
 }
@@ -187,6 +192,13 @@
  * @macro branch_linear_fill_check_chain
  */
 #define branch_linear_fill_check_chain(c, k, r) ( \
+	(c).p > CELL_MAX / (k).m \
+)
+
+/**
+ * @macro branch_linear_fill_check_alt
+ */
+#define branch_linear_fill_check_alt(c, k, r) ( \
 	   (VEC_LSB(v) > VEC_CENTER(v) - k.tc) \
 	|| (VEC_MSB(v) > VEC_CENTER(v) - k.tc) \
 )
@@ -211,6 +223,8 @@
 		} \
 		VEC_STORE(c.pdp, maxv); \
 	} \
+	VEC_STORE(c.pdp, pv); \
+	VEC_STORE(c.pdp, v); \
 }
 
 /**
@@ -222,8 +236,8 @@
 	c.j -= BW/2; \
 	c.v.size = sizeof(cell_t); \
 	c.v.clen = c.v.plen = BW; \
-	c.v.cv = (cell_t *)c.pdp - 3*BW; \
-	c.v.pv = (cell_t *)c.pdp - 4*BW; \
+	c.v.cv = (cell_t *)c.pdp - BW; \
+	c.v.pv = (cell_t *)c.pdp - 2*BW; \
 }
 
 /**

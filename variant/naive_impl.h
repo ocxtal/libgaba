@@ -75,7 +75,7 @@
 	c.i -= BW/2; \
 	c.j += BW/2; \
 	c.alim = c.alen - BW/2; \
-	c.blim = c.blen - BW/2; \
+	c.blim = c.blen - BW/2 + 1; \
 	dir_init(r, c.pdr[c.p]); \
 	for(c.q = 0; c.q < c.v.clen; c.q++) { \
 		*((cell_t *)c.pdp) = _read(c.v.pv, c.q, c.v.size); \
@@ -147,6 +147,13 @@
  * @macro naive_linear_fill_check_chain
  */
 #define naive_linear_fill_check_chain(c, k, r) ( \
+	0 /** never chain */ \
+)
+
+/**
+ * @macro naive_linear_fill_check_alt
+ */
+#define naive_linear_fill_check_alt(c, k, r) ( \
 	   (*((cell_t *)c.pdp-BW) > *((cell_t *)c.pdp-BW/2) - k.tc) \
 	|| (*((cell_t *)c.pdp-1)    > *((cell_t *)c.pdp-BW/2) - k.tc) \
 )
@@ -228,6 +235,7 @@
 		p[naive_linear_left(r, c)], p[naive_linear_top(r, c)]); \
 	if(score == (diag + sc)) { \
 		p += naive_linear_topleft(r, c); \
+		c.mq += naive_linear_topleftq(r, c); \
 		dir_prev(r, c); \
 		c.mi--; rd_fetch(c.a, c.mi-1); \
 		c.mj--; rd_fetch(c.b, c.mj-1); \
