@@ -74,8 +74,8 @@
  * @macro balloon_linear_fill_init
  */
 #define balloon_linear_fill_init(c, k, r) { \
-	dir_init(r, c.pdr[c.p-1]); \
-	dir_init(b, c.pdr[c.p-1]); \
+	dir_init(r, c.pdr[c.p]); \
+	dir_init(b, c.pdr[c.p]); \
 	pc = c.pdp; \
 	for(c.q = 0, eq = c.v.plen; c.q < eq; c.q++) { \
 		*((cell_t *)c.pdp) = _read(c.v.pv, c.q, c.v.size); \

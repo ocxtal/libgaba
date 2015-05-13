@@ -87,7 +87,7 @@
 	c.j += BW/2; \
 	c.alim = c.alen - BW/2; \
 	c.blim = c.blen - BW/2; \
-	dir_init(r, c.pdr[c.p-1]); \
+	dir_init(r, c.pdr[c.p]); \
 	VEC_SET(mv, k.m); \
 	VEC_SET(xv, k.x); \
 	VEC_SET(gv, k.gi); \
@@ -136,8 +136,8 @@
 	} \
 	VEC_SHIFT_R(tmp2, v); \
 	VEC_INSERT_MSB(tmp2, CELL_MIN); \
-	c.j++; \
 	rd_fetch(c.b, c.j+BW/2-1); \
+	c.j++; \
 	PUSHT(rd_decode(c.b), wt); \
 }
 
@@ -151,8 +151,8 @@
 	} \
 	VEC_SHIFT_L(tmp2, v); \
 	VEC_INSERT_LSB(tmp2, CELL_MIN); \
-	c.i++; \
 	rd_fetch(c.a, c.i+BW/2); \
+	c.i++; \
 	PUSHQ(rd_decode(c.a), wq); \
 }
 
@@ -160,6 +160,8 @@
  * @macro branch_linear_fill_latter_body
  */
 #define branch_linear_fill_latter_body(c, k, r) { \
+	VEC_CHAR_PRINT(stderr, wq); \
+	VEC_CHAR_PRINT(stderr, wt); \
  	VEC_ADD(tmp1, v, gv); \
 	VEC_ADD(tmp2, tmp2, gv); \
 	VEC_MAX(tmp1, tmp1, tmp2); \

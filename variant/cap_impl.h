@@ -46,8 +46,8 @@
  */
 #define cap_linear_fill_init(c, k, r) { \
 	naive_linear_fill_init(c, k, r); \
-	c.alim = c.alen; \
-	c.blim = c.blen; \
+	c.alim = c.alen + BW/2; \
+	c.blim = c.blen + BW/2; \
 }
 
 /**
@@ -105,7 +105,7 @@
  * @macro cap_linear_fill_check_term
  */
 #define cap_linear_fill_check_term(c, k, r) ( \
-	lb >= ub-1 \
+	lb >= ub \
 )
 
 /**
@@ -122,7 +122,7 @@
  * @macro cap_linear_fill_finish
  */
 #define cap_linear_fill_finish(c, k, r) { \
-	/** blank */ \
+	stat = TERM; /** never reaches here */ \
 }
 
 /**

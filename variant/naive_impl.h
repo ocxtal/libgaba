@@ -37,7 +37,7 @@
  */
 #define naive_linear_topq(r, c)		( - !dir(r) )
 #define naive_linear_leftq(r, c)	( dir(r) )
-#define naive_linear_topleftq(r, c)	( !dir(r) + (dir2(r)>>1) )
+#define naive_linear_topleftq(r, c)	( - !dir(r) + (dir2(r) & 0x01) )
 #define naive_linear_top(r, c)		( -BW + naive_linear_topq(r, c) )
 #define naive_linear_left(r, c)		( -BW + naive_linear_leftq(r, c) )
 #define naive_linear_topleft(r, c)	( -2 * BW + naive_linear_topleftq(r, c) )
@@ -76,7 +76,7 @@
 	c.j += BW/2; \
 	c.alim = c.alen - BW/2; \
 	c.blim = c.blen - BW/2; \
-	dir_init(r, c.pdr[c.p-1]); \
+	dir_init(r, c.pdr[c.p]); \
 	for(c.q = 0; c.q < c.v.clen; c.q++) { \
 		*((cell_t *)c.pdp) = _read(c.v.pv, c.q, c.v.size); \
 		c.pdp += sizeof(cell_t); \
@@ -209,6 +209,7 @@
  */
 #define naive_linear_trace_init(c, k, r) { \
 	dir_term(r, c); \
+	debug("dir: d(%d), d2(%d)", dir(r), dir2(r)); \
 	rd_fetch(c.a, c.mi-1); \
 	rd_fetch(c.b, c.mj-1); \
 }
@@ -218,9 +219,13 @@
  */
 #define naive_linear_trace_body(c, k, r) { \
 	dir_prev(r, c); \
+	debug("dir: d(%d), d2(%d)", dir(r), dir2(r)); \
 	cell_t diag = p[naive_linear_topleft(r, c)]; \
 	cell_t sc = rd_cmp(c.a, c.b) ? k.m : k.x; \
 	cell_t h, v; \
+	debug("traceback: score(%d), diag(%d), sc(%d), h(%d), v(%d)", \
+		score, diag, sc, \
+		p[naive_linear_left(r, c)], p[naive_linear_top(r, c)]); \
 	if(score == (diag + sc)) { \
 		p += naive_linear_topleft(r, c); \
 		dir_prev(r, c); \
@@ -244,6 +249,7 @@
 		wr_pushi(c.l); \
 		score = v; \
 	} else { \
+		debug("out of band"); \
 		return SEA_ERROR_OUT_OF_BAND; \
 	} \
 }

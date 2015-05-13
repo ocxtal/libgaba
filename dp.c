@@ -66,7 +66,6 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 		stat = CAP;
 		while(c.i <= c.alim && c.j <= c.blim) {
 			cell_t *curr = (cell_t *)c.pdp;		/** debug */
-			debug("%lld, %lld, %lld, %lld", c.i, c.j, c.p, c.q);
 
 			fill_former_body(c, k, r);
 			if(dir(r) == TOP) {
@@ -92,6 +91,7 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 			}
 
 			/** debug */
+			debug("%lld, %lld, %lld, %lld", c.i, c.j, c.p, c.q);
 			print_lane(curr, c.pdp);
 		}
 
@@ -171,6 +171,7 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 		/** restore pdp */
 		c.pdp = spdp;
 
+		debug("return: (%d)", ret);
 		/** check return status */
 		if(ret != SEA_SUCCESS) {
 			return(ret);
@@ -194,7 +195,7 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 				trace_body(c, k, r);
 			}
 		}
-		debug("trace finish: c.p(%lld)", c.p);
+		debug("trace finish: c.mp(%lld), c.l.pos(%lld), c.l.size(%lld)", c.mp, c.l.pos, c.l.size);
 		trace_finish(c, k, r);
 	}
 

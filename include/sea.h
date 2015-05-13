@@ -183,7 +183,7 @@ enum sea_error {
 struct sea_result {
 	void const *a; 			/*!< a pointer to a sequence a. */
 	void const *b;			/*!< a pointer to a sequence b. */
-	void *aln;				/*!< a pointer to a alignment result. */
+	uint8_t *aln;			/*!< a pointer to a alignment result. */
 	int32_t score;			/*!< an alignment score. */
 	int64_t len;			/*!< alignment length. (the length of a content of aln) used as an errno container if error occured. */
 	int64_t apos;			/*!< alignment start position on a. */

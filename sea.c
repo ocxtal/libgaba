@@ -168,7 +168,7 @@ sea_init_flags_vals(
 	 * use SEA_ALN_CIGAR for cigar string.)
 	 */
 	if((int_flags & SEA_FLAGS_MASK_ALN) == 0) {
-		int_flags = (int_flags & ~SEA_FLAGS_MASK_ALN) | SEA_ALN_DIR;
+		int_flags = (int_flags & ~SEA_FLAGS_MASK_ALN) | SEA_ALN_ASCII;
 	}
 
 	/** check if DP cost values are proper. the cost values must satisfy m >= 0, x < m, 2*gi <= x, ge <= 0. */
@@ -508,6 +508,7 @@ struct sea_result *sea_align(
 		goto _sea_error_handler;
 	}
 	c.dr.ep = (c.pdr = c.dr.sp) + c.size;
+	c.pdr[0] = LEFT;		/** initial vector */
 
 	/**
 	 * initialize max
@@ -522,13 +523,14 @@ struct sea_result *sea_align(
 
 	/* finishing */
 	r = (struct sea_result *)c.l.p;
-	c.l.p = (uint8_t *)(r + 1);
-	r->aln = (void *)c.l.p;
+	r->aln = (uint8_t *)(r + 1);
 	r->len = c.l.size - c.l.pos;
+	debug("finishing: len(%lld)", r->len);
 	for(i = 0; i < r->len; i++) {
-		c.l.p[i] = c.l.p[c.l.pos+i];
+		debug("move: %c at %lld", c.l.p[c.l.pos+i], c.l.pos+i);
+		r->aln[i] = c.l.p[c.l.pos+i];
 	}
-	c.l.p[i] = '\0';
+	r->aln[i] = '\0';
 	r->a = a;
 	r->b = b;
 	r->apos = apos;

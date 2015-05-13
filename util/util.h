@@ -135,9 +135,7 @@ cap_affine_guided(
 	struct sea_process *proc);
 
 /**
- * Constants representing algorithms
- *
- * Notice: This constants must be consistent with the sea_flags_alg in sea.h.
+ * flags
  */
 #define SW 								( SEA_SW )
 #define SEA 							( SEA_SEA )
@@ -238,9 +236,8 @@ enum _ALN_CHAR {
 	if((w).p != NULL) { \
 		free((w).p); (w).p = NULL; \
 	} \
-	(w).p = malloc(sizeof(struct sea_result) + sizeof(uint8_t) * s); \
-	(w).pos = s; \
-	(w).size = s; \
+	(w).pos = (w).size = sizeof(struct sea_result) + sizeof(uint8_t) * s; \
+	(w).p = malloc((w).size); \
 }
 
 /**
@@ -249,15 +246,19 @@ enum _ALN_CHAR {
  */
 #define wr_pushm(w) { \
 	(w).pos = (w).pushm((w).p, (w).pos); \
+	debug("pushm: %c", (w).p[(w).pos]); \
 }
 #define wr_pushx(w) { \
 	(w).pos = (w).pushx((w).p, (w).pos); \
+	debug("pushx: %c", (w).p[(w).pos]); \
 }
 #define wr_pushi(w) { \
 	(w).pos = (w).pushi((w).p, (w).pos); \
+	debug("pushi: %c", (w).p[(w).pos]); \
 }
 #define wr_pushd(w) { \
 	(w).pos = (w).pushd((w).p, (w).pos); \
+	debug("pushd: %c", (w).p[(w).pos]); \
 }
 
 /**
@@ -283,6 +284,28 @@ enum _ALN_CHAR {
 	(w).pos = 0; \
 	(w).pushm = (w).pushx = (w).pushi = (w).pushd = NULL; \
 }
+
+/**
+ * direction determiner constants
+ */
+/**
+ * @enum _DIR
+ * @brief constants for direction flags.
+ */
+enum _DIR {
+	LEFT 	= 0,
+	TOP 	= 0x01
+};
+
+/**
+ * @enum _DIR2
+ */
+enum _DIR2 {
+	LL = (LEFT<<0) | (LEFT<<1),
+	LT = (LEFT<<0) | (TOP<<1),
+	TL = (TOP<<0) | (LEFT<<1),
+	TT = (TOP<<0) | (TOP<<1)
+};
 
 /**
  * char vector shift operations
@@ -543,21 +566,27 @@ int64_t _pushd_dir(uint8_t *p, int64_t pos);
  */
 #define print_lane(p1, p2) { \
 	cell_t *p = p1, *t = p2; \
-	char *c = NULL; \
+	char *str = NULL; \
 	int len = 0, size = 128; \
-	c = malloc(size); \
-	len += sprintf(c+len, "["); \
+	str = malloc(size); \
+	len += sprintf(str+len, "["); \
 	while(p != t) { \
-		len += sprintf(c+len, "%d,", *--t); \
+		if(*--t <= CELL_MIN) { \
+			len += sprintf(str+len, "-oo,"); \
+		} else if(*t >= CELL_MAX) { \
+			len += sprintf(str+len, "oo"); \
+		} else { \
+			len += sprintf(str+len, "%d,", *t); \
+		} \
 		if(len > (size - 20)) { \
 			size *= 2; \
-			c = realloc(c, size); \
+			str = realloc(str, size); \
 		} \
 	} \
-	c[len == 1 ? 1 : len-1] = ']'; \
-	c[len == 1 ? 2 : len] = '\0'; \
-	debug("lane(%s)", c); \
-	free(c); \
+	str[len == 1 ? 1 : len-1] = ']'; \
+	str[len == 1 ? 2 : len] = '\0'; \
+	debug("lane(%s)", str); \
+	free(str); \
 }
 
 /**

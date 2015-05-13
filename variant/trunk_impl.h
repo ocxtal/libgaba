@@ -91,7 +91,7 @@
 	c.j += BW/2; \
 	c.alim = c.alen - BW/2; \
 	c.blim = c.blen - BW/2; \
-	dir_init(r, c.pdr[c.p-1]); \
+	dir_init(r, c.pdr[c.p]); \
 	VEC_SET(mggv, k.m - 2*k.gi); \
 	VEC_SET(xggv, k.x - 2*k.gi); \
 	VEC_SET_LHALF(dv, k.m - 2*k.gi); \

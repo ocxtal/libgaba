@@ -23,25 +23,6 @@
 //#define _DP 		SEA_DYNAMIC
 
 /**
- * @enum _DIR
- * @brief constants for direction flags.
- */
-enum _DIR {
-	LEFT 	= 0,
-	TOP 	= 0x01
-};
-
-/**
- * @enum _DIR2
- */
-enum _DIR2 {
-	LL = (LEFT<<0) | (LEFT<<1),
-	LT = (LEFT<<0) | (TOP<<1),
-	TL = (TOP<<0) | (LEFT<<1),
-	TT = (TOP<<0) | (TOP<<1)
-};
-
-/**
  * @struct _dir
  * @brief direction flag container.
  */
@@ -81,7 +62,7 @@ typedef struct _dir dir_t;
  */
 #define dir_next_dynamic(r, c) { \
 	(r).d = dir_exp(r, c); \
-	(c).pdr[(c).p++] = (r).d; \
+	(c).pdr[++(c).p] = (r).d; \
 	(r).d2 = ((r).d<<1) | ((r).d2>>1); \
 }
 
@@ -90,7 +71,7 @@ typedef struct _dir dir_t;
  * @brief set 2-bit direction flag from direction array.
  */
 #define dir_next_guided(r, c) { \
-	(r).d = (c).pdr[(c).p++]; \
+	(r).d = (c).pdr[++(c).p]; \
 	(r).d2 = ((r).d)<<1) | ((r).d2>>1); \
 }
 
@@ -98,7 +79,7 @@ typedef struct _dir dir_t;
  * @macro dir_term
  */
 #define dir_term(r, c) { \
-	int8_t d = (c).pdr[--(c).p]; \
+	int8_t d = (c).pdr[(c).mp]; \
 	(r).d = LEFT; \
 	(r).d2 = d; \
 }
@@ -108,7 +89,7 @@ typedef struct _dir dir_t;
  * @brief set 2-bit direction flag in reverse access.
  */
 #define dir_prev(r, c) { \
-	int8_t d = (c).pdr[--(c).p]; \
+	int8_t d = (c).pdr[--(c).mp]; \
 	(r).d = 0x01 & (r).d2; \
 	(r).d2 = 0x03 & (((r).d2<<1) | d); \
 }
