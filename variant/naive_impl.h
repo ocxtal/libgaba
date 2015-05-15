@@ -173,9 +173,14 @@
 }
 
 /**
+ * @macro naive_linear_chain_save_len
+ */
+#define naive_linear_chain_save_len(c, k)		( 2 * BW )
+
+/**
  * @macro naive_linear_chain_push_ivec
  */
-#define naive_linear_chain_push_ivec(c) { \
+#define naive_linear_chain_push_ivec(c, k) { \
 	dir_t r; \
 	c.i += BW/2; \
 	c.j -= BW/2; \
@@ -235,7 +240,6 @@
 		p[naive_linear_left(r, c)], p[naive_linear_top(r, c)]); \
 	if(score == (diag + sc)) { \
 		p += naive_linear_topleft(r, c); \
-		c.mq += naive_linear_topleftq(r, c); \
 		dir_prev(r, c); \
 		c.mi--; rd_fetch(c.a, c.mi-1); \
 		c.mj--; rd_fetch(c.b, c.mj-1); \
@@ -246,13 +250,11 @@
 		score = diag; \
 	} else if(score == ((h = p[naive_linear_left(r, c)]) + k.gi)) { \
 		p += naive_linear_left(r, c); \
-		c.mq += naive_linear_leftq(r, c); \
 		c.mi--; rd_fetch(c.a, c.mi-1); \
 		wr_pushd(c.l); \
 		score = h; \
 	} else if(score == ((v = p[naive_linear_top(r, c)]) + k.gi)) { \
 		p += naive_linear_top(r, c); \
-		c.mq += naive_linear_topq(r, c); \
 		c.mj--; rd_fetch(c.b, c.mj-1); \
 		wr_pushi(c.l); \
 		score = v; \
@@ -266,7 +268,7 @@
  * @macro naive_linear_trace_finish
  */
 #define naive_linear_trace_finish(c, k, r) { \
-	/** blank */ \
+	c.mq = (p - pb + BW) % BW - BW/2; /** correct q-coordinate */ \
 }
 
 #endif /* #ifndef _NAIVE_H_INCLUDED */

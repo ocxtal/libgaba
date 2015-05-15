@@ -149,9 +149,14 @@
 }
 
 /**
+ * @macro twig_linear_chain_save_len
+ */
+#define twig_linear_chain_save_len(c, k)		( 5 * BW )
+
+/**
  * @macro twig_linear_chain_push_ivec
  */
-#define twig_linear_chain_push_ivec(c) { \
+#define twig_linear_chain_push_ivec(c, k) { \
 	dir_t r; \
 	c.i += BW; /** BW == 16 */ \
 	c.j -= BW; \
@@ -178,10 +183,7 @@
 /**
  * @macro twig_linear_search_max_score
  */
-#define twig_linear_search_max_score(c, k) { \
-	c.alen = c.mi; \
-	c.blen = c.mj; \
-}
+#define twig_linear_search_max_score(c, k)		branch_linear_search_max_score(c, k)
 
 /**
  * @macro twig_linear_trace_decl

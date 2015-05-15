@@ -165,8 +165,6 @@
  * @macro branch_linear_fill_latter_body
  */
 #define branch_linear_fill_latter_body(c, k, r) { \
-	VEC_CHAR_PRINT(stderr, wq); \
-	VEC_CHAR_PRINT(stderr, wt); \
  	VEC_ADD(tmp1, v, gv); \
 	VEC_ADD(tmp2, tmp2, gv); \
 	VEC_MAX(tmp1, tmp1, tmp2); \
@@ -216,22 +214,31 @@
 #define branch_linear_fill_finish(c, k, r) { \
 	if(k.alg != NW) { \
 		VEC_STORE(c.pdp, maxv); \
+		print_lane(c.pdp - sizeof(cell_t) * BW, c.pdp); \
 		VEC_ASSIGN(tmp1, maxv); \
 		for(c.q = 1; c.q < BW; c.q++) { \
 			VEC_SHIFT_R(tmp1, tmp1); \
 			VEC_MAX(maxv, tmp1, maxv); \
 		} \
-		VEC_STORE(c.pdp, maxv); \
+		if(VEC_LSB(maxv) > c.max) { \
+			c.max = VEC_LSB(maxv); \
+		} \
 	} \
 	VEC_STORE(c.pdp, pv); \
+	print_lane(c.pdp - sizeof(cell_t) * BW, c.pdp); \
 	VEC_STORE(c.pdp, v); \
+	print_lane(c.pdp - sizeof(cell_t) * BW, c.pdp); \
 }
+
+/**
+ * @macro branch_linear_chain_save_len
+ */
+#define branch_linear_chain_save_len(c, k)		naive_linear_chain_save_len(c, k)
 
 /**
  * @macro branch_linear_chain_push_ivec
  */
-#define branch_linear_chain_push_ivec(c) { \
-	dir_t r; \
+#define branch_linear_chain_push_ivec(c, k) { \
 	c.i += BW/2; \
 	c.j -= BW/2; \
 	c.v.size = sizeof(cell_t); \
@@ -249,29 +256,30 @@
  * @macro branch_linear_search_max_score
  */
 #define branch_linear_search_max_score(c, k) { \
-	int64_t i, j, p = c.p, q; \
-	cell_t *pl = pb + ADDR(c.p+1, -BW/2, BW); \
+	int64_t i, j, p, q; \
+	cell_t *pl = pb + ADDR(c.p-sp+1, -BW/2, BW); \
 	cell_t *pt; \
-	cell_t max = *(pl + BW); \
 	dir_t r; \
-	c.mi = c.mj = c.mp = c.mq = 0; \
-	if(max != CELL_MAX && max != 0) { \
-		for(q = -BW/2; q < BW/2; q++, pl += BW) { \
-			c.p = p; \
-			dir_term(r, c); \
-			if(*pl == max) { \
+	if(c.max != CELL_MAX && c.max != 0) { \
+		p = 0; \
+		for(q = -BW/2; q < BW/2; q++, pl++) { \
+			if(*pl == c.max) { \
+				c.mp = c.p;\
+				dir_term(r, c); \
 				i = c.i - q; \
 				j = c.j + q; \
-			} \
-			for(pt = pl-BW; *pt != max; pt -= BW) { \
-				dir_prev(r, c); \
-				if(dir(r) == TOP) { j--; } else { i--; } \
-			} \
-			if(c.p > c.mp) { \
-				c.mi = i; c.mj = j; \
-				c.mp = c.p; c.mq = q; \
+				for(pt = pl-BW; *pt != c.max && c.mp > p; pt -= BW) { \
+					dir_prev(r, c); \
+					if(dir(r) == TOP) { j--; } else { i--; } \
+				} \
+				if(c.mp > p) { \
+					c.mi = i; c.mj = j; \
+					p = c.mp; c.mq = q; \
+				} \
 			} \
 		} \
+	} else { \
+		c.mi = c.mj = c.mp = c.mq = 0; \
 	} \
 	c.alen = c.mi; \
 	c.blen = c.mj; \

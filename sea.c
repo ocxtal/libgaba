@@ -75,7 +75,7 @@ void aligned_free(void *ptr)
  *
  * @brief an wrapper macro of alloca or aligned_malloc
  */
-#define ALLOCA_THRESH_SIZE		( 1000000 )		/** 1MB */
+#define ALLOCA_THRESH_SIZE		( 10000 )		/** 1MB */
 
 #if HAVE_ALLOCA_H
 	#define AMALLOC(ptr, size, align) { \
@@ -502,7 +502,8 @@ struct sea_result *sea_align(
 	}
 	c.dp.ep = (c.pdp = c.dp.sp) + c.size;
 
-	AMALLOC(c.dr.sp, c.size, ctx->memaln);
+//	AMALLOC(c.dr.sp, c.size, ctx->memaln);
+	c.dr.sp = malloc(c.size);
 	if(c.dr.sp == NULL) {
 		error_label = SEA_ERROR_OUT_OF_MEM;
 		goto _sea_error_handler;
@@ -543,7 +544,8 @@ struct sea_result *sea_align(
 	/* clean DP matrix */
 	AFREE(iv, 2*bw);
 	AFREE(c.dp.sp, ctx->isize);
-	AFREE(c.dr.sp, ctx->isize);
+//	AFREE(c.dr.sp, ctx->isize);
+	free(c.dr.sp);
 
 	return(r);
 

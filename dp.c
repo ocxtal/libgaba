@@ -48,7 +48,8 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 
 	/** check direction array size */
 	if((k.flags & SEA_FLAGS_MASK_DP) == SEA_DYNAMIC) {
-		if((c.dp.ep - c.pdp) / bpl(c) > ((uint8_t *)c.dr.ep - c.pdr)) {
+		debug("check pdr"); 
+		if((c.dp.ep - c.pdp) > bpl(c) * ((uint8_t *)c.dr.ep - (uint8_t *)c.dr.sp - c.p)) {
 			debug("resize c.pdr: c.pdr(%p)", c.pdr);
 			size_t s = 2 * (c.dr.ep - c.dr.sp);
 			c.dr.ep = (c.dr.sp = c.pdr = (void *)realloc(c.dr.sp, s)) + s;
@@ -61,7 +62,7 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 		cell_t *curr = (cell_t *)c.pdp;		/** debug */
 		fill_decl(c, k, r);
 		fill_init(c, k, r);
-		debug("init: r(%d)", dir2(r));
+		debug("init: r(%d), c.max(%d)", dir2(r), c.max);
 		print_lane(curr, c.pdp);
 
 		stat = CAP;
@@ -120,14 +121,17 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 
 			/** push */
 			mdp = c.dp;			/** push memory context to mdp */
-			c.size *= 2;		/** twice the memory */
+//			c.size *= 2;		/** twice the memory */
+			c.size = 100000;
 			c.dp.ep = (c.dp.sp = malloc(c.size)) + c.size;
-			memcpy(c.dp.sp, (cell_t *)c.pdp - 2*BW, sizeof(cell_t) * 2*BW);
-			c.pdp = (cell_t *)c.dp.sp + 2*BW;
+			memcpy(c.dp.sp,
+				(cell_t *)c.pdp - chain_save_len(c, k),
+				sizeof(cell_t) * chain_save_len(c, k));
+			c.pdp = (cell_t *)c.dp.sp + chain_save_len(c, k);
 			debug("mem: c.size(%llu)", c.size);
 
 			/** chain */
-			chain_push_ivec(c);
+			chain_push_ivec(c, k);
 			print_lane(c.v.pv, c.v.pv + c.v.plen*sizeof(cell_t));
 			print_lane(c.v.cv, c.v.cv + c.v.clen*sizeof(cell_t));
 			ret = CALL_FUNC(BASE, SUFFIX)(ctx, &c);
@@ -138,21 +142,21 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 		} else if(stat == CHAIN) {
 			/** chain to the next algorithm */
 			debug("chain: %p", func_next(k, CALL_FUNC(BASE, SUFFIX)));
-			chain_push_ivec(c);
+			chain_push_ivec(c, k);
 			print_lane(c.v.pv, c.v.pv + c.v.plen*sizeof(cell_t));
 			print_lane(c.v.cv, c.v.cv + c.v.clen*sizeof(cell_t));
 			ret = func_next(k, CALL_FUNC(BASE, SUFFIX))(ctx, &c);
 		} else if(stat == ALT) {
 			/** chain to the alternative algorithm */
 			debug("alt: %p", func_alt(k, CALL_FUNC(BASE, SUFFIX)));
-			chain_push_ivec(c);
+			chain_push_ivec(c, k);
 			print_lane(c.v.pv, c.v.pv + c.v.plen*sizeof(cell_t));
 			print_lane(c.v.cv, c.v.cv + c.v.clen*sizeof(cell_t));
 			ret = func_alt(k, CALL_FUNC(BASE, SUFFIX))(ctx, &c);			
 		} else if(stat == CAP) {
 			/** chain to the cap algorithm */
 			debug("cap: %p", k.f->cap);
-			chain_push_ivec(c);
+			chain_push_ivec(c, k);
 			print_lane(c.v.pv, c.v.pv + c.v.plen*sizeof(cell_t));
 			print_lane(c.v.cv, c.v.cv + c.v.clen*sizeof(cell_t));
 			ret = k.f->cap(ctx, &c);

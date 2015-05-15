@@ -246,19 +246,19 @@ enum _ALN_CHAR {
  */
 #define wr_pushm(w) { \
 	(w).pos = (w).pushm((w).p, (w).pos); \
-	debug("pushm: %c", (w).p[(w).pos]); \
+	debug("pushm: %c, pos(%lld)", (w).p[(w).pos], (w).pos); \
 }
 #define wr_pushx(w) { \
 	(w).pos = (w).pushx((w).p, (w).pos); \
-	debug("pushx: %c", (w).p[(w).pos]); \
+	debug("pushx: %c, pos(%lld)", (w).p[(w).pos], (w).pos); \
 }
 #define wr_pushi(w) { \
 	(w).pos = (w).pushi((w).p, (w).pos); \
-	debug("pushi: %c", (w).p[(w).pos]); \
+	debug("pushi: %c, pos(%lld)", (w).p[(w).pos], (w).pos); \
 }
 #define wr_pushd(w) { \
 	(w).pos = (w).pushd((w).p, (w).pos); \
-	debug("pushd: %c", (w).p[(w).pos]); \
+	debug("pushd: %c, pos(%lld)", (w).p[(w).pos], (w).pos); \
 }
 
 /**
@@ -546,49 +546,78 @@ int64_t _pushd_dir(uint8_t *p, int64_t pos);
 						"\x1b[39m"
 
 /**
+ * @macro DEBUG
+ */
+// #define DEBUG 			( 1 )
+
+/**
  * @macro dbprintf
  */
-#define dbprintf(fmt, ...) { \
-	fprintf(stderr, fmt, __VA_ARGS__); \
-}
+#ifdef DEBUG
+
+	#define dbprintf(fmt, ...) { \
+		fprintf(stderr, fmt, __VA_ARGS__); \
+	}
+
+#else
+
+	#define dbprintf(fmt, ...) {}
+
+#endif
 
 /**
  * @macro debug
  */
-#define debug(...) { \
-	debug_impl(__VA_ARGS__, ""); \
-}
-#define debug_impl(fmt, ...) { \
-	dbprintf("[%s] %s(%d) " fmt "%s\n", __FILE__, __func__, __LINE__, __VA_ARGS__); \
-}
+#ifdef DEBUG
+
+	#define debug(...) { \
+		debug_impl(__VA_ARGS__, ""); \
+	}
+	#define debug_impl(fmt, ...) { \
+		dbprintf("[%s] %s(%d) " fmt "%s\n", __FILE__, __func__, __LINE__, __VA_ARGS__); \
+	}
+
+#else
+
+	#define debug(...) {}
+
+#endif
 
 /**
  * @macro print_lane
  */
-#define print_lane(p1, p2) { \
-	cell_t *p = p1, *t = p2; \
-	char *str = NULL; \
-	int len = 0, size = 128; \
-	str = malloc(size); \
-	len += sprintf(str+len, "["); \
-	while(p != t) { \
-		if(*--t <= CELL_MIN) { \
-			len += sprintf(str+len, "-oo,"); \
-		} else if(*t >= CELL_MAX) { \
-			len += sprintf(str+len, "oo,"); \
-		} else { \
-			len += sprintf(str+len, "%d,", *t); \
+#ifdef DEBUG
+
+	#define print_lane(p1, p2) { \
+		cell_t *p = p1, *t = p2; \
+		char *str = NULL; \
+		int len = 0, size = 128; \
+		str = malloc(size); \
+		len += sprintf(str+len, "["); \
+		while(p != t) { \
+			if(*--t <= CELL_MIN) { \
+				len += sprintf(str+len, "-oo,"); \
+			} else if(*t >= CELL_MAX) { \
+				len += sprintf(str+len, "oo,"); \
+			} else { \
+				len += sprintf(str+len, "%d,", *t); \
+			} \
+			if(len > (size - 20)) { \
+				size *= 2; \
+				str = realloc(str, size); \
+			} \
 		} \
-		if(len > (size - 20)) { \
-			size *= 2; \
-			str = realloc(str, size); \
-		} \
-	} \
-	str[len == 1 ? 1 : len-1] = ']'; \
-	str[len == 1 ? 2 : len] = '\0'; \
-	debug("lane(%s)", str); \
-	free(str); \
-}
+		str[len == 1 ? 1 : len-1] = ']'; \
+		str[len == 1 ? 2 : len] = '\0'; \
+		debug("lane(%s)", str); \
+		free(str); \
+	}
+
+#else
+
+	#define print_lane(p1, p2) {}
+
+#endif
 
 /**
  * @macro log

@@ -190,6 +190,23 @@
 	VEC_STORE_PACKED(p, dv, dh); \
 }
 
+#define DH(c, g)					( (*((pack_t *)(c))>>4) + g )
+#define DV(c, g)					( (*((pack_t *)(c)) & 0x0f) + g )
+#define DE(c, g)					( (*(((pack_t *)(c) + BW))>>4) + g )
+#define DF(c, g)					( (*(((pack_t *)(c) + BW)) & 0x0f) + g )
+
+/*
+#define VEC_STORE_DVDH(p, dv, dh) { \
+	VEC_STORE(p, dv); \
+	VEC_STORE(p, dh); \
+}
+
+#define DH(c, g)					( (*((cell_t *)(c) + BW)) + g )
+#define DV(c, g)					( (*(cell_t *)(c)) + g )
+#define DE(c, g)					( (*((cell_t *)(c) + 3*BW)) + g )
+#define DF(c, g)					( (*((cell_t *)(c) + 2*BW)) + g )
+*/
+
 /**
  * print vector
  */

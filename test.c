@@ -59,26 +59,26 @@ int main(void)
 	char *a, *b;
 	// char const *a = "1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890";
 	// char const *b = "1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890";
-	int len = 8000;
+	int len = 10000000;
 
 	ctx = sea_init(
 		SEA_DYNAMIC | SEA_LINEAR_GAP_COST | SEA_XSEA,
-		2, -3, -5, -1, 30, 30, 30);
+		2, -3, -5, -1, 100, 20, 30);
 
-	printf("%d\n", ctx->alg);
+//	printf("%x\n", ctx->flags);
 
 	srand(time(NULL));
 
 	a = rseq(len);
-	b = mseq(a, 10, 30, 30);
+	b = mseq(a, 10, 40, 40);
 
-	printf("%s\n%s\n", a, b);
+//	printf("%s\n%s\n", a, b);
 
 	res = sea_align(ctx,
-		a, 0, strlen(a),
-		b, 0, strlen(b));
+		a, 1, strlen(a)-1,
+		b, 1, strlen(b)-1);
 
-	printf("%d, %lld, %s\n", res->score, res->len, res->aln);
+//	printf("%d, %lld, %s\n", res->score, res->len, res->aln);
 
 	free(a);
 	free(b);

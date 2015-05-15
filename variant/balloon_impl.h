@@ -186,18 +186,26 @@
 }
 
 /**
+ * @macro balloon_linear_chain_save_len
+ */
+#define balloon_linear_chain_save_len(c, k) ( \
+	(((cell_t *)c.pdp)[-1]) + (((cell_t *)c.pdp)[-1 - (((cell_t *)c.pdp)[-1])]) + 2 \
+)
+
+/**
  * @macro balloon_linear_chain_push_ivec
  */
-#define balloon_linear_chain_push_ivec(c) { \
+#define balloon_linear_chain_push_ivec(c, k) { \
 	c.p--; c.j--; /** always comes from top */ \
 	*((cell_t *)c.pdp) = BW; /** correct the lane width */ \
 	c.pdp += sizeof(cell_t); \
 	*((cell_t *)c.pdp-2) = CELL_MIN; /** fill the BW-th cell with min */ \
 	c.v.size = sizeof(cell_t); \
-	c.v.clen = BW; \
-	c.v.plen = BW; \
-	c.v.cv = (cell_t *)c.pdp - BW - 1; \
-	c.v.pv = (cell_t *)c.v.cv - BW - 1; \
+	cell_t *p = c.pdp; \
+	c.v.clen = p[-1]; \
+	c.v.plen = p[-1 - p[-1]]; \
+	c.v.cv = (cell_t *)c.pdp - c.v.clen - 1; \
+	c.v.pv = (cell_t *)c.v.cv - c.v.plen - 1; \
 }
 
 /**

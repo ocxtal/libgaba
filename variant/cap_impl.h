@@ -24,6 +24,7 @@
  */
 #define cap_linear_topq(r, c)		naive_linear_topq(r, c)
 #define cap_linear_leftq(r, c)		naive_linear_leftq(r, c)
+#define cap_linear_topleftq(r, c)	naive_linear_topleftq(r, c)
 #define cap_linear_top(r, c) 		naive_linear_top(r, c)
 #define cap_linear_left(r, c)		naive_linear_left(r, c)
 #define cap_linear_topleft(r, c)	naive_linear_topleft(r, c)
@@ -136,9 +137,14 @@
 }
 
 /**
+ * @macro cap_linear_chain_save_len(c, k)
+ */
+#define cap_linear_chain_save_len(c, k)			naive_linear_chain_save_len(c, k)
+
+/**
  * @macro cap_linear_chain_push_ivec
  */
-#define cap_linear_chain_push_ivec(c)			naive_linear_chain_push_ivec(c)
+#define cap_linear_chain_push_ivec(c, k)		naive_linear_chain_push_ivec(c, k)
 
 /**
  * @macro cap_linear_search_terminal
