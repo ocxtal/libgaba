@@ -121,8 +121,8 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 
 			/** push */
 			mdp = c.dp;			/** push memory context to mdp */
-//			c.size *= 2;		/** twice the memory */
-			c.size = 100000;
+			c.size *= 2;		/** twice the memory */
+			// c.size = 100000;
 			c.dp.ep = (c.dp.sp = malloc(c.size)) + c.size;
 			memcpy(c.dp.sp,
 				(cell_t *)c.pdp - chain_save_len(c, k),
@@ -172,7 +172,7 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 				}
 				if(c.max == 0) {
 					c.mi = c.mj = 0;
-					wr_alloc(c.l, 0); proc->l = c.l;
+					wr_alloc(c.l, 0, k); proc->l = c.l;
 					debug("wr_alloc without traceback");
 					return SEA_SUCCESS;
 				}
@@ -186,7 +186,7 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 			}
 
 			/** initialize traceback */
-			wr_alloc(c.l, c.p); proc->l = c.l;
+			wr_alloc(c.l, c.p, k); proc->l = c.l;
 			debug("wr_alloc: c.l.p(%p)", c.l.p);
 		}
 

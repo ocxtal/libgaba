@@ -59,10 +59,10 @@ int main(void)
 	char *a, *b;
 	// char const *a = "1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890";
 	// char const *b = "1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890";
-	int len = 10000000;
+	int len = 100000;
 
 	ctx = sea_init(
-		SEA_DYNAMIC | SEA_LINEAR_GAP_COST | SEA_XSEA,
+		SEA_DYNAMIC | SEA_LINEAR_GAP_COST | SEA_XSEA | SEA_ALN_CIGAR,
 		2, -3, -5, -1, 100, 20, 30);
 
 //	printf("%x\n", ctx->flags);
@@ -72,13 +72,13 @@ int main(void)
 	a = rseq(len);
 	b = mseq(a, 10, 40, 40);
 
-//	printf("%s\n%s\n", a, b);
+	printf("%s\n%s\n", a, b);
 
 	res = sea_align(ctx,
 		a, 1, strlen(a)-1,
 		b, 1, strlen(b)-1);
 
-//	printf("%d, %lld, %s\n", res->score, res->len, res->aln);
+	printf("%d, %lld, %s\n", res->score, res->len, res->aln);
 
 	free(a);
 	free(b);

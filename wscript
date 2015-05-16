@@ -22,7 +22,7 @@ def configure(conf):
 #	conf.recurse('variant')
 
 	conf.env.append_value('CFLAGS', '-g')
-	conf.env.append_value('CFLAGS', '-O3')
+	# conf.env.append_value('CFLAGS', '-O3')
 
 	from itertools import product
 	for (v, c, d) in product(variants, cost, dp):

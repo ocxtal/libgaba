@@ -135,6 +135,84 @@ cap_affine_guided(
 	struct sea_process *proc);
 
 /**
+ * io functions
+ */
+
+/**
+ * @fn _pop_ascii
+ * @brief retrieve an ascii character from ((uint8_t *)p)[pos].
+ * @detail implemented in `io.s'.
+ */
+uint8_t _pop_ascii(uint8_t const *p, int64_t pos);
+
+/**
+ * @fn _pop_4bit
+ * @brief retrieve a 4-bit encoded base from ((uint8_t *)p)[pos].
+ * @detail implemented in `io.s'.
+ */
+uint8_t _pop_4bit(uint8_t const *p, int64_t pos);
+
+/**
+ * @fn _pop_2bit
+ * @brief retrieve a 2-bit encoded base from ((uint8_t *)p)[pos].
+ * @detail implemented in `io.s'.
+ */
+uint8_t _pop_2bit(uint8_t const *p, int64_t pos);
+
+/**
+ * @fn _pop_4bit8packed
+ * @brief retrieve a packed 4-bit encoded base from ((uint8_t *)p)[pos/2].
+ * @detail implemented in `io.s'.
+ */
+uint8_t _pop_4bit8packed(uint8_t const *p, int64_t pos);
+
+/**
+ * @fn _pop_2bit8packed
+ * @brief retrieve a packed 2-bit encoded base from ((uint8_t *)p)[pos/4].
+ * @detail implemented in `io.s'.
+ */
+uint8_t _pop_2bit8packed(uint8_t const *p, int64_t pos);
+
+/**
+ * @fn _pushm_ascii, pushx_ascii, _pushi_ascii, _pushd_ascii
+ * @brief push a match (mismatch, ins, del) character to p[pos]
+ * @detail implemented in `io.s'.
+ * @return the next pos.
+ */
+int64_t _init_ascii(uint8_t *p, int64_t pos);
+int64_t _pushm_ascii(uint8_t *p, int64_t pos);
+int64_t _pushx_ascii(uint8_t *p, int64_t pos);
+int64_t _pushi_ascii(uint8_t *p, int64_t pos);
+int64_t _pushd_ascii(uint8_t *p, int64_t pos);
+int64_t _finish_ascii(uint8_t *p, int64_t pos);
+
+/**
+ * @fn _pushm_cigar, _pushx_cigar, _pushi_cigar, _pushd_cigar
+ * @brief append a match (mismatch, ins, del) to p[pos].
+ * @detail implemented in `io.s'.
+ * @return the next pos.
+ */
+int64_t _init_cigar(uint8_t *p, int64_t pos);
+int64_t _pushm_cigar(uint8_t *p, int64_t pos);
+int64_t _pushx_cigar(uint8_t *p, int64_t pos);
+int64_t _pushi_cigar(uint8_t *p, int64_t pos);
+int64_t _pushd_cigar(uint8_t *p, int64_t pos);
+int64_t _finish_cigar(uint8_t *p, int64_t pos);
+
+/**
+ * @fn _pushm_dir, _pushx_dir, _pushi_dir, _pushd_dir
+ * @brief append a direction string to p[pos].
+ * @detail implemented in `io.s'.
+ * @return the next pos.
+ */
+int64_t _init_dir(uint8_t *p, int64_t pos);
+int64_t _pushm_dir(uint8_t *p, int64_t pos);
+int64_t _pushx_dir(uint8_t *p, int64_t pos);
+int64_t _pushi_dir(uint8_t *p, int64_t pos);
+int64_t _pushd_dir(uint8_t *p, int64_t pos);
+int64_t _finish_dir(uint8_t *p, int64_t pos);
+
+/**
  * flags
  */
 #define SW 								( SEA_SW )
@@ -152,6 +230,18 @@ cap_affine_guided(
 #define COP(x, y, band)				( (x) + (y) )
 #define COQ(x, y, band) 			( ((y)-(x))>>1 )
 #define INSIDE(x, y, p, q, band)	( (COX(p, q, band) < (x)) && (COY(p, q, band) < (y)) )
+
+/**
+ * @enum _STATE
+ */
+enum _STATE {
+	CONT 	= 0,
+	MEM 	= 1,
+	CHAIN 	= 2,
+	ALT 	= 3,
+	CAP 	= 4,
+	TERM 	= 5
+};
 
 
 /**
@@ -232,12 +322,13 @@ enum _ALN_CHAR {
  * @macro wr_alloc
  * @brief allocate a memory for the alignment string.
  */
-#define wr_alloc(w, s) { \
+#define wr_alloc(w, s, k) { \
 	if((w).p != NULL) { \
 		free((w).p); (w).p = NULL; \
 	} \
 	(w).pos = (w).size = sizeof(struct sea_result) + sizeof(uint8_t) * s; \
 	(w).p = malloc((w).size); \
+	(w).pos = (k).f->init((w).p, (w).pos); \
 }
 
 /**
@@ -265,12 +356,8 @@ enum _ALN_CHAR {
  * @macro wr_finish
  * @brief finish the instance (move the content of the array to the front)
  */
-#define wr_finish(w) { \
-	int64_t i, j; \
-	for(i = (w).pos, j = 0; i < (w).size; i++, j++) { \
-		(w).p[j] = (w).p[i]; \
-	} \
-	(w).p[j] = 0; \
+#define wr_finish(w, ctx) { \
+	(w).pos = (ctx)->f->finish((w).p, (w).pos); \
 }
 
 /**
@@ -319,90 +406,6 @@ enum _DIR2 {
 	VEC_CHAR_SHIFT_R(y, y); \
 	VEC_CHAR_INSERT_MSB(y, x); \
 }
-
-/**
- * @enum _STATE
- */
-enum _STATE {
-	CONT 	= 0,
-	MEM 	= 1,
-	CHAIN 	= 2,
-	ALT 	= 3,
-	CAP 	= 4,
-	TERM 	= 5
-};
-
-/**
- * io functions
- */
-
-/**
- * @fn _pop_ascii
- * @brief retrieve an ascii character from ((uint8_t *)p)[pos].
- * @detail implemented in `io.s'.
- */
-uint8_t _pop_ascii(uint8_t const *p, int64_t pos);
-
-/**
- * @fn _pop_4bit
- * @brief retrieve a 4-bit encoded base from ((uint8_t *)p)[pos].
- * @detail implemented in `io.s'.
- */
-uint8_t _pop_4bit(uint8_t const *p, int64_t pos);
-
-/**
- * @fn _pop_2bit
- * @brief retrieve a 2-bit encoded base from ((uint8_t *)p)[pos].
- * @detail implemented in `io.s'.
- */
-uint8_t _pop_2bit(uint8_t const *p, int64_t pos);
-
-/**
- * @fn _pop_4bit8packed
- * @brief retrieve a packed 4-bit encoded base from ((uint8_t *)p)[pos/2].
- * @detail implemented in `io.s'.
- */
-uint8_t _pop_4bit8packed(uint8_t const *p, int64_t pos);
-
-/**
- * @fn _pop_2bit8packed
- * @brief retrieve a packed 2-bit encoded base from ((uint8_t *)p)[pos/4].
- * @detail implemented in `io.s'.
- */
-uint8_t _pop_2bit8packed(uint8_t const *p, int64_t pos);
-
-/**
- * @fn _pushm_ascii, pushx_ascii, _pushi_ascii, _pushd_ascii
- * @brief push a match (mismatch, ins, del) character to p[pos]
- * @detail implemented in `io.s'.
- * @return the next pos.
- */
-int64_t _pushm_ascii(uint8_t *p, int64_t pos);
-int64_t _pushx_ascii(uint8_t *p, int64_t pos);
-int64_t _pushi_ascii(uint8_t *p, int64_t pos);
-int64_t _pushd_ascii(uint8_t *p, int64_t pos);
-
-/**
- * @fn _pushm_cigar, _pushx_cigar, _pushi_cigar, _pushd_cigar
- * @brief append a match (mismatch, ins, del) to p[pos].
- * @detail implemented in `io.s'.
- * @return the next pos.
- */
-int64_t _pushm_cigar(uint8_t *p, int64_t pos);
-int64_t _pushx_cigar(uint8_t *p, int64_t pos);
-int64_t _pushi_cigar(uint8_t *p, int64_t pos);
-int64_t _pushd_cigar(uint8_t *p, int64_t pos);
-
-/**
- * @fn _pushm_dir, _pushx_dir, _pushi_dir, _pushd_dir
- * @brief append a direction string to p[pos].
- * @detail implemented in `io.s'.
- * @return the next pos.
- */
-int64_t _pushm_dir(uint8_t *p, int64_t pos);
-int64_t _pushx_dir(uint8_t *p, int64_t pos);
-int64_t _pushi_dir(uint8_t *p, int64_t pos);
-int64_t _pushd_dir(uint8_t *p, int64_t pos);
 
 /**
  * string concatenation macros
@@ -548,7 +551,7 @@ int64_t _pushd_dir(uint8_t *p, int64_t pos);
 /**
  * @macro DEBUG
  */
-// #define DEBUG 			( 1 )
+#define DEBUG 			( 1 )
 
 /**
  * @macro dbprintf

@@ -336,6 +336,9 @@ struct sea_funcs {
 	uint8_t (*popb)(
 		uint8_t const *ptr,
 		int64_t pos);
+	int64_t (*init)(
+		uint8_t *ptr,
+		int64_t pos);
 	int64_t (*pushm)(
 		uint8_t *ptr,
 		int64_t pos);
@@ -346,6 +349,9 @@ struct sea_funcs {
 		uint8_t *ptr,
 		int64_t pos);
 	int64_t (*pushd)(
+		uint8_t *ptr,
+		int64_t pos);
+	int64_t (*finish)(
 		uint8_t *ptr,
 		int64_t pos);
 };

@@ -75,7 +75,7 @@ void aligned_free(void *ptr)
  *
  * @brief an wrapper macro of alloca or aligned_malloc
  */
-#define ALLOCA_THRESH_SIZE		( 10000 )		/** 1MB */
+#define ALLOCA_THRESH_SIZE		( 1000000 )		/** 1MB */
 
 #if HAVE_ALLOCA_H
 	#define AMALLOC(ptr, size, align) { \
@@ -350,22 +350,28 @@ struct sea_context *sea_init(
 
 	switch((ctx->flags & SEA_FLAGS_MASK_ALN)) {
 		case SEA_ALN_ASCII:
+			ctx->f->init = _init_ascii;
 			ctx->f->pushm = _pushm_ascii;
 			ctx->f->pushx = _pushx_ascii;
 			ctx->f->pushi = _pushi_ascii;
 			ctx->f->pushd = _pushd_ascii;
+			ctx->f->finish = _finish_ascii;
 			break;
 		case SEA_ALN_CIGAR:
+			ctx->f->init = _init_cigar;
 			ctx->f->pushm = _pushm_cigar;
 			ctx->f->pushx = _pushx_cigar;
 			ctx->f->pushi = _pushi_cigar;
 			ctx->f->pushd = _pushd_cigar;
+			ctx->f->finish = _finish_cigar;
 			break;
 		case SEA_ALN_DIR:
+			ctx->f->init = _init_dir;
 			ctx->f->pushm = _pushm_dir;
 			ctx->f->pushx = _pushx_dir;
 			ctx->f->pushi = _pushi_dir;
 			ctx->f->pushd = _pushd_dir;
+			ctx->f->finish = _finish_dir;
 			break;
 		default:
 			ctx->f->pushm = NULL;
@@ -523,15 +529,12 @@ struct sea_result *sea_align(
 	}
 
 	/* finishing */
+	wr_finish(c.l, ctx);
 	r = (struct sea_result *)c.l.p;
-	r->aln = (uint8_t *)(r + 1);
+
+	r->aln = (uint8_t *)c.l.p + c.l.pos;
 	r->len = c.l.size - c.l.pos;
 	debug("finishing: len(%lld)", r->len);
-	for(i = 0; i < r->len; i++) {
-		debug("move: %c at %lld", c.l.p[c.l.pos+i], c.l.pos+i);
-		r->aln[i] = c.l.p[c.l.pos+i];
-	}
-	r->aln[i] = '\0';
 	r->a = a;
 	r->b = b;
 	r->apos = apos;
