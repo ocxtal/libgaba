@@ -181,7 +181,6 @@
  * @macro naive_linear_chain_push_ivec
  */
 #define naive_linear_chain_push_ivec(c, k) { \
-	dir_t r; \
 	c.i += BW/2; \
 	c.j -= BW/2; \
 	c.v.size = sizeof(cell_t); \

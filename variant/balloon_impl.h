@@ -67,7 +67,7 @@
 #define balloon_linear_fill_decl(c, k, r) \
 	dir_t r, b; \
 	cell_t *pp, *pc; \
-	cell_t max; \
+	cell_t max = 0; \
 	int32_t eq, mq = 0;
 
 /**

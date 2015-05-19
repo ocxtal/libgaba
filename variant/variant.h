@@ -9,6 +9,7 @@
 
 #include "../include/sea.h"
 #include "../util/util.h"
+#include <stdint.h>
 
 /**
  * defaults

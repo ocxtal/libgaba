@@ -11,49 +11,46 @@
 #include <stdio.h>
 #include <stdlib.h>				/** for `NULL' */
 #include <string.h>				/** for memcpy */
+#include <stdint.h>				/** int8_t, int16_t, ... */
 #include "include/sea.h"		/** global declarations */
 #include "util/util.h"			/** internal declarations */
+#include "util/log.h"
 #include "variant/variant.h"	/** dynamic programming variants */
 
 int32_t
 DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
-	sea_ctx_t const *ctx,
+	sea_t const *ctx,
 	sea_proc_t *proc)
 {
-	debug("enter: (%p)", CALL_FUNC(BASE, SUFFIX));
+	debug("entry point: (%p)", CALL_FUNC(BASE, SUFFIX));
 
 	/** check if arguments are sanity */ {
-		debug("check pointers: ctx(%p), proc(%p)", ctx, proc);
 		if(ctx == NULL || proc == NULL) {
-			debug("invalid pointers");
+			debug("invalid pointer detected: ctx(%p), proc(%p)", ctx, proc);
 			return SEA_ERROR_INVALID_ARGS;
 		}
 	}
 
 	/** load contexts onto the stack */
-	sea_ctx_t k = *ctx;
+	sea_t k = *ctx;
 	sea_proc_t c = *proc;
 
 	/** make the dp pointer aligned */ {
 		int64_t a = k.memaln;
 		c.pdp = (void *)((((uint64_t)c.pdp + a - 1) / a) * a);
-		debug("align c.pdp: c.pdp(%p), a(%lld)", c.pdp, a);
 	}
 
 	/** variable declarations */
 	int64_t sp = c.p;
 	cell_t *pb = (cell_t *)(c.pdp + bpl(c));
 	int8_t stat = CONT;
-	debug("save sp and pb: sp(%lld), pb(%p)", sp, pb);
 
 	/** check direction array size */
 	if((k.flags & SEA_FLAGS_MASK_DP) == SEA_DYNAMIC) {
-		debug("check pdr"); 
 		if((c.dp.ep - c.pdp) > bpl(c) * ((uint8_t *)c.dr.ep - (uint8_t *)c.dr.sp - c.p)) {
-			debug("resize c.pdr: c.pdr(%p)", c.pdr);
 			size_t s = 2 * (c.dr.ep - c.dr.sp);
 			c.dr.ep = (c.dr.sp = c.pdr = (void *)realloc(c.dr.sp, s)) + s;
-			debug("resized c.pdr: c.pdr(%p), size(%zu)", c.pdr, s);
+			debug("Realloc direction array at %p, with size %zu", c.dr.sp, s);
 		}
 	}
 
@@ -80,23 +77,23 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 			fill_latter_body(c, k, r);
 
 			/** debug */
-			debug("%lld, %lld, %lld, %lld, usage(%zu)", c.i, c.j, c.p, c.q, (size_t)(c.pdp - (void *)pb));
+			debug("pos: %lld, %lld, %lld, %lld, usage(%zu)", c.i, c.j, c.p, c.q, (size_t)(c.pdp - (void *)pb));
 			print_lane(curr, c.pdp);
 
 			if(fill_check_term(c, k, r)) {
-				debug("term");
+				debug("term detected");
 				stat = TERM; break;
 			}
 			if(fill_check_chain(c, k, r)) {
-				debug("chain");
+				debug("chain detected");
 				stat = CHAIN; break;
 			}
 			if(fill_check_alt(c, k, r)) {
-				debug("alt");
+				debug("alt detected");
 				stat = ALT; break;
 			}
 			if(fill_check_mem(c, k, r)) {
-				debug("mem");
+				debug("mem detected");
 				stat = MEM; break;
 			}
 		}

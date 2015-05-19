@@ -417,7 +417,7 @@ _sea_init_error_handler:
  * @sa sea_init
  */
 struct sea_result *sea_align(
-	sea_ctx_t const *ctx,
+	sea_t const *ctx,
 	void const *a,
 	int64_t apos,
 	int64_t alen,
@@ -434,12 +434,15 @@ struct sea_result *sea_align(
 
 	/* check if ctx points to valid context */
 	if(ctx == NULL) {
+		debug("invalid context: ctx(%p)", ctx);
 		error_label = SEA_ERROR_INVALID_CONTEXT;
 		goto _sea_error_handler;
 	}
 
 	/* check if the pointers, start position values, extension length values are proper. */
 	if(a == NULL || b == NULL || apos < 0 || alen < 0 || bpos < 0 || blen < 0) {
+		debug("invalid args: a(%p), apos(%lld), alen(%lld), b(%p), bpos(%lld), blen(%lld)",
+			a, apos, alen, b, bpos, blen);
 		error_label = SEA_ERROR_INVALID_ARGS;
 		goto _sea_error_handler;
 	}
@@ -579,7 +582,7 @@ _sea_error_handler:
  * @return error number, defined in sea_error
  */
 int sea_get_error_num(
-	sea_ctx_t *ctx,
+	sea_t *ctx,
 	struct sea_result *aln)
 {
 	int32_t error_label = SEA_SUCCESS;

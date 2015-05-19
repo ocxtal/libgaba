@@ -157,7 +157,6 @@
  * @macro twig_linear_chain_push_ivec
  */
 #define twig_linear_chain_push_ivec(c, k) { \
-	dir_t r; \
 	c.i += BW; /** BW == 16 */ \
 	c.j -= BW; \
 	c.v.size = sizeof(cell_t); \

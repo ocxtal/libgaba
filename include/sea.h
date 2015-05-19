@@ -34,6 +34,7 @@ namespace sea {
 #endif
 
 #include <stdlib.h>							/** NULL and size_t */
+#include <stdint.h>
 
 /** deprecated */
 /* fixme: use config.h instead of hard coding */
@@ -388,18 +389,11 @@ struct sea_context {
 };
 
 /**
- * @type sea_context_t
- *
- * @brief (deprecated) an alias to `struct sea_context *'.
- */
-typedef struct sea_context *	sea_context_t;
-
-/**
- * @type sea_ctx_t
+ * @type sea_t
  *
  * @brief (API) an alias to `struct sea_context'.
  */
-typedef struct sea_context sea_ctx_t;
+typedef struct sea_context sea_t;
 
 
 #ifdef __cplusplus
@@ -425,7 +419,7 @@ extern "C" {
  *
  * @sa sea_free, sea_sea
  */
-sea_ctx_t *sea_init(
+sea_t *sea_init(
 	int32_t flags,
 	int8_t m,
 	int8_t x,
@@ -453,7 +447,7 @@ sea_ctx_t *sea_init(
  * @sa sea_init
  */
 sea_res_t *sea_align(
-	sea_ctx_t const *ctx,
+	sea_t const *ctx,
 	void const *a,
 	int64_t apos,
 	int64_t alen,
@@ -472,7 +466,7 @@ sea_res_t *sea_align(
  * @return error number, defined in sea_error
  */
 int32_t sea_get_error_num(
-	sea_ctx_t *ctx,
+	sea_t *ctx,
 	sea_res_t *aln);
 
 /**
@@ -501,7 +495,7 @@ void sea_aln_free(
  * @sa sea_init
  */
 void sea_clean(
-	sea_ctx_t *ctx);
+	sea_t *ctx);
 
 #ifdef __cplusplus
 }		/* end of extern "C" */
@@ -627,11 +621,11 @@ public:
 /**
  * @class AlignmentContext
  *
- * @brief (API) an wrapper class of sea_init function and sea_ctx_t
+ * @brief (API) an wrapper class of sea_init function and sea_t
  */
 class AlignmentContext {
 private:
-	sea_ctx_t *_ctx;
+	sea_t *_ctx;
 
 public:
 	/**
