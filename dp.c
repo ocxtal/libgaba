@@ -56,15 +56,19 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 
 	/** fill-in */ {
 		/** init direction and vector */
-		cell_t *curr = (cell_t *)c.pdp;		/** debug */
+		#ifdef DEBUG
+			cell_t *curr = (cell_t *)c.pdp;		/** debug */
+		#endif
 		fill_decl(c, k, r);
 		fill_init(c, k, r);
 		debug("init: r(%d), c.max(%d)", dir2(r), c.max);
-		print_lane(curr, c.pdp);
+//		print_lane(curr, c.pdp);
 
 		stat = CAP;
 		while(c.i <= c.alim && c.j <= c.blim) {
-			cell_t *curr = (cell_t *)c.pdp;		/** debug */
+			#ifdef DEBUG
+				curr = (cell_t *)c.pdp;		/** debug */
+			#endif
 
 			fill_former_body(c, k, r);
 			if(dir(r) == TOP) {
@@ -78,7 +82,7 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 
 			/** debug */
 			debug("pos: %lld, %lld, %lld, %lld, usage(%zu)", c.i, c.j, c.p, c.q, (size_t)(c.pdp - (void *)pb));
-			print_lane(curr, c.pdp);
+//			print_lane(curr, c.pdp);
 
 			if(fill_check_term(c, k, r)) {
 				debug("term detected");

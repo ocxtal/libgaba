@@ -368,6 +368,7 @@ typedef struct sea_funcs sea_funcs_t;
  */
 struct sea_context {
 	struct sea_funcs *f;
+	struct sea_ivec *iv;
 
 	uint32_t flags;		/*!< a bitfield of option flags */
 	int8_t m;			/*!< a dynamic programming cost: match */

@@ -243,6 +243,7 @@ struct sea_context *sea_init(
 	int32_t tc,
 	int32_t tb)
 {
+	int32_t i;
 	struct sea_context *ctx = NULL;
 	int32_t error_label = SEA_ERROR;
 
@@ -293,7 +294,7 @@ struct sea_context *sea_init(
 	}
 
 	/**
-	 * set seq a reader
+	 * set seq a reader functions
 	 */
 	switch(ctx->flags & SEA_FLAGS_MASK_SEQ_A) {
 		case SEA_SEQ_A_ASCII:
@@ -348,6 +349,9 @@ struct sea_context *sea_init(
 		goto _sea_init_error_handler;
 	}
 
+	/**
+	 * set alignment writer functions
+	 */
 	switch((ctx->flags & SEA_FLAGS_MASK_ALN)) {
 		case SEA_ALN_ASCII:
 			ctx->f->init = _init_ascii;
@@ -385,6 +389,24 @@ struct sea_context *sea_init(
 		error_label = SEA_ERROR_INVALID_ARGS;
 		goto _sea_init_error_handler;
 	}
+
+	/**
+	 * initialize init vector
+	 */
+	ctx->iv = (struct sea_ivec *)malloc(sizeof(struct sea_ivec) + 32*sizeof(uint8_t));
+	ctx->iv->pv = ctx->iv + 1;
+	ctx->iv->cv = ctx->iv->pv + ctx->bw/2;
+	ctx->iv->clen = ctx->iv->plen = ctx->bw/2;
+	ctx->iv->size = sizeof(int8_t);
+	#define _Q(x)		( (x) - ctx->bw/4 )
+	for(i = 0; i < ctx->bw/2; i++) {
+		debug("pv: i(%d)", i);
+		((int8_t *)ctx->iv->pv)[i] = -ctx->gi + (_Q(i) < 0 ? -_Q(i) : _Q(i)+1) * (2 * ctx->gi - ctx->m);
+		debug("cv: i(%d)", i);
+		((int8_t *)ctx->iv->cv)[i] =            (_Q(i) < 0 ? -_Q(i) : _Q(i)  ) * (2 * ctx->gi - ctx->m);
+	}
+	#undef _Q
+
 	return(ctx);
 
 _sea_init_error_handler:
@@ -425,13 +447,13 @@ struct sea_result *sea_align(
 	int64_t bpos,
 	int64_t blen)
 {
-	int32_t i;
 	int8_t bw = ctx->bw;
-	int32_t *iv;
+//	void *iv;
 	struct sea_process c;
 	struct sea_result *r = NULL;
 	int32_t error_label = SEA_ERROR;
 
+	debug("enter sea_align");
 	/* check if ctx points to valid context */
 	if(ctx == NULL) {
 		debug("invalid context: ctx(%p)", ctx);
@@ -471,19 +493,27 @@ struct sea_result *sea_align(
 	 */
 
 	/** initialize init vector */
+	debug("initialize vector");
+	c.v = *(ctx->iv);
+/*
 	AMALLOC(iv, bw, 16);
+	debug("amalloced");
 	c.v.pv = iv;
 	c.v.cv = iv + bw/2;
 	c.v.clen = c.v.plen = bw/2;
-	c.v.size = sizeof(int32_t);
+	c.v.size = sizeof(int8_t);
 	#define _Q(x)		( (x) - bw/4 )
 	for(i = 0; i < bw/2; i++) {
-		((int32_t *)c.v.pv)[i] = -ctx->gi + (_Q(i) < 0 ? -_Q(i) : _Q(i)+1) * (2 * ctx->gi - ctx->m);
-		((int32_t *)c.v.cv)[i] =            (_Q(i) < 0 ? -_Q(i) : _Q(i)  ) * (2 * ctx->gi - ctx->m);
+		debug("pv: i(%d)", i);
+		((int8_t *)c.v.pv)[i] = -ctx->gi + (_Q(i) < 0 ? -_Q(i) : _Q(i)+1) * (2 * ctx->gi - ctx->m);
+		debug("cv: i(%d)", i);
+		((int8_t *)c.v.cv)[i] =            (_Q(i) < 0 ? -_Q(i) : _Q(i)  ) * (2 * ctx->gi - ctx->m);
 	}
 	#undef _Q
+*/
 
 	/** initialize coordinates */
+	debug("initialize coordinates");
 	c.i = bw/4;						/** the top-right cell of the lane */
 	c.j = -bw/4;
 	c.p = 0;
@@ -548,7 +578,7 @@ struct sea_result *sea_align(
 	r->ctx = ctx;
 
 	/* clean DP matrix */
-	AFREE(iv, 2*bw);
+//	AFREE(iv, 2*bw);
 	AFREE(c.dp.sp, ctx->isize);
 //	AFREE(c.dr.sp, ctx->isize);
 	free(c.dr.sp);
@@ -628,6 +658,12 @@ void sea_clean(
 	struct sea_context *ctx)
 {
 	if(ctx != NULL) {
+		if(ctx->f != NULL) {
+			free(ctx->f); ctx->f = NULL;
+		}
+		if(ctx->iv != NULL) {
+			free(ctx->iv); ctx->iv = NULL;
+		}
 		free(ctx);
 		return;
 	}
