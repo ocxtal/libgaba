@@ -24,7 +24,24 @@ def configure(conf):
 	conf.env.append_value('CFLAGS', '-g')
 	conf.env.append_value('CFLAGS', '-DDEBUG')
 	conf.env.append_value('CFLAGS', '-Wall')
-	# conf.env.append_value('CFLAGS', '-O3')
+	conf.env.append_value('CFLAGS', '-O3')
+	conf.env.append_value('CFLAGS', '-std=c99')
+	conf.env.append_value('CFLAGS', '-D_POSIX_C_SOURCE=200112L')	# for posix_memalign and clock_gettime
+	conf.env.append_value('CFLAGS', '-fPIC')
+
+	if conf.env.CC_NAME == 'icc':
+		# FIXME: dirty hack to pass '-diag-disable remark', current waf does not support space-separated options
+		# note: https://groups.google.com/forum/#!topic/waf-users/TJKhe04HGQc
+		conf.env.append_value('CFLAGS', '-diag-disable')
+		conf.env.append_value('CFLAGS', 'remark')
+	elif conf.env.CC_NAME == 'gcc':
+		conf.env.append_value('CFLAGS', '-Wno-unused-variable')
+		conf.env.append_value('CFLAGS', '-Wno-unused-but-set-variable')
+		conf.env.append_value('CFLAGS', '-Wno-unused-result')
+	elif conf.env.CC_NAME == 'clang':
+		conf.env.append_value('CFLAGS', '-Wno-unused-variable')
+	else:
+		pass
 
 	from itertools import product
 	for (v, c, d) in product(variants, cost, dp):
