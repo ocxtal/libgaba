@@ -7,7 +7,7 @@
 #define _NAIVE_H_INCLUDED
 
 #include "../include/sea.h"
-#include "../include/util.h"
+#include "../util/util.h"
 #include <stdint.h>
 
 /**
