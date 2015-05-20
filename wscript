@@ -38,6 +38,7 @@ def configure(conf):
 		conf.env.append_value('CFLAGS', '-Wno-unused-variable')
 		conf.env.append_value('CFLAGS', '-Wno-unused-but-set-variable')
 		conf.env.append_value('CFLAGS', '-Wno-unused-result')
+		conf.env.append_value('CFLAGS', '-Wno-format')				# ignore incompatibility between unsigned long long and int64_t
 	elif conf.env.CC_NAME == 'clang':
 		conf.env.append_value('CFLAGS', '-Wno-unused-variable')
 	else:
