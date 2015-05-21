@@ -41,7 +41,7 @@ int32_t
 };
 
 /**
- * @fn aligned_malloc
+ * @fn sea_aligned_malloc
  *
  * @brief an wrapper of posix_memalign
  *
@@ -50,7 +50,7 @@ int32_t
  *
  * @return a pointer to the allocated memory.
  */
-void *aligned_malloc(size_t size, size_t align)
+void *sea_aligned_malloc(size_t size, size_t align)
 {
 	void *ptr;
 	posix_memalign(&ptr, align, size);
@@ -58,13 +58,13 @@ void *aligned_malloc(size_t size, size_t align)
 }
 
 /**
- * @fn aligned_free
+ * @fn sea_aligned_free
  *
- * @brief free memory which is allocated by aligned_malloc
+ * @brief free memory which is allocated by sea_aligned_malloc
  *
  * @param[in] ptr : a pointer to the memory to be freed.
  */
-void aligned_free(void *ptr)
+void sea_aligned_free(void *ptr)
 {
 	free(ptr);
 	return;
@@ -73,38 +73,38 @@ void aligned_free(void *ptr)
 /**
  * @macro AMALLOC
  *
- * @brief an wrapper macro of alloca or aligned_malloc
+ * @brief an wrapper macro of alloca or sea_aligned_malloc
  */
 #define ALLOCA_THRESH_SIZE		( 1000000 )		/** 1MB */
 
 #if HAVE_ALLOCA_H
 	#define AMALLOC(ptr, size, align) { \
 	 	if((size) > ALLOCA_THRESH_SIZE) { \
-	 		(ptr) = aligned_malloc(size, align); \
+	 		(ptr) = sea_aligned_malloc(size, align); \
 	 	} else { \
 	 		(ptr) = alloca(size); (ptr) = (((ptr)+(align)-1) / (align)) * (align); \
 	 	} \
 	}
 #else
 	#define AMALLOC(ptr, size, align) { \
-		(ptr) = aligned_malloc(size, align); \
+		(ptr) = sea_aligned_malloc(size, align); \
 	}
 #endif /* #if HAVE_ALLOCA_H */
 
 /**
  * @macro AFREE
  *
- * @breif an wrapper macro of alloca or aligned_malloc
+ * @breif an wrapper macro of alloca or sea_aligned_malloc
  */
 #if HAVE_ALLOCA_H
 	#define AFREE(ptr, size) { \
 	 	if((size) > ALLOCA_THRESH_SIZE) { \
-	 		aligned_free(ptr); \
+	 		sea_aligned_free(ptr); \
 	 	} \
 	}
 #else
 	#define AFREE(ptr, size) { \
-		aligned_free(ptr); \
+		sea_aligned_free(ptr); \
 	}
 #endif /* #if HAVE_ALLOCA_H */
 
