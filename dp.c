@@ -129,7 +129,7 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 				(cell_t *)c.pdp - chain_save_len(c, k),
 				sizeof(cell_t) * chain_save_len(c, k));
 			c.pdp = (cell_t *)c.dp.sp + chain_save_len(c, k);
-			debug("mem: c.size(%llu)", c.size);
+			debug("mem: c.size(%lld)", c.size);
 
 			/** chain */
 			chain_push_ivec(c, k);

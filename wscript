@@ -71,6 +71,11 @@ def build(bld):
 		target = 'sea',
 		use = bld.env.OBJ)
 
+	bld.stlib(
+		source = 'sea.c',
+		target = 'sea',
+		use = bld.env.OBJ)
+
 	bld.program(
 		source = 'test.c',
 		target = 'test',
