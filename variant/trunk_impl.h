@@ -128,12 +128,6 @@
 	} \
 }
 
-/*
-	VEC_SET_LHALF(dv, k.m - 2*k.gi); \
-	VEC_SET_UHALF(dh, k.m - 2*k.gi); \
-	VEC_SHIFT_L(dv, dv); \
-*/
-
 /**
  * @macro trunk_linear_fill_former_body
  */
@@ -238,6 +232,10 @@
 
 /**
  * @macro trunk_linear_chain_push_ivec
+ *
+ * absolute valueへの変換をSIMDを使って高速にしたい。
+ * extract -> scatter -> addのループを32回回す。
+ * prefix sumなので、log(32) = 5回のループでできないか。
  */
 #define trunk_linear_chain_push_ivec(c, k) { \
 	int16_t psc, csc; \
@@ -303,6 +301,9 @@
 
 /**
  * @macro trunk_linear_trace_init
+ *
+ * push_ivecの実装を使って、absolute scoreに変換する。
+ * ここからnon-diffの計算をし、maxの場所を特定する。
  */
 #define trunk_linear_trace_init(c, k, r) { \
 	dir_term(r, c); \

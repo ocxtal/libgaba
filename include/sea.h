@@ -337,25 +337,42 @@ struct sea_funcs {
 	uint8_t (*popb)(
 		uint8_t const *ptr,
 		int64_t pos);
-	int64_t (*init)(
+	int64_t (*init_f)(			/*!< forward alnwriter */
 		uint8_t *ptr,
 		int64_t pos);
-	int64_t (*pushm)(
+	int64_t (*pushm_f)(
 		uint8_t *ptr,
 		int64_t pos);
-	int64_t (*pushx)(
+	int64_t (*pushx_f)(
 		uint8_t *ptr,
 		int64_t pos);
-	int64_t (*pushi)(
+	int64_t (*pushi_f)(
 		uint8_t *ptr,
 		int64_t pos);
-	int64_t (*pushd)(
+	int64_t (*pushd_f)(
 		uint8_t *ptr,
 		int64_t pos);
-	int64_t (*finish)(
+	int64_t (*finish_f)(
 		uint8_t *ptr,
 		int64_t pos);
-};
+	int64_t (*init_r)(			/*!< reverse alnwriter */
+		uint8_t *ptr,
+		int64_t pos);
+	int64_t (*pushm_r)(
+		uint8_t *ptr,
+		int64_t pos);
+	int64_t (*pushx_r)(
+		uint8_t *ptr,
+		int64_t pos);
+	int64_t (*pushi_r)(
+		uint8_t *ptr,
+		int64_t pos);
+	int64_t (*pushd_r)(
+		uint8_t *ptr,
+		int64_t pos);
+	int64_t (*finish_r)(
+		uint8_t *ptr,
+		int64_t pos);};
 
 typedef struct sea_funcs sea_funcs_t;
 
@@ -448,6 +465,32 @@ sea_t *sea_init(
  * @sa sea_init
  */
 sea_res_t *sea_align(
+	sea_t const *ctx,
+	void const *a,
+	int64_t apos,
+	int64_t alen,
+	void const *b,
+	int64_t bpos,
+	int64_t blen);
+
+/**
+ * @fn sea_align_f
+ * @brief the same as sea_align.
+ */
+sea_res_t *sea_align_f(
+	sea_t const *ctx,
+	void const *a,
+	int64_t apos,
+	int64_t alen,
+	void const *b,
+	int64_t bpos,
+	int64_t blen);
+
+/**
+ * @fn sea_align_r
+ * @brief the reverse variant of sea_align.
+ */
+sea_res_t *sea_align_r(
 	sea_t const *ctx,
 	void const *a,
 	int64_t apos,

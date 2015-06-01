@@ -176,43 +176,70 @@ uint8_t _pop_4bit8packed(uint8_t const *p, int64_t pos);
 uint8_t _pop_2bit8packed(uint8_t const *p, int64_t pos);
 
 /**
- * @fn _pushm_ascii, pushx_ascii, _pushi_ascii, _pushd_ascii
+ * @fn _pushm_ascii_f, pushx_ascii_f, _pushi_ascii_f, _pushd_ascii_f
  * @brief push a match (mismatch, ins, del) character to p[pos]
  * @detail implemented in `io.s'.
  * @return the next pos.
  */
-int64_t _init_ascii(uint8_t *p, int64_t pos);
-int64_t _pushm_ascii(uint8_t *p, int64_t pos);
-int64_t _pushx_ascii(uint8_t *p, int64_t pos);
-int64_t _pushi_ascii(uint8_t *p, int64_t pos);
-int64_t _pushd_ascii(uint8_t *p, int64_t pos);
-int64_t _finish_ascii(uint8_t *p, int64_t pos);
+/** forward writer */
+int64_t _init_ascii_f(uint8_t *p, int64_t pos);
+int64_t _pushm_ascii_f(uint8_t *p, int64_t pos);
+int64_t _pushx_ascii_f(uint8_t *p, int64_t pos);
+int64_t _pushi_ascii_f(uint8_t *p, int64_t pos);
+int64_t _pushd_ascii_f(uint8_t *p, int64_t pos);
+int64_t _finish_ascii_f(uint8_t *p, int64_t pos);
+
+/** reverse writer */
+int64_t _init_ascii_r(uint8_t *p, int64_t pos);
+int64_t _pushm_ascii_r(uint8_t *p, int64_t pos);
+int64_t _pushx_ascii_r(uint8_t *p, int64_t pos);
+int64_t _pushi_ascii_r(uint8_t *p, int64_t pos);
+int64_t _pushd_ascii_r(uint8_t *p, int64_t pos);
+int64_t _finish_ascii_r(uint8_t *p, int64_t pos);
 
 /**
- * @fn _pushm_cigar, _pushx_cigar, _pushi_cigar, _pushd_cigar
+ * @fn _pushm_cigar_f, _pushx_cigar_f, _pushi_cigar_f, _pushd_cigar_f
  * @brief append a match (mismatch, ins, del) to p[pos].
  * @detail implemented in `io.s'.
  * @return the next pos.
  */
-int64_t _init_cigar(uint8_t *p, int64_t pos);
-int64_t _pushm_cigar(uint8_t *p, int64_t pos);
-int64_t _pushx_cigar(uint8_t *p, int64_t pos);
-int64_t _pushi_cigar(uint8_t *p, int64_t pos);
-int64_t _pushd_cigar(uint8_t *p, int64_t pos);
-int64_t _finish_cigar(uint8_t *p, int64_t pos);
+/** forward writer */
+int64_t _init_cigar_f(uint8_t *p, int64_t pos);
+int64_t _pushm_cigar_f(uint8_t *p, int64_t pos);
+int64_t _pushx_cigar_f(uint8_t *p, int64_t pos);
+int64_t _pushi_cigar_f(uint8_t *p, int64_t pos);
+int64_t _pushd_cigar_f(uint8_t *p, int64_t pos);
+int64_t _finish_cigar_f(uint8_t *p, int64_t pos);
+
+/** reverse writer */
+int64_t _init_cigar_r(uint8_t *p, int64_t pos);
+int64_t _pushm_cigar_r(uint8_t *p, int64_t pos);
+int64_t _pushx_cigar_r(uint8_t *p, int64_t pos);
+int64_t _pushi_cigar_r(uint8_t *p, int64_t pos);
+int64_t _pushd_cigar_r(uint8_t *p, int64_t pos);
+int64_t _finish_cigar_r(uint8_t *p, int64_t pos);
 
 /**
- * @fn _pushm_dir, _pushx_dir, _pushi_dir, _pushd_dir
+ * @fn _pushm_dir_f, _pushx_dir_f, _pushi_dir_f, _pushd_dir_f
  * @brief append a direction string to p[pos].
  * @detail implemented in `io.s'.
  * @return the next pos.
  */
-int64_t _init_dir(uint8_t *p, int64_t pos);
-int64_t _pushm_dir(uint8_t *p, int64_t pos);
-int64_t _pushx_dir(uint8_t *p, int64_t pos);
-int64_t _pushi_dir(uint8_t *p, int64_t pos);
-int64_t _pushd_dir(uint8_t *p, int64_t pos);
-int64_t _finish_dir(uint8_t *p, int64_t pos);
+/** forward writer */
+int64_t _init_dir_f(uint8_t *p, int64_t pos);
+int64_t _pushm_dir_f(uint8_t *p, int64_t pos);
+int64_t _pushx_dir_f(uint8_t *p, int64_t pos);
+int64_t _pushi_dir_f(uint8_t *p, int64_t pos);
+int64_t _pushd_dir_f(uint8_t *p, int64_t pos);
+int64_t _finish_dir_f(uint8_t *p, int64_t pos);
+
+/** reverse writer */
+int64_t _init_dir_r(uint8_t *p, int64_t pos);
+int64_t _pushm_dir_r(uint8_t *p, int64_t pos);
+int64_t _pushx_dir_r(uint8_t *p, int64_t pos);
+int64_t _pushi_dir_r(uint8_t *p, int64_t pos);
+int64_t _pushd_dir_r(uint8_t *p, int64_t pos);
+int64_t _finish_dir_r(uint8_t *p, int64_t pos);
 
 /**
  * flags
@@ -308,16 +335,32 @@ enum _ALN_CHAR {
 };
 
 /**
+ * @enum _ALN_DIR
+ * @brief the direction of alignment string.
+ */
+enum _ALN_DIR {
+	ALN_FW = 0,
+	ALN_RV = 1
+};
+
+/**
  * @macro wr_init
  * @brief initialize an alignment writer instance.
  */
-#define wr_init(w, f) { \
+#define wr_init(w, f, dir) { \
 	(w).p = NULL; \
-	(w).pos = 0; \
-	(w).pushm = (f)->pushm; \
-	(w).pushx = (f)->pushx; \
-	(w).pushi = (f)->pushi; \
-	(w).pushd = (f)->pushd; \
+	(w).pos = (dir); \
+	if((dir) == ALN_FW) { \
+		(w).pushm = (f)->pushm_f; \
+		(w).pushx = (f)->pushx_f; \
+		(w).pushi = (f)->pushi_f; \
+		(w).pushd = (f)->pushd_f; \
+	} else { \
+		(w).pushm = (f)->pushm_r; \
+		(w).pushx = (f)->pushx_r; \
+		(w).pushi = (f)->pushi_r; \
+		(w).pushd = (f)->pushd_r; \
+	} \
 }
 
 /**
@@ -328,9 +371,15 @@ enum _ALN_CHAR {
 	if((w).p != NULL) { \
 		free((w).p); (w).p = NULL; \
 	} \
-	(w).pos = (w).size = sizeof(struct sea_result) + sizeof(uint8_t) * s; \
+	(w).size = sizeof(struct sea_result) + sizeof(uint8_t) * s; \
 	(w).p = malloc((w).size); \
-	(w).pos = (k).f->init((w).p, (w).pos); \
+	if((w).pos == ALN_FW) { \
+		(w).pos = (w).size; \
+		(w).pos = (k).f->init_f((w).p, (w).pos); \
+	} else { \
+		(w).pos = sizeof(struct sea_result); \
+		(w).pos = (k).f->init_r((w).p, (w).pos); \
+	} \
 }
 
 /**
@@ -358,8 +407,15 @@ enum _ALN_CHAR {
  * @macro wr_finish
  * @brief finish the instance (move the content of the array to the front)
  */
-#define wr_finish(w, ctx) { \
-	(w).pos = (ctx)->f->finish((w).p, (w).pos); \
+#define wr_finish(w, ctx, dir) { \
+	if((dir) == ALN_FW) { \
+		(w).pos = (ctx)->f->finish_f((w).p, (w).pos); \
+		(w).size = (w).size - (w).pos; \
+	} else { \
+		(w).pos = (ctx)->f->finish_r((w).p, (w).pos); \
+		(w).size = (w).pos - sizeof(struct sea_result); \
+		(w).pos = sizeof(struct sea_result); \
+	} \
 }
 
 /**

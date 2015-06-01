@@ -40,6 +40,41 @@ int32_t
 	}
 };
 
+uint8_t
+(*rd_table[8])(
+	uint8_t const *p,
+	int64_t pos) = {
+	NULL,
+	_pop_ascii,
+	_pop_4bit,
+	_pop_2bit,
+	_pop_4bit8packed,
+	_pop_2bit8packed,
+	NULL
+};
+
+int64_t
+(*wr_table[4][2][6])(
+	uint8_t *p,
+	int64_t pos) = {
+	{
+		{NULL, NULL, NULL, NULL, NULL, NULL},
+		{NULL, NULL, NULL, NULL, NULL, NULL}
+	},
+	{
+		{_init_ascii_f, _pushm_ascii_f, _pushx_ascii_f, _pushi_ascii_f, _pushd_ascii_f, _finish_ascii_f},
+		{_init_ascii_r, _pushm_ascii_r, _pushx_ascii_r, _pushi_ascii_r, _pushd_ascii_r, _finish_ascii_r}
+	},
+	{
+		{_init_cigar_f, _pushm_cigar_f, _pushx_cigar_f, _pushi_cigar_f, _pushd_cigar_f, _finish_cigar_f},
+		{_init_cigar_r, _pushm_cigar_r, _pushx_cigar_r, _pushi_cigar_r, _pushd_cigar_r, _finish_cigar_r}
+	},
+	{
+		{_init_dir_f, _pushm_dir_f, _pushx_dir_f, _pushi_dir_f, _pushd_dir_f, _finish_dir_f},
+		{_init_dir_r, _pushm_dir_r, _pushx_dir_r, _pushi_dir_r, _pushd_dir_r, _finish_dir_r}
+	}
+};
+
 /**
  * @fn sea_aligned_malloc
  *
@@ -280,6 +315,11 @@ struct sea_context *sea_init(
 	int32_t cost_idx = (ctx->flags & SEA_FLAGS_MASK_COST) >> SEA_FLAGS_POS_COST;
 	int32_t dp_idx = (ctx->flags & SEA_FLAGS_MASK_DP) >> SEA_FLAGS_POS_DP;
 
+	if(cost_idx >= 3 || dp_idx >= 3) {
+		error_label = SEA_ERROR_INVALID_ARGS;
+		goto _sea_init_error_handler;
+	}
+
 	ctx->f->twig    = func_table[cost_idx][dp_idx][1];
 	ctx->f->branch  = func_table[cost_idx][dp_idx][2];
 	ctx->f->trunk   = func_table[cost_idx][dp_idx][3];
@@ -296,55 +336,15 @@ struct sea_context *sea_init(
 	/**
 	 * set seq a reader functions
 	 */
-	switch(ctx->flags & SEA_FLAGS_MASK_SEQ_A) {
-		case SEA_SEQ_A_ASCII:
-			ctx->f->popa = _pop_ascii;
-			break;
-		case SEA_SEQ_A_4BIT:
-			ctx->f->popa = _pop_4bit;
-			break;
-		case SEA_SEQ_A_2BIT:
-			ctx->f->popa = _pop_2bit;
-			break;
-		case SEA_SEQ_A_4BIT8PACKED:
-			ctx->f->popa = _pop_4bit8packed;
-			break;
-		case SEA_SEQ_A_2BIT8PACKED:
-			ctx->f->popa = _pop_2bit8packed;
-			break;
-		default:
-			ctx->f->popa = NULL;
-			break;
-	}
-	if(ctx->f->popa == NULL) {
+	int32_t popa_idx = (ctx->flags & SEA_FLAGS_MASK_SEQ_A) >> SEA_FLAGS_POS_SEQ_A;
+	int32_t popb_idx = (ctx->flags & SEA_FLAGS_MASK_SEQ_B) >> SEA_FLAGS_POS_SEQ_B;
+	if(popa_idx >= 8 || popb_idx >= 8) {
 		error_label = SEA_ERROR_INVALID_ARGS;
 		goto _sea_init_error_handler;
 	}
-
-	/**
-	 * seq b
-	 */
-	switch(ctx->flags & SEA_FLAGS_MASK_SEQ_B) {
-		case SEA_SEQ_B_ASCII:
-			ctx->f->popb = _pop_ascii;
-			break;
-		case SEA_SEQ_B_4BIT:
-			ctx->f->popb = _pop_4bit;
-			break;
-		case SEA_SEQ_B_2BIT:
-			ctx->f->popb = _pop_2bit;
-			break;
-		case SEA_SEQ_B_4BIT8PACKED:
-			ctx->f->popb = _pop_4bit8packed;
-			break;
-		case SEA_SEQ_B_2BIT8PACKED:
-			ctx->f->popb = _pop_2bit8packed;
-			break;
-		default:
-			ctx->f->popb = NULL;
-			break;
-	}
-	if(ctx->f->popb == NULL) {
+	ctx->f->popa = rd_table[popa_idx];
+	ctx->f->popb = rd_table[popb_idx];
+	if(ctx->f->popa == NULL || ctx->f->popb == NULL) {
 		error_label = SEA_ERROR_INVALID_ARGS;
 		goto _sea_init_error_handler;
 	}
@@ -352,40 +352,29 @@ struct sea_context *sea_init(
 	/**
 	 * set alignment writer functions
 	 */
-	switch((ctx->flags & SEA_FLAGS_MASK_ALN)) {
-		case SEA_ALN_ASCII:
-			ctx->f->init = _init_ascii;
-			ctx->f->pushm = _pushm_ascii;
-			ctx->f->pushx = _pushx_ascii;
-			ctx->f->pushi = _pushi_ascii;
-			ctx->f->pushd = _pushd_ascii;
-			ctx->f->finish = _finish_ascii;
-			break;
-		case SEA_ALN_CIGAR:
-			ctx->f->init = _init_cigar;
-			ctx->f->pushm = _pushm_cigar;
-			ctx->f->pushx = _pushx_cigar;
-			ctx->f->pushi = _pushi_cigar;
-			ctx->f->pushd = _pushd_cigar;
-			ctx->f->finish = _finish_cigar;
-			break;
-		case SEA_ALN_DIR:
-			ctx->f->init = _init_dir;
-			ctx->f->pushm = _pushm_dir;
-			ctx->f->pushx = _pushx_dir;
-			ctx->f->pushi = _pushi_dir;
-			ctx->f->pushd = _pushd_dir;
-			ctx->f->finish = _finish_dir;
-			break;
-		default:
-			ctx->f->pushm = NULL;
-			ctx->f->pushx = NULL;
-			ctx->f->pushi = NULL;
-			ctx->f->pushd = NULL;
-			break;
+	int32_t aln_idx = (ctx->flags & SEA_FLAGS_MASK_ALN) >> SEA_FLAGS_POS_ALN;
+	if(aln_idx >= 4) {
+		error_label = SEA_ERROR_INVALID_ARGS;
+		goto _sea_init_error_handler;
 	}
-	if(ctx->f->pushm == NULL || ctx->f->pushx == NULL
-		|| ctx->f->pushi == NULL || ctx->f->pushd == NULL) {
+	ctx->f->init_f = wr_table[aln_idx][0][0];
+	ctx->f->pushm_f = wr_table[aln_idx][0][1];
+	ctx->f->pushx_f = wr_table[aln_idx][0][2];
+	ctx->f->pushi_f = wr_table[aln_idx][0][3];
+	ctx->f->pushd_f = wr_table[aln_idx][0][4];
+	ctx->f->finish_f = wr_table[aln_idx][0][5];
+
+	ctx->f->init_r = wr_table[aln_idx][1][0];
+	ctx->f->pushm_r = wr_table[aln_idx][1][1];
+	ctx->f->pushx_r = wr_table[aln_idx][1][2];
+	ctx->f->pushi_r = wr_table[aln_idx][1][3];
+	ctx->f->pushd_r = wr_table[aln_idx][1][4];
+	ctx->f->finish_r = wr_table[aln_idx][1][5];
+
+	if(ctx->f->init_f == NULL || ctx->f->pushm_f == NULL || ctx->f->pushx_f == NULL
+		|| ctx->f->pushi_f == NULL || ctx->f->pushd_f == NULL || ctx->f->finish_f == NULL
+		|| ctx->f->init_r == NULL || ctx->f->pushm_r == NULL || ctx->f->pushx_r == NULL
+		|| ctx->f->pushi_r == NULL || ctx->f->pushd_r == NULL || ctx->f->finish_r == NULL) {
 		error_label = SEA_ERROR_INVALID_ARGS;
 		goto _sea_init_error_handler;
 	}
@@ -422,33 +411,22 @@ _sea_init_error_handler:
 }
 
 /**
- * @fn sea_align
+ * @fn sea_align_intl
  *
- * @brief alignment function. 
- *
- * @param[ref] ctx : a pointer to an alignment context structure. must be initialized with sea_init function.
- * @param[in] a : a pointer to the query sequence a. see seqreader.h for more details of query sequence formatting.
- * @param[in] apos : the alignment start position in a. (0 <= apos < length(sequence a)) (or search start position in the Smith-Waterman algorithm). the alignment includes the position apos.
- * @param[in] alen : the extension length in a. (0 < alen) (to be exact, alen is search area length in the Smith-Waterman algorithm. the maximum extension length in the seed-and-extend alignment algorithm. the length of the query a to be aligned in the Needleman-Wunsch algorithm.)
- * @param[in] b : a pointer to the query sequence b.
- * @param[in] bpos : the alignment start position in b. (0 <= bpos < length(sequence b))
- * @param[in] blen : the extension length in b. (0 < blen)
- *
- * @return an pointer to the sea_result structure.
- *
- * @sa sea_init
+ * @brief (internal) the body of sea_align function.
  */
-struct sea_result *sea_align(
+static
+struct sea_result *sea_align_intl(
 	sea_t const *ctx,
 	void const *a,
 	int64_t apos,
 	int64_t alen,
 	void const *b,
 	int64_t bpos,
-	int64_t blen)
+	int64_t blen,
+	int32_t dir)
 {
 	int8_t bw = ctx->bw;
-//	void *iv;
 	struct sea_process c;
 	struct sea_result *r = NULL;
 	int32_t error_label = SEA_ERROR;
@@ -495,22 +473,6 @@ struct sea_result *sea_align(
 	/** initialize init vector */
 	debug("initialize vector");
 	c.v = *(ctx->iv);
-/*
-	AMALLOC(iv, bw, 16);
-	debug("amalloced");
-	c.v.pv = iv;
-	c.v.cv = iv + bw/2;
-	c.v.clen = c.v.plen = bw/2;
-	c.v.size = sizeof(int8_t);
-	#define _Q(x)		( (x) - bw/4 )
-	for(i = 0; i < bw/2; i++) {
-		debug("pv: i(%d)", i);
-		((int8_t *)c.v.pv)[i] = -ctx->gi + (_Q(i) < 0 ? -_Q(i) : _Q(i)+1) * (2 * ctx->gi - ctx->m);
-		debug("cv: i(%d)", i);
-		((int8_t *)c.v.cv)[i] =            (_Q(i) < 0 ? -_Q(i) : _Q(i)  ) * (2 * ctx->gi - ctx->m);
-	}
-	#undef _Q
-*/
 
 	/** initialize coordinates */
 	debug("initialize coordinates");
@@ -530,7 +492,7 @@ struct sea_result *sea_align(
 	c.blim = c.blen - bw/2;
 
 	/** initialize alignment writer */
-	wr_init(c.l, ctx->f);
+	wr_init(c.l, ctx->f, dir);
 
 	/** initialize memory */
 	c.size = ctx->isize;
@@ -541,7 +503,6 @@ struct sea_result *sea_align(
 	}
 	c.dp.ep = (c.pdp = c.dp.sp) + c.size;
 
-//	AMALLOC(c.dr.sp, c.size, ctx->memaln);
 	c.dr.sp = malloc(c.size);
 	if(c.dr.sp == NULL) {
 		error_label = SEA_ERROR_OUT_OF_MEM;
@@ -562,11 +523,11 @@ struct sea_result *sea_align(
 	}
 
 	/* finishing */
-	wr_finish(c.l, ctx);
+	wr_finish(c.l, ctx, dir);
 	r = (struct sea_result *)c.l.p;
 
 	r->aln = (uint8_t *)c.l.p + c.l.pos;
-	r->len = c.l.size - c.l.pos;
+	r->len = c.l.size;
 	debug("finishing: len(%lld)", r->len);
 	r->a = a;
 	r->b = b;
@@ -599,6 +560,67 @@ _sea_error_handler:
 	*((uint8_t *)r->aln) = '\0';
 	r->ctx = ctx;
 	return(r);
+}
+
+/**
+ * @fn sea_align
+ *
+ * @brief alignment function. 
+ *
+ * @param[ref] ctx : a pointer to an alignment context structure. must be initialized with sea_init function.
+ * @param[in] a : a pointer to the query sequence a. see seqreader.h for more details of query sequence formatting.
+ * @param[in] apos : the alignment start position on a. (0 <= apos < length(sequence a)) (or search start position in the Smith-Waterman algorithm). the alignment includes the position apos.
+ * @param[in] alen : the extension length on a. (0 < alen) (to be exact, alen is search area length in the Smith-Waterman algorithm. the maximum extension length in the seed-and-extend alignment algorithm. the length of the query a to be aligned in the Needleman-Wunsch algorithm.)
+ * @param[in] b : a pointer to the query sequence b.
+ * @param[in] bpos : the alignment start position on b. (0 <= bpos < length(sequence b))
+ * @param[in] blen : the extension length on b. (0 < blen)
+ *
+ * @return an pointer to the sea_result structure.
+ *
+ * @sa sea_init
+ */
+struct sea_result *sea_align(
+	sea_t const *ctx,
+	void const *a,
+	int64_t apos,
+	int64_t alen,
+	void const *b,
+	int64_t bpos,
+	int64_t blen)
+{
+	return(sea_align_intl(ctx, a, apos, alen, b, bpos, blen, ALN_FW));
+}
+
+/**
+ * @fn sea_align_f
+ * @brief the same as sea_align.
+ */
+struct sea_result *sea_align_f(
+	sea_t const *ctx,
+	void const *a,
+	int64_t apos,
+	int64_t alen,
+	void const *b,
+	int64_t bpos,
+	int64_t blen)
+{
+	return(sea_align_intl(ctx, a, apos, alen, b, bpos, blen, ALN_FW));
+}
+
+/**
+ * @fn sea_align_r
+ * @brief the reverse variant of sea_align.
+ */
+struct sea_result *sea_align_r(
+	sea_t const *ctx,
+	void const *a,
+	int64_t apos,
+	int64_t alen,
+	void const *b,
+	int64_t bpos,
+	int64_t blen)
+{
+	return(sea_align_intl(ctx, a, apos, alen, b, bpos, blen, ALN_RV));
 }
 
 /**

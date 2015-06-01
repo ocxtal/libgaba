@@ -181,7 +181,7 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 			debug("trace from: %lld, %lld, %lld, %lld", c.mi, c.mj, c.mp, c.mq);
 
 			/** トレースしない場合はここでリターン */
-			if(k.f->pushm == NULL) {			/** 汚い実装 */
+			if(k.f->pushm_f == NULL) {			/** 汚い実装 */
 				debug("return without traceback");
 				return SEA_SUCCESS;
 			}
