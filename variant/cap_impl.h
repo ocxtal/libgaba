@@ -47,8 +47,8 @@
  */
 #define cap_linear_fill_init(c, k, r) { \
 	naive_linear_fill_init(c, k, r); \
-	c.alim = c.alen + BW - 1; \
-	c.blim = c.blen + BW; \
+	c.alim = c.aep + BW - 1; \
+	c.blim = c.bep + BW; \
 }
 
 /**
@@ -71,7 +71,7 @@
  */
 #define cap_linear_fill_latter_body(c, k, r) { \
 	cell_t t, d, l; \
-	lb = c.i-c.alen, ub = c.blen-c.j+1; \
+	lb = c.i-c.aep, ub = c.bep-c.j+1; \
 	debug("fill: lb(%lld), ub(%lld)", lb, ub); \
 	if(lb < -BW/2) { lb = -BW/2; } \
 	if(ub > BW/2) { ub = BW/2; } \

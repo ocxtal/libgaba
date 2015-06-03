@@ -82,7 +82,7 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 
 			/** debug */
 			debug("pos: %lld, %lld, %lld, %lld, usage(%zu)", c.i, c.j, c.p, c.q, (size_t)(c.pdp - (void *)pb));
-//			print_lane(curr, c.pdp);
+			print_lane(curr, c.pdp);
 
 			if(fill_check_term(c, k, r)) {
 				debug("term detected");
@@ -206,12 +206,12 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 		trace_decl(c, k, r);
 		trace_init(c, k, r);
 		if(sp == 0) {
-			while(c.mi > 0 && c.mj > 0) {
+			while(c.mi > c.asp && c.mj > c.bsp) {
 				debug("%lld, %lld, %lld, %lld", c.mi, c.mj, c.mp, c.mq);
 				trace_body(c, k, r);
 			}
-			while(c.mi > 0) { c.mi--; wr_pushd(c.l); }
-			while(c.mj > 0) { c.mj--; wr_pushi(c.l); }
+			while(c.mi > c.asp) { c.mi--; wr_pushd(c.l); }
+			while(c.mj > c.bsp) { c.mj--; wr_pushi(c.l); }
 		} else {
 			while(c.mp > sp) {
 				debug("%lld, %lld, %lld, %lld", c.mi, c.mj, c.mp, c.mq);

@@ -281,9 +281,8 @@ enum _STATE {
  * @macro rd_init
  * @brief initialize a sequence reader instance.
  */
-#define rd_init(r, fp, base, sp) { \
+#define rd_init(r, fp, base) { \
 	(r).p = (void *)base; \
-	(r).spos = sp; \
 	(r).b = 0; \
 	(r).pop = fp; \
 }
@@ -293,7 +292,7 @@ enum _STATE {
  * @brief fetch a decoded base into r.b.
  */
 #define rd_fetch(r, pos) { \
-	(r).b = (r).pop((r).p, (r).spos + pos); \
+	(r).b = (r).pop((r).p, pos); \
 }
 
 /**

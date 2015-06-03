@@ -91,8 +91,8 @@
 #define trunk_linear_fill_init(c, k, r) { \
 	c.i -= BW/2; \
 	c.j += BW/2; \
-	c.alim = c.alen - BW/2; \
-	c.blim = c.blen - BW/2 + 1; \
+	c.alim = c.aep - BW/2; \
+	c.blim = c.bep - BW/2 + 1; \
 	dir_init(r, c.pdr[c.p]); \
 	VEC_SET(mggv, k.m - 2*k.gi); \
 	VEC_SET(xggv, k.x - 2*k.gi); \
@@ -171,7 +171,7 @@
 	if(k.alg != NW && score >= max) { \
 		max = score; \
 		c.mi = c.i; c.mj = c.j; \
-		c.mp = COP(c.mi, c.mj, BW); c.mq = 0; \
+		c.mp = COP(c.mi, c.mj, BW) - COP(c.asp, c.bsp, BW); c.mq = 0; \
 	} \
 }
 
@@ -278,9 +278,9 @@
  * @macro trunk_linear_search_terminal
  */
 #define trunk_linear_search_terminal(c, k) { \
-	c.mi = c.alen; \
-	c.mj = c.blen; \
-	c.mp = COP(c.mi, c.mj, BW); \
+	c.mi = c.aep; \
+	c.mj = c.bep; \
+	c.mp = COP(c.mi, c.mj, BW) - COP(c.asp, c.bsp, BW); \
 	c.mq = COQ(c.mi, c.mj, BW) - COQ(c.i, c.j, BW); \
 }
 
@@ -288,8 +288,8 @@
  * @macro trunk_linear_search_max_score
  */
 #define trunk_linear_search_max_score(c, k) { \
-	c.alen = c.mi; \
-	c.blen = c.mj; \
+	c.aep = c.mi; \
+	c.bep = c.mj; \
 }
 
 /**

@@ -52,14 +52,14 @@ char *mseq(char const *seq, int x, int ins, int del)
 	return(mod);
 }
 
-int main(void)
+int main(int argc, char *argv[])
 {
 	sea_t *ctx;
 	sea_res_t *fres, *rres;
 	char *a, *b;
 	// char const *a = "1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890";
 	// char const *b = "1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890";
-	int len = 100;
+	int len = 30;
 
 	ctx = sea_init(
 		SEA_DYNAMIC | SEA_LINEAR_GAP_COST | SEA_XSEA | SEA_ALN_CIGAR,
@@ -67,20 +67,26 @@ int main(void)
 
 //	printf("%x\n", ctx->flags);
 
-	srand(time(NULL));
+	unsigned long s = (argc == 2) ? atoi(argv[1]) : time(NULL);
+	srand(s);
+	printf("%lu\n", s);
 
 	a = rseq(len);
 	b = mseq(a, 10, 40, 40);
 
 	printf("%s\n%s\n", a, b);
 
+	int lm = 5, rm = 0;
+
 	fres = sea_align_f(ctx,
-		a, 1, strlen(a)-1,
-		b, 1, strlen(b)-1);
+		a, lm, strlen(a)-rm,
+		b, lm, strlen(b)-rm,
+		NULL, 0);
 
 	rres = sea_align_r(ctx,
-		a, 1, strlen(a)-1,
-		b, 1, strlen(b)-1);
+		a, lm, strlen(a)-rm,
+		b, lm, strlen(b)-rm,
+		NULL, 0);
 
 	printf("%d, %lld, %s\n", fres->score, fres->len, fres->aln);
 	printf("%d, %lld, %s\n", rres->score, rres->len, rres->aln);
@@ -88,8 +94,8 @@ int main(void)
 	free(a);
 	free(b);
 
-	sea_aln_free(fres);
-	sea_aln_free(rres);
+	sea_aln_free(ctx, fres);
+	sea_aln_free(ctx, rres);
 
 	sea_clean(ctx);
 	return 0;

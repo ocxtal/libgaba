@@ -16,6 +16,7 @@ such as read mapping, sequence assembly, and database search.
 * the local, global, and semi-global alignment algorithms
 * fixed / variable width banded dynamic programming
 * the dynamic band and the guided band algorithms
+* various input / output formats
 * parallelized with SIMD instructions
 * thread-safe
 * simple APIs for C
@@ -24,8 +25,8 @@ such as read mapping, sequence assembly, and database search.
 ## Environments
 
 In general, the library can be built on x86_64-based UNIX / Linux
-systems with the gcc / clang / icc compilers. The cygwin / mingw
-environment on the Windows systems are also supported.
+systems with the gcc / clang / icc compilers. Cygwin / mingw
+environments on Windows systems are also supported.
 
 ### Supported architectures
 
@@ -76,17 +77,62 @@ archive of the wrapper
 
 #### sea\_init
 
+Generate a context with a given parameters.
+
+```C
+sea_t *sea_init(
+	int32_t flags,		/** option flags: see Constants */ 
+	int8_t m,			/** match score (m > 0) */
+	int8_t x,			/** mismatch penalty (x < m) */
+	int8_t gi,			/** gap open penalgy (2*gi < x) */
+	int8_t ge,			/** gap extension penalty (ge < 0) */
+	int32_t tx,			/** xdrop termination threshold (tx > 0) */
+	int32_t tc,			/** chain threshold (tc > 0) */
+	int32_t tb);		/** balloon termination threshold (tb > tc) */
+```
+
 #### sea\_align
+
+Calculate an alignment with given two sequences. The sea\_align function
+invokes the dynamic band algorithm if `guide == NULL`, otherwise the
+function invokes the guided band algorithm.
+
+```C
+sea_res_t *sea_align(
+	sea_t const *ctx,	/** a pointer to a context */
+	void const *a,		/** a pointer to the head of a sequence a */
+	int64_t asp,		/** alignment start position on the seq a */
+	int64_t aep,		/** alignment end position on the seq a */
+	void const *b,		/** a pointer to the head of a sequence b */
+	int64_t bsp,		/** alignment start position on the seq b */
+	int64_t bep,		/** alignment end position on the seq b */
+	uint8_t const *guide,/** a pointer to the head of a guide string (can be NULL) */
+	int64_t glen);		/** the length of the guide string (ignored if guide == NULL */
+```
 
 #### sea\_aln\_free
 
+```C
+void sea_aln_free(
+	sea_t const *ctx,
+	sea_res_t *aln);
+```
+
 #### sea\_clean
+
+```C
+void sea_clean(
+	sea_t *ctx);
+```
+
 
 ### Types
 
-#### sea\_ctx\_t
+#### sea\_t
 
 #### sea\_res\_t
+
+### Constants
 
 ## Usage
 

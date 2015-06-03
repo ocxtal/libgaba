@@ -163,7 +163,7 @@ void sea_aligned_free(void *ptr)
  */
 static int32_t
 sea_init_flags_vals(
-	struct sea_context *ctx,
+	sea_t *ctx,
 	int32_t flags,
 	int8_t m,
 	int8_t x,
@@ -268,7 +268,7 @@ sea_init_flags_vals(
  *
  * @sa sea_free, sea_sea
  */
-struct sea_context *sea_init(
+sea_t *sea_init(
 	int32_t flags,
 	int8_t m,
 	int8_t x,
@@ -279,12 +279,12 @@ struct sea_context *sea_init(
 	int32_t tb)
 {
 	int32_t i;
-	struct sea_context *ctx = NULL;
+	sea_t *ctx = NULL;
 	int32_t error_label = SEA_ERROR;
 
 
 	/** malloc sea_context */
-	ctx = (struct sea_context *)malloc(sizeof(struct sea_context));
+	ctx = (sea_t *)malloc(sizeof(struct sea_context));
 	if(ctx == NULL) {
 		error_label = SEA_ERROR_OUT_OF_MEM;
 		goto _sea_init_error_handler;
@@ -416,19 +416,21 @@ _sea_init_error_handler:
  * @brief (internal) the body of sea_align function.
  */
 static
-struct sea_result *sea_align_intl(
+sea_res_t *sea_align_intl(
 	sea_t const *ctx,
 	void const *a,
-	int64_t apos,
-	int64_t alen,
+	int64_t asp,
+	int64_t aep,
 	void const *b,
-	int64_t bpos,
-	int64_t blen,
+	int64_t bsp,
+	int64_t bep,
+	uint8_t const *guide,
+	int64_t glen,
 	int32_t dir)
 {
 	int8_t bw = ctx->bw;
 	struct sea_process c;
-	struct sea_result *r = NULL;
+	sea_res_t *r = NULL;
 	int32_t error_label = SEA_ERROR;
 
 	debug("enter sea_align");
@@ -440,9 +442,9 @@ struct sea_result *sea_align_intl(
 	}
 
 	/* check if the pointers, start position values, extension length values are proper. */
-	if(a == NULL || b == NULL || apos < 0 || alen < 0 || bpos < 0 || blen < 0) {
+	if(a == NULL || b == NULL || asp < 0 || aep < asp || bsp < 0 || bep < bsp) {
 		debug("invalid args: a(%p), apos(%lld), alen(%lld), b(%p), bpos(%lld), blen(%lld)",
-			a, apos, alen, b, bpos, blen);
+			a, asp, aep, b, bsp, bep);
 		error_label = SEA_ERROR_INVALID_ARGS;
 		goto _sea_error_handler;
 	}
@@ -450,14 +452,14 @@ struct sea_result *sea_align_intl(
 	/**
 	 * if one of the length is zero, returns with score = 0 and aln = "".
 	 */
-	if(alen == 0 || blen == 0) {
-		r = (struct sea_result *)malloc(sizeof(struct sea_result) + 1);
+	if(asp == aep || bsp == bep) {
+		r = (sea_res_t *)malloc(sizeof(struct sea_result) + 1);
 		r->a = a;
-		r->apos = apos;
-		r->alen = alen;
+		r->apos = asp;
+		r->alen = aep;
 		r->b = b;
-		r->bpos = bpos;
-		r->blen = blen;
+		r->bpos = bsp;
+		r->blen = bep;
 		r->len = 0;
 		r->score = 0;
 		r->aln = (void *)(r + 1);
@@ -476,20 +478,24 @@ struct sea_result *sea_align_intl(
 
 	/** initialize coordinates */
 	debug("initialize coordinates");
-	c.i = bw/4;						/** the top-right cell of the lane */
-	c.j = -bw/4;
-	c.p = 0;
+	c.i = asp + bw/4;								/** the top-right cell of the lane */
+	c.j = bsp - bw/4;
+	c.p = 0; //COP(asp, bsp, ctx->bw);
 	c.q = 0;
-	c.mi = c.mj = 0;
-	c.mp = c.mq = 0;
+	c.mi = asp;
+	c.mj = bsp;
+	c.mp = 0; //COP(asp, bsp, ctx->bw);
+	c.mq = 0;
 
 	/** initialize sequence reader */
-	rd_init(c.a, ctx->f->popa, a, apos);
-	rd_init(c.b, ctx->f->popb, b, bpos);
-	c.alen = alen;
-	c.blen = blen;
-	c.alim = c.alen - bw/2;
-	c.blim = c.blen - bw/2;
+	rd_init(c.a, ctx->f->popa, a);
+	rd_init(c.b, ctx->f->popb, b);
+	c.asp = asp;
+	c.bsp = bsp;
+	c.aep = aep;
+	c.bep = bep;
+	c.alim = c.aep - bw/2;
+	c.blim = c.bep - bw/2;
 
 	/** initialize alignment writer */
 	wr_init(c.l, ctx->f, dir);
@@ -524,17 +530,17 @@ struct sea_result *sea_align_intl(
 
 	/* finishing */
 	wr_finish(c.l, ctx, dir);
-	r = (struct sea_result *)c.l.p;
+	r = (sea_res_t *)c.l.p;
 
 	r->aln = (uint8_t *)c.l.p + c.l.pos;
 	r->len = c.l.size;
 	debug("finishing: len(%lld)", r->len);
 	r->a = a;
 	r->b = b;
-	r->apos = apos;
-	r->bpos = bpos;
-	r->alen = c.alen;
-	r->blen = c.blen;
+	r->apos = c.mi;
+	r->bpos = c.mj;
+	r->alen = c.aep;
+	r->blen = c.bep;
 	r->score = c.max;
 	r->ctx = ctx;
 
@@ -547,7 +553,7 @@ struct sea_result *sea_align_intl(
 	return(r);
 
 _sea_error_handler:
-	r = (struct sea_result *)malloc(sizeof(struct sea_result) + 1);
+	r = (sea_res_t *)malloc(sizeof(struct sea_result) + 1);
 	r->a = NULL;
 	r->apos = 0;
 	r->alen = 0;
@@ -579,48 +585,54 @@ _sea_error_handler:
  *
  * @sa sea_init
  */
-struct sea_result *sea_align(
+sea_res_t *sea_align(
 	sea_t const *ctx,
 	void const *a,
-	int64_t apos,
-	int64_t alen,
+	int64_t asp,
+	int64_t aep,
 	void const *b,
-	int64_t bpos,
-	int64_t blen)
+	int64_t bsp,
+	int64_t bep,
+	uint8_t const *guide,
+	int64_t glen)
 {
-	return(sea_align_intl(ctx, a, apos, alen, b, bpos, blen, ALN_FW));
+	return(sea_align_intl(ctx, a, asp, aep, b, bsp, bep, guide, glen, ALN_FW));
 }
 
 /**
  * @fn sea_align_f
  * @brief the same as sea_align.
  */
-struct sea_result *sea_align_f(
+sea_res_t *sea_align_f(
 	sea_t const *ctx,
 	void const *a,
-	int64_t apos,
-	int64_t alen,
+	int64_t asp,
+	int64_t aep,
 	void const *b,
-	int64_t bpos,
-	int64_t blen)
+	int64_t bsp,
+	int64_t bep,
+	uint8_t const *guide,
+	int64_t glen)
 {
-	return(sea_align_intl(ctx, a, apos, alen, b, bpos, blen, ALN_FW));
+	return(sea_align_intl(ctx, a, asp, aep, b, bsp, bep, guide, glen, ALN_FW));
 }
 
 /**
  * @fn sea_align_r
  * @brief the reverse variant of sea_align.
  */
-struct sea_result *sea_align_r(
+sea_res_t *sea_align_r(
 	sea_t const *ctx,
 	void const *a,
-	int64_t apos,
-	int64_t alen,
+	int64_t asp,
+	int64_t aep,
 	void const *b,
-	int64_t bpos,
-	int64_t blen)
+	int64_t bsp,
+	int64_t bep,
+	uint8_t const *guide,
+	int64_t glen)
 {
-	return(sea_align_intl(ctx, a, apos, alen, b, bpos, blen, ALN_RV));
+	return(sea_align_intl(ctx, a, asp, aep, b, bsp, bep, guide, glen, ALN_RV));
 }
 
 /**
@@ -634,8 +646,8 @@ struct sea_result *sea_align_r(
  * @return error number, defined in sea_error
  */
 int sea_get_error_num(
-	sea_t *ctx,
-	struct sea_result *aln)
+	sea_t const *ctx,
+	sea_res_t *aln)
 {
 	int32_t error_label = SEA_SUCCESS;
 	if(aln != NULL) {
@@ -656,7 +668,8 @@ int sea_get_error_num(
  * @sa sea_sea
  */
 void sea_aln_free(
-	struct sea_result *aln)
+	sea_t const *ctx,
+	sea_res_t *aln)
 {
 	if(aln != NULL) {
 		free(aln);
@@ -677,7 +690,7 @@ void sea_aln_free(
  * @sa sea_init
  */
 void sea_clean(
-	struct sea_context *ctx)
+	sea_t *ctx)
 {
 	if(ctx != NULL) {
 		if(ctx->f != NULL) {

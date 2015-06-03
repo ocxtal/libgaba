@@ -237,7 +237,6 @@ typedef struct sea_mem sea_mem_t;
  */
 struct sea_reader {
 	uint8_t *p;
-	int64_t spos;
 	uint8_t (*pop)(
 		uint8_t const *p,
 		int64_t pos);
@@ -291,7 +290,8 @@ struct sea_process {
 	struct sea_mem dp, dr;		/*!< (ref) a dynamic programming matrix */
 	void *pdp;					/*!< dynamic programming matrix */
 	uint8_t *pdr;				/*!< direction array */
-	int64_t alen, blen;			/*!< the length of sequences */
+	int64_t asp, bsp;			/*!< the start position on the sequences */
+	int64_t aep, bep;			/*!< the end position on the sequences */
 	int64_t alim, blim;			/*!< the limit coordinate of the band */
 	int64_t i, j, p, q;			/*!< temporary */
 	int64_t mi, mj, mp, mq;		/*!< maximum score position */
@@ -467,11 +467,13 @@ sea_t *sea_init(
 sea_res_t *sea_align(
 	sea_t const *ctx,
 	void const *a,
-	int64_t apos,
-	int64_t alen,
+	int64_t asp,
+	int64_t aep,
 	void const *b,
-	int64_t bpos,
-	int64_t blen);
+	int64_t bsp,
+	int64_t bep,
+	uint8_t const *guide,
+	int64_t glen);
 
 /**
  * @fn sea_align_f
@@ -480,11 +482,13 @@ sea_res_t *sea_align(
 sea_res_t *sea_align_f(
 	sea_t const *ctx,
 	void const *a,
-	int64_t apos,
-	int64_t alen,
+	int64_t asp,
+	int64_t aep,
 	void const *b,
-	int64_t bpos,
-	int64_t blen);
+	int64_t bsp,
+	int64_t bep,
+	uint8_t const *guide,
+	int64_t glen);
 
 /**
  * @fn sea_align_r
@@ -493,11 +497,13 @@ sea_res_t *sea_align_f(
 sea_res_t *sea_align_r(
 	sea_t const *ctx,
 	void const *a,
-	int64_t apos,
-	int64_t alen,
+	int64_t asp,
+	int64_t aep,
 	void const *b,
-	int64_t bpos,
-	int64_t blen);
+	int64_t bsp,
+	int64_t bep,
+	uint8_t const *guide,
+	int64_t glen);
 
 /**
  * @fn sea_get_error_num
@@ -510,7 +516,7 @@ sea_res_t *sea_align_r(
  * @return error number, defined in sea_error
  */
 int32_t sea_get_error_num(
-	sea_t *ctx,
+	sea_t const *ctx,
 	sea_res_t *aln);
 
 /**
@@ -525,6 +531,7 @@ int32_t sea_get_error_num(
  * @sa sea_sea
  */
 void sea_aln_free(
+	sea_t const *ctx,
 	sea_res_t *aln);
 
 /**

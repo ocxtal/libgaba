@@ -85,8 +85,8 @@
 #define branch_linear_fill_init_intl(c, k, r) { \
 	c.i -= BW/2; /** convert to the local coordinate*/ \
 	c.j += BW/2; \
-	c.alim = c.alen - BW/2; \
-	c.blim = c.blen - BW/2 + 1; \
+	c.alim = c.aep - BW/2; \
+	c.blim = c.bep - BW/2 + 1; \
 	dir_init(r, c.pdr[c.p]); \
 	VEC_SET(mv, k.m); \
 	VEC_SET(xv, k.x); \
@@ -115,10 +115,12 @@
 	branch_linear_fill_init_intl(c, k, r); \
 	for(c.q = -BW/2; c.q < BW/2; c.q++) { \
 		rd_fetch(c.a, c.i+c.q); \
+		log("a: %d", rd_decode(c.a)); \
 		PUSHQ(rd_decode(c.a), wq); \
 	} \
 	for(c.q = -BW/2; c.q < BW/2-1; c.q++) { \
 		rd_fetch(c.b, c.j+c.q); \
+		log("b: %d", rd_decode(c.b)); \
 		PUSHT(rd_decode(c.b), wt); \
 	} \
 }
@@ -281,8 +283,8 @@
 	} else { \
 		c.mi = c.mj = c.mp = c.mq = 0; \
 	} \
-	c.alen = c.mi; \
-	c.blen = c.mj; \
+	c.aep = c.mi; \
+	c.bep = c.mj; \
 }
 
 /**

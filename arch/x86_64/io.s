@@ -19,7 +19,7 @@ __pop_ascii:
 	movq %rax, %rsi
 	shrq $2, %rax
 	shrq $1, %rsi
-	xorq %rax, %rsi
+	xorq %rsi, %rax
 	andq $3, %rax
 	ret
 
@@ -33,7 +33,7 @@ __pop_4bit:
 	shrq $3, %rax
 	shrq $1, %rsi
 	andq $1, %rax
-	subq %rax, %rsi
+	subq %rsi, %rax
 	andq $3, %rax
 	ret
 
@@ -57,10 +57,10 @@ __pop_4bit8packed:
 	andq $4, %rcx
 	shrq %cl, %rax
 	movq %rax, %rsi
-	shrq $3, %rax
-	shrq $1, %rsi
-	andq $1, %rax
-	subq %rax, %rsi
+	shrq $3, %rsi
+	shrq $1, %rax
+	andq $1, %rsi
+	subq %rsi, %rax
 	andq $3, %rax	
 	ret
 

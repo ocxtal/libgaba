@@ -74,8 +74,8 @@
  * @macro balloon_linear_fill_init
  */
 #define balloon_linear_fill_init(c, k, r) { \
-	c.alim = c.alen; \
-	c.blim = c.blen - BW + 1; \
+	c.alim = c.aep; \
+	c.blim = c.bep - BW + 1; \
 	dir_init(r, c.pdr[c.p]); \
 	dir_init(b, c.pdr[c.p]); \
 	pc = c.pdp; \
@@ -212,9 +212,9 @@
  * @macro balloon_linear_search_terminal
  */
 #define balloon_linear_search_terminal(c, k) { \
-	c.mi = c.alen; \
-	c.mj = c.blen; \
-	c.mp = COP(c.mi, c.mj, BW); \
+	c.mi = c.aep; \
+	c.mj = c.bep; \
+	c.mp = COP(c.mi, c.mj, BW) - COP(c.asp, c.bsp, BW); \
 	c.mq = COQ(c.mi, c.mj, BW) - COQ(c.i, c.j, BW); \
 }
 
@@ -222,8 +222,8 @@
  * @macro balloon_linear_search_max_score
  */
 #define balloon_linear_search_max_score(c, k) { \
-	c.alen = c.mi; \
-	c.blen = c.mj; \
+	c.aep = c.mi; \
+	c.bep = c.mj; \
 }
 
 /**

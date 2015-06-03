@@ -74,8 +74,8 @@
 #define naive_linear_fill_init(c, k, r) { \
 	c.i -= BW/2; \
 	c.j += BW/2; \
-	c.alim = c.alen - BW/2; \
-	c.blim = c.blen - BW/2 + 1; \
+	c.alim = c.aep - BW/2; \
+	c.blim = c.bep - BW/2 + 1; \
 	dir_init(r, c.pdr[c.p]); \
 	for(c.q = 0; c.q < c.v.clen; c.q++) { \
 		*((cell_t *)c.pdp) = _read(c.v.pv, c.q, c.v.size); \
@@ -193,9 +193,9 @@
  * @macro naive_linear_search_terminal
  */
 #define naive_linear_search_terminal(c, k) { \
-	c.mi = c.alen; \
-	c.mj = c.blen; \
-	c.mp = COP(c.mi, c.mj, BW); \
+	c.mi = c.aep; \
+	c.mj = c.bep; \
+	c.mp = COP(c.mi, c.mj, BW) - COP(c.asp, c.bsp, BW); \
 	c.mq = COQ(c.mi, c.mj, BW) - COQ(c.i, c.j, BW); \
 }
 
@@ -203,8 +203,8 @@
  * @macro naive_linear_search_max_score
  */
 #define naive_linear_search_max_score(c, k) { \
-	c.alen = c.mi; \
-	c.blen = c.mj; \
+	c.aep = c.mi; \
+	c.bep = c.mj; \
 }
 
 /**

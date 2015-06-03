@@ -76,11 +76,13 @@
 	VEC_CHAR_SETZERO(wq); \
 	VEC_CHAR_SETONES(wt); \
 	for(c.q = 0; c.q < BW/2; c.q++) { \
-		rd_fetch(c.a, c.q); \
+		rd_fetch(c.a, c.i+c.q); \
+		debug("a: %d", rd_decode(c.a)); \
 		PUSHQ(rd_decode(c.a), wq); \
 	} \
 	for(c.q = 0; c.q < BW/2-1; c.q++) { \
-		rd_fetch(c.b, c.q); \
+		rd_fetch(c.b, c.j+c.q); \
+		debug("b: %d", rd_decode(c.b)); \
 		PUSHT(rd_decode(c.b), wt); \
 	} \
 }
@@ -164,15 +166,6 @@
 	c.v.cv = (cell_t *)c.pdp - 5*BW/2; \
 	c.v.pv = (cell_t *)c.pdp - 9*BW/2; \
 }
-
-/**
-	dir_term(r, c); \
-	if(dir2(r) == TOP) { \
-		c.j--; \
-	} else { \
-		c.i--; \
-	} \
-*/
 
 /**
  * @macro twig_linear_search_terminal
