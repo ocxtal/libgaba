@@ -76,7 +76,7 @@ int main(int argc, char *argv[])
 
 	printf("%s\n%s\n", a, b);
 
-	int lm = 0, rm = 0;
+	int lm = 5, rm = 5;
 
 	fres = sea_align_f(ctx,
 		a, lm, strlen(a)-rm,

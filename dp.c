@@ -96,7 +96,7 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 //		print_lane(curr, c.pdp);
 
 		stat = CAP;
-		while(c.i <= c.alim && c.j <= c.blim) {
+		while(c.i <= c.alim && c.j <= c.blim && dir_check_term(r, c)) {
 			#ifdef DEBUG
 				curr = (cell_t *)c.pdp;		/** debug */
 			#endif

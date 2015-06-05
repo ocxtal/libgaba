@@ -77,6 +77,16 @@ typedef struct _dir dir_t;
 }
 
 /**
+ * @macro dir_check_term_dynamic
+ */
+#define dir_check_term_dynamic(r, c)	( 1 )
+
+/**
+ * @macro dir_check_term_guided
+ */
+#define dir_check_term_guided(r, c)		( c.p < (c.dr.ep - c.dr.sp) )
+
+/**
  * @macro dir_term
  */
 #define dir_term(r, c) { \
@@ -100,8 +110,10 @@ typedef struct _dir dir_t;
  */
 #if DP == SEA_DYNAMIC
 	#define dir_next 			dir_next_dynamic
+	#define dir_check_term		dir_check_term_dynamic
 #elif DP == SEA_GUIDED
 	#define dir_next 			dir_next_guided
+	#define dir_check_term 		dir_check_term_guided
 #else /* #if DP == SEA_DYNAMIC */
 	#error "DP must be SEA_DYNAMIC or SEA_GUIDED."
 #endif /* #if DP == SEA_DYNAMIC */
