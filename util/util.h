@@ -19,122 +19,122 @@
  */
 int32_t
 naive_linear_dynamic(
-	struct sea_context const *ctx,
-	struct sea_process *proc);
+	sea_consts_t const *ctx,
+	sea_proc_t *proc);
 int32_t
 naive_affine_dynamic(
-	struct sea_context const *ctx,
-	struct sea_process *proc);
+	sea_consts_t const *ctx,
+	sea_proc_t *proc);
 int32_t
 naive_linear_guided(
-	struct sea_context const *ctx,
-	struct sea_process *proc);
+	sea_consts_t const *ctx,
+	sea_proc_t *proc);
 int32_t
 naive_affine_guided(
-	struct sea_context const *ctx,
-	struct sea_process *proc);
+	sea_consts_t const *ctx,
+	sea_proc_t *proc);
 
 int32_t
 twig_linear_dynamic(
-	struct sea_context const *ctx,
-	struct sea_process *proc);
+	sea_consts_t const *ctx,
+	sea_proc_t *proc);
 int32_t
 twig_affine_dynamic(
-	struct sea_context const *ctx,
-	struct sea_process *proc);
+	sea_consts_t const *ctx,
+	sea_proc_t *proc);
 int32_t
 twig_linear_guided(
-	struct sea_context const *ctx,
-	struct sea_process *proc);
+	sea_consts_t const *ctx,
+	sea_proc_t *proc);
 int32_t
 twig_affine_guided(
-	struct sea_context const *ctx,
-	struct sea_process *proc);
+	sea_consts_t const *ctx,
+	sea_proc_t *proc);
 
 int32_t
 branch_linear_dynamic(
-	struct sea_context const *ctx,
-	struct sea_process *proc);
+	sea_consts_t const *ctx,
+	sea_proc_t *proc);
 int32_t
 branch_affine_dynamic(
-	struct sea_context const *ctx,
-	struct sea_process *proc);
+	sea_consts_t const *ctx,
+	sea_proc_t *proc);
 int32_t
 branch_linear_guided(
-	struct sea_context const *ctx,
-	struct sea_process *proc);
+	sea_consts_t const *ctx,
+	sea_proc_t *proc);
 int32_t
 branch_affine_guided(
-	struct sea_context const *ctx,
-	struct sea_process *proc);
+	sea_consts_t const *ctx,
+	sea_proc_t *proc);
 
 int32_t
 trunk_linear_dynamic(
-	struct sea_context const *ctx,
-	struct sea_process *proc);
+	sea_consts_t const *ctx,
+	sea_proc_t *proc);
 int32_t
 trunk_affine_dynamic(
-	struct sea_context const *ctx,
-	struct sea_process *proc);
+	sea_consts_t const *ctx,
+	sea_proc_t *proc);
 int32_t
 trunk_linear_guided(
-	struct sea_context const *ctx,
-	struct sea_process *proc);
+	sea_consts_t const *ctx,
+	sea_proc_t *proc);
 int32_t
 trunk_affine_guided(
-	struct sea_context const *ctx,
-	struct sea_process *proc);
+	sea_consts_t const *ctx,
+	sea_proc_t *proc);
 
 int32_t
 balloon_linear_dynamic(
-	struct sea_context const *ctx,
-	struct sea_process *proc);
+	sea_consts_t const *ctx,
+	sea_proc_t *proc);
 int32_t
 balloon_affine_dynamic(
-	struct sea_context const *ctx,
-	struct sea_process *proc);
+	sea_consts_t const *ctx,
+	sea_proc_t *proc);
 int32_t
 balloon_linear_guided(
-	struct sea_context const *ctx,
-	struct sea_process *proc);
+	sea_consts_t const *ctx,
+	sea_proc_t *proc);
 int32_t
 balloon_affine_guided(
-	struct sea_context const *ctx,
-	struct sea_process *proc);
+	sea_consts_t const *ctx,
+	sea_proc_t *proc);
 
 int32_t
 bulge_linear_dynamic(
-	struct sea_context const *ctx,
-	struct sea_process *proc);
+	sea_consts_t const *ctx,
+	sea_proc_t *proc);
 int32_t
 bulge_affine_dynamic(
-	struct sea_context const *ctx,
-	struct sea_process *proc);
+	sea_consts_t const *ctx,
+	sea_proc_t *proc);
 int32_t
 bulge_linear_guided(
-	struct sea_context const *ctx,
-	struct sea_process *proc);
+	sea_consts_t const *ctx,
+	sea_proc_t *proc);
 int32_t
 bulge_affine_guided(
-	struct sea_context const *ctx,
-	struct sea_process *proc);
+	sea_consts_t const *ctx,
+	sea_proc_t *proc);
 
 int32_t
 cap_linear_dynamic(
-	struct sea_context const *ctx,
-	struct sea_process *proc);
+	sea_consts_t const *ctx,
+	sea_proc_t *proc);
 int32_t
 cap_affine_dynamic(
-	struct sea_context const *ctx,
-	struct sea_process *proc);
+	sea_consts_t const *ctx,
+	sea_proc_t *proc);
 int32_t
 cap_linear_guided(
-	struct sea_context const *ctx,
-	struct sea_process *proc);
+	sea_consts_t const *ctx,
+	sea_proc_t *proc);
 int32_t
 cap_affine_guided(
-	struct sea_context const *ctx,
-	struct sea_process *proc);
+	sea_consts_t const *ctx,
+	sea_proc_t *proc);
 
 /**
  * io functions
@@ -182,7 +182,7 @@ uint8_t _pop_2bit8packed(uint8_t const *p, int64_t pos);
  * @return the next pos.
  */
 /** forward writer */
-int64_t _init_ascii_f(uint8_t *p, int64_t pos);
+int64_t _init_ascii_f(uint8_t *p, int64_t fpos, int64_t rpos);
 int64_t _pushm_ascii_f(uint8_t *p, int64_t pos);
 int64_t _pushx_ascii_f(uint8_t *p, int64_t pos);
 int64_t _pushi_ascii_f(uint8_t *p, int64_t pos);
@@ -190,7 +190,7 @@ int64_t _pushd_ascii_f(uint8_t *p, int64_t pos);
 int64_t _finish_ascii_f(uint8_t *p, int64_t pos);
 
 /** reverse writer */
-int64_t _init_ascii_r(uint8_t *p, int64_t pos);
+int64_t _init_ascii_r(uint8_t *p, int64_t fpos, int64_t rpos);
 int64_t _pushm_ascii_r(uint8_t *p, int64_t pos);
 int64_t _pushx_ascii_r(uint8_t *p, int64_t pos);
 int64_t _pushi_ascii_r(uint8_t *p, int64_t pos);
@@ -204,7 +204,7 @@ int64_t _finish_ascii_r(uint8_t *p, int64_t pos);
  * @return the next pos.
  */
 /** forward writer */
-int64_t _init_cigar_f(uint8_t *p, int64_t pos);
+int64_t _init_cigar_f(uint8_t *p, int64_t fpos, int64_t rpos);
 int64_t _pushm_cigar_f(uint8_t *p, int64_t pos);
 int64_t _pushx_cigar_f(uint8_t *p, int64_t pos);
 int64_t _pushi_cigar_f(uint8_t *p, int64_t pos);
@@ -212,7 +212,7 @@ int64_t _pushd_cigar_f(uint8_t *p, int64_t pos);
 int64_t _finish_cigar_f(uint8_t *p, int64_t pos);
 
 /** reverse writer */
-int64_t _init_cigar_r(uint8_t *p, int64_t pos);
+int64_t _init_cigar_r(uint8_t *p, int64_t fpos, int64_t rpos);
 int64_t _pushm_cigar_r(uint8_t *p, int64_t pos);
 int64_t _pushx_cigar_r(uint8_t *p, int64_t pos);
 int64_t _pushi_cigar_r(uint8_t *p, int64_t pos);
@@ -226,7 +226,7 @@ int64_t _finish_cigar_r(uint8_t *p, int64_t pos);
  * @return the next pos.
  */
 /** forward writer */
-int64_t _init_dir_f(uint8_t *p, int64_t pos);
+int64_t _init_dir_f(uint8_t *p, int64_t fpos, int64_t rpos);
 int64_t _pushm_dir_f(uint8_t *p, int64_t pos);
 int64_t _pushx_dir_f(uint8_t *p, int64_t pos);
 int64_t _pushi_dir_f(uint8_t *p, int64_t pos);
@@ -234,7 +234,7 @@ int64_t _pushd_dir_f(uint8_t *p, int64_t pos);
 int64_t _finish_dir_f(uint8_t *p, int64_t pos);
 
 /** reverse writer */
-int64_t _init_dir_r(uint8_t *p, int64_t pos);
+int64_t _init_dir_r(uint8_t *p, int64_t fpos, int64_t rpos);
 int64_t _pushm_dir_r(uint8_t *p, int64_t pos);
 int64_t _pushx_dir_r(uint8_t *p, int64_t pos);
 int64_t _pushi_dir_r(uint8_t *p, int64_t pos);
@@ -347,39 +347,27 @@ enum _ALN_DIR {
  * @macro wr_init
  * @brief initialize an alignment writer instance.
  */
-#define wr_init(w, f, dir) { \
+#define wr_init(w, f) { \
 	(w).p = NULL; \
-	(w).pos = (dir); \
-	if((dir) == ALN_FW) { \
-		(w).pushm = (f)->pushm_f; \
-		(w).pushx = (f)->pushx_f; \
-		(w).pushi = (f)->pushi_f; \
-		(w).pushd = (f)->pushd_f; \
-	} else { \
-		(w).pushm = (f)->pushm_r; \
-		(w).pushx = (f)->pushx_r; \
-		(w).pushi = (f)->pushi_r; \
-		(w).pushd = (f)->pushd_r; \
-	} \
+	(w).init = (f).init; \
+	(w).pushm = (f).pushm; \
+	(w).pushx = (f).pushx; \
+	(w).pushi = (f).pushi; \
+	(w).pushd = (f).pushd; \
+	(w).finish = (f).finish; \
 }
 
 /**
  * @macro wr_alloc
  * @brief allocate a memory for the alignment string.
  */
-#define wr_alloc(w, s, k) { \
+#define wr_alloc(w, s) { \
 	if((w).p != NULL) { \
 		free((w).p); (w).p = NULL; \
 	} \
-	(w).size = sizeof(struct sea_result) + sizeof(uint8_t) * s; \
+	(w).size = sizeof(sea_res_t) + sizeof(uint8_t) * (s); \
 	(w).p = malloc((w).size); \
-	if((w).pos == ALN_FW) { \
-		(w).pos = (w).size; \
-		(w).pos = (k).f->init_f((w).p, (w).pos); \
-	} else { \
-		(w).pos = sizeof(struct sea_result); \
-		(w).pos = (k).f->init_r((w).p, (w).pos); \
-	} \
+	(w).pos = (w).init((w).p, (w).size, sizeof(sea_res_t)); \
 }
 
 /**
@@ -407,14 +395,14 @@ enum _ALN_DIR {
  * @macro wr_finish
  * @brief finish the instance (move the content of the array to the front)
  */
-#define wr_finish(w, ctx, dir) { \
-	if((dir) == ALN_FW) { \
-		(w).pos = (ctx)->f->finish_f((w).p, (w).pos); \
-		(w).size = (w).size - (w).pos - 1; \
+#define wr_finish(w) { \
+	int64_t p = (w).finish((w).p, (w).pos); \
+	if(p <= (w).pos) { \
+		(w).size = (w).size - p - 1; \
+		(w).pos = p; \
 	} else { \
-		(w).pos = (ctx)->f->finish_r((w).p, (w).pos); \
-		(w).size = (w).pos - sizeof(struct sea_result) - 1; \
-		(w).pos = sizeof(struct sea_result); \
+		(w).size = p - sizeof(sea_res_t) - 1; \
+		(w).pos = sizeof(sea_res_t); \
 	} \
 }
 

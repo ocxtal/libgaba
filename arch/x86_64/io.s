@@ -138,7 +138,7 @@ __finish_ascii_f:
 	.globl __init_ascii_r
 _init_ascii_r:
 __init_ascii_r:
-	movq %rsi, %rax
+	movq %rdx, %rax
 	ret
 
 	.globl _pushm_ascii_r
@@ -344,10 +344,10 @@ __finish_cigar_f_loop:
 	.globl __init_cigar_r
 _init_cigar_r:
 __init_cigar_r:
-	movb $61, (%rdi, %rsi)
-	movq %rsi, %rax
-	addq $1, %rsi
-	movl $0, (%rdi, %rsi)
+	movb $61, (%rdi, %rdx)
+	movq %rdx, %rax
+	addq $1, %rdx
+	movl $0, (%rdi, %rdx)
 	ret
 
 	.globl _pushm_cigar_r
@@ -620,7 +620,7 @@ __finish_dir_f:
 	.globl __init_dir_r
 _init_dir_r:
 __init_dir_r:
-	movq %rsi, %rax
+	movq %rdx, %rax
 	ret
 
 	.globl _pushm_dir_r

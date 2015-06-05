@@ -19,10 +19,11 @@
  	#include <alloca.h>
 #endif
 
+/*
 int32_t
 (*func_table[3][3][7])(
-	struct sea_context const *ctx,
-	struct sea_process *proc) = {
+	sea_t const *ctx,
+	sea_proc_t *proc) = {
 	{
 		{NULL, NULL, NULL, NULL, NULL, NULL, NULL},
 		{NULL, NULL, NULL, NULL, NULL, NULL, NULL},
@@ -39,6 +40,22 @@ int32_t
 		{naive_affine_guided, twig_affine_guided, branch_affine_guided, trunk_affine_guided, balloon_affine_guided, balloon_affine_guided, cap_affine_guided}
 	}
 };
+*/
+
+struct sea_aln_funcs aln_table[3][2] = {
+	{
+		{NULL, NULL, NULL, NULL, NULL, NULL},
+		{NULL, NULL, NULL, NULL, NULL, NULL}
+	},
+	{
+		{twig_linear_dynamic, branch_linear_dynamic, trunk_linear_dynamic, balloon_linear_dynamic, balloon_linear_dynamic, cap_linear_dynamic},
+		{twig_linear_guided, branch_linear_guided, trunk_linear_guided, balloon_linear_guided, balloon_linear_guided, cap_linear_guided}
+	},
+	{
+		{twig_affine_dynamic, branch_affine_dynamic, trunk_affine_dynamic, balloon_affine_dynamic, balloon_affine_dynamic, cap_affine_dynamic},
+		{twig_affine_guided, branch_affine_guided, trunk_affine_guided, balloon_affine_guided, balloon_affine_guided, cap_affine_guided}
+	}
+};
 
 uint8_t
 (*rd_table[8])(
@@ -53,6 +70,7 @@ uint8_t
 	NULL
 };
 
+/*
 int64_t
 (*wr_table[4][2][6])(
 	uint8_t *p,
@@ -72,6 +90,26 @@ int64_t
 	{
 		{_init_dir_f, _pushm_dir_f, _pushx_dir_f, _pushi_dir_f, _pushd_dir_f, _finish_dir_f},
 		{_init_dir_r, _pushm_dir_r, _pushx_dir_r, _pushi_dir_r, _pushd_dir_r, _finish_dir_r}
+	}
+};
+*/
+
+struct sea_io_funcs io_table[4][2] = {
+	{
+		{NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL},
+		{NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL}
+	},
+	{
+		{_pop_ascii, _pop_ascii, _init_ascii_f, _pushm_ascii_f, _pushx_ascii_f, _pushi_ascii_f, _pushd_ascii_f, _finish_ascii_f},
+		{_pop_ascii, _pop_ascii, _init_ascii_r, _pushm_ascii_r, _pushx_ascii_r, _pushi_ascii_r, _pushd_ascii_r, _finish_ascii_r}
+	},
+	{
+		{_pop_ascii, _pop_ascii, _init_cigar_f, _pushm_cigar_f, _pushx_cigar_f, _pushi_cigar_f, _pushd_cigar_f, _finish_cigar_f},
+		{_pop_ascii, _pop_ascii, _init_cigar_r, _pushm_cigar_r, _pushx_cigar_r, _pushi_cigar_r, _pushd_cigar_r, _finish_cigar_r}
+	},
+	{
+		{_pop_ascii, _pop_ascii, _init_dir_f, _pushm_dir_f, _pushx_dir_f, _pushi_dir_f, _pushd_dir_f, _finish_dir_f},
+		{_pop_ascii, _pop_ascii, _init_dir_r, _pushm_dir_r, _pushx_dir_r, _pushi_dir_r, _pushd_dir_r, _finish_dir_r}
 	}
 };
 
@@ -163,7 +201,7 @@ void sea_aligned_free(void *ptr)
  */
 static int32_t
 sea_init_flags_vals(
-	sea_t *ctx,
+	sea_consts_t *ct,
 	int32_t flags,
 	int8_t m,
 	int8_t x,
@@ -217,35 +255,35 @@ sea_init_flags_vals(
 	}
 	
 	/* push scores to context */
-	ctx->m = m;
-	ctx->x = x;
-	ctx->gi = gi;
-	ctx->ge = ge;
+	ct->m = m;
+	ct->x = x;
+	ct->gi = gi;
+	ct->ge = ge;
 
 	/* check if thresholds are proper */
 	if(tx < 0 || tc < 0 || tb < 0) {
 		return SEA_ERROR_INVALID_ARGS;
 	}
-	ctx->tx = tx;
-	ctx->tc = tc;
-	ctx->tb = tb;
+	ct->tx = tx;
+	ct->tc = tc;
+	ct->tb = tb;
 
-	ctx->bw = 32;			/** fixed!! */
+	ct->bw = 32;			/** fixed!! */
 	if((int_flags & SEA_FLAGS_MASK_ALG) == SEA_SW) {
-		ctx->min = 0;
+		ct->min = 0;
 	} else {
-		ctx->min = INT32_MIN + 10;
+		ct->min = INT32_MIN + 10;
 	}
-	ctx->alg = int_flags & SEA_FLAGS_MASK_ALG;
+	ct->alg = int_flags & SEA_FLAGS_MASK_ALG;
 
 	/* special parameters */
-	ctx->mask = 0;			/** for the mask-match algorithm */
-	ctx->k = 4;				/** search length stretch ratio: default is 4 */
-	ctx->isize = ALLOCA_THRESH_SIZE;	/** inital matsize = 1M */
-	ctx->memaln = 256;	/** (MAGIC) memory alignment size */
+//	ct->mask = 0;			/** for the mask-match algorithm */
+	ct->k = 4;				/** search length stretch ratio: default is 4 */
+	ct->isize = ALLOCA_THRESH_SIZE;	/** inital matsize = 1M */
+	ct->memaln = 256;	/** (MAGIC) memory alignment size */
 
 	/* push flags to the context */
-	ctx->flags = int_flags;
+	ct->flags = int_flags;
 
 	error_label = SEA_SUCCESS;
 	return(error_label);
@@ -284,14 +322,15 @@ sea_t *sea_init(
 
 
 	/** malloc sea_context */
-	ctx = (sea_t *)malloc(sizeof(struct sea_context));
+	ctx = (sea_t *)malloc(sizeof(sea_t));
 	if(ctx == NULL) {
 		error_label = SEA_ERROR_OUT_OF_MEM;
 		goto _sea_init_error_handler;
 	}
+	memset(ctx, 0, sizeof(sea_t));
 
 	/** init value fields of sea_context */
-	if((error_label = sea_init_flags_vals(ctx, flags, m, x, gi, ge, tx, tc, tb)) != SEA_SUCCESS) {
+	if((error_label = sea_init_flags_vals(&ctx->k, flags, m, x, gi, ge, tx, tc, tb)) != SEA_SUCCESS) {
 		goto _sea_init_error_handler;
 	}
 
@@ -301,25 +340,19 @@ sea_t *sea_init(
 	}
 
 	/**
-	 * initialize sea_funcs.
-	 */
-	ctx->f = (struct sea_funcs *)malloc(sizeof(struct sea_funcs));
-	if(ctx->f == NULL) {
-		error_label = SEA_ERROR_OUT_OF_MEM;
-		goto _sea_init_error_handler;
-	}
-
-	/**
 	 * initialize alignment functions
 	 */
-	int32_t cost_idx = (ctx->flags & SEA_FLAGS_MASK_COST) >> SEA_FLAGS_POS_COST;
-	int32_t dp_idx = (ctx->flags & SEA_FLAGS_MASK_DP) >> SEA_FLAGS_POS_DP;
+	int32_t cost_idx = (ctx->k.flags & SEA_FLAGS_MASK_COST) >> SEA_FLAGS_POS_COST;
+//	int32_t dp_idx = (ctx->k.flags & SEA_FLAGS_MASK_DP) >> SEA_FLAGS_POS_DP;
 
-	if(cost_idx >= 3 || dp_idx >= 3) {
+	if(cost_idx <= 0 || cost_idx >= 3) {
 		error_label = SEA_ERROR_INVALID_ARGS;
 		goto _sea_init_error_handler;
 	}
 
+	ctx->dynamic = aln_table[cost_idx][0];
+	ctx->guided = aln_table[cost_idx][1];
+/*
 	ctx->f->twig    = func_table[cost_idx][dp_idx][1];
 	ctx->f->branch  = func_table[cost_idx][dp_idx][2];
 	ctx->f->trunk   = func_table[cost_idx][dp_idx][3];
@@ -332,31 +365,18 @@ sea_t *sea_init(
 		error_label = SEA_ERROR_INVALID_ARGS;
 		goto _sea_init_error_handler;
 	}
-
-	/**
-	 * set seq a reader functions
-	 */
-	int32_t popa_idx = (ctx->flags & SEA_FLAGS_MASK_SEQ_A) >> SEA_FLAGS_POS_SEQ_A;
-	int32_t popb_idx = (ctx->flags & SEA_FLAGS_MASK_SEQ_B) >> SEA_FLAGS_POS_SEQ_B;
-	if(popa_idx >= 8 || popb_idx >= 8) {
-		error_label = SEA_ERROR_INVALID_ARGS;
-		goto _sea_init_error_handler;
-	}
-	ctx->f->popa = rd_table[popa_idx];
-	ctx->f->popb = rd_table[popb_idx];
-	if(ctx->f->popa == NULL || ctx->f->popb == NULL) {
-		error_label = SEA_ERROR_INVALID_ARGS;
-		goto _sea_init_error_handler;
-	}
-
+*/
 	/**
 	 * set alignment writer functions
 	 */
-	int32_t aln_idx = (ctx->flags & SEA_FLAGS_MASK_ALN) >> SEA_FLAGS_POS_ALN;
-	if(aln_idx >= 4) {
+	int32_t aln_idx = (ctx->k.flags & SEA_FLAGS_MASK_ALN) >> SEA_FLAGS_POS_ALN;
+	if(aln_idx <= 0 || aln_idx >= 4) {
 		error_label = SEA_ERROR_INVALID_ARGS;
 		goto _sea_init_error_handler;
 	}
+	ctx->fw = io_table[aln_idx][0];
+	ctx->rv = io_table[aln_idx][1];
+/*
 	ctx->f->init_f = wr_table[aln_idx][0][0];
 	ctx->f->pushm_f = wr_table[aln_idx][0][1];
 	ctx->f->pushx_f = wr_table[aln_idx][0][2];
@@ -370,7 +390,25 @@ sea_t *sea_init(
 	ctx->f->pushi_r = wr_table[aln_idx][1][3];
 	ctx->f->pushd_r = wr_table[aln_idx][1][4];
 	ctx->f->finish_r = wr_table[aln_idx][1][5];
-
+*/
+	/**
+	 * set seq a reader functions
+	 */
+	int32_t popa_idx = (ctx->k.flags & SEA_FLAGS_MASK_SEQ_A) >> SEA_FLAGS_POS_SEQ_A;
+	int32_t popb_idx = (ctx->k.flags & SEA_FLAGS_MASK_SEQ_B) >> SEA_FLAGS_POS_SEQ_B;
+	if(popa_idx <= 0 || popa_idx >= 8 || popb_idx <= 0 || popb_idx >= 8) {
+		error_label = SEA_ERROR_INVALID_ARGS;
+		goto _sea_init_error_handler;
+	}
+	ctx->fw.popa = ctx->rv.popa = rd_table[popa_idx];
+	ctx->fw.popb = ctx->rv.popb = rd_table[popb_idx];
+/*
+	if(ctx->f->popa == NULL || ctx->f->popb == NULL) {
+		error_label = SEA_ERROR_INVALID_ARGS;
+		goto _sea_init_error_handler;
+	}
+*/
+/*
 	if(ctx->f->init_f == NULL || ctx->f->pushm_f == NULL || ctx->f->pushx_f == NULL
 		|| ctx->f->pushi_f == NULL || ctx->f->pushd_f == NULL || ctx->f->finish_f == NULL
 		|| ctx->f->init_r == NULL || ctx->f->pushm_r == NULL || ctx->f->pushx_r == NULL
@@ -378,21 +416,28 @@ sea_t *sea_init(
 		error_label = SEA_ERROR_INVALID_ARGS;
 		goto _sea_init_error_handler;
 	}
-
+*/
 	/**
 	 * initialize init vector
 	 */
+/*
 	ctx->iv = (struct sea_ivec *)malloc(sizeof(struct sea_ivec) + 32*sizeof(uint8_t));
 	ctx->iv->pv = ctx->iv + 1;
 	ctx->iv->cv = ctx->iv->pv + ctx->bw/2;
 	ctx->iv->clen = ctx->iv->plen = ctx->bw/2;
 	ctx->iv->size = sizeof(int8_t);
-	#define _Q(x)		( (x) - ctx->bw/4 )
-	for(i = 0; i < ctx->bw/2; i++) {
+	*/
+	ctx->v.pv = (uint8_t *)malloc(32*sizeof(uint8_t));
+	ctx->v.cv = ctx->v.pv + ctx->k.bw/2;
+	ctx->v.clen = ctx->v.plen = ctx->k.bw/2;
+	ctx->v.size = sizeof(int8_t);
+
+	#define _Q(x)		( (x) - ctx->k.bw/4 )
+	for(i = 0; i < ctx->k.bw/2; i++) {
 		debug("pv: i(%d)", i);
-		((int8_t *)ctx->iv->pv)[i] = -ctx->gi + (_Q(i) < 0 ? -_Q(i) : _Q(i)+1) * (2 * ctx->gi - ctx->m);
+		((int8_t *)ctx->v.pv)[i] = -ctx->k.gi + (_Q(i) < 0 ? -_Q(i) : _Q(i)+1) * (2 * ctx->k.gi - ctx->k.m);
 		debug("cv: i(%d)", i);
-		((int8_t *)ctx->iv->cv)[i] =            (_Q(i) < 0 ? -_Q(i) : _Q(i)  ) * (2 * ctx->gi - ctx->m);
+		((int8_t *)ctx->v.cv)[i] =              (_Q(i) < 0 ? -_Q(i) : _Q(i)  ) * (2 * ctx->k.gi - ctx->k.m);
 	}
 	#undef _Q
 
@@ -400,12 +445,18 @@ sea_t *sea_init(
 
 _sea_init_error_handler:
 	if(ctx != NULL) {
+/*
 		if(ctx->f != NULL) {
 			free(ctx->f);
 			ctx->f = NULL;
 		}
-		memset(ctx, 0, sizeof(struct sea_context));
+		memset(ctx, 0, sizeof(sea_t));
 		ctx->alg = error_label;
+*/
+		if(ctx->v.pv != NULL) {
+			free(ctx->v.pv); ctx->v.pv = NULL;
+		}
+		free(ctx);
 	}
 	return(ctx);
 }
@@ -428,8 +479,8 @@ sea_res_t *sea_align_intl(
 	int64_t glen,
 	int32_t dir)
 {
-	int8_t bw = ctx->bw;
-	struct sea_process c;
+	sea_consts_t k = ctx->k;
+	sea_proc_t c;
 	sea_res_t *r = NULL;
 	int32_t error_label = SEA_ERROR;
 
@@ -453,7 +504,7 @@ sea_res_t *sea_align_intl(
 	 * if one of the length is zero, returns with score = 0 and aln = "".
 	 */
 	if(asp == aep || bsp == bep) {
-		r = (sea_res_t *)malloc(sizeof(struct sea_result) + 1);
+		r = (sea_res_t *)malloc(sizeof(sea_res_t) + 1);
 		r->a = a;
 		r->apos = asp;
 		r->alen = aep;
@@ -474,62 +525,72 @@ sea_res_t *sea_align_intl(
 
 	/** initialize init vector */
 	debug("initialize vector");
-	c.v = *(ctx->iv);
+	c.v = ctx->v;
 
 	/** initialize coordinates */
 	debug("initialize coordinates");
-	c.i = asp + bw/4;								/** the top-right cell of the lane */
-	c.j = bsp - bw/4;
-	c.p = 0; //COP(asp, bsp, ctx->bw);
+	c.i = asp + k.bw/4;								/** the top-right cell of the lane */
+	c.j = bsp - k.bw/4;
+	c.p = 0; //COP(asp, bsp, ctx->k.bw);
 	c.q = 0;
 	c.mi = asp;
 	c.mj = bsp;
-	c.mp = 0; //COP(asp, bsp, ctx->bw);
+	c.mp = 0; //COP(asp, bsp, ctx->k.bw);
 	c.mq = 0;
-
-	/** initialize sequence reader */
-	rd_init(c.a, ctx->f->popa, a);
-	rd_init(c.b, ctx->f->popb, b);
 	c.asp = asp;
 	c.bsp = bsp;
 	c.aep = aep;
 	c.bep = bep;
-	c.alim = c.aep - bw/2;
-	c.blim = c.bep - bw/2;
+	c.alim = c.aep - k.bw/2;
+	c.blim = c.bep - k.bw/2;
 
-	/** initialize alignment writer */
-	wr_init(c.l, ctx->f, dir);
+	/** initialize io */
+	if(dir == ALN_FW) {
+		rd_init(c.a, ctx->fw.popa, a);
+		rd_init(c.b, ctx->fw.popb, b);
+		wr_init(c.l, ctx->fw);
+	} else {
+		rd_init(c.a, ctx->rv.popa, a);
+		rd_init(c.b, ctx->rv.popb, b);
+		wr_init(c.l, ctx->rv);
+	}
 
-	/** initialize memory */
-	c.size = ctx->isize;
-	AMALLOC(c.dp.sp, c.size, ctx->memaln);
+	/** initialize dynamic programming memory */
+	c.size = k.isize;
+	AMALLOC(c.dp.sp, c.size, k.memaln);
 	if(c.dp.sp == NULL) {
 		error_label = SEA_ERROR_OUT_OF_MEM;
 		goto _sea_error_handler;
 	}
 	c.dp.ep = (c.pdp = c.dp.sp) + c.size;
 
-	c.dr.sp = malloc(c.size);
-	if(c.dr.sp == NULL) {
-		error_label = SEA_ERROR_OUT_OF_MEM;
-		goto _sea_error_handler;
-	}
-	c.dr.ep = (c.pdr = c.dr.sp) + c.size;
-	c.pdr[0] = LEFT;		/** initial vector */
 
-	/**
-	 * initialize max
-	 */
+	/** initialize alignment function pointers and direction array */
+	if(guide == NULL) {
+		k.f = &ctx->dynamic;
+		c.dr.sp = malloc(c.size);
+		if(c.dr.sp == NULL) {
+			error_label = SEA_ERROR_OUT_OF_MEM;
+			goto _sea_error_handler;
+		}
+		c.dr.ep = (c.pdr = c.dr.sp) + c.size;
+		c.pdr[0] = LEFT;		/** initial vector */
+	} else {
+		k.f = &ctx->guided;
+		c.dr.ep = (c.dr.sp = c.pdr = (uint8_t *)guide) + glen;
+	}
+
+	/** initialize max */
 	c.max = 0;
 
 	/* do alignment */
-	error_label = ctx->f->twig(ctx, &c);
+	error_label = k.f->twig(&k, &c);
 	if(error_label != SEA_SUCCESS) {
 		goto _sea_error_handler;					/** when the path went out of the band */
 	}
 
 	/* finishing */
-	wr_finish(c.l, ctx, dir);
+	wr_finish(c.l);
 	r = (sea_res_t *)c.l.p;
 
 	r->aln = (uint8_t *)c.l.p + c.l.pos;
@@ -545,15 +606,17 @@ sea_res_t *sea_align_intl(
 	r->ctx = ctx;
 
 	/* clean DP matrix */
-//	AFREE(iv, 2*bw);
-	AFREE(c.dp.sp, ctx->isize);
+//	AFREE(iv, 2*k.bw);
+	AFREE(c.dp.sp, k.isize);
 //	AFREE(c.dr.sp, ctx->isize);
-	free(c.dr.sp);
+	if(guide == NULL) {
+		free(c.dr.sp);
+	}
 
 	return(r);
 
 _sea_error_handler:
-	r = (sea_res_t *)malloc(sizeof(struct sea_result) + 1);
+	r = (sea_res_t *)malloc(sizeof(sea_res_t) + 1);
 	r->a = NULL;
 	r->apos = 0;
 	r->alen = 0;
@@ -693,11 +756,8 @@ void sea_clean(
 	sea_t *ctx)
 {
 	if(ctx != NULL) {
-		if(ctx->f != NULL) {
-			free(ctx->f); ctx->f = NULL;
-		}
-		if(ctx->iv != NULL) {
-			free(ctx->iv); ctx->iv = NULL;
+		if(ctx->v.pv != NULL) {
+			free(ctx->v.pv); ctx->v.pv = NULL;
 		}
 		free(ctx);
 		return;

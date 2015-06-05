@@ -50,7 +50,7 @@
 
 int32_t
 DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
-	sea_t const *ctx,
+	sea_consts_t const *ctx,
 	sea_proc_t *proc)
 {
 	debug("entry point: (%p)", CALL_FUNC(BASE, SUFFIX));
@@ -63,7 +63,7 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 	}
 
 	/** load contexts onto the stack */
-	sea_t k = *ctx;
+	sea_consts_t k = *ctx;
 	sea_proc_t c = *proc;
 
 	/** make the dp pointer aligned */ {
@@ -141,7 +141,7 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 	}
 
 	/** chain */ {
-		int32_t (*cfn)(sea_t const *, sea_proc_t *) = NULL;
+		int32_t (*cfn)(sea_consts_t const *, sea_proc_t *) = NULL;
 
 		/** check status sanity */
 		if(stat == CONT) {
@@ -214,7 +214,7 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 				}
 				if(c.max <= 0) {			/** fixme! */
 					c.i = c.mi = c.asp; c.j = c.mj = c.bsp;
-					wr_alloc(c.l, 0, k); proc->l = c.l;
+					wr_alloc(c.l, 0); proc->l = c.l;
 					debug("wr_alloc without traceback");
 					return SEA_SUCCESS;
 				}
@@ -229,7 +229,7 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 		if(c.mp <= c.p) {
 			c.i = c.mi; c.j = c.mj;
 			c.p = c.mp; c.q = c.mq;
-			wr_alloc(c.l, c.mp, k); proc->l = c.l;
+			wr_alloc(c.l, c.mp); proc->l = c.l;
 			debug("wr_alloc: c.l.p(%p)", c.l.p);
 		}
 
