@@ -269,7 +269,8 @@ enum _STATE {
 	CHAIN 	= 2,
 	ALT 	= 3,
 	CAP 	= 4,
-	TERM 	= 5
+	TERM 	= 5,
+	SEARCH  = 6
 };
 
 
@@ -409,10 +410,10 @@ enum _ALN_DIR {
 #define wr_finish(w, ctx, dir) { \
 	if((dir) == ALN_FW) { \
 		(w).pos = (ctx)->f->finish_f((w).p, (w).pos); \
-		(w).size = (w).size - (w).pos; \
+		(w).size = (w).size - (w).pos - 1; \
 	} else { \
 		(w).pos = (ctx)->f->finish_r((w).p, (w).pos); \
-		(w).size = (w).pos - sizeof(struct sea_result); \
+		(w).size = (w).pos - sizeof(struct sea_result) - 1; \
 		(w).pos = sizeof(struct sea_result); \
 	} \
 }

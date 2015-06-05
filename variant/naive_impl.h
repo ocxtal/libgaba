@@ -212,7 +212,7 @@
  */
 #define naive_linear_trace_decl(c, k, r) \
 	dir_t r; \
-	cell_t *p = pb + ADDR(c.mp - sp, c.mq, BW); \
+	cell_t *p = pb + ADDR(c.p - sp, c.q, BW); \
 	cell_t score = *p;
 
 /**
@@ -221,8 +221,8 @@
 #define naive_linear_trace_init(c, k, r) { \
 	dir_term(r, c); \
 	debug("dir: d(%d), d2(%d)", dir(r), dir2(r)); \
-	rd_fetch(c.a, c.mi-1); \
-	rd_fetch(c.b, c.mj-1); \
+	rd_fetch(c.a, c.i-1); \
+	rd_fetch(c.b, c.j-1); \
 }
 
 /**
@@ -240,8 +240,8 @@
 	if(score == (diag + sc)) { \
 		p += naive_linear_topleft(r, c); \
 		dir_prev(r, c); \
-		c.mi--; rd_fetch(c.a, c.mi-1); \
-		c.mj--; rd_fetch(c.b, c.mj-1); \
+		c.i--; rd_fetch(c.a, c.i-1); \
+		c.j--; rd_fetch(c.b, c.j-1); \
 		if(sc == k.m) { wr_pushm(c.l); } else { wr_pushx(c.l); } \
 		if(k.alg == SW && score <= sc) { \
 			return SEA_TERMINATED; \
@@ -249,12 +249,12 @@
 		score = diag; \
 	} else if(score == ((h = p[naive_linear_left(r, c)]) + k.gi)) { \
 		p += naive_linear_left(r, c); \
-		c.mi--; rd_fetch(c.a, c.mi-1); \
+		c.i--; rd_fetch(c.a, c.i-1); \
 		wr_pushd(c.l); \
 		score = h; \
 	} else if(score == ((v = p[naive_linear_top(r, c)]) + k.gi)) { \
 		p += naive_linear_top(r, c); \
-		c.mj--; rd_fetch(c.b, c.mj-1); \
+		c.j--; rd_fetch(c.b, c.j-1); \
 		wr_pushi(c.l); \
 		score = v; \
 	} else { \
@@ -267,7 +267,7 @@
  * @macro naive_linear_trace_finish
  */
 #define naive_linear_trace_finish(c, k, r) { \
-	c.mq = (p - pb + BW) % BW - BW/2; /** correct q-coordinate */ \
+	c.q = (p - pb + BW) % BW - BW/2; /** correct q-coordinate */ \
 }
 
 #endif /* #ifndef _NAIVE_H_INCLUDED */

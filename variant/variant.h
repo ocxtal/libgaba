@@ -80,7 +80,7 @@ typedef struct _dir dir_t;
  * @macro dir_term
  */
 #define dir_term(r, c) { \
-	int8_t d = (c).pdr[(c).mp]; \
+	int8_t d = (c).pdr[(c).p]; \
 	(r).d = LEFT; \
 	(r).d2 = d; \
 }
@@ -90,7 +90,7 @@ typedef struct _dir dir_t;
  * @brief set 2-bit direction flag in reverse access.
  */
 #define dir_prev(r, c) { \
-	int8_t d = (c).pdr[--(c).mp]; \
+	int8_t d = (c).pdr[--(c).p]; \
 	(r).d = 0x01 & (r).d2; \
 	(r).d2 = 0x03 & (((r).d2<<1) | d); \
 }
@@ -148,16 +148,6 @@ typedef struct _dir dir_t;
 #define trace_init			LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _trace_init)
 #define trace_body			LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _trace_body)
 #define trace_finish		LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _trace_finish)
-
-
-// #include "naive.h"
-// #include "twig.h"
-// #include "branch.h"
-// #include "trunk.h"
-// #include "balloon.h"
-// #include "bulge.h"
-// #include "cap.h"
-
 
 #endif /* #ifndef _VARIANT_H_INCLUDED */
 

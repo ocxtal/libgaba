@@ -297,7 +297,7 @@
  */
 #define trunk_linear_trace_decl(c, k, r) \
 	dir_t r; \
-	cell_t *p = pb + ADDR(c.mp - sp, c.mq, BW);
+	cell_t *p = pb + ADDR(c.p - sp, c.q, BW);
 
 /**
  * @macro trunk_linear_trace_init
@@ -307,8 +307,8 @@
  */
 #define trunk_linear_trace_init(c, k, r) { \
 	dir_term(r, c); \
-	rd_fetch(c.a, c.mi-1); \
-	rd_fetch(c.b, c.mj-1); \
+	rd_fetch(c.a, c.i-1); \
+	rd_fetch(c.b, c.j-1); \
 }
 
 /**
@@ -328,27 +328,27 @@
 		trunk_linear_left(r, c), trunk_linear_top(r, c)); \
 	if(sc == diag) { \
 		p += trunk_linear_topleft(r, c); \
-		c.mq += trunk_linear_topleftq(r, c); \
+		c.q += trunk_linear_topleftq(r, c); \
 		dir_prev(r, c); \
-		c.mi--; rd_fetch(c.a, c.mi-1); \
-		c.mj--; rd_fetch(c.b, c.mj-1); \
+		c.i--; rd_fetch(c.a, c.i-1); \
+		c.j--; rd_fetch(c.b, c.j-1); \
 		if(sc == k.m) { wr_pushm(c.l); } else { wr_pushx(c.l); } \
 	} else if(dh == k.gi) { \
 		p += trunk_linear_left(r, c); \
-		c.mq += trunk_linear_leftq(r, c); \
-		c.mi--; rd_fetch(c.a, c.mi-1); \
+		c.q += trunk_linear_leftq(r, c); \
+		c.i--; rd_fetch(c.a, c.i-1); \
 		wr_pushd(c.l); \
 	} else if(DV(p, k.gi) == k.gi) { \
 		p += trunk_linear_top(r, c); \
-		c.mq += trunk_linear_topq(r, c); \
-		c.mj--; rd_fetch(c.b, c.mj-1); \
+		c.q += trunk_linear_topq(r, c); \
+		c.j--; rd_fetch(c.b, c.j-1); \
 		wr_pushi(c.l); \
 	} else { \
 		debug("out of band"); \
 		return SEA_ERROR_OUT_OF_BAND; \
 	} \
-	if(c.mq < -BW/2 || c.mq > BW/2-1) { \
-		debug("out of band c.mq(%lld)", c.mq); \
+	if(c.q < -BW/2 || c.q > BW/2-1) { \
+		debug("out of band c.mq(%lld)", c.q); \
 		return SEA_ERROR_OUT_OF_BAND; \
 	} \
 }

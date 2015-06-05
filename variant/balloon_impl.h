@@ -242,9 +242,9 @@
 	p = (cell_t *)c.pdp - ((cell_t *)c.pdp)[-1] - 1; \
 	pc = p - p[-1] - 1; \
 	pp = pc - pc[-1] - 1; \
-	score = p[c.mq]; \
-	rd_fetch(c.a, c.mi-1); \
-	rd_fetch(c.b, c.mj-1); \
+	score = p[c.q]; \
+	rd_fetch(c.a, c.i-1); \
+	rd_fetch(c.b, c.j-1); \
 }
 
 /**
@@ -252,30 +252,30 @@
  */
 #define balloon_linear_trace_body(c, k, r) { \
 	dir_prev(r, c); \
-	cell_t diag = pp[c.mq + balloon_linear_topleftq(r, c)]; \
+	cell_t diag = pp[c.q + balloon_linear_topleftq(r, c)]; \
 	cell_t sc = rd_cmp(c.a, c.b) ? k.m : k.x; \
 	cell_t h, v; \
 	if(score == (diag + sc)) { \
 		p = pp; pc = p - p[-1] - 1; pp = pc - pc[-1] - 1; \
-		c.mq += balloon_linear_topleftq(r, c); \
+		c.q += balloon_linear_topleftq(r, c); \
 		dir_prev(r, c); \
-		c.mi--; rd_fetch(c.a, c.mi-1); \
-		c.mj--; rd_fetch(c.b, c.mj-1); \
+		c.i--; rd_fetch(c.a, c.i-1); \
+		c.j--; rd_fetch(c.b, c.j-1); \
 		if(sc == k.m) { wr_pushm(c.l); } else { wr_pushx(c.l); } \
 		if(k.alg == SW && score <= sc) { \
 			return SEA_TERMINATED; \
 		} \
 		score = diag; \
-	} else if(score == ((h = pc[c.mq + balloon_linear_leftq(r, c)]) + k.gi)) { \
+	} else if(score == ((h = pc[c.q + balloon_linear_leftq(r, c)]) + k.gi)) { \
 		p = pc; pc = pp; pp = pc - pc[-1] - 1; \
-		c.mq += balloon_linear_leftq(r, c); \
-		c.mi--; rd_fetch(c.a, c.mi-1); \
+		c.q += balloon_linear_leftq(r, c); \
+		c.i--; rd_fetch(c.a, c.i-1); \
 		wr_pushd(c.l); \
 		score = h; \
-	} else if(score == ((v = pc[c.mq + balloon_linear_topq(r, c)]) + k.gi)) { \
+	} else if(score == ((v = pc[c.q + balloon_linear_topq(r, c)]) + k.gi)) { \
 		p = pc; pc = pp; pp = pc - pc[-1] - 1; \
-		c.mq += balloon_linear_topq(r, c); \
-		c.mj--; rd_fetch(c.b, c.mj-1); \
+		c.q += balloon_linear_topq(r, c); \
+		c.j--; rd_fetch(c.b, c.j-1); \
 		wr_pushd(c.l); \
 		score = v; \
 	} else { \
