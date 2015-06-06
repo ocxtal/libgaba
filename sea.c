@@ -212,7 +212,6 @@ sea_init_flags_vals(
 	int32_t tb)
 {
 	int32_t int_flags = flags;		/* internal copy of the flags */
-	int32_t error_label = SEA_ERROR;
 
 	if((int_flags & SEA_FLAGS_MASK_ALG) == 0) {
 		return SEA_ERROR_UNSUPPORTED_ALG;
@@ -221,11 +220,6 @@ sea_init_flags_vals(
 	/** default: affine-gap cost */
 	if((int_flags & SEA_FLAGS_MASK_COST) == 0) {
 		int_flags = (int_flags & ~SEA_FLAGS_MASK_COST) | SEA_AFFINE_GAP_COST;
-	}
-
-	/** default: banded DP */
-	if((int_flags & SEA_FLAGS_MASK_DP) == 0) {
-		int_flags = (int_flags & ~SEA_FLAGS_MASK_DP) | SEA_DYNAMIC;
 	}
 
 	/** default input sequence format: ASCII */
@@ -279,14 +273,13 @@ sea_init_flags_vals(
 	/* special parameters */
 //	ct->mask = 0;			/** for the mask-match algorithm */
 	ct->k = 4;				/** search length stretch ratio: default is 4 */
-	ct->isize = ALLOCA_THRESH_SIZE;	/** inital matsize = 1M */
+	ct->isize = ALLOCA_THRESH_SIZE;	/** initial matsize = 1M */
 	ct->memaln = 256;	/** (MAGIC) memory alignment size */
 
 	/* push flags to the context */
-	ct->flags = int_flags;
+//	ct->flags = int_flags;
 
-	error_label = SEA_SUCCESS;
-	return(error_label);
+	return(int_flags);
 }
 
 /**
@@ -330,21 +323,15 @@ sea_t *sea_init(
 	memset(ctx, 0, sizeof(sea_t));
 
 	/** init value fields of sea_context */
-	if((error_label = sea_init_flags_vals(&ctx->k, flags, m, x, gi, ge, tx, tc, tb)) != SEA_SUCCESS) {
-		goto _sea_init_error_handler;
-	}
-
-	/* check if error_label is success */
-	if(error_label != SEA_SUCCESS) {
+	if((ctx->flags = sea_init_flags_vals(&ctx->k, flags, m, x, gi, ge, tx, tc, tb)) < SEA_SUCCESS) {
+		error_label = ctx->flags;
 		goto _sea_init_error_handler;
 	}
 
 	/**
 	 * initialize alignment functions
 	 */
-	int32_t cost_idx = (ctx->k.flags & SEA_FLAGS_MASK_COST) >> SEA_FLAGS_POS_COST;
-//	int32_t dp_idx = (ctx->k.flags & SEA_FLAGS_MASK_DP) >> SEA_FLAGS_POS_DP;
-
+	int32_t cost_idx = (ctx->flags & SEA_FLAGS_MASK_COST) >> SEA_FLAGS_POS_COST;
 	if(cost_idx <= 0 || cost_idx >= 3) {
 		error_label = SEA_ERROR_INVALID_ARGS;
 		goto _sea_init_error_handler;
@@ -352,81 +339,33 @@ sea_t *sea_init(
 
 	ctx->dynamic = aln_table[cost_idx][0];
 	ctx->guided = aln_table[cost_idx][1];
-/*
-	ctx->f->twig    = func_table[cost_idx][dp_idx][1];
-	ctx->f->branch  = func_table[cost_idx][dp_idx][2];
-	ctx->f->trunk   = func_table[cost_idx][dp_idx][3];
-	ctx->f->balloon = func_table[cost_idx][dp_idx][4];
-	ctx->f->bulge   = func_table[cost_idx][dp_idx][5];
-	ctx->f->cap     = func_table[cost_idx][dp_idx][6];
 
-	if(ctx->f->twig == NULL || ctx->f->branch == NULL || ctx->f->trunk == NULL
-		|| ctx->f->balloon == NULL || ctx->f->bulge == NULL || ctx->f->cap == NULL) {
-		error_label = SEA_ERROR_INVALID_ARGS;
-		goto _sea_init_error_handler;
-	}
-*/
 	/**
 	 * set alignment writer functions
 	 */
-	int32_t aln_idx = (ctx->k.flags & SEA_FLAGS_MASK_ALN) >> SEA_FLAGS_POS_ALN;
+	int32_t aln_idx = (ctx->flags & SEA_FLAGS_MASK_ALN) >> SEA_FLAGS_POS_ALN;
 	if(aln_idx <= 0 || aln_idx >= 4) {
 		error_label = SEA_ERROR_INVALID_ARGS;
 		goto _sea_init_error_handler;
 	}
 	ctx->fw = io_table[aln_idx][0];
 	ctx->rv = io_table[aln_idx][1];
-/*
-	ctx->f->init_f = wr_table[aln_idx][0][0];
-	ctx->f->pushm_f = wr_table[aln_idx][0][1];
-	ctx->f->pushx_f = wr_table[aln_idx][0][2];
-	ctx->f->pushi_f = wr_table[aln_idx][0][3];
-	ctx->f->pushd_f = wr_table[aln_idx][0][4];
-	ctx->f->finish_f = wr_table[aln_idx][0][5];
 
-	ctx->f->init_r = wr_table[aln_idx][1][0];
-	ctx->f->pushm_r = wr_table[aln_idx][1][1];
-	ctx->f->pushx_r = wr_table[aln_idx][1][2];
-	ctx->f->pushi_r = wr_table[aln_idx][1][3];
-	ctx->f->pushd_r = wr_table[aln_idx][1][4];
-	ctx->f->finish_r = wr_table[aln_idx][1][5];
-*/
 	/**
 	 * set seq a reader functions
 	 */
-	int32_t popa_idx = (ctx->k.flags & SEA_FLAGS_MASK_SEQ_A) >> SEA_FLAGS_POS_SEQ_A;
-	int32_t popb_idx = (ctx->k.flags & SEA_FLAGS_MASK_SEQ_B) >> SEA_FLAGS_POS_SEQ_B;
+	int32_t popa_idx = (ctx->flags & SEA_FLAGS_MASK_SEQ_A) >> SEA_FLAGS_POS_SEQ_A;
+	int32_t popb_idx = (ctx->flags & SEA_FLAGS_MASK_SEQ_B) >> SEA_FLAGS_POS_SEQ_B;
 	if(popa_idx <= 0 || popa_idx >= 8 || popb_idx <= 0 || popb_idx >= 8) {
 		error_label = SEA_ERROR_INVALID_ARGS;
 		goto _sea_init_error_handler;
 	}
 	ctx->fw.popa = ctx->rv.popa = rd_table[popa_idx];
 	ctx->fw.popb = ctx->rv.popb = rd_table[popb_idx];
-/*
-	if(ctx->f->popa == NULL || ctx->f->popb == NULL) {
-		error_label = SEA_ERROR_INVALID_ARGS;
-		goto _sea_init_error_handler;
-	}
-*/
-/*
-	if(ctx->f->init_f == NULL || ctx->f->pushm_f == NULL || ctx->f->pushx_f == NULL
-		|| ctx->f->pushi_f == NULL || ctx->f->pushd_f == NULL || ctx->f->finish_f == NULL
-		|| ctx->f->init_r == NULL || ctx->f->pushm_r == NULL || ctx->f->pushx_r == NULL
-		|| ctx->f->pushi_r == NULL || ctx->f->pushd_r == NULL || ctx->f->finish_r == NULL) {
-		error_label = SEA_ERROR_INVALID_ARGS;
-		goto _sea_init_error_handler;
-	}
-*/
+
 	/**
 	 * initialize init vector
 	 */
-/*
-	ctx->iv = (struct sea_ivec *)malloc(sizeof(struct sea_ivec) + 32*sizeof(uint8_t));
-	ctx->iv->pv = ctx->iv + 1;
-	ctx->iv->cv = ctx->iv->pv + ctx->bw/2;
-	ctx->iv->clen = ctx->iv->plen = ctx->bw/2;
-	ctx->iv->size = sizeof(int8_t);
-	*/
 	ctx->v.pv = (uint8_t *)malloc(32*sizeof(uint8_t));
 	ctx->v.cv = ctx->v.pv + ctx->k.bw/2;
 	ctx->v.clen = ctx->v.plen = ctx->k.bw/2;
@@ -445,20 +384,12 @@ sea_t *sea_init(
 
 _sea_init_error_handler:
 	if(ctx != NULL) {
-/*
-		if(ctx->f != NULL) {
-			free(ctx->f);
-			ctx->f = NULL;
-		}
-		memset(ctx, 0, sizeof(sea_t));
-		ctx->alg = error_label;
-*/
 		if(ctx->v.pv != NULL) {
 			free(ctx->v.pv); ctx->v.pv = NULL;
 		}
 		free(ctx);
 	}
-	return(ctx);
+	return(NULL);
 }
 
 /**
@@ -567,6 +498,7 @@ sea_res_t *sea_align_intl(
 
 	/** initialize alignment function pointers and direction array */
 	if(guide == NULL) {
+		debug("initialize dynamic band direction array");
 		k.f = &ctx->dynamic;
 		c.dr.sp = malloc(c.size);
 		if(c.dr.sp == NULL) {
@@ -576,8 +508,10 @@ sea_res_t *sea_align_intl(
 		c.dr.ep = (c.pdr = c.dr.sp) + c.size;
 		c.pdr[0] = LEFT;		/** initial vector */
 	} else {
+		debug("initialize guided band direction array");
 		k.f = &ctx->guided;
-		c.dr.ep = (c.dr.sp = c.pdr = (uint8_t *)guide) + glen;
+		c.pdr = (uint8_t *)guide;
+		c.dr.ep = (c.dr.sp = NULL) + glen;
 	}
 
 	/** initialize max */

@@ -54,15 +54,19 @@ char *mseq(char const *seq, int x, int ins, int del)
 
 int main(int argc, char *argv[])
 {
-	sea_t *ctx;
-	sea_res_t *fres, *rres;
+	sea_t *d, *c;
+	sea_res_t *dres, *cres, *res;
 	char *a, *b;
 	// char const *a = "1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890";
 	// char const *b = "1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890";
 	int len = 30;
 
-	ctx = sea_init(
-		SEA_DYNAMIC | SEA_LINEAR_GAP_COST | SEA_XSEA | SEA_ALN_CIGAR,
+	d = sea_init(
+		SEA_LINEAR_GAP_COST | SEA_XSEA | SEA_ALN_DIR,
+		2, -3, -5, -1, 100, 20, 30);
+
+	c = sea_init(
+		SEA_LINEAR_GAP_COST | SEA_XSEA | SEA_ALN_CIGAR,
 		2, -3, -5, -1, 100, 20, 30);
 
 //	printf("%x\n", ctx->flags);
@@ -78,25 +82,32 @@ int main(int argc, char *argv[])
 
 	int lm = 5, rm = 5;
 
-	fres = sea_align_f(ctx,
+	dres = sea_align(d,
 		a, lm, strlen(a)-rm,
 		b, lm, strlen(b)-rm,
 		NULL, 0);
 
-	rres = sea_align_r(ctx,
+	cres = sea_align(c,
+		a, lm, strlen(a)-rm,
+		b, lm, strlen(b)-rm,
+		dres->aln, dres->len);
+
+	res = sea_align(c,
 		a, lm, strlen(a)-rm,
 		b, lm, strlen(b)-rm,
 		NULL, 0);
 
-	printf("%d, %lld, %s\n", fres->score, fres->len, fres->aln);
-	printf("%d, %lld, %s\n", rres->score, rres->len, rres->aln);
+	printf("%d, %lld, %s\n", cres->score, cres->len, cres->aln);
+	printf("%d, %lld, %s\n", res->score, res->len, res->aln);
 
 	free(a);
 	free(b);
 
-	sea_aln_free(ctx, fres);
-	sea_aln_free(ctx, rres);
+	sea_aln_free(d, dres);
+	sea_aln_free(c, cres);
+	sea_aln_free(c, res);
 
-	sea_clean(ctx);
+	sea_clean(d);
+	sea_clean(c);
 	return 0;
 }

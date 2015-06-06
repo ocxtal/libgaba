@@ -309,7 +309,6 @@ struct sea_consts {
 	int16_t tb; 		/*!< balloon termination threshold. */
 	int32_t min;		/*!< (in) lower bound of the score */
 	uint32_t alg;		/*!< algorithm flag (same as (ctx->flags) & SEA_FLAG_MASK_ALG) */
-	uint32_t flags;		/*!< a bitfield of option flags */
 
 	size_t isize;		/*!< initial matsize */
 	size_t memaln;		/*!< memory alignment size (default: 32) */
@@ -387,6 +386,7 @@ struct sea_context {
 	struct sea_io_funcs fw, rv;
 	struct sea_ivec v;
 	struct sea_consts k;
+	uint32_t flags;		/*!< a bitfield of option flags */
 };
 
 /**

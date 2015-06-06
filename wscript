@@ -5,8 +5,8 @@ variants = ['naive', 'twig', 'branch', 'trunk', 'balloon', 'cap']
 cost = ['linear', 'affine']
 dp = ['dynamic', 'guided']
 
-cost_flag = {'linear': 'SEA_LINEAR_GAP_COST', 'affine': 'SEA_AFFINE_GAP_COST'}
-dp_flag = {'dynamic': 'SEA_DYNAMIC', 'guided': 'SEA_GUIDED'}
+cost_flag = {'linear': 'LINEAR', 'affine': 'LINEAR'}
+dp_flag = {'dynamic': 'DYNAMIC', 'guided': 'GUIDED'}
 
 def suffix(c, d):
 	return('_' + c + '_' + d)

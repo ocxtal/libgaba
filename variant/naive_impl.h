@@ -68,6 +68,11 @@
 	cell_t xacc = 0;
 
 /**
+ * @macro naive_affine_fill_decl
+ */
+#define naive_affine_fill_decl(c, k, r)		naive_linear_fill_decl(c, k, r)
+
+/**
  * @macro naive_linear_fill_init
  * @brief initialize fill-in step context
  */
@@ -86,6 +91,11 @@
 		c.pdp += sizeof(cell_t); \
 	} \
 }
+
+/**
+ * @macro naive_affine_fill_init
+ */
+#define naive_affine_fill_init(c, k, r) {}
 
 /**
  * @macro naive_linear_fill_former_body

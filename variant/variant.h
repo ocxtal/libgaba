@@ -12,16 +12,22 @@
 #include <stdint.h>
 
 /**
+ * define constants
+ */
+#define DYNAMIC		( 2 )		// avoid 1
+#define GUIDED 		( 3 )
+#define LINEAR 		( 4 )
+#define AFFINE 		( 5 )
+
+/**
  * defaults
  */
-// #define DP 				SEA_DYNAMIC
-// #define COST 			SEA_LINEAR_GAP_COST
+// #define DP 				GUIDED
+// #define COST 			LINEAR
 
 /**
  * direction determiner variants
  */
-/** uncomment this line to preset direction variant */
-//#define _DP 		SEA_DYNAMIC
 
 /**
  * @struct _dir
@@ -63,6 +69,7 @@ typedef struct _dir dir_t;
  */
 #define dir_next_dynamic(r, c) { \
 	(r).d = dir_exp(r, c); \
+	debug("dynamic band: d(%d)", (r).d); \
 	(c).pdr[++(c).p] = (r).d; \
 	(r).d2 = ((r).d<<1) | ((r).d2>>1); \
 }
@@ -73,7 +80,8 @@ typedef struct _dir dir_t;
  */
 #define dir_next_guided(r, c) { \
 	(r).d = (c).pdr[++(c).p]; \
-	(r).d2 = ((r).d)<<1) | ((r).d2>>1); \
+	debug("guided band: d(%d)", (r).d); \
+	(r).d2 = ((r).d<<1) | ((r).d2>>1); \
 }
 
 /**
@@ -108,15 +116,23 @@ typedef struct _dir dir_t;
 /**
  * macro aliasing
  */
-#if DP == SEA_DYNAMIC
+#ifndef DP
+	#warning "DP undefined"
+#endif
+
+static int32_t const _dp = DP;
+
+#if DP == DYNAMIC
+	#warning "dynamic"
 	#define dir_next 			dir_next_dynamic
 	#define dir_check_term		dir_check_term_dynamic
-#elif DP == SEA_GUIDED
+#elif DP == GUIDED
+	#warning "guided"
 	#define dir_next 			dir_next_guided
 	#define dir_check_term 		dir_check_term_guided
-#else /* #if DP == SEA_DYNAMIC */
-	#error "DP must be SEA_DYNAMIC or SEA_GUIDED."
-#endif /* #if DP == SEA_DYNAMIC */
+#else /* #if DP == DYNAMIC */
+	#error "DP must be DYNAMIC or GUIDED."
+#endif /* #if DP == DYNAMIC */
 
 
 /**
@@ -125,19 +141,25 @@ typedef struct _dir dir_t;
 #define HEADER(base)			QUOTE(HEADER_WITH_SUFFIX(base, _impl.h))
 #include HEADER(BASE)
 
-#if COST == SEA_LINEAR_GAP_COST
+#ifndef COST
+	#warning "COST undefined"
+#endif
+
+static int32_t const _cost = COST;
+
+#if COST == LINEAR
 
 	#define COST_SUFFIX 		_linear
 
-#elif COST == SEA_AFFINE_GAP_COST
+#elif COST == AFFINE
 
 	#define COST_SUFFIX 		_affine
 
-#else /* #if COST == SEA_LINEAR_GAP_COST */
+#else /* #if COST == LINEAR */
 
-	#error "COST must be SEA_LINEAR_GAP_COST or SEA_AFFINE_GAP_COST."
+	#error "COST must be LINEAR or AFFINE."
 
-#endif /* #if COST == SEA_LINEAR_GAP_COST */
+#endif /* #if COST == LINEAR */
 
 #define bpl					LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _bpl)
 #define dir_exp				LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _dir_exp)

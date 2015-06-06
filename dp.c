@@ -77,7 +77,7 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 	int8_t stat = CONT;
 
 	/** check direction array size */
-	if((k.flags & SEA_FLAGS_MASK_DP) == SEA_DYNAMIC) {
+	if(c.dr.sp != NULL) {
 		if((c.dp.ep - c.pdp) > bpl(c) * ((uint8_t *)c.dr.ep - (uint8_t *)c.dr.sp - c.p)) {
 			size_t s = 2 * (c.dr.ep - c.dr.sp);
 			c.dr.ep = (c.dr.sp = c.pdr = (void *)realloc(c.dr.sp, s)) + s;
