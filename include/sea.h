@@ -174,7 +174,6 @@ struct sea_result {
 	int64_t alen;			/*!< alignment length on a. the alignment interval is a[apos]..a[apos+alen-1] */
 	int64_t bpos;			/*!< alignment start position on b. */
 	int64_t blen;			/*!< alignment length on b. the alignment interval is b[bpos]..b[bpos+blen-1] */
-	struct sea_context const *ctx;/*!< a pointer to a alignment context structure. */
 };
 
 /**
