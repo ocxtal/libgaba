@@ -50,8 +50,8 @@
 
 int32_t
 DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
-	sea_consts_t const *ctx,
-	sea_proc_t *proc)
+	struct sea_consts const *ctx,
+	struct sea_process *proc)
 {
 	debug("entry point: (%p)", CALL_FUNC(BASE, SUFFIX));
 
@@ -63,8 +63,8 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 	}
 
 	/** load contexts onto the stack */
-	sea_consts_t k = *ctx;
-	sea_proc_t c = *proc;
+	struct sea_consts k = *ctx;
+	struct sea_process c = *proc;
 
 	/** make the dp pointer aligned */ {
 		int64_t a = k.memaln;
@@ -141,7 +141,7 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 	}
 
 	/** chain */ {
-		int32_t (*cfn)(sea_consts_t const *, sea_proc_t *) = NULL;
+		int32_t (*cfn)(struct sea_consts const *, struct sea_process *) = NULL;
 
 		/** check status sanity */
 		if(stat == CONT) {
@@ -163,7 +163,7 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 		if(cfn != NULL) {
 			debug("chain: cfn(%p), stat(%d)", cfn, stat);
 			void *spdp = c.pdp;
-			sea_mem_t mdp = c.dp;
+			struct sea_mem mdp = c.dp;
 			int32_t tmax = c.max;
 			int32_t ret = SEA_SUCCESS;
 

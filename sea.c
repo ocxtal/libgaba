@@ -19,30 +19,7 @@
  	#include <alloca.h>
 #endif
 
-/*
-int32_t
-(*func_table[3][3][7])(
-	sea_t const *ctx,
-	sea_proc_t *proc) = {
-	{
-		{NULL, NULL, NULL, NULL, NULL, NULL, NULL},
-		{NULL, NULL, NULL, NULL, NULL, NULL, NULL},
-		{NULL, NULL, NULL, NULL, NULL, NULL, NULL}
-	},
-	{
-		{NULL, NULL, NULL, NULL, NULL, NULL},
-		{naive_linear_dynamic, twig_linear_dynamic, branch_linear_dynamic, trunk_linear_dynamic, balloon_linear_dynamic, balloon_linear_dynamic, cap_linear_dynamic},
-		{naive_linear_guided, twig_linear_guided, branch_linear_guided, trunk_linear_guided, balloon_linear_guided, balloon_linear_guided, cap_linear_guided}
-	},
-	{
-		{NULL, NULL, NULL, NULL, NULL, NULL},
-		{naive_affine_dynamic, twig_affine_dynamic, branch_affine_dynamic, trunk_affine_dynamic, balloon_affine_dynamic, balloon_affine_dynamic, cap_affine_dynamic},
-		{naive_affine_guided, twig_affine_guided, branch_affine_guided, trunk_affine_guided, balloon_affine_guided, balloon_affine_guided, cap_affine_guided}
-	}
-};
-*/
-
-struct sea_aln_funcs aln_table[3][2] = {
+struct sea_aln_funcs const aln_table[3][2] = {
 	{
 		{NULL, NULL, NULL, NULL, NULL, NULL},
 		{NULL, NULL, NULL, NULL, NULL, NULL}
@@ -70,31 +47,7 @@ uint8_t
 	NULL
 };
 
-/*
-int64_t
-(*wr_table[4][2][6])(
-	uint8_t *p,
-	int64_t pos) = {
-	{
-		{NULL, NULL, NULL, NULL, NULL, NULL},
-		{NULL, NULL, NULL, NULL, NULL, NULL}
-	},
-	{
-		{_init_ascii_f, _pushm_ascii_f, _pushx_ascii_f, _pushi_ascii_f, _pushd_ascii_f, _finish_ascii_f},
-		{_init_ascii_r, _pushm_ascii_r, _pushx_ascii_r, _pushi_ascii_r, _pushd_ascii_r, _finish_ascii_r}
-	},
-	{
-		{_init_cigar_f, _pushm_cigar_f, _pushx_cigar_f, _pushi_cigar_f, _pushd_cigar_f, _finish_cigar_f},
-		{_init_cigar_r, _pushm_cigar_r, _pushx_cigar_r, _pushi_cigar_r, _pushd_cigar_r, _finish_cigar_r}
-	},
-	{
-		{_init_dir_f, _pushm_dir_f, _pushx_dir_f, _pushi_dir_f, _pushd_dir_f, _finish_dir_f},
-		{_init_dir_r, _pushm_dir_r, _pushx_dir_r, _pushi_dir_r, _pushd_dir_r, _finish_dir_r}
-	}
-};
-*/
-
-struct sea_io_funcs io_table[4][2] = {
+struct sea_io_funcs const io_table[4][2] = {
 	{
 		{NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL},
 		{NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL}
@@ -116,7 +69,7 @@ struct sea_io_funcs io_table[4][2] = {
 /**
  * @fn sea_aligned_malloc
  *
- * @brief an wrapper of posix_memalign
+ * @brief (internal) an wrapper of posix_memalign
  *
  * @param[in] size : size of memory in bytes.
  * @param[in] align : alignment size.
@@ -133,7 +86,7 @@ void *sea_aligned_malloc(size_t size, size_t align)
 /**
  * @fn sea_aligned_free
  *
- * @brief free memory which is allocated by sea_aligned_malloc
+ * @brief (internal) free memory which is allocated by sea_aligned_malloc
  *
  * @param[in] ptr : a pointer to the memory to be freed.
  */
@@ -167,7 +120,7 @@ void sea_aligned_free(void *ptr)
 /**
  * @macro AFREE
  *
- * @breif an wrapper macro of alloca or sea_aligned_malloc
+ * @breif (internal) an wrapper macro of alloca or sea_aligned_malloc
  */
 #if HAVE_ALLOCA_H
 	#define AFREE(ptr, size) { \
@@ -201,7 +154,7 @@ void sea_aligned_free(void *ptr)
  */
 static int32_t
 sea_init_flags_vals(
-	sea_consts_t *ct,
+	struct sea_consts *ct,
 	int32_t flags,
 	int8_t m,
 	int8_t x,
@@ -310,17 +263,17 @@ sea_t *sea_init(
 	int32_t tb)
 {
 	int32_t i;
-	sea_t *ctx = NULL;
+	struct sea_context *ctx = NULL;
 	int32_t error_label = SEA_ERROR;
 
 
 	/** malloc sea_context */
-	ctx = (sea_t *)malloc(sizeof(sea_t));
+	ctx = (struct sea_context *)malloc(sizeof(struct sea_context));
 	if(ctx == NULL) {
 		error_label = SEA_ERROR_OUT_OF_MEM;
 		goto _sea_init_error_handler;
 	}
-	memset(ctx, 0, sizeof(sea_t));
+	memset(ctx, 0, sizeof(struct sea_context));
 
 	/** init value fields of sea_context */
 	if((ctx->flags = sea_init_flags_vals(&ctx->k, flags, m, x, gi, ge, tx, tc, tb)) < SEA_SUCCESS) {
@@ -380,7 +333,7 @@ sea_t *sea_init(
 	}
 	#undef _Q
 
-	return(ctx);
+	return((sea_t *)ctx);
 
 _sea_init_error_handler:
 	if(ctx != NULL) {
@@ -389,7 +342,7 @@ _sea_init_error_handler:
 		}
 		free(ctx);
 	}
-	return(NULL);
+	return((sea_t *)NULL);
 }
 
 /**
@@ -398,8 +351,8 @@ _sea_init_error_handler:
  * @brief (internal) the body of sea_align function.
  */
 static
-sea_res_t *sea_align_intl(
-	sea_t const *ctx,
+struct sea_result *sea_align_intl(
+	struct sea_context const *ctx,
 	void const *a,
 	int64_t asp,
 	int64_t aep,
@@ -410,9 +363,9 @@ sea_res_t *sea_align_intl(
 	int64_t glen,
 	int32_t dir)
 {
-	sea_consts_t k = ctx->k;
-	sea_proc_t c;
-	sea_res_t *r = NULL;
+	struct sea_consts k = ctx->k;
+	struct sea_process c;
+	struct sea_result *r = NULL;
 	int32_t error_label = SEA_ERROR;
 
 	debug("enter sea_align");
@@ -435,7 +388,7 @@ sea_res_t *sea_align_intl(
 	 * if one of the length is zero, returns with score = 0 and aln = "".
 	 */
 	if(asp == aep || bsp == bep) {
-		r = (sea_res_t *)malloc(sizeof(sea_res_t) + 1);
+		r = (struct sea_result *)malloc(sizeof(struct sea_result) + 1);
 		r->a = a;
 		r->apos = asp;
 		r->alen = aep;
@@ -525,7 +478,7 @@ sea_res_t *sea_align_intl(
 
 	/* finishing */
 	wr_finish(c.l);
-	r = (sea_res_t *)c.l.p;
+	r = (struct sea_result *)c.l.p;
 
 	r->aln = (uint8_t *)c.l.p + c.l.pos;
 	r->len = c.l.size;
@@ -550,7 +503,7 @@ sea_res_t *sea_align_intl(
 	return(r);
 
 _sea_error_handler:
-	r = (sea_res_t *)malloc(sizeof(sea_res_t) + 1);
+	r = (struct sea_result *)malloc(sizeof(struct sea_result) + 1);
 	r->a = NULL;
 	r->apos = 0;
 	r->alen = 0;
@@ -568,7 +521,7 @@ _sea_error_handler:
 /**
  * @fn sea_align
  *
- * @brief alignment function. 
+ * @brief (API) alignment function. 
  *
  * @param[ref] ctx : a pointer to an alignment context structure. must be initialized with sea_init function.
  * @param[in] a : a pointer to the query sequence a. see seqreader.h for more details of query sequence formatting.
@@ -593,12 +546,16 @@ sea_res_t *sea_align(
 	uint8_t const *guide,
 	int64_t glen)
 {
-	return(sea_align_intl(ctx, a, asp, aep, b, bsp, bep, guide, glen, ALN_FW));
+	return((sea_res_t *)sea_align_intl(
+		(struct sea_context *)ctx,
+		a, asp, aep,
+		b, bsp, bep,
+		guide, glen, ALN_FW));
 }
 
 /**
  * @fn sea_align_f
- * @brief the same as sea_align.
+ * @brief (API) the same as sea_align.
  */
 sea_res_t *sea_align_f(
 	sea_t const *ctx,
@@ -611,12 +568,16 @@ sea_res_t *sea_align_f(
 	uint8_t const *guide,
 	int64_t glen)
 {
-	return(sea_align_intl(ctx, a, asp, aep, b, bsp, bep, guide, glen, ALN_FW));
+	return((sea_res_t *)sea_align_intl(
+		(struct sea_context *)ctx,
+		a, asp, aep,
+		b, bsp, bep,
+		guide, glen, ALN_FW));
 }
 
 /**
  * @fn sea_align_r
- * @brief the reverse variant of sea_align.
+ * @brief (API) the reverse variant of sea_align.
  */
 sea_res_t *sea_align_r(
 	sea_t const *ctx,
@@ -629,7 +590,11 @@ sea_res_t *sea_align_r(
 	uint8_t const *guide,
 	int64_t glen)
 {
-	return(sea_align_intl(ctx, a, asp, aep, b, bsp, bep, guide, glen, ALN_RV));
+	return((sea_res_t *)sea_align_intl(
+		(struct sea_context *)ctx,
+		a, asp, aep,
+		b, bsp, bep,
+		guide, glen, ALN_RV));
 }
 
 /**
@@ -644,10 +609,10 @@ sea_res_t *sea_align_r(
  */
 int sea_get_error_num(
 	sea_t const *ctx,
-	sea_res_t *aln)
+	sea_res_t const *aln)
 {
 	int32_t error_label = SEA_SUCCESS;
-	if(aln != NULL) {
+	if((struct sea_result *)aln != NULL) {
 		error_label = aln->score;
 	}
 	return error_label;
@@ -668,8 +633,8 @@ void sea_aln_free(
 	sea_t const *ctx,
 	sea_res_t *aln)
 {
-	if(aln != NULL) {
-		free(aln);
+	if((struct sea_result *)aln != NULL) {
+		free((struct sea_result *)aln);
 		return;
 	}
 	return;
@@ -689,11 +654,12 @@ void sea_aln_free(
 void sea_clean(
 	sea_t *ctx)
 {
-	if(ctx != NULL) {
-		if(ctx->v.pv != NULL) {
-			free(ctx->v.pv); ctx->v.pv = NULL;
+	if((struct sea_context *)ctx != NULL) {
+		if(((struct sea_context *)ctx)->v.pv != NULL) {
+			free(((struct sea_context *)ctx)->v.pv);
+			((struct sea_context *)ctx)->v.pv = NULL;
 		}
-		free(ctx);
+		free((struct sea_context *)ctx);
 		return;
 	}
 	return;

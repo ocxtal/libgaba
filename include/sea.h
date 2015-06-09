@@ -33,8 +33,8 @@
 namespace sea {
 #endif
 
-#include <stdlib.h>							/** NULL and size_t */
-#include <stdint.h>
+#include <stdlib.h>		/** NULL and size_t */
+#include <stdint.h>		/** uint8_t, int32_t, int64_t */
 
 /**
  * @enum sea_flags_pos
@@ -178,216 +178,9 @@ struct sea_result {
 };
 
 /**
- * @type sea_result_t
- *
- * @brief (deprecated) an alias to `struct sea_result'.
- */
-typedef struct sea_result 		sea_result_t;
-
-/**
  * @type sea_res_t
- *
- * @brief (API) an alias to `struct sea_result'.
  */
 typedef struct sea_result sea_res_t;
-
-/**
- * @struct sea_pos
- *
- * @brief (internal) holds a pair of (x, y)-coordinate and (p, q)-coordinate.
- */
-struct sea_pos {
-	int64_t i, j, p, q;
-};
-
-typedef struct sea_pos sea_pos_t;
-
-/**
- * @struct sea_mem
- *
- * @brief sequence reader
- */
-struct sea_mem {
-	void *sp, *ep;
-};
-
-typedef struct sea_mem sea_mem_t;
-
-/**
- * @struct sea_reader
- *
- * @brief abstract sequence reader
- */
-struct sea_reader {
-	uint8_t *p;
-	uint8_t (*pop)(
-		uint8_t const *p,
-		int64_t pos);
-	uint8_t b;
-};
-
-/**
- * @struct sea_writer
- *
- * @brief abstract sequence writer
- */
-struct sea_writer {
-	uint8_t *p;
-	int64_t pos, size;
-	int64_t (*init)(
-		uint8_t *ptr,
-		int64_t fpos,
-		int64_t rpos);
-	int64_t (*pushm)(
-		uint8_t *p,
-		int64_t pos);
-	int64_t (*pushx)(
-		uint8_t *p,
-		int64_t pos);
-	int64_t (*pushi)(
-		uint8_t *p,
-		int64_t pos);
-	int64_t (*pushd)(
-		uint8_t *p,
-		int64_t pos);
-	int64_t (*finish)(
-		uint8_t *ptr,
-		int64_t pos);
-};
-
-/**
- * @struct sea_ivec
- *
- * @brief init vector container
- */
-struct sea_ivec {
-	void *cv, *pv;				/*!< pointers to the initial vectors (should be allocated in the stack by fixed length array, or alloca) */
-	int8_t clen, plen;			/*!< the lengths of the vectors */
-	int8_t size;				/*!< the size of a cell in the vector */
-};
-typedef struct sea_ivec sea_ivec_t;
-
-/**
- * @struct sea_process
- *
- * @brief (internal) an individual alignment context.
- */
-struct sea_process {
-	struct sea_ivec v;
-	struct sea_reader a, b;		/*!< (in) sequence readers */
-	struct sea_writer l;		/*!< (inout) alignment writer */
-	struct sea_mem dp, dr;		/*!< (ref) a dynamic programming matrix */
-	void *pdp;					/*!< dynamic programming matrix */
-	uint8_t *pdr;				/*!< direction array */
-	int64_t asp, bsp;			/*!< the start position on the sequences */
-	int64_t aep, bep;			/*!< the end position on the sequences */
-	int64_t alim, blim;			/*!< the limit coordinate of the band */
-	int64_t i, j, p, q;			/*!< temporary */
-	int64_t mi, mj, mp, mq;		/*!< maximum score position */
-	int64_t size;				/*!< default malloc size */
-	int32_t max;				/*!< (inout) current maximum score */
-};
-typedef struct sea_process sea_proc_t;
-
-/**
- * @struct sea_consts
- *
- * @brief (internal) constant container.
- */
-struct sea_consts {
-	struct sea_aln_funcs const *f;
-
-	int8_t m;			/*!< a dynamic programming cost: match */
-	int8_t x;			/*!< a dynamic programming cost: mismatch */
-	int8_t gi;			/*!< a dynamic programming cost: gap open (in the affine-gap cost) or gap cost per base (in the linear-gap cost) */
-	int8_t ge;			/*!< a dynamic programming cost: gap extension */
-
-	int8_t k;			/*!< heuristic search length stretch ratio. (default is k = 4) */
-	int8_t bw;			/*!< the width of the band. */
-	int16_t tx;			/*!< xdrop threshold. see sea_init for more details */
-	int16_t tc;			/*!< chain threshold */
-	int16_t tb; 		/*!< balloon termination threshold. */
-	int32_t min;		/*!< (in) lower bound of the score */
-	uint32_t alg;		/*!< algorithm flag (same as (ctx->flags) & SEA_FLAG_MASK_ALG) */
-
-	size_t isize;		/*!< initial matsize */
-	size_t memaln;		/*!< memory alignment size (default: 32) */
-};
-typedef struct sea_consts sea_consts_t;
-
-
-/**
- * @struct sea_aln_funcs
- *
- * @brief (internal) a struct which holds alignment function pointers.
- */
-struct sea_aln_funcs {
-	int32_t (*twig)(			/*!< diag 8bit */
-		struct sea_consts const *ctx,
-		struct sea_process *proc);
-	int32_t (*branch)(			/*!< diag 16bit */
-		struct sea_consts const *ctx,
-		struct sea_process *proc);
-	int32_t (*trunk)(			/*!< diag 32bit */
-		struct sea_consts const *ctx,
-		struct sea_process *proc);
-	int32_t (*balloon)(			/*!< 32bit balloon algorithm */
-		struct sea_consts const *ctx,
-		struct sea_process *proc);
-	int32_t (*bulge)(			/*!< 32bit bulge (guided balloon) algorithm */
-		struct sea_consts const *ctx,
-		struct sea_process *proc);
-	int32_t (*cap)(				/*!< 32bit cap algorithm */
-		struct sea_consts const *ctx,
-		struct sea_process *proc);
-};
-
-/**
- * @struct sea_io_funcs
- * @brief (internal) a struct which holds io function pointers.
- */
-struct sea_io_funcs {
-	uint8_t (*popa)(			/*!< retrieve a character from sequence a */
-		uint8_t const *ptr,
-		int64_t pos);
-	uint8_t (*popb)(
-		uint8_t const *ptr,
-		int64_t pos);
-	int64_t (*init)(			/*!< forward alnwriter */
-		uint8_t *ptr,
-		int64_t fpos,
-		int64_t rpos);
-	int64_t (*pushm)(
-		uint8_t *ptr,
-		int64_t pos);
-	int64_t (*pushx)(
-		uint8_t *ptr,
-		int64_t pos);
-	int64_t (*pushi)(
-		uint8_t *ptr,
-		int64_t pos);
-	int64_t (*pushd)(
-		uint8_t *ptr,
-		int64_t pos);
-	int64_t (*finish)(
-		uint8_t *ptr,
-		int64_t pos);
-};
-
-/**
- * @struct sea_context
- *
- * @brief (API) an algorithmic context.
- *
- * @sa sea_init, sea_clean
- */
-struct sea_context {
-	struct sea_aln_funcs dynamic, guided;
-	struct sea_io_funcs fw, rv;
-	struct sea_ivec v;
-	struct sea_consts k;
-	uint32_t flags;		/*!< a bitfield of option flags */
-};
 
 /**
  * @type sea_t
@@ -500,7 +293,7 @@ sea_res_t *sea_align_r(
  */
 int32_t sea_get_error_num(
 	sea_t const *ctx,
-	sea_res_t *aln);
+	sea_res_t const *aln);
 
 /**
  * @fn sea_aln_free
