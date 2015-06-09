@@ -123,11 +123,9 @@ typedef struct _dir dir_t;
 static int32_t const _dp = DP;
 
 #if DP == DYNAMIC
-	#warning "dynamic"
 	#define dir_next 			dir_next_dynamic
 	#define dir_check_term		dir_check_term_dynamic
 #elif DP == GUIDED
-	#warning "guided"
 	#define dir_next 			dir_next_guided
 	#define dir_check_term 		dir_check_term_guided
 #else /* #if DP == DYNAMIC */
