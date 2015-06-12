@@ -37,7 +37,7 @@
  */
 #define naive_linear_topq(r, c)		( - (dir(r) == LEFT) )
 #define naive_linear_leftq(r, c)	( dir(r) == TOP )
-#define naive_linear_topleftq(r, c)	( - (int)(dir2(r) == LL) + (int)(dir2(r) == TT) )
+#define naive_linear_topleftq(r, c)	( - (dir2(r) == LL) + (dir2(r) == TT) )
 #define naive_linear_top(r, c)		( -BW + naive_linear_topq(r, c) )
 #define naive_linear_left(r, c)		( -BW + naive_linear_leftq(r, c) )
 #define naive_linear_topleft(r, c)	( -2 * BW + naive_linear_topleftq(r, c) )
