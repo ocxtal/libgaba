@@ -142,7 +142,7 @@ enum sea_flags_aln {
  */
 enum sea_error {
 	SEA_SUCCESS 				=  0,	/*!< success!! */
-	SEA_TERMINATED				=  1,	/*!< success (internal code) */
+	SEA_TERMINATED				=  1,	/*!< (internal code) success */
 	SEA_ERROR 					= -1,	/*!< unknown error */
 	/** errors which occur in an alignment function */
 	SEA_ERROR_INVALID_MEM 		= -2,	/*!< invalid pointer to memory */
@@ -154,6 +154,18 @@ enum sea_error {
 	/** errors which occur in an initialization function */
 	SEA_ERROR_UNSUPPORTED_ALG 	= -8,	/*!< unsupported combination of algorithm and processor options. use naive implementations instead. */
 	SEA_ERROR_INVALID_COST 		= -9	/*!< invalid alignment cost */
+};
+
+/**
+ * @enum sea_direction
+ */
+enum sea_direction {
+	SEA_UE_LEFT = 0x00,							/** 0b00 */
+	SEA_UE_TOP  = 0x01,							/** 0b01 */
+	SEA_LE_LEFT = SEA_UE_LEFT<<1,				/** 0b00 */
+	SEA_LE_TOP  = SEA_UE_TOP<<1,				/** 0b10 */
+	SEA_LEFT    = SEA_UE_LEFT | SEA_LE_LEFT,	/** 0b00 */
+	SEA_TOP     = SEA_UE_TOP | SEA_LE_TOP		/** 0b11 */
 };
 
 

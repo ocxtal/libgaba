@@ -621,18 +621,18 @@ enum _ALN_DIR {
  * @brief constants for direction flags.
  */
 enum _DIR {
-	LEFT 	= 0,
-	TOP 	= 0x01
+	LEFT 	= SEA_UE_LEFT<<2,
+	TOP 	= SEA_UE_TOP<<2
 };
 
 /**
  * @enum _DIR2
  */
 enum _DIR2 {
-	LL = (LEFT<<0) | (LEFT<<1),
-	LT = (LEFT<<0) | (TOP<<1),
-	TL = (TOP<<0) | (LEFT<<1),
-	TT = (TOP<<0) | (TOP<<1)
+	LL = (SEA_UE_LEFT<<0) | (SEA_UE_LEFT<<2),
+	LT = (SEA_UE_LEFT<<0) | (SEA_UE_TOP<<2),
+	TL = (SEA_UE_TOP<<0) | (SEA_UE_LEFT<<2),
+	TT = (SEA_UE_TOP<<0) | (SEA_UE_TOP<<2)
 };
 
 /**

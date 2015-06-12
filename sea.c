@@ -399,7 +399,7 @@ struct sea_result *sea_align_intl(
 		r->score = 0;
 		r->aln = (void *)(r + 1);
 		*((uint8_t *)r->aln) = '\0';
-		r->ctx = ctx;
+//		r->ctx = ctx;
 		return(r);
 	}
 
@@ -490,7 +490,7 @@ struct sea_result *sea_align_intl(
 	r->alen = c.aep;
 	r->blen = c.bep;
 	r->score = c.max;
-	r->ctx = ctx;
+//	r->ctx = ctx;
 
 	/* clean DP matrix */
 //	AFREE(iv, 2*k.bw);
@@ -514,7 +514,7 @@ _sea_error_handler:
 	r->score = error_label;
 	r->aln = (void *)(r + 1);
 	*((uint8_t *)r->aln) = '\0';
-	r->ctx = ctx;
+//	r->ctx = ctx;
 	return(r);
 }
 

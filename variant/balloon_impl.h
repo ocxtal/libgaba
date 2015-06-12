@@ -50,7 +50,7 @@
  * @brief determine the next direction in the dynamic banded algorithm.
  */
 #define balloon_linear_dir_exp_top(r, c) ( \
-	(pc[0] > max - k.tb) ? LEFT : TOP \
+	(pc[0] > max - k.tb) ? SEA_UE_LEFT : SEA_UE_TOP \
 )
 #define balloon_linear_dir_exp(r, c) 	balloon_linear_dir_exp_top(r, c)
 
@@ -58,7 +58,7 @@
  * @macro balloon_linear_dir_exp_bottom
  */
 #define balloon_linear_dir_exp_bottom(r, c) ( \
-	(pc[eq-1] > max - k.tb) ? TOP : LEFT \
+	(pc[eq-1] > max - k.tb) ? SEA_LE_TOP : SEA_LE_LEFT \
 )
 
 /**
@@ -85,7 +85,8 @@
 	} \
 	*((cell_t *)c.pdp) = c.v.clen; \
 	c.pdp += sizeof(cell_t); \
-	balloon_linear_dir_next(r, b, c); \
+	/*balloon_linear_dir_next(r, b, c); */ \
+	dir_next(r, c); \
 	pp = pc; \
 	pc = c.pdp; \
 	for(c.q = 0, eq = c.v.clen; c.q < eq; c.q++) { \
@@ -100,7 +101,8 @@
  * @macro balloon_linear_fill_former_body
  */
 #define balloon_linear_fill_former_body(c, k, r) { \
-	balloon_linear_dir_next(r, b, c); \
+	/*balloon_linear_dir_next(r, b, c); */ \
+	dir_next(r, c); \
 }
 
 /**
@@ -130,11 +132,11 @@
 		t = pc[c.q + balloon_linear_topq(r, c)] + k.gi; \
 		l = pc[c.q + balloon_linear_leftq(r, c)] + k.gi; \
 		if(c.q == 0) { \
-			if(dir(r) == LEFT) { t = CELL_MIN; } \
-			if(dir2(r) == LL) { d = CELL_MIN; } \
+			if(dir_ue(r) == LEFT) { t = CELL_MIN; } \
+			if(dir2_ue(r) == LL) { d = CELL_MIN; } \
 		} else if(c.q == eq-1) { \
-			if(dir(b) == TOP) { l = CELL_MIN; } \
-			if(dir2(b) == TT) { d = CELL_MIN; } \
+			if(dir_le(b) == TOP) { l = CELL_MIN; } \
+			if(dir2_le(b) == TT) { d = CELL_MIN; } \
 		} \
 		*((cell_t *)c.pdp) = d = MAX4(d, t, l, k.min); \
 		c.pdp += sizeof(cell_t); \

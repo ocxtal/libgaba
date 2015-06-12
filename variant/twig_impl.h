@@ -61,7 +61,8 @@
  *
  * sseレジスタにアクセスできないといけない。
  */
-#define twig_linear_dir_exp(r, c)				branch_linear_dir_exp(r, c)
+#define twig_linear_dir_exp_top(r, c)			branch_linear_dir_exp_top(r, c)
+#define twig_linear_dir_exp_bottom(r, c)		branch_linear_dir_exp_bottom(r, c)
 
 /**
  * @macro twig_linear_fill_decl

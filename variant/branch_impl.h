@@ -58,9 +58,10 @@
  * @macro branch_linear_dir_exp
  * @brief determines the next direction of the lane in the dynamic algorithm.
  */
-#define branch_linear_dir_exp(r, c) ( \
-	(VEC_MSB(v) > VEC_LSB(v)) ? TOP : LEFT \
+#define branch_linear_dir_exp_top(r, c) ( \
+	(VEC_MSB(v) > VEC_LSB(v)) ? SEA_TOP : SEA_LEFT \
 )
+#define branch_linear_dir_exp_bottom(r, c) ( 0 )
 
 /**
  * @macro branch_linear_fill_decl

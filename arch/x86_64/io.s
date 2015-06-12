@@ -627,7 +627,7 @@ __init_dir_r:
 	.globl __pushm_dir_r
 _pushm_dir_r:
 __pushm_dir_r:
-	movw $1, (%rdi, %rsi)
+	movw $3, (%rdi, %rsi)
 	movq %rsi, %rax
 	addq $2, %rax
 	ret
@@ -636,7 +636,7 @@ __pushm_dir_r:
 	.globl __pushx_dir_r
 _pushx_dir_r:
 __pushx_dir_r:
-	movw $1, (%rdi, %rsi)
+	movw $3, (%rdi, %rsi)
 	movq %rsi, %rax
 	addq $2, %rax
 	ret
@@ -645,7 +645,7 @@ __pushx_dir_r:
 	.globl __pushi_dir_r
 _pushi_dir_r:
 __pushi_dir_r:
-	movb $1, (%rdi, %rsi)
+	movb $3, (%rdi, %rsi)
 	movq %rsi, %rax
 	addq $1, %rax
 	ret

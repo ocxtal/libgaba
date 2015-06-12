@@ -34,7 +34,8 @@
  * @brief direction flag container.
  */
 struct _dir {
-	uint8_t d, d2;
+//	uint8_t d, d2;
+	uint8_t d2;
 };
 
 typedef struct _dir dir_t;
@@ -44,45 +45,84 @@ typedef struct _dir dir_t;
  * @brief initialize _dir struct
  */
 #define dir_init(r, dir) { \
-	(r).d = (dir); \
+	/*(r).d = (dir);*/ \
 	(r).d2 = (dir)<<1; \
 }
+
+/**
+ * @macro dir_ue
+ * @brief direction of the upper edge
+ */
+#define dir_ue(r)	( 0x04 & (r).d2 )
+
+/**
+ * @macro dir2_ue
+ * @brief 2-bit direction flag of the upper edge
+ */
+#define dir2_ue(r) 	( 0x05 & (r).d2 )
+
+/**
+ * @macro dir_le
+ * @brief direction of the upper edge
+ */
+#define dir_le(r)	( (0x08 & (r).d2)>>1 )
+
+/**
+ * @macro dir2_le
+ * @brief 2-bit direction flag of the upper edge
+ */
+#define dir2_le(r) 	( (0x0a & (r).d2)>>1 )
 
 /**
  * @macro dir
  * @brief extract the most recent direction flag
  */
-#define dir(r)		( (r).d )
+#define dir(r)		dir_ue(r)
 
 /**
  * @macro dir2
  * @brief extract the most recent 2-bit direction flag
  */
-#define dir2(r) 	( (r).d2 )
+#define dir2(r) 	dir2_ue(r)
 
 /**
  * @macro dir_next_dynamic
  * @brief set 2-bit direction flag from external expression.
  *
  * @detail
- * dir_exp must be aliased to a direction determiner.
+ * dir_exp_top and dir_exp_bottom must be aliased to a direction determiner.
  */
+#define dir_next_dynamic(r, c) { \
+	uint8_t d = dir_exp_top(r, c) | dir_exp_bottom(r, c); \
+	debug("dynamic band: d(%d)", d); \
+	(c).pdr[++(c).p] = d; \
+	(r).d2 = (d<<2) | ((r).d2>>2); \
+}
+/*
 #define dir_next_dynamic(r, c) { \
 	(r).d = dir_exp(r, c); \
 	debug("dynamic band: d(%d)", (r).d); \
 	(c).pdr[++(c).p] = (r).d; \
-	(r).d2 = ((r).d<<1) | ((r).d2>>1); \
+	(r).d2 = ((r).d<<2) | ((r).d2>>2); \
 }
+*/
 
 /**
  * @macro dir_next_guided
  * @brief set 2-bit direction flag from direction array.
  */
 #define dir_next_guided(r, c) { \
+	uint8_t d = (c).pdr[++(c).p]; \
+	debug("guided band: d(%d)", d); \
+	(r).d2 = (d<<2) | ((r).d2>>2); \
+}
+/*
+#define dir_next_guided(r, c) { \
 	(r).d = (c).pdr[++(c).p]; \
 	debug("guided band: d(%d)", (r).d); \
-	(r).d2 = ((r).d<<1) | ((r).d2>>1); \
+	(r).d2 = ((r).d<<2) | ((r).d2>>2); \
 }
+*/
 
 /**
  * @macro dir_check_term_dynamic
@@ -99,7 +139,7 @@ typedef struct _dir dir_t;
  */
 #define dir_term(r, c) { \
 	int8_t d = (c).pdr[(c).p]; \
-	(r).d = LEFT; \
+/*	(r).d = LEFT; */ \
 	(r).d2 = d; \
 }
 
@@ -109,8 +149,8 @@ typedef struct _dir dir_t;
  */
 #define dir_prev(r, c) { \
 	int8_t d = (c).pdr[--(c).p]; \
-	(r).d = 0x01 & (r).d2; \
-	(r).d2 = 0x03 & (((r).d2<<1) | d); \
+/*	(r).d = 0x01 & (r).d2; */ \
+	(r).d2 = 0x0f & (((r).d2<<2) | d); \
 }
 
 /**
@@ -160,7 +200,11 @@ static int32_t const _cost = COST;
 #endif /* #if COST == LINEAR */
 
 #define bpl					LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _bpl)
-#define dir_exp				LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _dir_exp)
+#define topq				LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _topq)
+#define leftq				LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _leftq)
+#define topleftq			LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _topleftq)
+#define dir_exp_top 		LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _dir_exp_top)
+#define dir_exp_bottom 		LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _dir_exp_bottom)
 #define fill_decl			LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _fill_decl)
 #define fill_init			LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _fill_init)
 #define fill_former_body	LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _fill_former_body)

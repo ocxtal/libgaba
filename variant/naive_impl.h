@@ -35,9 +35,9 @@
  * @macro (internal) naive_linear_topq, naive_linear_leftq, ...
  * @brief coordinate calculation helper macros
  */
-#define naive_linear_topq(r, c)		( - !dir(r) )
-#define naive_linear_leftq(r, c)	( dir(r) )
-#define naive_linear_topleftq(r, c)	( - !dir(r) + (dir2(r) & 0x01) )
+#define naive_linear_topq(r, c)		( - (dir(r) == LEFT) )
+#define naive_linear_leftq(r, c)	( dir(r) == TOP )
+#define naive_linear_topleftq(r, c)	( - (int)(dir2(r) == LL) + (int)(dir2(r) == TT) )
 #define naive_linear_top(r, c)		( -BW + naive_linear_topq(r, c) )
 #define naive_linear_left(r, c)		( -BW + naive_linear_leftq(r, c) )
 #define naive_linear_topleft(r, c)	( -2 * BW + naive_linear_topleftq(r, c) )
@@ -53,12 +53,14 @@
  * @macro naive_linear_dir_exp, naive_affine_dir_exp
  * @brief determines the next direction in the dynamic banded algorithm.
  */
-#define naive_linear_dir_exp(r, c) ( \
-	*((cell_t *)c.pdp-1) > *((cell_t *)c.pdp-BW) ? TOP : LEFT \
+#define naive_linear_dir_exp_top(r, c) ( \
+	*((cell_t *)c.pdp-1) > *((cell_t *)c.pdp-BW) ? SEA_TOP : SEA_LEFT \
 )
+#define naive_linear_dir_exp_bottom(r, c) ( 0 )
 #define naive_affine_dir_exp(r, c) ( \
-	*((cell_t *)c.pdp-2*BW-1) > *((cell_t *)c.pdp-3*BW) ? TOP : LEFT \
+	*((cell_t *)c.pdp-2*BW-1) > *((cell_t *)c.pdp-3*BW) ? SEA_TOP : SEA_LEFT \
 )
+#define naive_affine_dir_exp_bottom(r, c) ( 0 )
 
 /**
  * @macro naive_linear_fill_decl

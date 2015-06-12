@@ -33,7 +33,8 @@
  * @macro cap_linear_dir_exp
  * @brief determines the direction in the dynamic algorithm
  */
-#define cap_linear_dir_exp(r, c)	( (c.p & 0x01) == 0 ? TOP : LEFT )
+#define cap_linear_dir_exp_top(r, c)	( (c.p & 0x01) == 0 ? SEA_TOP : SEA_LEFT )
+#define cap_linear_dir_exp_bottom(r, c)	( 0 )
 
 /**
  * @macro cap_linear_fill_decl

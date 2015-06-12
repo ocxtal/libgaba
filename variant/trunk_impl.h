@@ -60,15 +60,16 @@
  * @macro trunk_linear_dir_exp
  * @brief determines the next direction of the lane in the dynamic algorithm.
  */
-#define trunk_linear_dir_exp(r, c) ( \
+#define trunk_linear_dir_exp_top(r, c) ( \
 	scl += ((dir(r) == TOP \
 		? VEC_MSB(dv) \
 		: VEC_MSB(dh)) + k.gi), \
 	scu += ((dir(r) == TOP \
 		? VEC_LSB(dv) \
 		: VEC_LSB(dh)) + k.gi), \
-	(scu > scl) ? LEFT : TOP \
+	(scl > scu) ? SEA_TOP : SEA_LEFT \
 )
+#define trunk_linear_dir_exp_bottom(r, c) ( 0 )
 
 /**
  * @macro trunk_linear_fill_decl

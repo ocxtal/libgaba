@@ -239,6 +239,7 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 		if(sp == 0) {
 			while(c.i > c.asp && c.j > c.bsp) {
 				debug("%lld, %lld, %lld, %lld", c.i, c.j, c.p, c.q);
+				debug("topleftq(%d), dir2(%d)", topleftq(r, c), dir2(r));
 				trace_body(c, k, r);
 			}
 			while(c.i > c.asp) { c.i--; wr_pushd(c.l); }
@@ -246,6 +247,7 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 		} else {
 			while(c.p > sp) {
 				debug("%lld, %lld, %lld, %lld", c.i, c.j, c.p, c.q);
+				debug("topleftq(%d), dir2(%d)", topleftq(r, c), dir2(r));
 				trace_body(c, k, r);
 			}
 		}
