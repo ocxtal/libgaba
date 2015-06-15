@@ -54,9 +54,9 @@ char *mseq(char const *seq, int x, int ins, int del)
 
 int main(int argc, char *argv[])
 {
-	sea_t *d, *c;
-	sea_res_t *dres, *cres, *res;
-	char *a, *b;
+	sea_t *d = NULL, *c = NULL;
+	sea_res_t *dres = NULL, *cres = NULL, *res = NULL;
+	char *a, *b, *at, *bt;
 	// char const *a = "1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890";
 	// char const *b = "1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890";
 	int len = 3000;
@@ -75,14 +75,18 @@ int main(int argc, char *argv[])
 	srand(s);
 	printf("%lu\n", s);
 
-	a = rseq(len);
+	a = rseq(len * 9 / 10);
 	b = mseq(a, 10, 40, 40);
+	at = rseq(len / 10);
+	bt = rseq(len / 10);
+	a = realloc(a, 2*len); strcat(a, at); free(at);
+	b = realloc(b, 2*len); strcat(b, bt); free(bt);
 
 	printf("%s\n%s\n", a, b);
 
 	int lm = 5, rm = 5;
 
-	dres = sea_align(d,
+/*	dres = sea_align(d,
 		a, lm, strlen(a)-rm,
 		b, lm, strlen(b)-rm,
 		NULL, 0);
@@ -91,13 +95,13 @@ int main(int argc, char *argv[])
 		a, lm, strlen(a)-rm,
 		b, lm, strlen(b)-rm,
 		dres->aln, dres->len);
-
+*/
 	res = sea_align(c,
 		a, lm, strlen(a)-rm,
 		b, lm, strlen(b)-rm,
 		NULL, 0);
 
-	printf("%d, %lld, %s\n", cres->score, cres->len, cres->aln);
+	// printf("%d, %lld, %s\n", cres->score, cres->len, cres->aln);
 	printf("%d, %lld, %s\n", res->score, res->len, res->aln);
 
 	free(a);

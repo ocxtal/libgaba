@@ -34,7 +34,6 @@
  * @brief direction flag container.
  */
 struct _dir {
-//	uint8_t d, d2;
 	uint8_t d2;
 };
 
@@ -45,7 +44,6 @@ typedef struct _dir dir_t;
  * @brief initialize _dir struct
  */
 #define dir_init(r, dir) { \
-	/*(r).d = (dir);*/ \
 	(r).d2 = (dir)<<1; \
 }
 
@@ -98,14 +96,6 @@ typedef struct _dir dir_t;
 	(c).pdr[++(c).p] = d; \
 	(r).d2 = (d<<2) | ((r).d2>>2); \
 }
-/*
-#define dir_next_dynamic(r, c) { \
-	(r).d = dir_exp(r, c); \
-	debug("dynamic band: d(%d)", (r).d); \
-	(c).pdr[++(c).p] = (r).d; \
-	(r).d2 = ((r).d<<2) | ((r).d2>>2); \
-}
-*/
 
 /**
  * @macro dir_next_guided
@@ -116,13 +106,6 @@ typedef struct _dir dir_t;
 	debug("guided band: d(%d)", d); \
 	(r).d2 = (d<<2) | ((r).d2>>2); \
 }
-/*
-#define dir_next_guided(r, c) { \
-	(r).d = (c).pdr[++(c).p]; \
-	debug("guided band: d(%d)", (r).d); \
-	(r).d2 = ((r).d<<2) | ((r).d2>>2); \
-}
-*/
 
 /**
  * @macro dir_check_term_dynamic
@@ -139,7 +122,6 @@ typedef struct _dir dir_t;
  */
 #define dir_term(r, c) { \
 	int8_t d = (c).pdr[(c).p]; \
-/*	(r).d = LEFT; */ \
 	(r).d2 = d; \
 }
 

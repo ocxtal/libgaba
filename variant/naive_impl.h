@@ -167,7 +167,7 @@
  */
 #define naive_linear_fill_check_alt(c, k, r) ( \
 	   (*((cell_t *)c.pdp-BW) > *((cell_t *)c.pdp-BW/2) - k.tc) \
-	|| (*((cell_t *)c.pdp-1)    > *((cell_t *)c.pdp-BW/2) - k.tc) \
+	|| (*((cell_t *)c.pdp-1)  > *((cell_t *)c.pdp-BW/2) - k.tc) \
 )
 
 /**
@@ -203,20 +203,24 @@
 
 /**
  * @macro naive_linear_search_terminal
+ * 無条件に(mi, mj)を上書きして良い。
  */
-#define naive_linear_search_terminal(c, k) { \
+#define naive_linear_search_terminal(c, k, t) { \
 	c.mi = c.aep; \
 	c.mj = c.bep; \
-	c.mp = COP(c.mi, c.mj, BW) - COP(c.asp, c.bsp, BW); \
-	c.mq = COQ(c.mi, c.mj, BW) - COQ(c.i, c.j, BW); \
+	c.mp = COP(c.mi-c.asp, c.mj-c.bsp, BW) - COP(c.asp, c.bsp, BW); \
+	c.mq = COQ(c.mi-c.asp, c.mj-c.bsp, BW) - COQ(t.i-c.asp, t.j-c.bsp, BW); \
 }
 
 /**
  * @macro naive_linear_search_max_score
+ * tmaxを見て上書きするかどうか決める。
  */
-#define naive_linear_search_max_score(c, k) { \
-	c.aep = c.mi; \
-	c.bep = c.mj; \
+#define naive_linear_search_max_score(c, k, t) { \
+	if(t.max > c.max) { \
+		c.mi = t.mi; \
+		c.mj = t.mj; \
+	} \
 }
 
 /**

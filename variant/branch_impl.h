@@ -225,6 +225,8 @@
 		} \
 		if(VEC_LSB(maxv) > c.max) { \
 			c.max = VEC_LSB(maxv); \
+			c.mi = c.i; c.mj = c.j; \
+			c.mp = c.p; c.mq = c.q; \
 		} \
 	} \
 	VEC_STORE(c.pdp, pv); \
@@ -253,39 +255,36 @@
 /**
  * @macro branch_linear_search_terminal
  */
-#define branch_linear_search_terminal(c, k) 	naive_linear_search_terminal(c, k)
+#define branch_linear_search_terminal(c, k, t) 	naive_linear_search_terminal(c, k, t)
 
 /**
  * @macro branch_linear_search_max_score
  */
-#define branch_linear_search_max_score(c, k) { \
-	int64_t i, j, p, q; \
-	cell_t *pl = pb + ADDR(c.p-sp+1, -BW/2, BW); \
-	cell_t *pt; \
-	dir_t r; \
-	if(c.max != CELL_MAX && c.max != 0) { \
-		p = 0; \
-		for(q = -BW/2; q < BW/2; q++, pl++) { \
-			if(*pl == c.max) { \
-				c.mp = c.p;\
-				dir_term(r, c); \
-				i = c.i - q; \
-				j = c.j + q; \
-				for(pt = pl-BW; *pt != c.max && c.mp > p; pt -= BW) { \
-					dir_prev(r, c); \
-					if(dir(r) == TOP) { j--; } else { i--; } \
-				} \
-				if(c.mp > p) { \
-					c.mi = i; c.mj = j; \
-					p = c.mp; c.mq = q; \
-				} \
+#define branch_linear_search_max_score(c, k, t) { \
+	if(t.max > c.max && t.max != CELL_MAX) { \
+		int64_t i, j; \
+		int64_t ep = t.p; \
+		cell_t *pl = pb + ADDR(ep-sp+1, -BW/2, BW); \
+		cell_t *pt; \
+		dir_t r; \
+		c.max = t.max; \
+		c.mp = 0; \
+		for(t.q = -BW/2; t.q < BW/2; t.q++, pl++) { \
+			if(*pl != t.max) { continue; } \
+			t.p = ep; \
+			dir_term(r, c); \
+			i = t.i - t.q; \
+			j = t.j + t.q; \
+			for(pt = pl-BW; *pt != t.max && t.p > t.mp; pt -= BW) { \
+				dir_prev(r, c); \
+				if(dir(r) == TOP) { j--; } else { i--; } \
+			} \
+			if(t.p > c.mp) { \
+				c.mi = i; c.mj = j; \
+				c.mp = t.p; c.mq = t.q; \
 			} \
 		} \
-	} else { \
-		c.mi = c.mj = c.mp = c.mq = 0; \
 	} \
-	c.aep = c.mi; \
-	c.bep = c.mj; \
 }
 
 /**

@@ -76,7 +76,7 @@
  */
 #define trunk_linear_fill_decl(c, k, r) \
 	dir_t r; \
-	int32_t score, max, scu, scl; \
+	int32_t score, scu, scl; \
 	DECLARE_VEC_CELL_REG(mggv); \
 	DECLARE_VEC_CELL_REG(xggv); \
 	DECLARE_VEC_CHAR_REG(wq); \
@@ -115,7 +115,7 @@
 		VEC_INSERT_LSB(dv, 0); \
 	} \
 	scu = _read(c.v.cv, 0, c.v.size); \
-	max = score = _read(c.v.cv, BW/2, c.v.size); \
+	c.max = score = _read(c.v.cv, BW/2, c.v.size); \
 	scl = _read(c.v.cv, BW-1, c.v.size); \
 	c.pdp += trunk_linear_bpl(c); \
 	VEC_STORE_DVDH(c.pdp, dv, dh); \
@@ -169,8 +169,8 @@
 	VEC_SUB(dh, tmp, dv); \
 	VEC_ASSIGN(dv, dv_); \
 	VEC_STORE_DVDH(c.pdp, dv, dh); \
-	if(k.alg != NW && score >= max) { \
-		max = score; \
+	if(k.alg != NW && score >= c.max) { \
+		c.max = score; \
 		c.mi = c.i; c.mj = c.j; \
 		c.mp = COP(c.mi, c.mj, BW) - COP(c.asp, c.bsp, BW); c.mq = 0; \
 	} \
@@ -183,7 +183,7 @@
 	score += ((dir(r) == TOP \
 		? VEC_CENTER(dv) \
 		: VEC_CENTER(dh)) + k.gi), \
-	k.alg == XSEA && score + k.tx - max < 0 \
+	k.alg == XSEA && score + k.tx - c.max < 0 \
 )
 
 /**
@@ -221,7 +221,7 @@
 	c.pdp += sizeof(int32_t); \
 	*((int32_t *)c.pdp) = scl; \
 	c.pdp += sizeof(int32_t); \
-	*((int32_t *)c.pdp) = max; \
+	*((int32_t *)c.pdp) = c.max; \
 	c.pdp += sizeof(int32_t); \
 	c.pdp += (trunk_linear_bpl(c) - sizeof(int32_t) * 4); \
 }
@@ -241,8 +241,8 @@
 #define trunk_linear_chain_push_ivec(c, k) { \
 	int16_t psc, csc; \
 	cell_t *p = (cell_t *)c.pdp - 3*BW; \
-	debug("compensate max: c.max(%d), base(%d)", c.max, *((int32_t *)((cell_t *)c.pdp - BW))); \
-	c.max -= *((int32_t *)((cell_t *)c.pdp - BW)); \
+	/*debug("compensate max: c.max(%d), base(%d)", c.max, *((int32_t *)((cell_t *)c.pdp - BW)));*/ \
+	/*c.max -= *((int32_t *)((cell_t *)c.pdp - BW));*/ \
 	c.i += BW/2; \
 	c.j -= BW/2; \
 	psc = -k.gi - *(p + BW) - *p; \
@@ -278,19 +278,76 @@
 /**
  * @macro trunk_linear_search_terminal
  */
-#define trunk_linear_search_terminal(c, k) { \
+#define trunk_linear_search_terminal(c, k, t) { \
+	dir_t r; \
+	cell_t *psc = pb + ADDR(t.p - sp, 0, BW); \
+	int64_t sc = pb[ADDR(t.p - sp + 1, -BW/2 + 1, BW)]; /** score */ \
 	c.mi = c.aep; \
 	c.mj = c.bep; \
 	c.mp = COP(c.mi, c.mj, BW) - COP(c.asp, c.bsp, BW); \
-	c.mq = COQ(c.mi, c.mj, BW) - COQ(c.i, c.j, BW); \
+	c.mq = COQ(c.mi, c.mj, BW) - COQ(t.i, t.j, BW); /** COP(mi, mj) == COP(i, j)でなければならない */ \
+	c.p = t.p; c.q = t.q; \
+	dir_term(r, c); \
+	while(c.p > c.mp) { \
+		dir_prev(r, c); \
+		sc -= (dir(r) == TOP) ? DV(psc, k.gi) : DH(psc, k.gi); \
+		psc -= trunk_linear_bpl(c); \
+	} \
+	while(c.q < c.mq) { \
+		sc += (DV(psc+1, k.gi) - DH(psc, k.gi)); \
+		psc++; c.q++; \
+	} \
+	while(c.q > c.mq) { \
+		sc += (DH(psc-1, k.gi) - DV(psc, k.gi)); \
+		psc--; c.q--; \
+	} \
 }
 
 /**
  * @macro trunk_linear_search_max_score
+ * tmaxを見て上書きするか決める。
+ * t: chainのときにreserveしたもの。fill-inの直後の状態
+ * c: chainのあと。capなどで処理されたものが入っている。
+ * b: chainの後の状態をreserveしたもの。
+ *
+ * つまり、bにまずバックアップ -> cに初期状態をセットし、tを調整
+ * -> chain -> tを元に復元
  */
-#define trunk_linear_search_max_score(c, k) { \
-	c.aep = c.mi; \
-	c.bep = c.mj; \
+#define trunk_linear_search_max_score(c, k, t) { \
+	if(t.max > c.max - (k.m - 2*k.gi)*BW/2) { \
+		dir_t r; \
+		cell_t *psc = pb + ADDR(t.p - sp, 0, BW); \
+		struct sea_chain_resv b = *((struct sea_chain_resv *)(&c.pdp)); \
+		*((struct sea_chain_resv *)(&c.pdp)) = t; \
+		t.mp = MAX2(t.mp + BW * (k.m - 2*k.gi) / (2 * k.x), sp); \
+		t.mq = 0; \
+		dir_term(r, c); \
+		while(c.p > t.mp) { \
+			dir_prev(r, c); \
+			t.max -= (dir(r) == TOP) ? DV(psc, k.gi) : DH(psc, k.gi); \
+			if(dir(r) == TOP) { c.j--; } else { c.i--; } \
+			psc -= trunk_linear_bpl(c); \
+		} \
+		/** ここで(i, j)はsearch開始座標 / (mi, mj)は0にセットする */ \
+		{ \
+			int64_t scu = 0, score = 0, scl = 0; \
+			c.max = 0; \
+			DECLARE_VEC_CELL_REG(dv); \
+			DECLARE_VEC_CELL_REG(dh); \
+			DECLARE_VEC_CELL_REG(tmp); \
+			VEC_LOAD_DVDH(c.pdp, dv, dh); \
+			trunk_linear_fill_finish(c, k, r); \
+			trunk_linear_chain_push_ivec(c, k); \
+		} \
+		t = *((struct sea_chain_resv *)(&c.pdp)); \
+		k.f->branch(&k, &c); \
+		if(c.max + t.max > b.max) { \
+			c.max += t.max; \
+			c.mp += t.mp; c.mq += t.mq; \
+		} else { \
+			*((struct sea_chain_resv *)(&c.pdp)) = b; \
+		} \
+	} \
 }
 
 /**

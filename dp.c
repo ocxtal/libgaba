@@ -44,6 +44,7 @@
 #include <stdlib.h>				/** for `NULL' */
 #include <string.h>				/** for memcpy */
 #include <stdint.h>				/** int8_t, int16_t, ... */
+#include <stddef.h>				/** offsetof */
 #include "include/sea.h"		/** global declarations */
 #include "util/util.h"			/** internal declarations */
 #include "variant/variant.h"	/** dynamic programming variants */
@@ -123,10 +124,10 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 				debug("chain detected");
 				stat = CHAIN; break;
 			}
-			if(fill_check_alt(c, k, r)) {
+/*			if(fill_check_alt(c, k, r)) {
 				debug("alt detected");
 				stat = ALT; break;
-			}
+			}*/
 			if(fill_check_mem(c, k, r)) {
 				debug("mem detected");
 				stat = MEM; break;
@@ -142,6 +143,7 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 
 	/** chain */ {
 		int32_t (*cfn)(struct sea_consts const *, struct sea_process *) = NULL;
+		struct sea_chain_resv t;
 
 		/** check status sanity */
 		if(stat == CONT) {
@@ -162,10 +164,11 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 		/** chain chain chain */
 		if(cfn != NULL) {
 			debug("chain: cfn(%p), stat(%d)", cfn, stat);
-			void *spdp = c.pdp;
 			struct sea_mem mdp = c.dp;
-			int32_t tmax = c.max;
 			int32_t ret = SEA_SUCCESS;
+
+			/** save current positions */
+			t = *((struct sea_chain_resv *)(&c.pdp));
 
 			/** malloc memory if stat == MEM */
 			if(stat == MEM) {
@@ -183,7 +186,6 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 			print_lane(c.v.pv, c.v.pv + c.v.plen*sizeof(cell_t));
 			print_lane(c.v.cv, c.v.cv + c.v.clen*sizeof(cell_t));
 			ret = cfn(ctx, &c);
-			c.pdp = spdp;
 
 			/** clean up memory if stat == MEM */
 			if(stat == MEM) {
@@ -195,20 +197,37 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 			if(ret != SEA_SUCCESS) {
 				return(ret);
 			}
-
+#if 0
 			/** check if search is needed */
-			if(k.alg != NW && tmax > c.max) {
+			if(k.alg != NW && t.max > c.max) {		/** fixme diffのアルゴリズムでは厳密ではない */
 				debug("re-search triggered");
 				stat = SEARCH;
 			}
+#endif
 		}
 
 		/** check if search is needed */
+		if(k.alg == NW) {
+			if(stat == TERM) {
+				search_terminal(c, k, t);
+			}
+		} else {
+			search_max_score(c, k, t);
+			if(c.max > (CELL_MAX - k.m)) {
+				return SEA_ERROR_OVERFLOW;
+			}
+			if(c.max <= 0) {
+				c.i = c.mi = c.asp; c.j = c.mj = c.bsp;
+				debug("wr_alloc without traceback");
+				return SEA_SUCCESS;
+			}
+		}
+#if 0
 		if(stat == TERM || stat == SEARCH) {
 			if(k.alg == NW) {
-				search_terminal(c, k);
+				search_terminal(c, k, t);
 			} else if(c.mp > sp) {			/** fixme! */
-				search_max_score(c, k);
+				search_max_score(c, k, t);
 				if(c.max > (CELL_MAX - k.m)) {
 					return SEA_ERROR_OVERFLOW;
 				}
@@ -220,6 +239,7 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 				}
 			}
 		}
+#endif
 	}
 
 	/** traceback */ {
@@ -257,6 +277,7 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 
 	/** write back the local context to the upper stack */
 	*proc = c;
+	//memcpy(proc, &c, offsetof(struct sea_process, padding));
 
 	/** finish!! */
 	return SEA_SUCCESS;

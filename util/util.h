@@ -94,19 +94,33 @@ struct sea_ivec {
  * @brief (internal) an individual alignment context.
  */
 struct sea_process {
+	/** unsaved variables */
 	struct sea_ivec v;
 	struct sea_reader a, b;		/*!< (in) sequence readers */
 	struct sea_writer l;		/*!< (inout) alignment writer */
 	struct sea_mem dp, dr;		/*!< (ref) a dynamic programming matrix */
-	void *pdp;					/*!< dynamic programming matrix */
 	uint8_t *pdr;				/*!< direction array */
 	int64_t asp, bsp;			/*!< the start position on the sequences */
 	int64_t aep, bep;			/*!< the end position on the sequences */
 	int64_t alim, blim;			/*!< the limit coordinate of the band */
-	int64_t i, j, p, q;			/*!< temporary */
-	int64_t mi, mj, mp, mq;		/*!< maximum score position */
 	int64_t size;				/*!< default malloc size */
+	/** caller saved variables */
+	void *pdp;					/*!< dynamic programming matrix */
 	int32_t max;				/*!< (inout) current maximum score */
+	int64_t mi, mj, mp, mq;		/*!< maximum score position */
+	int64_t i, j, p, q;			/*!< temporary */
+};
+
+/**
+ * @struct sea_chain_resv
+ * @brief (internal) a set of caller saved variables in struct sea_process.
+ */
+struct sea_chain_resv {
+	/** caller saved variables of struct sea_process */
+	void *pdp;					/*!< dynamic programming matrix */
+	int32_t max;				/*!< (inout) current maximum score */
+	int64_t mi, mj, mp, mq;		/*!< maximum score position */
+	int64_t i, j, p, q;			/*!< temporary */
 };
 
 /**

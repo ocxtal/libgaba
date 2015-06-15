@@ -213,20 +213,12 @@
 /**
  * @macro balloon_linear_search_terminal
  */
-#define balloon_linear_search_terminal(c, k) { \
-	c.mi = c.aep; \
-	c.mj = c.bep; \
-	c.mp = COP(c.mi, c.mj, BW) - COP(c.asp, c.bsp, BW); \
-	c.mq = COQ(c.mi, c.mj, BW) - COQ(c.i, c.j, BW); \
-}
+#define balloon_linear_search_terminal(c, k, t)		naive_linear_search_terminal(c, k, t)
 
 /**
  * @macro balloon_linear_search_max_score
  */
-#define balloon_linear_search_max_score(c, k) { \
-	c.aep = c.mi; \
-	c.bep = c.mj; \
-}
+#define balloon_linear_search_max_score(c, k, t) 	naive_linear_search_max_score(c, k, t)
 
 /**
  * @macro balloon_linear_trace_decl

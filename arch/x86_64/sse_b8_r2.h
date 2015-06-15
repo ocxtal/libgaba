@@ -178,16 +178,38 @@
 #define VEC_STORE_PACKED(p, dv, dh) { \
 	_mm_store_si128( \
 		(__m128i *)(p), \
-		_mm_or_si128(_mm_slli_epi64(dh##1, 4), dv##1)); \
+		_mm_or_si128(_mm_slli_epi64((dh##1), 4), (dv##1))); \
 	p += sizeof(__m128i); \
 	_mm_store_si128( \
 		(__m128i *)(p), \
-		_mm_or_si128(_mm_slli_epi64(dh##2, 4), dv##2)); \
+		_mm_or_si128(_mm_slli_epi64((dh##2), 4), (dv##2))); \
 	p += sizeof(__m128i); \
 }
 
 #define VEC_STORE_DVDH(p, dv, dh) { \
 	VEC_STORE_PACKED(p, dv, dh); \
+}
+
+#define VEC_LOAD(p, v) { \
+	(v##1) = _mm_load_si128((__m128i *)(p)); p += sizeof(__m128i); \
+	(v##2) = _mm_load_si128((__m128i *)(p)); p += sizeof(__m128i); \
+}
+
+#define VEC_LOAD_PACKED(p, dv, dh) { \
+	(dv##1) = _mm_load_si128( \
+		(__m128i *)(p)); \
+	(dh##1) = _mm_srli_epi64((dv##1), 4); \
+	(dv##1) = _mm_srli_epi64(_mm_slli_epi64((dv##1), 4), 4); \
+	p += sizeof(__m128i); \
+	(dv##2) = _mm_load_si128( \
+		(__m128i *)(p)); \
+	(dh##2) = _mm_srli_epi64((dv##2), 4); \
+	(dv##2) = _mm_srli_epi64(_mm_slli_epi64((dv##2), 4), 4); \
+	p += sizeof(__m128i); \
+}
+
+#define VEC_LOAD_DVDH(p, dv, dh) { \
+	VEC_LOAD_PACKED(p, dv, dh); \
 }
 
 #define DH(c, g)					( (*((pack_t *)(c))>>4) + g )
