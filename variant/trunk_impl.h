@@ -50,7 +50,7 @@
  * @brief coordinate calculation helper macros
  */
 #define trunk_linear_topq(r, t, c)		naive_linear_topq(r, t, c)
-#define trunk_linear_leftq(r, t, c)	naive_linear_leftq(r, t, c)
+#define trunk_linear_leftq(r, t, c)		naive_linear_leftq(r, t, c)
 #define trunk_linear_topleftq(r, t, c)	naive_linear_topleftq(r, t, c)
 #define trunk_linear_top(r, t, c) 		naive_linear_top(r, t, c)
 #define trunk_linear_left(r, t, c)		naive_linear_left(r, t, c)
@@ -100,11 +100,11 @@
 	for(t.q = 0; t.q < BW; t.q++) { \
 		VEC_INSERT_MSB(dv, \
 			  _read(c.v.cv, t.q, c.v.size) \
-			- _read(c.v.pv, t.q - !dir(r), c.v.size) \
+			- _read(c.v.pv, t.q + trunk_linear_topq(r, t, c), c.v.size) \
 			- k.gi); \
 		VEC_INSERT_MSB(dh, \
 			  _read(c.v.cv, t.q, c.v.size) \
-			- _read(c.v.pv, t.q + dir(r), c.v.size) \
+			- _read(c.v.pv, t.q + trunk_linear_leftq(r, t, c), c.v.size) \
 			- k.gi); \
 		VEC_SHIFT_R(dv, dv); \
 		VEC_SHIFT_R(dh, dh); \
@@ -332,6 +332,7 @@
 	memset(&x, 0, sizeof(struct sea_coords)); \
 	c.pdp = pb + ADDR(msp - sp, -BW/2, BW); \
 	dir_init(r, c.pdr[msp]); \
+	VEC_LOAD_DVDH(c.pdp, dv, dh); \
 	for(x.p = msp; x.p < mep;) { \
 		dir_next_guided(r, x, c); \
 		VEC_LOAD_DVDH(c.pdp, dv, dh); \
