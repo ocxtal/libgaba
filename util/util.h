@@ -89,21 +89,26 @@ struct sea_ivec {
 };
 
 /**
- * @struct sea_process
- *
- * @brief (internal) an individual alignment context.
+ * @struct sea_coords
+ * @brief (internal) a set of local-nonvolatile variables. (need write back / caller saved values)
  */
-struct sea_process {
-	/** caller saved variables */
-	void *pdp;					/*!< dynamic programming matrix */
+struct sea_coords {
 	int32_t max;				/*!< (inout) current maximum score */
 	int64_t mi, mj, mp, mq;		/*!< maximum score position */
 	int64_t i, j, p, q;			/*!< temporary */
-	/** unsaved variables */
+	struct sea_writer l;		/*!< (inout) alignment writer */
+};
+
+/**
+ * @struct sea_process
+ *
+ * @brief (internal) a set of local-volatile variables. (no need to write back)
+ */
+struct sea_process {
 	struct sea_ivec v;
 	struct sea_reader a, b;		/*!< (in) sequence readers */
-	struct sea_writer l;		/*!< (inout) alignment writer */
 	struct sea_mem dp, dr;		/*!< (ref) a dynamic programming matrix */
+	void *pdp;					/*!< dynamic programming matrix */
 	uint8_t *pdr;				/*!< direction array */
 	int64_t asp, bsp;			/*!< the start position on the sequences */
 	int64_t aep, bep;			/*!< the end position on the sequences */
@@ -112,21 +117,9 @@ struct sea_process {
 };
 
 /**
- * @struct sea_chain_resv
- * @brief (internal) a set of caller saved variables in struct sea_process.
- */
-struct sea_chain_resv {
-	/** caller saved variables of struct sea_process */
-	void *pdp;					/*!< dynamic programming matrix */
-	int32_t max;				/*!< (inout) current maximum score */
-	int64_t mi, mj, mp, mq;		/*!< maximum score position */
-	int64_t i, j, p, q;			/*!< temporary */
-};
-
-/**
  * @struct sea_consts
  *
- * @brief (internal) constant container.
+ * @brief (internal) local constant container.
  */
 struct sea_consts {
 	struct sea_aln_funcs const *f;
@@ -156,22 +149,28 @@ struct sea_consts {
 struct sea_aln_funcs {
 	int32_t (*twig)(			/*!< diag 8bit */
 		struct sea_consts const *ctx,
-		struct sea_process *proc);
+		struct sea_process *proc,
+		struct sea_coords *co);
 	int32_t (*branch)(			/*!< diag 16bit */
 		struct sea_consts const *ctx,
-		struct sea_process *proc);
+		struct sea_process *proc,
+		struct sea_coords *co);
 	int32_t (*trunk)(			/*!< diag 32bit */
 		struct sea_consts const *ctx,
-		struct sea_process *proc);
+		struct sea_process *proc,
+		struct sea_coords *co);
 	int32_t (*balloon)(			/*!< 32bit balloon algorithm */
 		struct sea_consts const *ctx,
-		struct sea_process *proc);
+		struct sea_process *proc,
+		struct sea_coords *co);
 	int32_t (*bulge)(			/*!< 32bit bulge (guided balloon) algorithm */
 		struct sea_consts const *ctx,
-		struct sea_process *proc);
+		struct sea_process *proc,
+		struct sea_coords *co);
 	int32_t (*cap)(				/*!< 32bit cap algorithm */
 		struct sea_consts const *ctx,
-		struct sea_process *proc);
+		struct sea_process *proc,
+		struct sea_coords *co);
 };
 
 /**
@@ -229,121 +228,149 @@ struct sea_context {
 int32_t
 naive_linear_dynamic(
 	struct sea_consts const *ctx,
-	struct sea_process *proc);
+	struct sea_process *proc,
+	struct sea_coords *co);
 int32_t
 naive_affine_dynamic(
 	struct sea_consts const *ctx,
-	struct sea_process *proc);
+	struct sea_process *proc,
+	struct sea_coords *co);
 int32_t
 naive_linear_guided(
 	struct sea_consts const *ctx,
-	struct sea_process *proc);
+	struct sea_process *proc,
+	struct sea_coords *co);
 int32_t
 naive_affine_guided(
 	struct sea_consts const *ctx,
-	struct sea_process *proc);
+	struct sea_process *proc,
+	struct sea_coords *co);
 
 int32_t
 twig_linear_dynamic(
 	struct sea_consts const *ctx,
-	struct sea_process *proc);
+	struct sea_process *proc,
+	struct sea_coords *co);
 int32_t
 twig_affine_dynamic(
 	struct sea_consts const *ctx,
-	struct sea_process *proc);
+	struct sea_process *proc,
+	struct sea_coords *co);
 int32_t
 twig_linear_guided(
 	struct sea_consts const *ctx,
-	struct sea_process *proc);
+	struct sea_process *proc,
+	struct sea_coords *co);
 int32_t
 twig_affine_guided(
 	struct sea_consts const *ctx,
-	struct sea_process *proc);
+	struct sea_process *proc,
+	struct sea_coords *co);
 
 int32_t
 branch_linear_dynamic(
 	struct sea_consts const *ctx,
-	struct sea_process *proc);
+	struct sea_process *proc,
+	struct sea_coords *co);
 int32_t
 branch_affine_dynamic(
 	struct sea_consts const *ctx,
-	struct sea_process *proc);
+	struct sea_process *proc,
+	struct sea_coords *co);
 int32_t
 branch_linear_guided(
 	struct sea_consts const *ctx,
-	struct sea_process *proc);
+	struct sea_process *proc,
+	struct sea_coords *co);
 int32_t
 branch_affine_guided(
 	struct sea_consts const *ctx,
-	struct sea_process *proc);
+	struct sea_process *proc,
+	struct sea_coords *co);
 
 int32_t
 trunk_linear_dynamic(
 	struct sea_consts const *ctx,
-	struct sea_process *proc);
+	struct sea_process *proc,
+	struct sea_coords *co);
 int32_t
 trunk_affine_dynamic(
 	struct sea_consts const *ctx,
-	struct sea_process *proc);
+	struct sea_process *proc,
+	struct sea_coords *co);
 int32_t
 trunk_linear_guided(
 	struct sea_consts const *ctx,
-	struct sea_process *proc);
+	struct sea_process *proc,
+	struct sea_coords *co);
 int32_t
 trunk_affine_guided(
 	struct sea_consts const *ctx,
-	struct sea_process *proc);
+	struct sea_process *proc,
+	struct sea_coords *co);
 
 int32_t
 balloon_linear_dynamic(
 	struct sea_consts const *ctx,
-	struct sea_process *proc);
+	struct sea_process *proc,
+	struct sea_coords *co);
 int32_t
 balloon_affine_dynamic(
 	struct sea_consts const *ctx,
-	struct sea_process *proc);
+	struct sea_process *proc,
+	struct sea_coords *co);
 int32_t
 balloon_linear_guided(
 	struct sea_consts const *ctx,
-	struct sea_process *proc);
+	struct sea_process *proc,
+	struct sea_coords *co);
 int32_t
 balloon_affine_guided(
 	struct sea_consts const *ctx,
-	struct sea_process *proc);
+	struct sea_process *proc,
+	struct sea_coords *co);
 
 int32_t
 bulge_linear_dynamic(
 	struct sea_consts const *ctx,
-	struct sea_process *proc);
+	struct sea_process *proc,
+	struct sea_coords *co);
 int32_t
 bulge_affine_dynamic(
 	struct sea_consts const *ctx,
-	struct sea_process *proc);
+	struct sea_process *proc,
+	struct sea_coords *co);
 int32_t
 bulge_linear_guided(
 	struct sea_consts const *ctx,
-	struct sea_process *proc);
+	struct sea_process *proc,
+	struct sea_coords *co);
 int32_t
 bulge_affine_guided(
 	struct sea_consts const *ctx,
-	struct sea_process *proc);
+	struct sea_process *proc,
+	struct sea_coords *co);
 
 int32_t
 cap_linear_dynamic(
 	struct sea_consts const *ctx,
-	struct sea_process *proc);
+	struct sea_process *proc,
+	struct sea_coords *co);
 int32_t
 cap_affine_dynamic(
 	struct sea_consts const *ctx,
-	struct sea_process *proc);
+	struct sea_process *proc,
+	struct sea_coords *co);
 int32_t
 cap_linear_guided(
 	struct sea_consts const *ctx,
-	struct sea_process *proc);
+	struct sea_process *proc,
+	struct sea_coords *co);
 int32_t
 cap_affine_guided(
 	struct sea_consts const *ctx,
-	struct sea_process *proc);
+	struct sea_process *proc,
+	struct sea_coords *co);
 
 /**
  * io functions

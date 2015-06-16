@@ -90,10 +90,10 @@ typedef struct _dir dir_t;
  * @detail
  * dir_exp_top and dir_exp_bottom must be aliased to a direction determiner.
  */
-#define dir_next_dynamic(r, c) { \
-	uint8_t d = dir_exp_top(r, c) | dir_exp_bottom(r, c); \
+#define dir_next_dynamic(r, t, c) { \
+	uint8_t d = dir_exp_top(r, t, c) | dir_exp_bottom(r, t, c); \
 	debug("dynamic band: d(%d)", d); \
-	(c).pdr[++(c).p] = d; \
+	(c).pdr[++(t).p] = d; \
 	(r).d2 = (d<<2) | ((r).d2>>2); \
 }
 
@@ -101,8 +101,8 @@ typedef struct _dir dir_t;
  * @macro dir_next_guided
  * @brief set 2-bit direction flag from direction array.
  */
-#define dir_next_guided(r, c) { \
-	uint8_t d = (c).pdr[++(c).p]; \
+#define dir_next_guided(r, t, c) { \
+	uint8_t d = (c).pdr[++(t).p]; \
 	debug("guided band: d(%d)", d); \
 	(r).d2 = (d<<2) | ((r).d2>>2); \
 }
@@ -110,18 +110,18 @@ typedef struct _dir dir_t;
 /**
  * @macro dir_check_term_dynamic
  */
-#define dir_check_term_dynamic(r, c)	( 1 )
+#define dir_check_term_dynamic(r, t, c)		( 1 )
 
 /**
  * @macro dir_check_term_guided
  */
-#define dir_check_term_guided(r, c)		( c.p < (c.dr.ep - c.dr.sp) )
+#define dir_check_term_guided(r, t, c)		( t.p < (c.dr.ep - c.dr.sp) )
 
 /**
  * @macro dir_term
  */
-#define dir_term(r, c) { \
-	int8_t d = (c).pdr[(c).p]; \
+#define dir_term(r, t, c) { \
+	int8_t d = (c).pdr[(t).p]; \
 	(r).d2 = d; \
 }
 
@@ -129,8 +129,8 @@ typedef struct _dir dir_t;
  * @macro dir_prev
  * @brief set 2-bit direction flag in reverse access.
  */
-#define dir_prev(r, c) { \
-	int8_t d = (c).pdr[--(c).p]; \
+#define dir_prev(r, t, c) { \
+	int8_t d = (c).pdr[--(t).p]; \
 /*	(r).d = 0x01 & (r).d2; */ \
 	(r).d2 = 0x0f & (((r).d2<<2) | d); \
 }
@@ -201,6 +201,7 @@ static int32_t const _cost = COST;
 #define chain_save_len		LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _chain_save_len)
 #define chain_push_ivec		LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _chain_push_ivec)
 #define search_terminal		LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _search_terminal)
+#define search_trigger		LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _search_trigger)
 #define search_max_score	LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _search_max_score)
 #define trace_decl			LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _trace_decl)
 #define trace_init			LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _trace_init)

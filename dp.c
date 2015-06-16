@@ -6,38 +6,6 @@
  * @author Hajime Suzuki
  * @date 2015/5/7
  * @licence Apache v2.
- *
- * @memo
- * chainする際のmaxの値の取り扱いが不明瞭になっているので整理する。
- * searchが終わった後のmaxは確定max
- * searchが終わる前のmaxは未確定max
- * どんなアルゴリズムにすべきか...?
- *
- * maxが確定する条件
- * chainしない場合(stat == TERMで終了した場合)
- *   これは簡単で、search_max_scoreで得られた結果が確定maxになる
- *   自分のところでmaxが得られない場合があることに注意する。
- * chainする場合(それ以外)
- *   chainから帰ってきた後、未確定maxとchainの結果を比較して、
- *   自分のところでsearchを行う必要があるか調べる。必要があれば
- *   searchを行ってtracebackの開始点を上書きする。
- *
- * 未確定maxでchainする場合の問題点
- *   tracebackした内容が途中で破棄される場合がある。
- *
- * 確定maxでchainする場合の問題点
- *   searchのコストが余計にかかる。
- *
- * 結局、searchかtraceかどちらのコストがより小さいか、という話になる。
- * tmaxとrmaxの両方を保持する。
- * 入力としてtmaxを受け取る。fill-inのときにtmaxを超える可能性があることが
- * わかったら、tmax変数を書き換える。chainの際にはそのtmaxを渡す。
- * termしたとき、miとmjが自分のfill-inした範囲内にあるときはtracebackを開始する。
- * chainが終了したとき、tracebackが開始されているかチェックする。
- * 開始されていた場合、rmaxと
- *
- *
- * max arrayのようなものがあると良い?
  */
 #include <stdio.h>				/** for debug */
 #include "util/log.h"			/** for debug */
@@ -52,7 +20,8 @@
 int32_t
 DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 	struct sea_consts const *ctx,
-	struct sea_process *proc)
+	struct sea_process *proc,
+	struct sea_coords *co)
 {
 	debug("entry point: (%p)", CALL_FUNC(BASE, SUFFIX));
 
@@ -66,6 +35,7 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 	/** load contexts onto the stack */
 	struct sea_consts k = *ctx;
 	struct sea_process c = *proc;
+	struct sea_coords t = *co;
 
 	/** make the dp pointer aligned */ {
 		int64_t a = k.memaln;
@@ -73,13 +43,13 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 	}
 
 	/** variable declarations */
-	int64_t sp = c.p;
+	int64_t sp = t.p;
 	cell_t *pb = (cell_t *)(c.pdp + bpl(c));
 	int8_t stat = CONT;
 
 	/** check direction array size */
 	if(c.dr.sp != NULL) {
-		if((c.dp.ep - c.pdp) > bpl(c) * ((uint8_t *)c.dr.ep - (uint8_t *)c.dr.sp - c.p)) {
+		if((c.dp.ep - c.pdp) > bpl(c) * ((uint8_t *)c.dr.ep - (uint8_t *)c.dr.sp - t.p)) {
 			size_t s = 2 * (c.dr.ep - c.dr.sp);
 			c.dr.ep = (c.dr.sp = c.pdr = (void *)realloc(c.dr.sp, s)) + s;
 			debug("Realloc direction array at %p, with size %zu", c.dr.sp, s);
@@ -91,59 +61,59 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 		#ifdef DEBUG
 			cell_t *curr = (cell_t *)c.pdp;		/** debug */
 		#endif
-		fill_decl(c, k, r);
-		fill_init(c, k, r);
-		debug("init: r(%d), c.max(%d)", dir2(r), c.max);
+		fill_decl(t, c, k, r);
+		fill_init(t, c, k, r);
+		debug("init: r(%d), t.max(%d)", dir2(r), t.max);
 //		print_lane(curr, c.pdp);
 
 		stat = CAP;
-		while(c.i <= c.alim && c.j <= c.blim && dir_check_term(r, c)) {
+		while(t.i <= c.alim && t.j <= c.blim && dir_check_term(r, t, c)) {
 			#ifdef DEBUG
 				curr = (cell_t *)c.pdp;		/** debug */
 			#endif
 
-			fill_former_body(c, k, r);
+			fill_former_body(t, c, k, r);
 			if(dir(r) == TOP) {
 				debug("go down: r(%d)", dir2(r));
-				fill_go_down(c, k, r);
+				fill_go_down(t, c, k, r);
 			} else {
 				debug("go right: r(%d)", dir2(r));
-				fill_go_right(c, k, r);
+				fill_go_right(t, c, k, r);
 			}
-			fill_latter_body(c, k, r);
+			fill_latter_body(t, c, k, r);
 
 			/** debug */
-			debug("pos: %lld, %lld, %lld, %lld, usage(%zu)", c.i, c.j, c.p, c.q, (size_t)(c.pdp - (void *)pb));
+			debug("pos: %lld, %lld, %lld, %lld, usage(%zu)", t.i, t.j, t.p, t.q, (size_t)(c.pdp - (void *)pb));
 			print_lane(curr, c.pdp);
 
-			if(fill_check_term(c, k, r)) {
+			if(fill_check_term(t, c, k, r)) {
 				debug("term detected");
 				stat = TERM; break;
 			}
-			if(fill_check_chain(c, k, r)) {
+			if(fill_check_chain(t, c, k, r)) {
 				debug("chain detected");
 				stat = CHAIN; break;
 			}
-/*			if(fill_check_alt(c, k, r)) {
+/*			if(fill_check_alt(t, c, k, r)) {
 				debug("alt detected");
 				stat = ALT; break;
 			}*/
-			if(fill_check_mem(c, k, r)) {
+			if(fill_check_mem(t, c, k, r)) {
 				debug("mem detected");
 				stat = MEM; break;
 			}
 		}
 		if(stat == CAP) {
-			debug("edge violation: c.i(%lld), c.alim(%lld), c.j(%lld), c.blim(%lld)", c.i, c.alim, c.j, c.blim);
+			debug("edge violation: t.i(%lld), c.alim(%lld), t.j(%lld), c.blim(%lld)", t.i, c.alim, t.j, c.blim);
 		}
 
 		debug("finish: stat(%d)", stat);
-		fill_finish(c, k, r);
+		fill_finish(t, c, k, r);
 	}
 
 	/** chain */ {
-		int32_t (*cfn)(struct sea_consts const *, struct sea_process *) = NULL;
-		struct sea_chain_resv t;
+		int32_t (*cfn)(struct sea_consts const *, struct sea_process *, struct sea_coords *) = NULL;
+		struct sea_coords tn;
 
 		/** check status sanity */
 		if(stat == CONT) {
@@ -168,24 +138,24 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 			int32_t ret = SEA_SUCCESS;
 
 			/** save coordinates */
-			t = *(struct sea_chain_resv *)&c;
+			tn = t;
 
 			/** malloc memory if stat == MEM */
 			if(stat == MEM) {
 				c.size *= 2;
 				c.dp.ep = (c.dp.sp = malloc(c.size)) + c.size;
 				memcpy(c.dp.sp,
-					(cell_t *)c.pdp - chain_save_len(c, k),
-					sizeof(cell_t) * chain_save_len(c, k));
-				c.pdp = (cell_t *)c.dp.sp + chain_save_len(c, k);
+					(cell_t *)c.pdp - chain_save_len(t, c, k),
+					sizeof(cell_t) * chain_save_len(t, c, k));
+				c.pdp = (cell_t *)c.dp.sp + chain_save_len(t, c, k);
 				debug("malloc memory: size(%llu), c.pdp(%p)", c.size, c.pdp);
 			}
 
 			/** call func */
-			chain_push_ivec(c, k);
+			chain_push_ivec(t, c, k);
 			print_lane(c.v.pv, c.v.pv + c.v.plen*sizeof(cell_t));
 			print_lane(c.v.cv, c.v.cv + c.v.clen*sizeof(cell_t));
-			ret = cfn(ctx, &c);
+			ret = cfn(ctx, &c, &tn);
 
 			/** clean up memory if stat == MEM */
 			if(stat == MEM) {
@@ -197,26 +167,24 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 			if(ret != SEA_SUCCESS) {
 				return(ret);
 			}
-			if(k.alg != NW && (stat == TERM || t.max > c.max)) {
-				search_max_score(c, k, t);
+			if(k.alg != NW && (stat == TERM || search_trigger(t, tn, c, k))) {
+				search_max_score(t, c, k);
 				debug("check if replace is needed");
-				if(t.max > c.max) {
-					*(struct sea_chain_resv *)&c = t;
-				}
+				if(tn.max > t.max) { t = tn; }
 			}
 		} else {
 			/** termination */
 			if(k.alg == NW) {
 				debug("set terminal");
-				search_terminal(c, k, c);
+				search_terminal(t, c, k);
 			} else {
 				debug("search max score");
-				search_max_score(c, k, c);
-				if(c.max > (CELL_MAX - k.m)) {
+				search_max_score(t, c, k);
+				if(t.max > (CELL_MAX - k.m)) {
 					return SEA_ERROR_OVERFLOW;
 				}
-				if(c.max <= 0) {
-					c.i = c.mi = c.asp; c.j = c.mj = c.bsp;
+				if(t.max <= 0) {
+					t.i = t.mi = c.asp; t.j = t.mj = c.bsp;
 					debug("wr_alloc without traceback");
 					return SEA_SUCCESS;
 				}
@@ -225,41 +193,41 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 	}
 
 	/** traceback */ {
-		debug("c.mi(%lld), c.mj(%lld), c.mp(%lld), c.mq(%lld)", c.mi, c.mj, c.mp, c.mq);
-		debug("c.i(%lld), c.j(%lld), c.p(%lld), c.q(%lld)", c.i, c.j, c.p, c.q);
+		debug("t.mi(%lld), t.mj(%lld), t.mp(%lld), t.mq(%lld)", t.mi, t.mj, t.mp, t.mq);
+		debug("t.i(%lld), t.j(%lld), t.p(%lld), t.q(%lld)", t.i, t.j, t.p, t.q);
 		/** check if wr_alloc is needed */
-		if(c.mp <= c.p) {
-			c.i = c.mi; c.j = c.mj;
-			c.p = c.mp; c.q = c.mq;
-			wr_alloc(c.l, c.mp); proc->l = c.l;
-			debug("wr_alloc: c.l.p(%p)", c.l.p);
+		if(t.mp <= t.p) {	/** これバグになる */
+			t.i = t.mi; t.j = t.mj;
+			t.p = t.mp; t.q = t.mq;
+			wr_alloc(t.l, t.mp); co->l = t.l;
+			debug("wr_alloc: t.l.p(%p)", t.l.p);
 		}
 
 		debug("trace");
-		trace_decl(c, k, r);
-		trace_init(c, k, r);
+		trace_decl(t, c, k, r);
+		trace_init(t, c, k, r);
 		if(sp == 0) {
-			while(c.i > c.asp && c.j > c.bsp) {
-				debug("%lld, %lld, %lld, %lld", c.i, c.j, c.p, c.q);
-				debug("topleftq(%d), dir2(%d)", topleftq(r, c), dir2(r));
-				trace_body(c, k, r);
+			while(t.i > c.asp && t.j > c.bsp) {
+				debug("%lld, %lld, %lld, %lld", t.i, t.j, t.p, t.q);
+				debug("topleftq(%d), dir2(%d)", topleftq(r, t, c), dir2(r));
+				trace_body(t, c, k, r);
 			}
-			while(c.i > c.asp) { c.i--; wr_pushd(c.l); }
-			while(c.j > c.bsp) { c.j--; wr_pushi(c.l); }
+			while(t.i > c.asp) { t.i--; wr_pushd(t.l); }
+			while(t.j > c.bsp) { t.j--; wr_pushi(t.l); }
 		} else {
-			while(c.p > sp) {
-				debug("%lld, %lld, %lld, %lld", c.i, c.j, c.p, c.q);
-				debug("topleftq(%d), dir2(%d)", topleftq(r, c), dir2(r));
-				trace_body(c, k, r);
+			while(t.p > sp) {
+				debug("%lld, %lld, %lld, %lld", t.i, t.j, t.p, t.q);
+				debug("topleftq(%d), dir2(%d)", topleftq(r, t, c), dir2(r));
+				trace_body(t, c, k, r);
 			}
 		}
-		debug("trace finish: c.mp(%lld), c.l.pos(%lld), c.l.size(%lld)", c.mp, c.l.pos, c.l.size);
-		trace_finish(c, k, r);
+		debug("trace finish: t.mp(%lld), t.l.pos(%lld), t.l.size(%lld)", t.mp, t.l.pos, t.l.size);
+		trace_finish(t, c, k, r);
 	}
 
 	/** write back the local context to the upper stack */
-	*proc = c;
-	//memcpy(proc, &c, offsetof(struct sea_process, padding));
+	*co = t;
+	//*proc = c;
 
 	/** finish!! */
 	return SEA_SUCCESS;

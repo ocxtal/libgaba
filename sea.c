@@ -365,6 +365,7 @@ struct sea_result *sea_align_intl(
 {
 	struct sea_consts k = ctx->k;
 	struct sea_process c;
+	struct sea_coords t;
 	struct sea_result *r = NULL;
 	int32_t error_label = SEA_ERROR;
 
@@ -413,14 +414,14 @@ struct sea_result *sea_align_intl(
 
 	/** initialize coordinates */
 	debug("initialize coordinates");
-	c.i = asp + k.bw/4;								/** the top-right cell of the lane */
-	c.j = bsp - k.bw/4;
-	c.p = 0; //COP(asp, bsp, ctx->k.bw);
-	c.q = 0;
-	c.mi = asp;
-	c.mj = bsp;
-	c.mp = 0; //COP(asp, bsp, ctx->k.bw);
-	c.mq = 0;
+	t.i = asp + k.bw/4;								/** the top-right cell of the lane */
+	t.j = bsp - k.bw/4;
+	t.p = 0; //COP(asp, bsp, ctx->k.bw);
+	t.q = 0;
+	t.mi = asp;
+	t.mj = bsp;
+	t.mp = 0; //COP(asp, bsp, ctx->k.bw);
+	t.mq = 0;
 	c.asp = asp;
 	c.bsp = bsp;
 	c.aep = aep;
@@ -432,11 +433,11 @@ struct sea_result *sea_align_intl(
 	if(dir == ALN_FW) {
 		rd_init(c.a, ctx->fw.popa, a);
 		rd_init(c.b, ctx->fw.popb, b);
-		wr_init(c.l, ctx->fw);
+		wr_init(t.l, ctx->fw);
 	} else {
 		rd_init(c.a, ctx->rv.popa, a);
 		rd_init(c.b, ctx->rv.popb, b);
-		wr_init(c.l, ctx->rv);
+		wr_init(t.l, ctx->rv);
 	}
 
 	/** initialize dynamic programming memory */
@@ -468,28 +469,28 @@ struct sea_result *sea_align_intl(
 	}
 
 	/** initialize max */
-	c.max = 0;
+	t.max = 0;
 
 	/* do alignment */
-	error_label = k.f->twig(&k, &c);
+	error_label = k.f->twig(&k, &c, &t);
 	if(error_label != SEA_SUCCESS) {
 		goto _sea_error_handler;					/** when the path went out of the band */
 	}
 
 	/* finishing */
-	wr_finish(c.l);
-	r = (struct sea_result *)c.l.p;
+	wr_finish(t.l);
+	r = (struct sea_result *)t.l.p;
 
-	r->aln = (uint8_t *)c.l.p + c.l.pos;
-	r->len = c.l.size;
+	r->aln = (uint8_t *)t.l.p + t.l.pos;
+	r->len = t.l.size;
 	debug("finishing: len(%lld)", r->len);
 	r->a = a;
 	r->b = b;
-	r->apos = c.mi;
-	r->bpos = c.mj;
+	r->apos = t.mi;
+	r->bpos = t.mj;
 	r->alen = c.aep;
 	r->blen = c.bep;
-	r->score = c.max;
+	r->score = t.max;
 //	r->ctx = ctx;
 
 	/* clean DP matrix */
