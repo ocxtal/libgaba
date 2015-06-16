@@ -320,12 +320,53 @@
  * つまり、bにまずバックアップ -> cに初期状態をセットし、tを調整
  * -> chain -> tを元に復元
  */
+/*
+#define trunk_linear_search_max_score(t, c, k) { \
+	t.mi = t.i; t.mj = t.j; t.mp = t.p; t.mq = 0; \
+}
+*/
+#define trunk_linear_search_max_score(t, c, k) { \
+	dir_t r; \
+	int64_t msp = MAX2(t.mp + BW * (k.m - 2*k.gi) / (2 * k.x), sp); \
+	int64_t mep = MIN2(t.mp + BW * (k.m - 2*k.gi) / (2 * k.m), t.p); \
+	int64_t sc = 0, tsc; \
+	struct sea_coords x, y; \
+	DECLARE_VEC_CELL_REG(dv); \
+	DECLARE_VEC_CELL_REG(dh); \
+	\
+	x.i = 0; x.j = 0; \
+	c.pdp = pb + ADDR(msp - sp, -BW/2, BW); \
+	dir_init(r, c.pdr[msp]); \
+	for(x.p = msp; x.p < mep;) { \
+		dir_next_guided(r, x, c); \
+		VEC_LOAD_DVDH(c.pdp, dv, dh); \
+		sc += (((dir(r) == TOP) ? VEC_LSB(dv) : VEC_LSB(dh)) - k.gi); \
+		if(dir(r) == TOP) { x.j++; } else { x.i++; } \
+		for(x.q = -BW/2, tsc = sc; x.q < BW/2; x.q++) { \
+			if(tsc > x.max) { \
+				x.max = tsc; \
+				coord_save_m(x); \
+			} \
+			if(x.q == 0 && x.p == t.mp) { \
+				y = x; y.max = tsc; \
+			} \
+			tsc -= (VEC_LSB(dh) - k.gi); \
+			VEC_SHIFT_R(dh, dh); \
+			VEC_SHIFT_R(dv, dv); \
+			tsc += (VEC_LSB(dv) - k.gi); \
+		} \
+	} \
+	t.max = x.max - y.max + t.max; \
+	t.mi = x.mi - y.i + t.mi; \
+	t.mj = x.mj - y.j + t.mj; \
+	t.mp = x.mp; \
+	t.mq = x.mq; \
+}
+#if 0
 #define trunk_linear_search_max_score(t, c, k) { \
 	/*if(t.max > t.max - (k.m - 2*k.gi)*BW/2) {*/ \
 	dir_t r; \
 	cell_t *psc = pb + ADDR(t.p - sp, 0, BW); \
-	struct sea_coords b = *(struct sea_coords *)&c; \
-	*(struct sea_coords *)&c = *(struct sea_coords *)&t; \
 	t.mp = MAX2(t.mp + BW * (k.m - 2*k.gi) / (2 * k.x), sp); \
 	t.mq = 0; \
 	dir_term(r, t, c); \
@@ -346,14 +387,14 @@
 		trunk_linear_fill_finish(t, c, k, r); \
 		trunk_linear_chain_push_ivec(t, c, k); \
 	} \
-	*(struct sea_coords *)&t = *(struct sea_coords *)&c; \
-	k.f->branch(&k, &c, &t); \
-	if(t.max + t.max > b.max) { \
-		t.max += t.max; \
-		t.mp += t.mp; t.mq += t.mq; \
+	{ \
+		struct sea_coords b = t; \
+		k.f->branch(&k, &c, &b); \
+		t.max += b.max; \
+		t.mp += b.mp; t.mq += b.mq; \
 	} \
-	*(struct sea_coords *)&c = b; \
 }
+#endif
 
 /**
  * @macro trunk_linear_trace_decl

@@ -196,15 +196,14 @@
 }
 
 #define VEC_LOAD_PACKED(p, dv, dh) { \
-	(dv##1) = _mm_load_si128( \
-		(__m128i *)(p)); \
-	(dh##1) = _mm_srli_epi64((dv##1), 4); \
-	(dv##1) = _mm_srli_epi64(_mm_slli_epi64((dv##1), 4), 4); \
+	__m128i mask = _mm_set1_epi8(0x0f); \
+	(dv##1) = _mm_load_si128((__m128i *)(p)); \
+	(dh##1) = _mm_and_si128(_mm_srli_epi64((dv##1), 4), mask); \
+	(dv##1) = _mm_and_si128((dv##1), mask); \
 	p += sizeof(__m128i); \
-	(dv##2) = _mm_load_si128( \
-		(__m128i *)(p)); \
-	(dh##2) = _mm_srli_epi64((dv##2), 4); \
-	(dv##2) = _mm_srli_epi64(_mm_slli_epi64((dv##2), 4), 4); \
+	(dv##2) = _mm_load_si128((__m128i *)(p)); \
+	(dh##2) = _mm_and_si128(_mm_srli_epi64((dv##2), 4), mask); \
+	(dv##2) = _mm_and_si128((dv##2), mask); \
 	p += sizeof(__m128i); \
 }
 

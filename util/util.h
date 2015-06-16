@@ -779,6 +779,22 @@ enum _DIR2 {
 )
 
 /**
+ * @macro coord_save_m
+ * @brief save current (i, j)-coordinate to (mi, mj)
+ */
+#define coord_save_m(t) { \
+	t.mi = t.i; t.mj = t.j; t.mp = t.p; t.mq = t.q; \
+}
+
+/**
+ * @macro coord_load_m
+ * @brief load current (mi, mj)-coordinate to (i, j)
+ */
+#define coord_load_m(t) { \
+	t.i = t.mi; t.j = t.mj; t.p = t.mp; t.q = t.mq; \
+}
+
+/**
  * @macro LABEL
  * @brief a label declaration macro.
  */

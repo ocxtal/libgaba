@@ -174,7 +174,7 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 					wr_close(t.l);
 					wr_alloc(ct.l, ct.mp);
 					t = ct;
-					t.i = t.mi; t.j = t.mj; t.p = t.mp; t.q = t.mq;
+					coord_load_m(t);
 					debug("wr_alloc: t.l.p(%p)", t.l.p);
 				}
 			}
@@ -186,9 +186,6 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 			} else {
 				debug("search max score");
 				search_max_score(t, c, k);
-				if(t.max > (CELL_MAX - k.m)) {
-					return SEA_ERROR_OVERFLOW;
-				}
 				if(t.max <= 0) {
 					t.i = t.mi = c.asp; t.j = t.mj = c.bsp;
 					debug("wr_alloc without traceback");
@@ -196,7 +193,7 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 				}
 			}
 			wr_alloc(t.l, t.mp);
-			t.i = t.mi; t.j = t.mj; t.p = t.mp; t.q = t.mq;
+			coord_load_m(t);
 			debug("wr_alloc: t.l.p(%p)", t.l.p);
 		}
 	}

@@ -225,8 +225,7 @@
 		} \
 		if(VEC_LSB(maxv) > t.max) { \
 			t.max = VEC_LSB(maxv); \
-			t.mi = t.i; t.mj = t.j; \
-			t.mp = t.p; t.mq = t.q; \
+			coord_save_m(t); \
 		} \
 	} \
 	VEC_STORE(c.pdp, pv); \
