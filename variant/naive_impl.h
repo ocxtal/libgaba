@@ -213,14 +213,18 @@
 }
 
 /**
+ * @macro naive_linear_search_trigger
+ */
+#define naive_linear_search_trigger(c, k, t) ( \
+	t.max > c.max \
+)
+
+/**
  * @macro naive_linear_search_max_score
  * tmaxを見て上書きするかどうか決める。
  */
 #define naive_linear_search_max_score(c, k, t) { \
-	if(t.max > c.max) { \
-		c.mi = t.mi; \
-		c.mj = t.mj; \
-	} \
+	/** no need to search */ \
 }
 
 /**

@@ -222,6 +222,7 @@
 	*((int32_t *)c.pdp) = scl; \
 	c.pdp += sizeof(int32_t); \
 	*((int32_t *)c.pdp) = c.max; \
+/*	c.max += (k.m - 2*k.gi)*BW/2; */ \
 	c.pdp += sizeof(int32_t); \
 	c.pdp += (trunk_linear_bpl(c) - sizeof(int32_t) * 4); \
 }
@@ -304,6 +305,13 @@
 }
 
 /**
+ * @macro trunk_linear_search_trigger
+ */
+#define trunk_linear_search_trigger(c, k, t) ( \
+	t.max > c.max - (k.m - 2*k.gi)*BW/2 \
+)
+
+/**
  * @macro trunk_linear_search_max_score
  * tmaxを見て上書きするか決める。
  * t: chainのときにreserveしたもの。fill-inの直後の状態
@@ -314,40 +322,38 @@
  * -> chain -> tを元に復元
  */
 #define trunk_linear_search_max_score(c, k, t) { \
-	if(t.max > c.max - (k.m - 2*k.gi)*BW/2) { \
-		dir_t r; \
-		cell_t *psc = pb + ADDR(t.p - sp, 0, BW); \
-		struct sea_chain_resv b = *((struct sea_chain_resv *)(&c.pdp)); \
-		*((struct sea_chain_resv *)(&c.pdp)) = t; \
-		t.mp = MAX2(t.mp + BW * (k.m - 2*k.gi) / (2 * k.x), sp); \
-		t.mq = 0; \
-		dir_term(r, c); \
-		while(c.p > t.mp) { \
-			dir_prev(r, c); \
-			t.max -= (dir(r) == TOP) ? DV(psc, k.gi) : DH(psc, k.gi); \
-			if(dir(r) == TOP) { c.j--; } else { c.i--; } \
-			psc -= trunk_linear_bpl(c); \
-		} \
-		/** ここで(i, j)はsearch開始座標 / (mi, mj)は0にセットする */ \
-		{ \
-			int64_t scu = 0, score = 0, scl = 0; \
-			c.max = 0; \
-			DECLARE_VEC_CELL_REG(dv); \
-			DECLARE_VEC_CELL_REG(dh); \
-			DECLARE_VEC_CELL_REG(tmp); \
-			VEC_LOAD_DVDH(c.pdp, dv, dh); \
-			trunk_linear_fill_finish(c, k, r); \
-			trunk_linear_chain_push_ivec(c, k); \
-		} \
-		t = *((struct sea_chain_resv *)(&c.pdp)); \
-		k.f->branch(&k, &c); \
-		if(c.max + t.max > b.max) { \
-			c.max += t.max; \
-			c.mp += t.mp; c.mq += t.mq; \
-		} else { \
-			*((struct sea_chain_resv *)(&c.pdp)) = b; \
-		} \
+	/*if(t.max > c.max - (k.m - 2*k.gi)*BW/2) {*/ \
+	dir_t r; \
+	cell_t *psc = pb + ADDR(t.p - sp, 0, BW); \
+	struct sea_chain_resv b = *(struct sea_chain_resv *)&c; \
+	*(struct sea_chain_resv *)&c = *(struct sea_chain_resv *)&t; \
+	t.mp = MAX2(t.mp + BW * (k.m - 2*k.gi) / (2 * k.x), sp); \
+	t.mq = 0; \
+	dir_term(r, c); \
+	while(c.p > t.mp) { \
+		dir_prev(r, c); \
+		t.max -= (dir(r) == TOP) ? DV(psc, k.gi) : DH(psc, k.gi); \
+		if(dir(r) == TOP) { c.j--; } else { c.i--; } \
+		psc -= trunk_linear_bpl(c); \
 	} \
+	/** ここで(i, j)はsearch開始座標 / (mi, mj)は0にセットする */ \
+	{ \
+		int64_t scu = 0, score = 0, scl = 0; \
+		c.max = 0; \
+		DECLARE_VEC_CELL_REG(dv); \
+		DECLARE_VEC_CELL_REG(dh); \
+		DECLARE_VEC_CELL_REG(tmp); \
+		VEC_LOAD_DVDH(c.pdp, dv, dh); \
+		trunk_linear_fill_finish(c, k, r); \
+		trunk_linear_chain_push_ivec(c, k); \
+	} \
+	*(struct sea_chain_resv *)&t = *(struct sea_chain_resv *)&c; \
+	k.f->branch(&k, &c); \
+	if(c.max + t.max > b.max) { \
+		t.max += c.max; \
+		t.mp += c.mp; t.mq += c.mq; \
+	} \
+	*(struct sea_chain_resv *)&c = b; \
 }
 
 /**

@@ -94,6 +94,11 @@ struct sea_ivec {
  * @brief (internal) an individual alignment context.
  */
 struct sea_process {
+	/** caller saved variables */
+	void *pdp;					/*!< dynamic programming matrix */
+	int32_t max;				/*!< (inout) current maximum score */
+	int64_t mi, mj, mp, mq;		/*!< maximum score position */
+	int64_t i, j, p, q;			/*!< temporary */
 	/** unsaved variables */
 	struct sea_ivec v;
 	struct sea_reader a, b;		/*!< (in) sequence readers */
@@ -104,11 +109,6 @@ struct sea_process {
 	int64_t aep, bep;			/*!< the end position on the sequences */
 	int64_t alim, blim;			/*!< the limit coordinate of the band */
 	int64_t size;				/*!< default malloc size */
-	/** caller saved variables */
-	void *pdp;					/*!< dynamic programming matrix */
-	int32_t max;				/*!< (inout) current maximum score */
-	int64_t mi, mj, mp, mq;		/*!< maximum score position */
-	int64_t i, j, p, q;			/*!< temporary */
 };
 
 /**

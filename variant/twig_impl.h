@@ -174,6 +174,11 @@
 #define twig_linear_search_terminal(c, k, t) 	naive_linear_search_terminal(c, k, t)
 
 /**
+ * @macro twig_linear_search_trigger
+ */
+#define twig_linear_search_trigger(c, k, t)		naive_linear_search_trigger(c, k, t)
+
+/**
  * @macro twig_linear_search_max_score
  */
 #define twig_linear_search_max_score(c, k, t)	branch_linear_search_max_score(c, k, t)

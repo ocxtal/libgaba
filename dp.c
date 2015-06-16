@@ -161,14 +161,14 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 			default:    cfn = NULL; break;
 		}
 
-		/** chain chain chain */
 		if(cfn != NULL) {
+			/** chain chain chain */
 			debug("chain: cfn(%p), stat(%d)", cfn, stat);
 			struct sea_mem mdp = c.dp;
 			int32_t ret = SEA_SUCCESS;
 
-			/** save current positions */
-			t = *((struct sea_chain_resv *)(&c.pdp));
+			/** save coordinates */
+			t = *(struct sea_chain_resv *)&c;
 
 			/** malloc memory if stat == MEM */
 			if(stat == MEM) {
@@ -197,49 +197,31 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 			if(ret != SEA_SUCCESS) {
 				return(ret);
 			}
-#if 0
-			/** check if search is needed */
-			if(k.alg != NW && t.max > c.max) {		/** fixme diffのアルゴリズムでは厳密ではない */
-				debug("re-search triggered");
-				stat = SEARCH;
-			}
-#endif
-		}
-
-		/** check if search is needed */
-		if(k.alg == NW) {
-			if(stat == TERM) {
-				search_terminal(c, k, t);
+			if(k.alg != NW && (stat == TERM || t.max > c.max)) {
+				search_max_score(c, k, t);
+				debug("check if replace is needed");
+				if(t.max > c.max) {
+					*(struct sea_chain_resv *)&c = t;
+				}
 			}
 		} else {
-			search_max_score(c, k, t);
-			if(c.max > (CELL_MAX - k.m)) {
-				return SEA_ERROR_OVERFLOW;
-			}
-			if(c.max <= 0) {
-				c.i = c.mi = c.asp; c.j = c.mj = c.bsp;
-				debug("wr_alloc without traceback");
-				return SEA_SUCCESS;
-			}
-		}
-#if 0
-		if(stat == TERM || stat == SEARCH) {
+			/** termination */
 			if(k.alg == NW) {
-				search_terminal(c, k, t);
-			} else if(c.mp > sp) {			/** fixme! */
-				search_max_score(c, k, t);
+				debug("set terminal");
+				search_terminal(c, k, c);
+			} else {
+				debug("search max score");
+				search_max_score(c, k, c);
 				if(c.max > (CELL_MAX - k.m)) {
 					return SEA_ERROR_OVERFLOW;
 				}
-				if(c.max <= 0) {			/** fixme! */
+				if(c.max <= 0) {
 					c.i = c.mi = c.asp; c.j = c.mj = c.bsp;
-					wr_alloc(c.l, 0); proc->l = c.l;
 					debug("wr_alloc without traceback");
 					return SEA_SUCCESS;
 				}
 			}
 		}
-#endif
 	}
 
 	/** traceback */ {

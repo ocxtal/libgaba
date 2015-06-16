@@ -258,31 +258,36 @@
 #define branch_linear_search_terminal(c, k, t) 	naive_linear_search_terminal(c, k, t)
 
 /**
+ * @macro branch_linear_search_trigger
+ */
+#define branch_linear_search_trigger(c, k, t)	naive_linear_search_trigger(c, k, t)
+
+/**
  * @macro branch_linear_search_max_score
  */
 #define branch_linear_search_max_score(c, k, t) { \
-	if(t.max > c.max && t.max != CELL_MAX) { \
-		int64_t i, j; \
-		int64_t ep = t.p; \
-		cell_t *pl = pb + ADDR(ep-sp+1, -BW/2, BW); \
-		cell_t *pt; \
-		dir_t r; \
-		c.max = t.max; \
-		c.mp = 0; \
-		for(t.q = -BW/2; t.q < BW/2; t.q++, pl++) { \
-			if(*pl != t.max) { continue; } \
-			t.p = ep; \
-			dir_term(r, c); \
-			i = t.i - t.q; \
-			j = t.j + t.q; \
-			for(pt = pl-BW; *pt != t.max && t.p > t.mp; pt -= BW) { \
-				dir_prev(r, c); \
-				if(dir(r) == TOP) { j--; } else { i--; } \
-			} \
-			if(t.p > c.mp) { \
-				c.mi = i; c.mj = j; \
-				c.mp = t.p; c.mq = t.q; \
-			} \
+	debug("search start"); \
+	int64_t i, j; \
+	int64_t ep = t.p; \
+	cell_t *pl = pb + ADDR(ep-sp+1, -BW/2, BW); \
+	cell_t *pt; \
+	dir_t r; \
+	t.mp = 0; \
+	for(t.q = -BW/2; t.q < BW/2; t.q++, pl++) { \
+		debug("check pl(%p)", pl); \
+		if(*pl != t.max) { continue; } \
+		debug("found"); \
+		t.p = ep; \
+		dir_term(r, c); \
+		i = t.i - t.q; \
+		j = t.j + t.q; \
+		for(pt = pl-BW; *pt != t.max && t.p > t.mp; pt -= BW) { \
+			dir_prev(r, c); \
+			if(dir(r) == TOP) { j--; } else { i--; } \
+		} \
+		if(t.p > t.mp) { \
+			t.mi = i; t.mj = j; \
+			t.mp = t.p; t.mq = t.q; \
 		} \
 	} \
 }
