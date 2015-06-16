@@ -196,7 +196,7 @@
 }
 
 #define VEC_LOAD_PACKED(p, dv, dh) { \
-	__m128i mask = _mm_set1_epi8(0x0f); \
+	__m128i const mask = _mm_set1_epi8(0x0f); \
 	(dv##1) = _mm_load_si128((__m128i *)(p)); \
 	(dh##1) = _mm_and_si128(_mm_srli_epi64((dv##1), 4), mask); \
 	(dv##1) = _mm_and_si128((dv##1), mask); \

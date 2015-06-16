@@ -44,7 +44,7 @@ typedef struct _dir dir_t;
  * @brief initialize _dir struct
  */
 #define dir_init(r, dir) { \
-	(r).d2 = (dir)<<1; \
+	(r).d2 = (dir)<<2; \
 }
 
 /**

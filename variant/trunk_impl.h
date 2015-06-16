@@ -312,13 +312,6 @@
 
 /**
  * @macro trunk_linear_search_max_score
- * tmaxを見て上書きするか決める。
- * t: chainのときにreserveしたもの。fill-inの直後の状態
- * c: chainのあと。capなどで処理されたものが入っている。
- * b: chainの後の状態をreserveしたもの。
- *
- * つまり、bにまずバックアップ -> cに初期状態をセットし、tを調整
- * -> chain -> tを元に復元
  */
 /*
 #define trunk_linear_search_max_score(t, c, k) { \
@@ -329,39 +322,50 @@
 	dir_t r; \
 	int64_t msp = MAX2(t.mp + BW * (k.m - 2*k.gi) / (2 * k.x), sp); \
 	int64_t mep = MIN2(t.mp + BW * (k.m - 2*k.gi) / (2 * k.m), t.p); \
-	int64_t sc = 0, tsc; \
+	int32_t sc = 0, tsc; \
 	struct sea_coords x, y; \
 	DECLARE_VEC_CELL_REG(dv); \
 	DECLARE_VEC_CELL_REG(dh); \
 	\
-	x.i = 0; x.j = 0; \
+	debug("msp(%lld), mep(%lld)", msp, mep); \
+	debug("mi(%lld), mj(%lld), mp(%lld), mq(%lld), max(%d)", t.mi, t.mj, t.mp, t.mq, t.max); \
+	memset(&x, 0, sizeof(struct sea_coords)); \
 	c.pdp = pb + ADDR(msp - sp, -BW/2, BW); \
 	dir_init(r, c.pdr[msp]); \
 	for(x.p = msp; x.p < mep;) { \
 		dir_next_guided(r, x, c); \
 		VEC_LOAD_DVDH(c.pdp, dv, dh); \
-		sc += (((dir(r) == TOP) ? VEC_LSB(dv) : VEC_LSB(dh)) - k.gi); \
+		debug("load: pdp(%p)", c.pdp); \
+		sc += (((dir(r) == TOP) ? VEC_LSB(dv) : VEC_LSB(dh)) + k.gi); \
 		if(dir(r) == TOP) { x.j++; } else { x.i++; } \
+		debug("i(%lld), j(%lld), p(%lld), q(%lld), sc(%d)", x.i, x.j, x.p, x.q, sc); \
 		for(x.q = -BW/2, tsc = sc; x.q < BW/2; x.q++) { \
-			if(tsc > x.max) { \
+			if(tsc >= x.max) { \
 				x.max = tsc; \
 				coord_save_m(x); \
+				debug("max found: i(%lld), j(%lld), p(%lld), q(%lld), sc(%d)", x.i, x.j, x.p, x.q, x.max); \
 			} \
 			if(x.q == 0 && x.p == t.mp) { \
 				y = x; y.max = tsc; \
+				debug("anchor found: i(%lld), j(%lld), p(%lld), q(%lld), sc(%d), max(%d)", x.i, x.j, x.p, x.q, tsc, x.max); \
 			} \
-			tsc -= (VEC_LSB(dh) - k.gi); \
+			tsc -= (VEC_LSB(dh) + k.gi); \
 			VEC_SHIFT_R(dh, dh); \
 			VEC_SHIFT_R(dv, dv); \
-			tsc += (VEC_LSB(dv) - k.gi); \
+			tsc += (VEC_LSB(dv) + k.gi); \
 		} \
 	} \
-	t.max = x.max - y.max + t.max; \
-	t.mi = x.mi - y.i + t.mi; \
-	t.mj = x.mj - y.j + t.mj; \
+	debug("t: mi(%lld), mj(%lld), mp(%lld), mq(%lld), max(%d)", t.mi, t.mj, t.mp, t.mq, t.max); \
+	debug("x: mi(%lld), mj(%lld), mp(%lld), mq(%lld), max(%d)", x.mi, x.mj, x.mp, x.mq, x.max); \
+	debug("y: mi(%lld), mj(%lld), mp(%lld), mq(%lld), max(%d)", y.mi, y.mj, y.mp, y.mq, y.max); \
+	t.max += (x.max - y.max); \
+	t.mi += (x.mi - y.i - x.mq); \
+	t.mj += (x.mj - y.j + x.mq); \
 	t.mp = x.mp; \
 	t.mq = x.mq; \
+	debug("mi(%lld), mj(%lld), mp(%lld), mq(%lld), max(%d)", t.mi, t.mj, t.mp, t.mq, t.max); \
 }
+
 #if 0
 #define trunk_linear_search_max_score(t, c, k) { \
 	/*if(t.max > t.max - (k.m - 2*k.gi)*BW/2) {*/ \

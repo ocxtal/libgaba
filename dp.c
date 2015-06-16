@@ -26,8 +26,8 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 	debug("entry point: (%p)", CALL_FUNC(BASE, SUFFIX));
 
 	/** check if arguments are sanity */ {
-		if(ctx == NULL || proc == NULL) {
-			debug("invalid pointer detected: ctx(%p), proc(%p)", ctx, proc);
+		if(ctx == NULL || proc == NULL || co == NULL) {
+			debug("invalid pointer detected: ctx(%p), proc(%p), co(%p)", ctx, proc, co);
 			return SEA_ERROR_INVALID_ARGS;
 		}
 	}
