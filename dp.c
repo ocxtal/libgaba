@@ -113,7 +113,7 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 
 	/** chain */ {
 		int32_t (*cfn)(struct sea_consts const *, struct sea_process *, struct sea_coords *) = NULL;
-		struct sea_coords tn;
+		struct sea_coords ct;
 
 		/** check status sanity */
 		if(stat == CONT) {
@@ -138,7 +138,7 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 			int32_t ret = SEA_SUCCESS;
 
 			/** save coordinates */
-			tn = t;
+			ct = t;
 
 			/** malloc memory if stat == MEM */
 			if(stat == MEM) {
@@ -155,7 +155,7 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 			chain_push_ivec(t, c, k);
 			print_lane(c.v.pv, c.v.pv + c.v.plen*sizeof(cell_t));
 			print_lane(c.v.cv, c.v.cv + c.v.clen*sizeof(cell_t));
-			ret = cfn(ctx, &c, &tn);
+			ret = cfn(ctx, &c, &t);
 
 			/** clean up memory if stat == MEM */
 			if(stat == MEM) {
@@ -167,10 +167,16 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 			if(ret != SEA_SUCCESS) {
 				return(ret);
 			}
-			if(k.alg != NW && (stat == TERM || search_trigger(t, tn, c, k))) {
-				search_max_score(t, c, k);
+			if(k.alg != NW && (stat == TERM || search_trigger(ct, t, c, k))) {
+				search_max_score(ct, c, k);
 				debug("check if replace is needed");
-				if(tn.max > t.max) { t = tn; }
+				if(ct.max > t.max) {			// わからんわからんわからん
+					wr_close(t.l);
+					wr_alloc(ct.l, ct.mp);
+					t = ct;
+					t.i = t.mi; t.j = t.mj; t.p = t.mp; t.q = t.mq;
+					debug("wr_alloc: t.l.p(%p)", t.l.p);
+				}
 			}
 		} else {
 			/** termination */
@@ -189,19 +195,15 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 					return SEA_SUCCESS;
 				}
 			}
+			wr_alloc(t.l, t.mp);
+			t.i = t.mi; t.j = t.mj; t.p = t.mp; t.q = t.mq;
+			debug("wr_alloc: t.l.p(%p)", t.l.p);
 		}
 	}
 
 	/** traceback */ {
 		debug("t.mi(%lld), t.mj(%lld), t.mp(%lld), t.mq(%lld)", t.mi, t.mj, t.mp, t.mq);
 		debug("t.i(%lld), t.j(%lld), t.p(%lld), t.q(%lld)", t.i, t.j, t.p, t.q);
-		/** check if wr_alloc is needed */
-		if(t.mp <= t.p) {	/** これバグになる */
-			t.i = t.mi; t.j = t.mj;
-			t.p = t.mp; t.q = t.mq;
-			wr_alloc(t.l, t.mp); co->l = t.l;
-			debug("wr_alloc: t.l.p(%p)", t.l.p);
-		}
 
 		debug("trace");
 		trace_decl(t, c, k, r);
