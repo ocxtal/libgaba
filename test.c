@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
+#include <sys/time.h>
 #include "include/sea.h"
 
 /**
@@ -57,6 +57,7 @@ int main(int argc, char *argv[])
 	sea_t *d = NULL, *c = NULL;
 	sea_res_t *dres = NULL, *cres = NULL, *res = NULL;
 	char *a, *b, *at, *bt;
+	struct timeval tv;
 	// char const *a = "1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890";
 	// char const *b = "1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890";
 	int len = 3000;
@@ -71,7 +72,8 @@ int main(int argc, char *argv[])
 
 //	printf("%x\n", ctx->flags);
 
-	unsigned long s = (argc == 2) ? atoi(argv[1]) : time(NULL);
+	gettimeofday(&tv, NULL);
+	unsigned long s = (argc == 2) ? atoi(argv[1]) : tv.tv_usec;
 	srand(s);
 	printf("%lu\n", s);
 
