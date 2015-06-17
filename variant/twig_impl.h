@@ -141,7 +141,7 @@
 			VEC_SHIFT_R(tmp1, tmp1); \
 			VEC_MAX(maxv, tmp1, maxv); \
 		} \
-		VEC_STORE(c.pdp, maxv); \
+		t.max = VEC_LSB(maxv); \
 	} \
 	VEC_SET(zv, CELL_MIN); \
 	VEC_STORE(c.pdp, zv); \

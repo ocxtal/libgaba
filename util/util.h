@@ -598,12 +598,24 @@ enum _ALN_DIR {
  * @brief allocate a memory for the alignment string.
  */
 #define wr_alloc(w, s) { \
-	if((w).p != NULL) { \
-		free((w).p); (w).p = NULL; \
+	if((w).p != NULL && (w).size >= (sizeof(struct sea_result) + sizeof(uint8_t) * (s))) { \
+		(w).pos = (w).init((w).p, (w).size, sizeof(struct sea_result)); \
+	} else { \
+		(w).size = sizeof(struct sea_result) + sizeof(uint8_t) * (s); \
+		(w).p = malloc((w).size); \
+		(w).pos = (w).init((w).p, (w).size, sizeof(struct sea_result)); \
 	} \
-	(w).size = sizeof(sea_res_t) + sizeof(uint8_t) * (s); \
-	(w).p = malloc((w).size); \
-	(w).pos = (w).init((w).p, (w).size, sizeof(sea_res_t)); \
+}
+
+/**
+ * @macro wr_realloc
+ */
+#define wr_realloc(w, s) { \
+	if((w).p != NULL && (w).size >= (sizeof(struct sea_result) + sizeof(uint8_t) * (s))) { \
+		(w).pos = (w).init((w).p, (w).size, sizeof(struct sea_result)); \
+ 	} else { \
+ 		wr_alloc(w, s); \
+ 	} \
 }
 
 /**
@@ -643,10 +655,10 @@ enum _ALN_DIR {
 }
 
 /**
- * @macro wr_close
+ * @macro wr_clean
  * @brief free malloc'd memory and fill the instance with zero.
  */
-#define wr_close(w) { \
+#define wr_clean(w) { \
 	if((w).p != NULL) { \
 		free((w).p); (w).p = NULL; \
 	} \

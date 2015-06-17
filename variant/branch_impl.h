@@ -217,21 +217,15 @@
 #define branch_linear_fill_finish(t, c, k, r) { \
 	if(k.alg != NW) { \
 		VEC_STORE(c.pdp, maxv); \
-		print_lane(c.pdp - sizeof(cell_t) * BW, c.pdp); \
 		VEC_ASSIGN(tmp1, maxv); \
 		for(t.q = 1; t.q < BW; t.q++) { \
 			VEC_SHIFT_R(tmp1, tmp1); \
 			VEC_MAX(maxv, tmp1, maxv); \
 		} \
-		if(VEC_LSB(maxv) > t.max) { \
-			t.max = VEC_LSB(maxv); \
-			coord_save_m(t); \
-		} \
+		t.max = VEC_LSB(maxv); \
 	} \
 	VEC_STORE(c.pdp, pv); \
-	print_lane(c.pdp - sizeof(cell_t) * BW, c.pdp); \
 	VEC_STORE(c.pdp, v); \
-	print_lane(c.pdp - sizeof(cell_t) * BW, c.pdp); \
 }
 
 /**

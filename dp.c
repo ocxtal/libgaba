@@ -137,8 +137,8 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 			struct sea_mem mdp = c.dp;
 			int32_t ret = SEA_SUCCESS;
 
-			/** save coordinates */
-			ct = t;
+			/** save coordinates to global working buffer */
+			*co = t;
 
 			/** malloc memory if stat == MEM */
 			if(stat == MEM) {
@@ -152,10 +152,10 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 			}
 
 			/** call func */
-			chain_push_ivec(t, c, k);
+			chain_push_ivec((*co), c, k);
 			print_lane(c.v.pv, c.v.pv + c.v.plen*sizeof(cell_t));
 			print_lane(c.v.cv, c.v.cv + c.v.clen*sizeof(cell_t));
-			ret = cfn(ctx, &c, &t);
+			ret = cfn(ctx, &c, co);
 
 			/** clean up memory if stat == MEM */
 			if(stat == MEM) {
@@ -167,35 +167,59 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 			if(ret != SEA_SUCCESS) {
 				return(ret);
 			}
-			if(k.alg != NW && (stat == TERM || search_trigger(ct, t, c, k))) {
-				search_max_score(ct, c, k);
+		} else {
+			/** here stat == TERM */
+			if(k.alg == NW) {
+				debug("set terminal");
+				search_terminal(t, c, k);
+			}
+		}
+
+		if(k.alg != NW) {
+			debug("check re-search is needed: t1.max(%d), t2.max(%d)", t.max, ct.max);
+			/** here co is previous stack coords if stat == TERM, or next stack coords otherwise */
+			if(search_trigger(t, (*co), c, k)) {
+				search_max_score(t, c, k);
 				debug("check if replace is needed");
-				if(ct.max > t.max) {			// わからんわからんわからん
-					wr_close(t.l);
-					wr_alloc(ct.l, ct.mp);
-					t = ct;
+				if(t.max > co->max) {
+					t.l = co->l;
+					wr_alloc(t.l, t.mp);
 					coord_load_m(t);
 					debug("wr_alloc: t.l.p(%p)", t.l.p);
 				}
 			}
+			if(t.l.p == NULL) {			/** if valid max position is not found */
+				co->max = 0;
+				co->mi = co->mj = -1; co->mp = -2; co->mq = 0;
+				debug("return without traceback");
+				return SEA_SUCCESS;
+			}
+		}
+#if 0
 		} else {
 			/** termination */
 			if(k.alg == NW) {
 				debug("set terminal");
 				search_terminal(t, c, k);
 			} else {
-				debug("search max score");
-				search_max_score(t, c, k);
-				if(t.max <= 0) {
-					t.i = t.mi = c.asp; t.j = t.mj = c.bsp;
-					debug("wr_alloc without traceback");
+				if(search_trigger(t, (*co), c, k)) {
+					debug("search max score");
+					search_max_score(t, c, k);
+					if(t.max > co->max) {
+						wr_alloc(t.l, t.mp);
+						coord_load_m(t);
+						debug("wr_alloc: t.l.p(%p)", t.l.p);
+					}
+				}
+				if(t.l.p == NULL) {			/** if valid max position is not found */
+					co->max = 0;
+					co->mi = co->mj = -1; co->mp = -2; co->mq = 0;
+					debug("return without traceback");
 					return SEA_SUCCESS;
 				}
 			}
-			wr_alloc(t.l, t.mp);
-			coord_load_m(t);
-			debug("wr_alloc: t.l.p(%p)", t.l.p);
 		}
+#endif
 	}
 
 	/** traceback */ {
@@ -224,9 +248,8 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 		trace_finish(t, c, k, r);
 	}
 
-	/** write back the local context to the upper stack */
+	/** write back the local context to the global working buffer */
 	*co = t;
-	//*proc = c;
 
 	/** finish!! */
 	return SEA_SUCCESS;

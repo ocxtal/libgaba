@@ -478,6 +478,10 @@ struct sea_result *sea_align_intl(
 	}
 
 	/* finishing */
+	if(t.l.p == NULL) {
+		/** when returned without traceback */
+		wr_alloc(t.l, 1);
+	}
 	wr_finish(t.l);
 	r = (struct sea_result *)t.l.p;
 
@@ -504,18 +508,14 @@ struct sea_result *sea_align_intl(
 	return(r);
 
 _sea_error_handler:
-	r = (struct sea_result *)malloc(sizeof(struct sea_result) + 1);
-	r->a = NULL;
-	r->apos = 0;
-	r->alen = 0;
-	r->b = NULL;
-	r->bpos = 0;
-	r->blen = 0;
-	r->len = 0;
+	if(t.l.p == NULL) {
+		wr_alloc(t.l, 1);
+	}
+	r = (struct sea_result *)t.l.p;
+	memset(r, 0, sizeof(struct sea_result));
 	r->score = error_label;
 	r->aln = (void *)(r + 1);
 	*((uint8_t *)r->aln) = '\0';
-//	r->ctx = ctx;
 	return(r);
 }
 
