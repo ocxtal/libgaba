@@ -222,7 +222,6 @@
 	*((int32_t *)c.pdp) = scl; \
 	c.pdp += sizeof(int32_t); \
 	*((int32_t *)c.pdp) = t.max; \
-/*	t.max += (k.m - 2*k.gi)*BW/2; */ \
 	c.pdp += sizeof(int32_t); \
 	c.pdp += (trunk_linear_bpl(c) - sizeof(int32_t) * 4); \
 }
@@ -242,8 +241,6 @@
 #define trunk_linear_chain_push_ivec(t, c, k) { \
 	int16_t psc, csc; \
 	cell_t *p = (cell_t *)c.pdp - 3*BW; \
-	/*debug("compensate max: t.max(%d), base(%d)", t.max, *((int32_t *)((cell_t *)c.pdp - BW)));*/ \
-	/*t.max -= *((int32_t *)((cell_t *)c.pdp - BW));*/ \
 	t.i += BW/2; \
 	t.j -= BW/2; \
 	psc = -k.gi - *(p + BW) - *p; \
@@ -307,7 +304,7 @@
  * @macro trunk_linear_search_trigger
  */
 #define trunk_linear_search_trigger(t1, t2, c, k) ( \
-	t1.max > t2.max - (k.m - 2*k.gi)*BW/2 \
+	t1.max > (t2.max - (k.m - 2*k.gi)*BW/2 - (t1.max > t2.max)) \
 )
 
 /**

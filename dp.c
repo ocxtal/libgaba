@@ -113,7 +113,6 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 
 	/** chain */ {
 		int32_t (*cfn)(struct sea_consts const *, struct sea_process *, struct sea_coords *) = NULL;
-		struct sea_coords ct;
 
 		/** check status sanity */
 		if(stat == CONT) {
@@ -176,12 +175,14 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 		}
 
 		if(k.alg != NW) {
-			debug("check re-search is needed: t1.max(%d), t2.max(%d)", t.max, ct.max);
+			debug("check re-search is needed: t1.max(%d), t2.max(%d)", t.max, co->max);
 			/** here co is previous stack coords if stat == TERM, or next stack coords otherwise */
+			
+			/** search triggerがかからないのは、co->maxが大きい値を持っているとき */
 			if(search_trigger(t, (*co), c, k)) {
 				search_max_score(t, c, k);
 				debug("check if replace is needed");
-				if(t.max > co->max) {
+				if(t.max > co->max - (t.mp > co->mp)) {
 					t.l = co->l;
 					wr_alloc(t.l, t.mp);
 					coord_load_m(t);
@@ -189,37 +190,16 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 				}
 			}
 			if(t.l.p == NULL) {			/** if valid max position is not found */
-				co->max = 0;
-				co->mi = co->mj = -1; co->mp = -2; co->mq = 0;
-				debug("return without traceback");
-				return SEA_SUCCESS;
-			}
-		}
-#if 0
-		} else {
-			/** termination */
-			if(k.alg == NW) {
-				debug("set terminal");
-				search_terminal(t, c, k);
-			} else {
-				if(search_trigger(t, (*co), c, k)) {
-					debug("search max score");
-					search_max_score(t, c, k);
-					if(t.max > co->max) {
-						wr_alloc(t.l, t.mp);
-						coord_load_m(t);
-						debug("wr_alloc: t.l.p(%p)", t.l.p);
-					}
-				}
-				if(t.l.p == NULL) {			/** if valid max position is not found */
+				if(co->l.p == NULL) {
 					co->max = 0;
-					co->mi = co->mj = -1; co->mp = -2; co->mq = 0;
+					co->mi = c.asp; co->mj = c.bsp; co->mp = 0; co->mq = 0;
 					debug("return without traceback");
 					return SEA_SUCCESS;
+				} else {
+					t = *co;
 				}
 			}
 		}
-#endif
 	}
 
 	/** traceback */ {

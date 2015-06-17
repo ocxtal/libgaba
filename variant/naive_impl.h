@@ -216,7 +216,7 @@
  * @macro naive_linear_search_trigger
  */
 #define naive_linear_search_trigger(t1, t2, c, k) ( \
-	t1.max > t2.max \
+	t1.max > (t2.max - (t1.max > t2.max)) \
 )
 
 /**

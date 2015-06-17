@@ -392,10 +392,10 @@ struct sea_result *sea_align_intl(
 		r = (struct sea_result *)malloc(sizeof(struct sea_result) + 1);
 		r->a = a;
 		r->apos = asp;
-		r->alen = aep;
+		r->alen = 0;
 		r->b = b;
 		r->bpos = bsp;
-		r->blen = bep;
+		r->blen = 0;
 		r->len = 0;
 		r->score = 0;
 		r->aln = (void *)(r + 1);
@@ -478,29 +478,29 @@ struct sea_result *sea_align_intl(
 	}
 
 	/* finishing */
+	debug("t.l.p(%p)", t.l.p);
 	if(t.l.p == NULL) {
 		/** when returned without traceback */
-		wr_alloc(t.l, 1);
-	}
+		debug("set default (i, j) coordinates");
+		t.i = t.mi = asp; t.j = t.mj = bsp;
+		wr_alloc(t.l, 100);
+	}	
+	debug("finishing: r(%p), size(%lld), pos(%lld)", t.l.p, t.l.size, t.l.pos);
 	wr_finish(t.l);
 	r = (struct sea_result *)t.l.p;
 
 	r->aln = (uint8_t *)t.l.p + t.l.pos;
 	r->len = t.l.size;
-	debug("finishing: len(%lld)", r->len);
 	r->a = a;
 	r->b = b;
-	r->apos = t.mi;
-	r->bpos = t.mj;
-	r->alen = c.aep;
-	r->blen = c.bep;
+	r->apos = t.i;
+	r->bpos = t.j;
+	r->alen = t.mi - t.i;
+	r->blen = t.mj - t.j;
 	r->score = t.max;
-//	r->ctx = ctx;
 
 	/* clean DP matrix */
-//	AFREE(iv, 2*k.bw);
 	AFREE(c.dp.sp, k.isize);
-//	AFREE(c.dr.sp, ctx->isize);
 	if(guide == NULL) {
 		free(c.dr.sp);
 	}
