@@ -19,4 +19,5 @@ pbchk/pbsim-1.0.3
 *build*
 *sublime*
 *oprofile*
+Makefile
 .gitignore~

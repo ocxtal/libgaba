@@ -11,6 +11,7 @@
 
 #include <stdlib.h>				/* for malloc / free */
 #include <string.h>				/* memset */
+#include <ctype.h>				/* isdigit */
 #include "include/sea.h"		/* definitions of public APIs and structures */
 #include "util/util.h"			/* definitions of internal utility functions */
 // #include "build/config.h"
@@ -596,6 +597,79 @@ sea_res_t *sea_align_r(
 		a, asp, aep,
 		b, bsp, bep,
 		guide, glen, ALN_RV));
+}
+
+/** high-level APIs for constructing seed-and-extend local alignment algorithms */
+/**
+ * @fn sea_align_checkpoint
+ * @brief (API) do checkpoint alignment
+ */
+sea_res_t *sea_align_checkpoint(
+	sea_t const *ctx,
+	void const *a,
+	void const *b,
+	struct sea_checkpoint *cp)
+{
+	return NULL;
+}
+
+/**
+ * @sea_align_finish
+ * @brief (API) do finishing (the guided Smith-Waterman) alignment
+ */
+sea_res_t *sea_align_finish(
+	sea_t const *ctx,
+	void const *a,
+	void const *b,
+	uint8_t const *guide,
+	int64_t glen)
+{
+	return NULL;
+}
+
+/**
+ * @fn sea_add_clips
+ * @brief add soft / hard clips at the ends of the cigar string.
+ */
+void sea_add_clips(
+	sea_t const *ctx,
+	sea_res_t *aln,
+	int64_t hlen,
+	int64_t tlen,
+	char type)
+{
+	uint8_t *p;
+	char buf[32];
+	int64_t blen;
+
+	if(ctx == NULL || aln == NULL || aln->len <= 0) {
+		return;
+	}
+	/** check if aln->aln is a ciger string */
+	if(!isalnum(aln->aln[0])) {
+		return;
+	}
+	/** check if the alignment already has the clips */
+	p = aln->aln;
+	while(isdigit(*p)) { p++; }
+	if(  aln->aln[aln->len-1] == SEA_CLIP_SOFT
+	  || aln->aln[aln->len-1] == SEA_CLIP_HARD
+	  || *p == SEA_CLIP_SOFT || *p == SEA_CLIP_HARD) {
+		return;
+	}
+
+	if(hlen > 0) {
+		/** add a clip at the head */
+		aln->len += sprintf((char *)aln->aln + aln->len, "%lld%c", hlen, type);
+	}
+	if(tlen > 0) {
+		/** add a clip at the tail */
+		blen = sprintf(buf, "%lld%c", tlen, type);
+		aln->len += blen;
+		aln->aln -= blen;
+		strncpy((char *)aln->aln, buf, blen);
+	}
+	return;
 }
 
 /**

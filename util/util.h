@@ -597,7 +597,13 @@ enum _ALN_DIR {
  * @macro wr_alloc
  * @brief allocate a memory for the alignment string.
  */
-#define wr_alloc_size(s)		( sizeof(struct sea_result) + sizeof(uint8_t) * ((s) + 16/* margin for xmm bulk write (see pushm_cigar_r in io.s)*/) )
+#define wr_alloc_size(s) ( \
+	  sizeof(struct sea_result) \
+	+ sizeof(uint8_t) * ( \
+	    (s) \
+	  + 16 /* margin for xmm bulk write (see pushm_cigar_r in io.s)*/ \
+	  + 16 /* margin for clip seqs at the head and tail */ ) \
+)
 #define wr_alloc(w, s) { \
 	debug("wr_alloc called"); \
 	if((w).p == NULL || (w).size < wr_alloc_size(s)) { \
@@ -607,7 +613,9 @@ enum _ALN_DIR {
 		(w).size = wr_alloc_size(s); \
 		(w).p = malloc((w).size); \
 	} \
-	(w).pos = (w).init((w).p, (w).size, sizeof(struct sea_result)); \
+	(w).pos = (w).init((w).p, \
+		(w).size - 8, /** margin: must be consistent to wr_finish */ \
+		sizeof(struct sea_result) + 8); /** margin: must be consistent to wr_finish */ \
 }
 
 /**
@@ -638,10 +646,10 @@ enum _ALN_DIR {
 #define wr_finish(w) { \
 	int64_t p = (w).finish((w).p, (w).pos); \
 	if(p <= (w).pos) { \
-		(w).size = (w).size - p - 1; \
+		(w).size = ((w).size - 8) - p - 1; \
 		(w).pos = p; \
 	} else { \
-		(w).size = p - sizeof(sea_res_t) - 1; \
+		(w).size = p - (sizeof(struct sea_result) + 8) - 1; \
 		(w).pos = sizeof(sea_res_t); \
 	} \
 }

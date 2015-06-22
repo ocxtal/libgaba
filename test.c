@@ -60,7 +60,7 @@ int main(int argc, char *argv[])
 	struct timeval tv;
 	// char const *a = "1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890";
 	// char const *b = "1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890";
-	int len = 30000;
+	int len = 300;
 
 	d = sea_init(
 		SEA_LINEAR_GAP_COST | SEA_XSEA | SEA_ALN_DIR,
@@ -87,8 +87,8 @@ int main(int argc, char *argv[])
 	printf("%s\n%s\n", a, b);
 
 	int lm = 5, rm = 5;
-
-/*	dres = sea_align(d,
+/*
+	dres = sea_align(d,
 		a, lm, strlen(a)-rm,
 		b, lm, strlen(b)-rm,
 		NULL, 0);
@@ -102,6 +102,8 @@ int main(int argc, char *argv[])
 		a, lm, strlen(a)-rm,
 		b, lm, strlen(b)-rm,
 		NULL, 0);
+
+	sea_add_clips(c, res, lm, rm, SEA_CLIP_HARD);
 
 	// printf("%d, %lld, %s\n", cres->score, cres->len, cres->aln);
 	printf("%d, %lld, %s\n", res->score, res->len, res->aln);

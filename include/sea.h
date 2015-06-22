@@ -168,6 +168,39 @@ enum sea_direction {
 	SEA_TOP     = SEA_UE_TOP | SEA_LE_TOP		/** 0b11 */
 };
 
+/**
+ * @enum sea_checkpoint_type
+ */
+enum sea_checkpoint_type {
+	SEA_CP_UPWARD = 1,
+	SEA_CP_DOWNWARD = 2,
+	SEA_CP_3PRIME = SEA_CP_UPWARD,
+	SEA_CP_5PRIME = SEA_CP_DOWNWARD,
+	SEA_CP_BEGIN = SEA_CP_DOWNWARD,
+	SEA_CP_END = SEA_CP_UPWARD,
+	SEA_CP_CHECKPOINT = SEA_CP_UPWARD | SEA_CP_DOWNWARD
+};
+
+/**
+ * @enum sea_clip_type
+ */
+enum sea_clip_type {
+	SEA_CLIP_SOFT = 'S',
+	SEA_CLIP_HARD = 'H',
+	SEA_CLIP_NULL = 0
+};
+
+/**
+ * @struct sea_checkpoint
+ *
+ * @brief input point container for checkpoint alignment function.
+ */
+struct sea_checkpoint {
+	int64_t apos;
+	int64_t bpos;
+	int32_t type;
+	struct sea_checkpoint *next;				/** linked list */
+};
 
 /**
  * @struct sea_result
@@ -291,6 +324,37 @@ sea_res_t *sea_align_r(
 	int64_t bep,
 	uint8_t const *guide,
 	int64_t glen);
+
+/**
+ * @fn sea_align_checkpoint
+ */
+sea_res_t *sea_align_checkpoint(
+	sea_t const *ctx,
+	void const *a,
+	void const *b,
+	struct sea_checkpoint *cp);
+
+/**
+ * @fn sea_align_finish
+ */
+sea_res_t *sea_align_finish(
+	sea_t const *ctx,
+	void const *a,
+	void const *b,
+	uint8_t const *guide,
+	int64_t glen);
+
+/**
+ * @fn sea_add_clips
+ *
+ * @brief add soft / hard clip to the ends of the cigar string.
+ */
+void sea_add_clips(
+	sea_t const *ctx,
+	sea_res_t *aln,
+	int64_t hlen,
+	int64_t tlen,
+	char type);
 
 /**
  * @fn sea_get_error_num
