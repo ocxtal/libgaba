@@ -487,11 +487,15 @@ struct sea_result *sea_align_intl(
 		wr_alloc(t.l, 100);
 	}	
 	debug("finishing: r(%p), size(%lld), pos(%lld)", t.l.p, t.l.size, t.l.pos);
-	wr_finish(t.l);
+	wr_finish(t.l, t.mp);
 	r = (struct sea_result *)t.l.p;
 
 	r->aln = (uint8_t *)t.l.p + t.l.pos;
-	r->len = t.l.size;
+	switch(ctx->flags & SEA_FLAGS_MASK_ALN) {
+		case SEA_ALN_ASCII: r->len = t.l.len; break;
+		case SEA_ALN_CIGAR: r->len = t.l.len; break;
+		case SEA_ALN_DIR: r->len = t.l.size; break;
+	}
 	r->a = a;
 	r->b = b;
 	r->apos = t.i;
@@ -628,6 +632,16 @@ sea_res_t *sea_align_finish(
 }
 
 /**
+ * @fn isclip
+ * @brief (internal) check if a is a clip character.
+ */
+static inline
+int isclip(char c)
+{
+	return(c == SEA_CLIP_HARD || c == SEA_CLIP_SOFT);
+}
+
+/**
  * @fn sea_add_clips
  * @brief add soft / hard clips at the ends of the cigar string.
  */
@@ -649,25 +663,28 @@ void sea_add_clips(
 	if(!isalnum(aln->aln[0])) {
 		return;
 	}
-	/** check if the alignment already has the clips */
+	/** check if the alignment already has clips */
 	p = aln->aln;
 	while(isdigit(*p)) { p++; }
-	if(  aln->aln[aln->len-1] == SEA_CLIP_SOFT
-	  || aln->aln[aln->len-1] == SEA_CLIP_HARD
-	  || *p == SEA_CLIP_SOFT || *p == SEA_CLIP_HARD) {
+	if(isclip(*p) || isclip(aln->aln[strlen((char const *)aln->aln)-1])) {
 		return;
 	}
-
+	/** add clips */
 	if(hlen > 0) {
-		/** add a clip at the head */
-		aln->len += sprintf((char *)aln->aln + aln->len, "%lld%c", hlen, type);
+		/** add head clip */
+		sprintf((char *)aln->aln + strlen((char const *)aln->aln), "%lld%c", hlen, type);
 	}
 	if(tlen > 0) {
-		/** add a clip at the tail */
-		blen = sprintf(buf, "%lld%c", tlen, type);
-		aln->len += blen;
-		aln->aln -= blen;
+		/** add tail clip */
+		aln->aln -= (blen = sprintf(buf, "%lld%c", tlen, type));
 		strncpy((char *)aln->aln, buf, blen);
+	}
+	/** adjust apos, alen, bpos, and blen */
+	if(type == SEA_CLIP_SOFT) {
+		aln->apos -= hlen;
+		aln->bpos -= hlen;
+		aln->alen += (hlen + tlen);
+		aln->blen += (hlen + tlen);
 	}
 	return;
 }

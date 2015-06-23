@@ -142,8 +142,6 @@ typedef struct _dir dir_t;
 	#warning "DP undefined"
 #endif
 
-static int32_t const _dp = DP;
-
 #if DP == DYNAMIC
 	#define dir_next 			dir_next_dynamic
 	#define dir_check_term		dir_check_term_dynamic

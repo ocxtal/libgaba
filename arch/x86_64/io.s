@@ -360,7 +360,6 @@ __pushm_cigar_r:
 	pxor %xmm0, %xmm0
 	pxor %xmm1, %xmm1
 	movd %r8d, %xmm0
-#	shlq $56, %r8		# %r8 is used as string buffer
 	movq $1, %r9		# %r9 holds the length of array in %r8
 	movq %rsi, %rdx
 	addq $1, %rdx
@@ -371,15 +370,11 @@ __pushm_cigar_r_loop:
 	divq %rcx
 	addq $48, %rdx
 	movd %edx, %xmm1
-#	shlq $56, %rdx
-#	shlq $8, %r8
 	pslldq $1, %xmm0
-#	orq %rdx, %r8
 	por %xmm1, %xmm0
 	addq $1, %r9
 	cmpl $0, %eax
 	jne __pushm_cigar_r_loop
-#	movq %r8, (%rdi, %rsi)
 	movdqu %xmm0, (%rdi, %rsi)
 	addq %r9, %rsi
 	movb $61, (%rdi, %rsi)
@@ -403,7 +398,6 @@ __pushx_cigar_r:
 	pxor %xmm0, %xmm0
 	pxor %xmm1, %xmm1
 	movd %r8d, %xmm0
-#	shlq $56, %r8		# %r8 is used as string buffer
 	movq $1, %r9		# %r9 holds the length of array in %r8
 	movq %rsi, %rdx
 	addq $1, %rdx
@@ -414,15 +408,11 @@ __pushx_cigar_r_loop:
 	divq %rcx
 	addq $48, %rdx
 	movd %edx, %xmm1
-#	shlq $56, %rdx
-#	shlq $8, %r8
 	pslldq $1, %xmm0
-#	orq %rdx, %r8
 	por %xmm1, %xmm0
 	addq $1, %r9
 	cmpl $0, %eax
 	jne __pushx_cigar_r_loop
-#	movq %r8, (%rdi, %rsi)
 	movdqu %xmm0, (%rdi, %rsi)
 	addq %r9, %rsi
 	movb $88, (%rdi, %rsi)
@@ -446,7 +436,6 @@ __pushi_cigar_r:
 	pxor %xmm0, %xmm0
 	pxor %xmm1, %xmm1
 	movd %r8d, %xmm0
-#	shlq $56, %r8		# %r8 is used as string buffer
 	movq $1, %r9		# %r9 holds the length of array in %r8
 	movq %rsi, %rdx
 	addq $1, %rdx
@@ -457,15 +446,11 @@ __pushi_cigar_r_loop:
 	divq %rcx
 	addq $48, %rdx
 	movd %edx, %xmm1
-#	shlq $56, %rdx
-#	shlq $8, %r8
 	pslldq $1, %xmm0
-#	orq %rdx, %r8
 	por %xmm1, %xmm0
 	addq $1, %r9
 	cmpl $0, %eax
 	jne __pushi_cigar_r_loop
-#	movq %r8, (%rdi, %rsi)
 	movdqu %xmm0, (%rdi, %rsi)
 	addq %r9, %rsi
 	movb $73, (%rdi, %rsi)
@@ -489,7 +474,6 @@ __pushd_cigar_r:
 	pxor %xmm0, %xmm0
 	pxor %xmm1, %xmm1
 	movd %r8d, %xmm0
-#	shlq $56, %r8		# %r8 is used as string buffer
 	movq $1, %r9		# %r9 holds the length of array in %r8
 	movq %rsi, %rdx
 	addq $1, %rdx
@@ -500,19 +484,11 @@ __pushd_cigar_r_loop:
 	divq %rcx
 	addq $48, %rdx
 	movd %edx, %xmm1
-#	shlq $56, %rdx
-#	shlq $8, %r8
 	pslldq $1, %xmm0
-#	orq %rdx, %r8
 	por %xmm1, %xmm0
 	addq $1, %r9
 	cmpl $0, %eax
 	jne __pushd_cigar_r_loop
-#	movq $8, %rcx
-#	subq %r9, %rcx
-#	shlq $3, %rcx
-#	shrq %cl, %r8
-#	movq %r8, (%rdi, %rsi)
 	movdqu %xmm0, (%rdi, %rsi)
 	addq %r9, %rsi
 	movb $68, (%rdi, %rsi)
@@ -534,7 +510,6 @@ __finish_cigar_r:
 	pxor %xmm0, %xmm0
 	pxor %xmm1, %xmm1
 	movd %r8d, %xmm0
-#	shlq $56, %r8		# %r8 is used as string buffer
 	movq $1, %r9		# %r9 holds the length of array in %r8
 	movq %rsi, %rdx
 	addq $1, %rdx
@@ -545,15 +520,11 @@ __finish_cigar_r_loop:
 	divq %rcx
 	addq $48, %rdx
 	movd %edx, %xmm1
-#	shlq $56, %rdx
-#	shlq $8, %r8
 	pslldq $1, %xmm0
-#	orq %rdx, %r8
 	por %xmm1, %xmm0
 	addq $1, %r9
 	cmpl $0, %eax
 	jne __finish_cigar_r_loop
-#	movq %r8, (%rdi, %rsi)
 	movdqu %xmm0, (%rdi, %rsi)
 	addq %r9, %rsi
 	movb $0, (%rdi, %rsi)

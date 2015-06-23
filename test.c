@@ -54,8 +54,8 @@ char *mseq(char const *seq, int x, int ins, int del)
 
 int main(int argc, char *argv[])
 {
-	sea_t *d = NULL, *c = NULL;
-	sea_res_t *dres = NULL, *cres = NULL, *res = NULL;
+	sea_t *d = NULL, *c = NULL, *r;
+	sea_res_t *dres = NULL, *cres = NULL, *rres = NULL, *res = NULL;
 	char *a, *b, *at, *bt;
 	struct timeval tv;
 	// char const *a = "1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890";
@@ -69,6 +69,11 @@ int main(int argc, char *argv[])
 	c = sea_init(
 		SEA_LINEAR_GAP_COST | SEA_XSEA | SEA_ALN_CIGAR,
 		2, -3, -5, -1, 100, 20, 30);
+
+	r = sea_init(
+		SEA_LINEAR_GAP_COST | SEA_XSEA | SEA_ALN_ASCII,
+		2, -3, -5, -1, 100, 20, 30);
+
 
 //	printf("%x\n", ctx->flags);
 
@@ -87,7 +92,7 @@ int main(int argc, char *argv[])
 	printf("%s\n%s\n", a, b);
 
 	int lm = 5, rm = 5;
-/*
+
 	dres = sea_align(d,
 		a, lm, strlen(a)-rm,
 		b, lm, strlen(b)-rm,
@@ -97,7 +102,12 @@ int main(int argc, char *argv[])
 		a, lm, strlen(a)-rm,
 		b, lm, strlen(b)-rm,
 		dres->aln, dres->len);
-*/
+
+	rres = sea_align(r,
+		a, lm, strlen(a)-rm,
+		b, lm, strlen(b)-rm,
+		dres->aln, dres->len);
+
 	res = sea_align(c,
 		a, lm, strlen(a)-rm,
 		b, lm, strlen(b)-rm,
@@ -105,7 +115,9 @@ int main(int argc, char *argv[])
 
 	sea_add_clips(c, res, lm, rm, SEA_CLIP_HARD);
 
-	// printf("%d, %lld, %s\n", cres->score, cres->len, cres->aln);
+	printf("%d, %lld\n", dres->score, dres->len);
+	printf("%d, %lld, %s\n", cres->score, cres->len, cres->aln);
+	printf("%d, %lld, %s\n", rres->score, rres->len, rres->aln);
 	printf("%d, %lld, %s\n", res->score, res->len, res->aln);
 
 	free(a);
@@ -113,6 +125,7 @@ int main(int argc, char *argv[])
 
 	sea_aln_free(d, dres);
 	sea_aln_free(c, cres);
+	sea_aln_free(r, rres);
 	sea_aln_free(c, res);
 
 	sea_clean(d);

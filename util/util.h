@@ -55,7 +55,7 @@ struct sea_reader {
  */
 struct sea_writer {
 	uint8_t *p;
-	int64_t pos, size;
+	int64_t pos, size, len;
 	int64_t (*init)(
 		uint8_t *ptr,
 		int64_t fpos,
@@ -602,7 +602,7 @@ enum _ALN_DIR {
 	+ sizeof(uint8_t) * ( \
 	    (s) \
 	  + 16 /* margin for xmm bulk write (see pushm_cigar_r in io.s)*/ \
-	  + 16 /* margin for clip seqs at the head and tail */ ) \
+	  + 8 + 8 /* margin for clip seqs at the head and tail */ ) \
 )
 #define wr_alloc(w, s) { \
 	debug("wr_alloc called"); \
@@ -616,6 +616,7 @@ enum _ALN_DIR {
 	(w).pos = (w).init((w).p, \
 		(w).size - 8, /** margin: must be consistent to wr_finish */ \
 		sizeof(struct sea_result) + 8); /** margin: must be consistent to wr_finish */ \
+	(w).len = 0; \
 }
 
 /**
@@ -623,34 +624,35 @@ enum _ALN_DIR {
  * @brief push an alignment character
  */
 #define wr_pushm(w) { \
-	(w).pos = (w).pushm((w).p, (w).pos); \
+	(w).pos = (w).pushm((w).p, (w).pos); (w).len++; \
 	debug("pushm: %c, pos(%lld)", (w).p[(w).pos], (w).pos); \
 }
 #define wr_pushx(w) { \
-	(w).pos = (w).pushx((w).p, (w).pos); \
+	(w).pos = (w).pushx((w).p, (w).pos); (w).len++; \
 	debug("pushx: %c, pos(%lld)", (w).p[(w).pos], (w).pos); \
 }
 #define wr_pushi(w) { \
-	(w).pos = (w).pushi((w).p, (w).pos); \
+	(w).pos = (w).pushi((w).p, (w).pos); (w).len++; \
 	debug("pushi: %c, pos(%lld)", (w).p[(w).pos], (w).pos); \
 }
 #define wr_pushd(w) { \
-	(w).pos = (w).pushd((w).p, (w).pos); \
+	(w).pos = (w).pushd((w).p, (w).pos); (w).len++; \
 	debug("pushd: %c, pos(%lld)", (w).p[(w).pos], (w).pos); \
 }
 
 /**
  * @macro wr_finish
- * @brief finish the instance (move the content of the array to the front)
+ * @brief finish the instance
+ * @detail the size of the array (s) must have the same value as given to wr_alloc.
  */
-#define wr_finish(w) { \
+#define wr_finish(w, s) { \
 	int64_t p = (w).finish((w).p, (w).pos); \
 	if(p <= (w).pos) { \
 		(w).size = ((w).size - 8) - p - 1; \
 		(w).pos = p; \
 	} else { \
 		(w).size = p - (sizeof(struct sea_result) + 8) - 1; \
-		(w).pos = sizeof(sea_res_t); \
+		(w).pos = sizeof(struct sea_result) + 8; \
 	} \
 }
 
@@ -662,7 +664,9 @@ enum _ALN_DIR {
 	if((w).p != NULL) { \
 		free((w).p); (w).p = NULL; \
 	} \
+	(w).size = 0; \
 	(w).pos = 0; \
+	(w).len = 0; \
 	(w).pushm = (w).pushx = (w).pushi = (w).pushd = NULL; \
 }
 

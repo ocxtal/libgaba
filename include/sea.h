@@ -196,9 +196,9 @@ enum sea_clip_type {
  * @brief input point container for checkpoint alignment function.
  */
 struct sea_checkpoint {
-	int64_t apos;
+	int64_t apos;			/** (apos, bpos) makes a checkpoint on seq a and seq b */
 	int64_t bpos;
-	int32_t type;
+	int32_t type;			/** checkpoint type; see `enum sea_checkpoint_type'. */
 	struct sea_checkpoint *next;				/** linked list */
 };
 
@@ -207,14 +207,23 @@ struct sea_checkpoint {
  *
  * @brief (API) a structure containing an alignment result.
  *
+ * @detail
+ * the triplets (a, apos, alen) and (b, bpos, blen) contains the position
+ * and the length of the alignment projected on each sequences.
+ * the aln contains the alignment string, which format is specified by the
+ * flags given to the `sea_init'. (see `enum sea_flags_aln' for available
+ * formats.)
+ * the len contains the length of the alignment string, not including
+ * clippings at the ends.
+ *
  * @sa sea_sea, sea_aln_free
  */
 struct sea_result {
-	void const *a; 			/*!< a pointer to a sequence a. */
-	void const *b;			/*!< a pointer to a sequence b. */
-	uint8_t *aln;			/*!< a pointer to a alignment result. */
-	int32_t score;			/*!< an alignment score. */
-	int64_t len;			/*!< alignment length. (the length of a content of aln) used as an errno container if error occured. */
+	void const *a; 			/*!< a pointer to the sequence a. */
+	void const *b;			/*!< a pointer to the sequence b. */
+	uint8_t *aln;			/*!< a pointer to the alignment result. */
+	int32_t score;			/*!< the alignment score. */
+	int64_t len;			/*!< alignment length (len == strlen(aln) if ASCII, len == the sum of {M, X, I, D, =} operations if CIGAR, and len == the length of the direction string if DIR) */
 	int64_t apos;			/*!< alignment start position on a. */
 	int64_t alen;			/*!< alignment length on a. the alignment interval is a[apos]..a[apos+alen-1] */
 	int64_t bpos;			/*!< alignment start position on b. */
