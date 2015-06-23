@@ -669,7 +669,7 @@ void sea_add_clips(
 	/** add clips */
 	if(hlen > 0) {
 		/** add head clip */
-		aln->slen += sprintf((char *)aln->aln + strlen((char const *)aln->aln), "%lld%c", hlen, type);
+		aln->slen += sprintf((char *)aln->aln + aln->slen, "%lld%c", hlen, type);
 	}
 	if(tlen > 0) {
 		/** add tail clip */
