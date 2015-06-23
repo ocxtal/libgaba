@@ -101,12 +101,12 @@ int main(int argc, char *argv[])
 	cres = sea_align(c,
 		a, lm, strlen(a)-rm,
 		b, lm, strlen(b)-rm,
-		dres->aln, dres->len);
+		dres->aln, dres->slen);
 
 	rres = sea_align(r,
 		a, lm, strlen(a)-rm,
 		b, lm, strlen(b)-rm,
-		dres->aln, dres->len);
+		dres->aln, dres->slen);
 
 	res = sea_align(c,
 		a, lm, strlen(a)-rm,
@@ -115,10 +115,10 @@ int main(int argc, char *argv[])
 
 	sea_add_clips(c, res, lm, rm, SEA_CLIP_HARD);
 
-	printf("%d, %lld\n", dres->score, dres->len);
-	printf("%d, %lld, %s\n", cres->score, cres->len, cres->aln);
-	printf("%d, %lld, %s\n", rres->score, rres->len, rres->aln);
-	printf("%d, %lld, %s\n", res->score, res->len, res->aln);
+	printf("%d, %lld\n", dres->score, dres->plen);
+	printf("%d, %lld, %s\n", cres->score, cres->plen, cres->aln);
+	printf("%d, %lld, %s\n", rres->score, rres->plen, rres->aln);
+	printf("%d, %lld, %s\n", res->score, res->plen, res->aln);
 
 	free(a);
 	free(b);

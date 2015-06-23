@@ -397,11 +397,11 @@ struct sea_result *sea_align_intl(
 		r->b = b;
 		r->bpos = bsp;
 		r->blen = 0;
-		r->len = 0;
+		r->slen = 0;
+		r->plen = 0;
 		r->score = 0;
 		r->aln = (void *)(r + 1);
 		*((uint8_t *)r->aln) = '\0';
-//		r->ctx = ctx;
 		return(r);
 	}
 
@@ -491,11 +491,8 @@ struct sea_result *sea_align_intl(
 	r = (struct sea_result *)t.l.p;
 
 	r->aln = (uint8_t *)t.l.p + t.l.pos;
-	switch(ctx->flags & SEA_FLAGS_MASK_ALN) {
-		case SEA_ALN_ASCII: r->len = t.l.len; break;
-		case SEA_ALN_CIGAR: r->len = t.l.len; break;
-		case SEA_ALN_DIR: r->len = t.l.size; break;
-	}
+	r->slen = t.l.size;
+	r->plen = t.l.len;
 	r->a = a;
 	r->b = b;
 	r->apos = t.i;
@@ -656,7 +653,7 @@ void sea_add_clips(
 	char buf[32];
 	int64_t blen;
 
-	if(ctx == NULL || aln == NULL || aln->len <= 0) {
+	if(ctx == NULL || aln == NULL || aln->slen <= 0) {
 		return;
 	}
 	/** check if aln->aln is a ciger string */
@@ -666,17 +663,19 @@ void sea_add_clips(
 	/** check if the alignment already has clips */
 	p = aln->aln;
 	while(isdigit(*p)) { p++; }
-	if(isclip(*p) || isclip(aln->aln[strlen((char const *)aln->aln)-1])) {
+	if(isclip(*p) || isclip(aln->aln[aln->slen-1])) {
 		return;
 	}
 	/** add clips */
 	if(hlen > 0) {
 		/** add head clip */
-		sprintf((char *)aln->aln + strlen((char const *)aln->aln), "%lld%c", hlen, type);
+		aln->slen += sprintf((char *)aln->aln + strlen((char const *)aln->aln), "%lld%c", hlen, type);
 	}
 	if(tlen > 0) {
 		/** add tail clip */
-		aln->aln -= (blen = sprintf(buf, "%lld%c", tlen, type));
+		blen = sprintf(buf, "%lld%c", tlen, type);
+		aln->aln -= blen;
+		aln->slen += blen;
 		strncpy((char *)aln->aln, buf, blen);
 	}
 	/** adjust apos, alen, bpos, and blen */

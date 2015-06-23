@@ -560,6 +560,12 @@ enum _STATE {
  */
 
 /**
+ * @macro SEA_CLIP_LEN
+ * @brief length of the reserved buffer for clip sequence
+ */
+#define SEA_CLIP_LEN 		( 8 )
+
+/**
  * @enum _ALN_CHAR
  * @brief alignment character, used in ascii output format.
  */
@@ -601,8 +607,9 @@ enum _ALN_DIR {
 	  sizeof(struct sea_result) \
 	+ sizeof(uint8_t) * ( \
 	    (s) \
-	  + 16 /* margin for xmm bulk write (see pushm_cigar_r in io.s)*/ \
-	  + 8 + 8 /* margin for clip seqs at the head and tail */ ) \
+	  + 16 - SEA_CLIP_LEN /* margin for xmm bulk write, sizeof(__m128i) == 16. (see pushm_cigar_r in io.s) */ \
+	  + SEA_CLIP_LEN /* margin for clip seqs at the head */ \
+	  + SEA_CLIP_LEN /* margin for clip seqs at the tail */ ) \
 )
 #define wr_alloc(w, s) { \
 	debug("wr_alloc called"); \
@@ -614,8 +621,8 @@ enum _ALN_DIR {
 		(w).p = malloc((w).size); \
 	} \
 	(w).pos = (w).init((w).p, \
-		(w).size - 8, /** margin: must be consistent to wr_finish */ \
-		sizeof(struct sea_result) + 8); /** margin: must be consistent to wr_finish */ \
+		(w).size - SEA_CLIP_LEN, /** margin: must be consistent to wr_finish */ \
+		sizeof(struct sea_result) + SEA_CLIP_LEN); /** margin: must be consistent to wr_finish */ \
 	(w).len = 0; \
 }
 
@@ -648,11 +655,11 @@ enum _ALN_DIR {
 #define wr_finish(w, s) { \
 	int64_t p = (w).finish((w).p, (w).pos); \
 	if(p <= (w).pos) { \
-		(w).size = ((w).size - 8) - p - 1; \
+		(w).size = ((w).size - SEA_CLIP_LEN) - p - 1; \
 		(w).pos = p; \
 	} else { \
-		(w).size = p - (sizeof(struct sea_result) + 8) - 1; \
-		(w).pos = sizeof(struct sea_result) + 8; \
+		(w).size = p - (sizeof(struct sea_result) + SEA_CLIP_LEN) - 1; \
+		(w).pos = sizeof(struct sea_result) + SEA_CLIP_LEN; \
 	} \
 }
 

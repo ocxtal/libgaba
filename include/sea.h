@@ -222,12 +222,13 @@ struct sea_result {
 	void const *a; 			/*!< a pointer to the sequence a. */
 	void const *b;			/*!< a pointer to the sequence b. */
 	uint8_t *aln;			/*!< a pointer to the alignment result. */
-	int32_t score;			/*!< the alignment score. */
-	int64_t len;			/*!< alignment length (len == strlen(aln) if ASCII, len == the sum of {M, X, I, D, =} operations if CIGAR, and len == the length of the direction string if DIR) */
+	int64_t slen;			/*!< the length of the alignment string (slen == strlen(aln)) */
+	int64_t plen;			/*!< the length of the path of the alignment (slen == tlen if ASCII) */
 	int64_t apos;			/*!< alignment start position on a. */
 	int64_t alen;			/*!< alignment length on a. the alignment interval is a[apos]..a[apos+alen-1] */
 	int64_t bpos;			/*!< alignment start position on b. */
 	int64_t blen;			/*!< alignment length on b. the alignment interval is b[bpos]..b[bpos+blen-1] */
+	int32_t score;			/*!< the alignment score. */
 };
 
 /**
