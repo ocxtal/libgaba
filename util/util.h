@@ -210,7 +210,7 @@ struct sea_io_funcs {
  *
  * @brief (API) an algorithmic context.
  *
- * @sa sea_init, sea_clean
+ * @sa sea_init, sea_close
  */
 struct sea_context {
 	struct sea_aln_funcs dynamic, guided;

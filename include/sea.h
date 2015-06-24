@@ -396,7 +396,7 @@ void sea_aln_free(
 	sea_res_t *aln);
 
 /**
- * @fn sea_clean
+ * @fn sea_close
  *
  * @brief (API) clean up the alignment context structure.
  *
@@ -406,7 +406,7 @@ void sea_aln_free(
  *
  * @sa sea_init
  */
-void sea_clean(
+void sea_close(
 	sea_t *ctx);
 
 #ifdef __cplusplus
@@ -564,7 +564,7 @@ public:
 	 */
 	~AlignmentContext(void) {
 		if(_ctx != NULL) {
-			sea_clean(_ctx);
+			sea_close(_ctx);
 			_ctx = NULL;
 		}
 	}

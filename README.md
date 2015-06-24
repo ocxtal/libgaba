@@ -118,10 +118,10 @@ void sea_aln_free(
 	sea_res_t *aln);
 ```
 
-#### sea\_clean
+#### sea\_close
 
 ```C
-void sea_clean(
+void sea_close(
 	sea_t *ctx);
 ```
 

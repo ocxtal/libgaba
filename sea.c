@@ -732,7 +732,7 @@ void sea_aln_free(
 }
 
 /**
- * @fn sea_clean
+ * @fn sea_close
  *
  * @brief clean up the alignment context structure.
  *
@@ -742,7 +742,7 @@ void sea_aln_free(
  *
  * @sa sea_init
  */
-void sea_clean(
+void sea_close(
 	sea_t *ctx)
 {
 	if((struct sea_context *)ctx != NULL) {

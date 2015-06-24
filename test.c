@@ -128,7 +128,7 @@ int main(int argc, char *argv[])
 	sea_aln_free(r, rres);
 	sea_aln_free(c, res);
 
-	sea_clean(d);
-	sea_clean(c);
+	sea_close(d);
+	sea_close(c);
 	return 0;
 }
