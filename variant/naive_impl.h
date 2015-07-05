@@ -6,7 +6,7 @@
 #ifndef _NAIVE_H_INCLUDED
 #define _NAIVE_H_INCLUDED
 
-#include "../include/sea.h"
+#include "../sea.h"
 #include "../util/util.h"
 #include <stdint.h>
 
@@ -241,8 +241,8 @@
 #define naive_linear_trace_init(t, c, k, r) { \
 	dir_term(r, t, c); \
 	debug("dir: d(%d), d2(%d)", dir(r), dir2(r)); \
-	rd_fetch(c.a, t.i-1); \
-	rd_fetch(c.b, t.j-1); \
+	/*rd_fetch(c.a, t.i-1);*/ \
+	/*rd_fetch(c.b, t.j-1);*/ \
 }
 
 /**
@@ -250,6 +250,8 @@
  */
 #define naive_linear_trace_body(t, c, k, r) { \
 	dir_prev(r, t, c); \
+	rd_fetch(c.a, t.i-1); \
+	rd_fetch(c.b, t.j-1); \
 	debug("dir: d(%d), d2(%d)", dir(r), dir2(r)); \
 	cell_t diag = p[naive_linear_topleft(r, t, c)]; \
 	cell_t sc = rd_cmp(c.a, c.b) ? k.m : k.x; \
@@ -260,8 +262,8 @@
 	if(score == (diag + sc)) { \
 		p += naive_linear_topleft(r, t, c); \
 		dir_prev(r, t, c); \
-		t.i--; rd_fetch(c.a, t.i-1); \
-		t.j--; rd_fetch(c.b, t.j-1); \
+		t.i--; /*rd_fetch(c.a, t.i-1);*/ \
+		t.j--; /*rd_fetch(c.b, t.j-1);*/ \
 		if(sc == k.m) { wr_pushm(t.l); } else { wr_pushx(t.l); } \
 		if(k.alg == SW && score <= sc) { \
 			return SEA_TERMINATED; \
@@ -269,12 +271,12 @@
 		score = diag; \
 	} else if(score == ((h = p[naive_linear_left(r, t, c)]) + k.gi)) { \
 		p += naive_linear_left(r, t, c); \
-		t.i--; rd_fetch(c.a, t.i-1); \
+		t.i--; /*rd_fetch(c.a, t.i-1);*/ \
 		wr_pushd(t.l); \
 		score = h; \
 	} else if(score == ((v = p[naive_linear_top(r, t, c)]) + k.gi)) { \
 		p += naive_linear_top(r, t, c); \
-		t.j--; rd_fetch(c.b, t.j-1); \
+		t.j--; /*rd_fetch(c.b, t.j-1);*/ \
 		wr_pushi(t.l); \
 		score = v; \
 	} else { \

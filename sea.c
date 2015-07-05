@@ -12,7 +12,7 @@
 #include <stdlib.h>				/* for malloc / free */
 #include <string.h>				/* memset */
 #include <ctype.h>				/* isdigit */
-#include "include/sea.h"		/* definitions of public APIs and structures */
+#include "sea.h"				/* definitions of public APIs and structures */
 #include "util/util.h"			/* definitions of internal utility functions */
 // #include "build/config.h"
 
@@ -391,17 +391,12 @@ struct sea_result *sea_align_intl(
 	 */
 	if(asp == aep || bsp == bep) {
 		r = (struct sea_result *)malloc(sizeof(struct sea_result) + 1);
-		r->a = a;
-		r->apos = asp;
-		r->alen = 0;
-		r->b = b;
-		r->bpos = bsp;
-		r->blen = 0;
+		r->a = a; r->apos = asp; r->alen = 0;
+		r->b = b; r->bpos = bsp; r->blen = 0;
 		r->slen = 0;
 		r->plen = 0;
 		r->score = 0;
-		r->aln = (void *)(r + 1);
-		*((uint8_t *)r->aln) = '\0';
+		r->aln = (void *)(r + 1); *((uint8_t *)r->aln) = '\0';
 		return(r);
 	}
 

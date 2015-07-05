@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
-#include "include/sea.h"
+#include "sea.h"
 
 /**
  * random sequence generator, modifier.

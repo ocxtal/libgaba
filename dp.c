@@ -13,7 +13,7 @@
 #include <string.h>				/** for memcpy */
 #include <stdint.h>				/** int8_t, int16_t, ... */
 #include <stddef.h>				/** offsetof */
-#include "include/sea.h"		/** global declarations */
+#include "sea.h"				/** global declarations */
 #include "util/util.h"			/** internal declarations */
 #include "variant/variant.h"	/** dynamic programming variants */
 

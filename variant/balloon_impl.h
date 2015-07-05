@@ -6,7 +6,7 @@
 #ifndef _BALLOON_H_INCLUDED
 #define _BALLOON_H_INCLUDED
 
-#include "../include/sea.h"
+#include "../sea.h"
 #include "../util/util.h"
 #include "naive_impl.h"
 

@@ -8,7 +8,7 @@
 #ifndef _UTIL_H_INCLUDED
 #define _UTIL_H_INCLUDED
 
-#include "../include/sea.h"
+#include "../sea.h"
 #include "log.h"
 #include <stdio.h>
 #include <stdint.h>

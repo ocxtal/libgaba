@@ -7,7 +7,7 @@
 #define _BRANCH_H_INCLUDED
 
 #include "../arch/b16c32.h"
-#include "../include/sea.h"
+#include "../sea.h"
 #include "../util/util.h"
 #include <stdint.h>
 #include "naive_impl.h"

@@ -6,7 +6,7 @@
 #ifndef _CAP_H_INCLUDED
 #define _CAP_H_INCLUDED
 
-#include "../include/sea.h"
+#include "../sea.h"
 #include "../util/util.h"
 #include <stdint.h>
 #include "naive_impl.h"
@@ -65,7 +65,7 @@
 /**
  * @macro cap_linear_fill_go_right
  */
-#define cap_linear_fill_go_right(t, c, k, r)		naive_linear_fill_go_right(t, c, k, r)
+#define cap_linear_fill_go_right(t, c, k, r)	naive_linear_fill_go_right(t, c, k, r)
 
 /**
  * @macro cap_linear_fill_latter_body
@@ -82,6 +82,7 @@
 		debug("write"); \
 	} \
 	for(t.q = lb; t.q < ub; t.q++) { \
+		debug("i(%lld), j(%lld), p(%lld), q(%lld), a(%lld), b(%lld)", t.i, t.j, t.p, t.q, (t.i-t.q)-1, (t.j+t.q)-1); \
 		rd_fetch(c.a, (t.i-t.q)-1); \
 		rd_fetch(c.b, (t.j+t.q)-1); \
 		debug("d(%d), t(%d), l(%d)", ((cell_t *)c.pdp)[cap_linear_topleft(r, t, c)], ((cell_t *)c.pdp)[cap_linear_top(r, t, c)], ((cell_t *)c.pdp)[cap_linear_left(r, t, c)]); \

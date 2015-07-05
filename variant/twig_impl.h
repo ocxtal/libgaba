@@ -7,7 +7,7 @@
 #define _TWIG_H_INCLUDED
 
 #include "../arch/b8c16.h"
-#include "../include/sea.h"
+#include "../sea.h"
 #include "../util/util.h"
 #include <stdint.h>
 #include "naive_impl.h"
