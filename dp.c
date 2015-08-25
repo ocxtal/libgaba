@@ -17,6 +17,8 @@
 #include "util/util.h"			/** internal declarations */
 #include "variant/variant.h"	/** dynamic programming variants */
 
+extern bench_t fill, search, trace;
+
 int32_t
 DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 	struct sea_consts const *ctx,
@@ -39,7 +41,7 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 
 	/** make the dp pointer aligned */ {
 		int64_t a = k.memaln;
-		c.pdp = (void *)((((uint64_t)c.pdp + a - 1) / a) * a);
+		c.pdp = (uint8_t *)((((uint64_t)c.pdp + a - 1) / a) * a);
 	}
 
 	/** variable declarations */
@@ -49,14 +51,15 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 
 	/** check direction array size */
 	if(c.dr.sp != NULL) {
-		if((c.dp.ep - c.pdp) > bpl(c) * ((uint8_t *)c.dr.ep - (uint8_t *)c.dr.sp - t.p)) {
+		if((c.dp.ep - c.pdp) > bpl(c) * (c.dr.ep - c.dr.sp - t.p)) {
 			size_t s = 2 * (c.dr.ep - c.dr.sp);
-			c.dr.ep = (c.dr.sp = c.pdr = (void *)realloc(c.dr.sp, s)) + s;
+			c.dr.ep = (c.dr.sp = c.pdr = (uint8_t *)realloc(c.dr.sp, s)) + s;
 			debug("Realloc direction array at %p, with size %zu", c.dr.sp, s);
 		}
 	}
 
 	/** fill-in */ {
+		bench_start(fill);
 		/** init direction and vector */
 		#ifdef DEBUG
 			cell_t *curr = (cell_t *)c.pdp;		/** debug */
@@ -109,6 +112,7 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 
 		debug("finish: stat(%d)", stat);
 		fill_finish(t, c, k, r);
+		bench_end(fill);
 	}
 
 	/** chain */ {
@@ -141,12 +145,11 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 
 			/** malloc memory if stat == MEM */
 			if(stat == MEM) {
+				int64_t save_len = sizeof(cell_t) * chain_save_len(t, c, k);
 				c.size *= 2;
-				c.dp.ep = (c.dp.sp = malloc(c.size)) + c.size;
-				memcpy(c.dp.sp,
-					(cell_t *)c.pdp - chain_save_len(t, c, k),
-					sizeof(cell_t) * chain_save_len(t, c, k));
-				c.pdp = (cell_t *)c.dp.sp + chain_save_len(t, c, k);
+				c.dp.ep = (c.dp.sp = (uint8_t *)malloc(c.size)) + c.size;
+				memcpy(c.dp.sp, c.pdp - save_len, save_len);
+				c.pdp = c.dp.sp + save_len;
 				debug("malloc memory: size(%llu), c.pdp(%p)", c.size, c.pdp);
 			}
 
@@ -175,6 +178,7 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 		}
 
 		if(k.alg != NW) {
+			bench_start(search);
 			debug("check re-search is needed: t1.max(%d), t2.max(%d)", t.max, co->max);
 			/** here co is previous stack coords if stat == TERM, or next stack coords otherwise */
 			
@@ -199,10 +203,12 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 					t = *co;
 				}
 			}
+			bench_end(search);
 		}
 	}
 
 	/** traceback */ {
+		bench_start(trace);
 		debug("t.mi(%lld), t.mj(%lld), t.mp(%lld), t.mq(%lld)", t.mi, t.mj, t.mp, t.mq);
 		debug("t.i(%lld), t.j(%lld), t.p(%lld), t.q(%lld)", t.i, t.j, t.p, t.q);
 
@@ -226,6 +232,7 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 		}
 		debug("trace finish: t.mp(%lld), t.l.pos(%lld), t.l.size(%lld)", t.mp, t.l.pos, t.l.size);
 		trace_finish(t, c, k, r);
+		bench_end(trace);
 	}
 
 	/** write back the local context to the global working buffer */

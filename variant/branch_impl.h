@@ -114,14 +114,14 @@
  */
 #define branch_linear_fill_init(t, c, k, r) { \
 	branch_linear_fill_init_intl(t, c, k, r); \
+	VEC_CHAR_SETZERO(wq); \
 	for(t.q = -BW/2; t.q < BW/2; t.q++) { \
 		rd_fetch(c.a, t.i+t.q); \
-		log("a: %d", rd_decode(c.a)); \
 		PUSHQ(rd_decode(c.a), wq); \
 	} \
+	VEC_CHAR_SETZERO(wt); \
 	for(t.q = -BW/2; t.q < BW/2-1; t.q++) { \
 		rd_fetch(c.b, t.j+t.q); \
-		log("b: %d", rd_decode(c.b)); \
 		PUSHT(rd_decode(c.b), wt); \
 	} \
 }
@@ -241,8 +241,8 @@
 	t.j -= BW/2; \
 	c.v.size = sizeof(cell_t); \
 	c.v.clen = c.v.plen = BW; \
-	c.v.cv = (cell_t *)c.pdp - BW; \
-	c.v.pv = (cell_t *)c.pdp - 2*BW; \
+	c.v.cv = c.pdp - sizeof(cell_t) * BW; \
+	c.v.pv = c.pdp - sizeof(cell_t) * 2*BW; \
 }
 
 /**

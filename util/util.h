@@ -12,6 +12,7 @@
 #include "log.h"
 #include <stdio.h>
 #include <stdint.h>
+#include <string.h>
 
 /**
  * structs
@@ -32,7 +33,7 @@ struct sea_pos {
  * @brief (internal) sequence reader
  */
 struct sea_mem {
-	void *sp, *ep;
+	uint8_t *sp, *ep;
 };
 
 /**
@@ -83,7 +84,7 @@ struct sea_writer {
  * @brief (internal) init vector container
  */
 struct sea_ivec {
-	void *cv, *pv;				/*!< pointers to the initial vectors (should be allocated in the stack by fixed length array, or alloca) */
+	uint8_t *cv, *pv;				/*!< pointers to the initial vectors (should be allocated in the stack by fixed length array, or alloca) */
 	int8_t clen, plen;			/*!< the lengths of the vectors */
 	int8_t size;				/*!< the size of a cell in the vector */
 };
@@ -108,7 +109,7 @@ struct sea_process {
 	struct sea_ivec v;
 	struct sea_reader a, b;		/*!< (in) sequence readers */
 	struct sea_mem dp, dr;		/*!< (ref) a dynamic programming matrix */
-	void *pdp;					/*!< dynamic programming matrix */
+	uint8_t *pdp;					/*!< dynamic programming matrix */
 	uint8_t *pdr;				/*!< direction array */
 	int64_t asp, bsp;			/*!< the start position on the sequences */
 	int64_t aep, bep;			/*!< the end position on the sequences */
@@ -217,7 +218,7 @@ struct sea_context {
 	struct sea_io_funcs fw, rv;
 	struct sea_ivec v;
 	struct sea_consts k;
-	uint32_t flags;		/*!< a bitfield of option flags */
+	int flags;			/*!< a bitfield of option flags */
 };
 
 
@@ -519,7 +520,7 @@ enum _STATE {
  * @brief initialize a sequence reader instance.
  */
 #define rd_init(r, fp, base) { \
-	(r).p = (void *)base; \
+	(r).p = (uint8_t *)base; \
 	(r).b = 0; \
 	(r).pop = fp; \
 }
@@ -848,7 +849,7 @@ enum _DIR2 {
  * @fn _read
  */
 int32_t static inline
-_read_impl(void *ptr, int64_t pos, size_t size)
+_read_impl(uint8_t *ptr, int64_t pos, size_t size)
 {
 	switch(size) {
 		case 1: return((int32_t)(((int8_t *)ptr)[pos]));
@@ -860,12 +861,72 @@ _read_impl(void *ptr, int64_t pos, size_t size)
 }
 
 int32_t static inline
-_read(void *ptr, int64_t pos, size_t size)
+_read(uint8_t *ptr, int64_t pos, size_t size)
 {
 	int32_t r = _read_impl(ptr, pos, size);
 	debug("_read: r(%d) at %p, %lld, %d", r, ptr, pos, (int32_t)size);
 	return(r);
 }
+
+/**
+ * benchmark macros
+ */
+#ifdef BENCH
+#include <sys/time.h>
+
+/**
+ * @struct _bench
+ * @brief benchmark variable container
+ */
+struct _bench {
+	struct timeval s;		/** start */
+	int64_t a;				/** accumulator */
+};
+typedef struct _bench bench_t;
+
+/**
+ * @macro bench_init
+ */
+#define bench_init(b) { \
+	memset(&(b).s, 0, sizeof(struct timeval)); \
+	(b).a = 0; \
+}
+
+/**
+ * @macro bench_start
+ */
+#define bench_start(b) { \
+	gettimeofday(&(b).s, NULL); \
+}
+
+/**
+ * @macro bench_end
+ */
+#define bench_end(b) { \
+	struct timeval e; \
+	gettimeofday(&e, NULL); \
+	(b).a += ( (e.tv_sec  - (b).s.tv_sec ) * 1000000000 \
+	         + (e.tv_usec - (b).s.tv_usec) * 1000); \
+}
+
+/**
+ * @macro bench_get
+ */
+#define bench_get(b) ( \
+	(b).a \
+)
+
+#else /* #ifdef BENCH */
+
+/** disable bench */
+struct _bench {};
+typedef struct _bench bench_t;
+#define bench_init(b) 		;
+#define bench_start(b) 		;
+#define bench_end(b)		;
+#define bench_get(b)		( 0LL )
+
+#endif /* #ifdef BENCH */
 
 #endif /* #ifndef _UTIL_H_INCLUDED */
 

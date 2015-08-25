@@ -75,12 +75,12 @@
 #define twig_linear_fill_init(t, c, k, r) { \
 	branch_linear_fill_init_intl(t, c, k, r); \
 	VEC_CHAR_SETZERO(wq); \
-	VEC_CHAR_SETONES(wt); \
 	for(t.q = 0; t.q < BW/2; t.q++) { \
 		rd_fetch(c.a, t.i+t.q); \
 		debug("a: %d", rd_decode(c.a)); \
 		PUSHQ(rd_decode(c.a), wq); \
 	} \
+	VEC_CHAR_SETONES(wt); \
 	for(t.q = 0; t.q < BW/2-1; t.q++) { \
 		rd_fetch(c.b, t.j+t.q); \
 		debug("b: %d", rd_decode(c.b)); \
@@ -164,8 +164,8 @@
 	t.j -= BW; \
 	c.v.size = sizeof(cell_t); \
 	c.v.clen = c.v.plen = 2*BW; \
-	c.v.cv = (cell_t *)c.pdp - 5*BW/2; \
-	c.v.pv = (cell_t *)c.pdp - 9*BW/2; \
+	c.v.cv = c.pdp - sizeof(cell_t) * 5*BW/2; \
+	c.v.pv = c.pdp - sizeof(cell_t) * 9*BW/2; \
 }
 
 /**

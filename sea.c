@@ -20,6 +20,10 @@
  	#include <alloca.h>
 #endif
 
+#ifdef BENCH
+	bench_t fill, search, trace;	/** global benchmark variables */
+#endif
+
 struct sea_aln_funcs const aln_table[3][2] = {
 	{
 		{NULL, NULL, NULL, NULL, NULL, NULL},
@@ -265,6 +269,7 @@ sea_t *sea_init(
 {
 	int32_t i;
 	struct sea_context *ctx = NULL;
+	int32_t cost_idx, aln_idx, popa_idx, popb_idx;
 	int32_t error_label = SEA_ERROR;
 
 
@@ -285,7 +290,7 @@ sea_t *sea_init(
 	/**
 	 * initialize alignment functions
 	 */
-	int32_t cost_idx = (ctx->flags & SEA_FLAGS_MASK_COST) >> SEA_FLAGS_POS_COST;
+	cost_idx = (ctx->flags & SEA_FLAGS_MASK_COST) >> SEA_FLAGS_POS_COST;
 	if(cost_idx <= 0 || cost_idx >= 3) {
 		error_label = SEA_ERROR_INVALID_ARGS;
 		goto _sea_init_error_handler;
@@ -297,7 +302,7 @@ sea_t *sea_init(
 	/**
 	 * set alignment writer functions
 	 */
-	int32_t aln_idx = (ctx->flags & SEA_FLAGS_MASK_ALN) >> SEA_FLAGS_POS_ALN;
+	aln_idx = (ctx->flags & SEA_FLAGS_MASK_ALN) >> SEA_FLAGS_POS_ALN;
 	if(aln_idx <= 0 || aln_idx >= 4) {
 		error_label = SEA_ERROR_INVALID_ARGS;
 		goto _sea_init_error_handler;
@@ -308,8 +313,8 @@ sea_t *sea_init(
 	/**
 	 * set seq a reader functions
 	 */
-	int32_t popa_idx = (ctx->flags & SEA_FLAGS_MASK_SEQ_A) >> SEA_FLAGS_POS_SEQ_A;
-	int32_t popb_idx = (ctx->flags & SEA_FLAGS_MASK_SEQ_B) >> SEA_FLAGS_POS_SEQ_B;
+	popa_idx = (ctx->flags & SEA_FLAGS_MASK_SEQ_A) >> SEA_FLAGS_POS_SEQ_A;
+	popb_idx = (ctx->flags & SEA_FLAGS_MASK_SEQ_B) >> SEA_FLAGS_POS_SEQ_B;
 	if(popa_idx <= 0 || popa_idx >= 8 || popb_idx <= 0 || popb_idx >= 8) {
 		error_label = SEA_ERROR_INVALID_ARGS;
 		goto _sea_init_error_handler;
@@ -468,7 +473,9 @@ struct sea_result *sea_align_intl(
 	t.max = 0;
 
 	/* do alignment */
-	error_label = k.f->twig(&k, &c, &t);
+//	if(guide == NULL) {
+		error_label = k.f->twig(&k, &c, &t);
+//	}
 	if(error_label != SEA_SUCCESS) {
 		goto _sea_error_handler;					/** when the path went out of the band */
 	}
@@ -505,6 +512,9 @@ struct sea_result *sea_align_intl(
 	return(r);
 
 _sea_error_handler:
+	if(guide != NULL) {
+//		log("log caught at _sea_error_handler");
+	}
 	if(t.l.p == NULL) {
 		wr_alloc(t.l, 1);
 	}

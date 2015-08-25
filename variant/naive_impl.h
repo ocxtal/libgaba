@@ -197,8 +197,8 @@
 	t.j -= BW/2; \
 	c.v.size = sizeof(cell_t); \
 	c.v.clen = c.v.plen = BW; \
-	c.v.cv = (cell_t *)c.pdp - BW; \
-	c.v.pv = (cell_t *)c.pdp - 2*BW; \
+	c.v.cv = c.pdp - sizeof(cell_t) * BW; \
+	c.v.pv = c.pdp - sizeof(cell_t) * 2*BW; \
 }
 
 /**

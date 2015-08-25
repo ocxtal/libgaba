@@ -97,6 +97,8 @@
 	dir_init(r, c.pdr[t.p]); \
 	VEC_SET(mggv, k.m - 2*k.gi); \
 	VEC_SET(xggv, k.x - 2*k.gi); \
+	VEC_SETZERO(dv); \
+	VEC_SETZERO(dh); \
 	for(t.q = 0; t.q < BW; t.q++) { \
 		VEC_INSERT_MSB(dv, \
 			  _read(c.v.cv, t.q, c.v.size) \
@@ -119,10 +121,12 @@
 	scl = _read(c.v.cv, BW-1, c.v.size); \
 	c.pdp += trunk_linear_bpl(c); \
 	VEC_STORE_DVDH(c.pdp, dv, dh); \
+	VEC_CHAR_SETZERO(wq); \
 	for(t.q = -BW/2; t.q < BW/2; t.q++) { \
 		rd_fetch(c.a, t.i+t.q); \
 		PUSHQ(rd_decode(c.a), wq); \
 	} \
+	VEC_CHAR_SETZERO(wt); \
 	for(t.q = -BW/2; t.q < BW/2-1; t.q++) { \
 		rd_fetch(c.b, t.j+t.q); \
 		PUSHT(rd_decode(c.b), wt); \
@@ -268,8 +272,8 @@
 	c.pdp += sizeof(int16_t) * BW; \
 	c.v.size = sizeof(int16_t); \
 	c.v.plen = c.v.clen = BW; \
-	c.v.pv = (int16_t *)c.pdp - 2*BW; \
-	c.v.cv = (int16_t *)c.pdp - BW; \
+	c.v.pv = c.pdp - sizeof(int16_t) * 2*BW; \
+	c.v.cv = c.pdp - sizeof(int16_t) * BW; \
 	debug("ivec: dir(%d)", c.pdr[t.p]); \
 }
 
@@ -327,7 +331,8 @@
 	debug("msp(%lld), mep(%lld)", msp, mep); \
 	debug("mi(%lld), mj(%lld), mp(%lld), mq(%lld), max(%d)", t.mi, t.mj, t.mp, t.mq, t.max); \
 	memset(&x, 0, sizeof(struct sea_coords)); \
-	c.pdp = pb + ADDR(msp - sp, -BW/2, BW); \
+	memset(&y, 0, sizeof(struct sea_coords)); \
+	c.pdp = (uint8_t *)(pb + ADDR(msp - sp, -BW/2, BW)); \
 	dir_init(r, c.pdr[msp]); \
 	VEC_LOAD_DVDH(c.pdp, dv, dh); \
 	for(x.p = msp; x.p < mep;) { \

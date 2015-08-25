@@ -7,6 +7,9 @@
 #ifndef _LOG_H_INCLUDED
 #define _LOG_H_INCLUDED
 
+#include <stdio.h>
+#include <stdlib.h>
+
 /**
  * color outputs
  */
@@ -107,13 +110,48 @@
 #endif
 
 /**
+ * @macro logprintf
+ */
+#define logprintf(fmt, ...) { \
+	fprintf(stderr, fmt, __VA_ARGS__); \
+}
+
+/**
  * @macro log
  */
 #define log(...) { \
 	log_impl(__VA_ARGS__, ""); \
 }
 #define log_impl(fmt, ...) { \
-	dbprintf("[%s] " fmt "%s\n", __func__, __VA_ARGS__); \
+	logprintf("[%s] " fmt "%s\n", __func__, __VA_ARGS__); \
+}
+
+/**
+ * @macro log_error
+ */
+#define log_error(...) { \
+	log_error_impl(__VA_ARGS__, ""); \
+}
+#define log_error_impl(fmt, ...) { \
+	logprintf("[%s]  ERROR: " fmt "%s\n", __func__, __VA_ARGS__); \
+}
+
+/**
+ * @macro log_error_abort
+ */
+#define log_error_abort(...) { \
+	log_error_impl(__VA_ARGS__, ""); \
+	exit(1); \
+}
+
+/**
+ * @macro msg
+ */
+#define msg(...) { \
+	msg_impl(__VA_ARGS__, ""); \
+}
+#define msg_impl(fmt, ...) { \
+	logprintf(fmt "%s\n", __VA_ARGS__); \
 }
 
 #endif /* #ifndef _LOG_H_INCLUDED */

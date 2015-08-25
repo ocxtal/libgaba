@@ -78,7 +78,7 @@
 	c.blim = c.bep - BW + 1; \
 	dir_init(r, c.pdr[t.p]); \
 	dir_init(b, c.pdr[t.p]); \
-	pc = c.pdp; \
+	pc = (cell_t *)c.pdp; \
 	for(t.q = 0, eq = c.v.plen; t.q < eq; t.q++) { \
 		*((cell_t *)c.pdp) = _read(c.v.pv, t.q, c.v.size); \
 		c.pdp += sizeof(cell_t); \
@@ -88,7 +88,7 @@
 	/*balloon_linear_dir_next(r, b, c); */ \
 	dir_next(r, t, c); \
 	pp = pc; \
-	pc = c.pdp; \
+	pc = (cell_t *)c.pdp; \
 	for(t.q = 0, eq = c.v.clen; t.q < eq; t.q++) { \
 		*((cell_t *)c.pdp) = _read(c.v.cv, t.q, c.v.size); \
 		c.pdp += sizeof(cell_t); \
@@ -203,11 +203,11 @@
 	c.pdp += sizeof(cell_t); \
 	*((cell_t *)c.pdp-2) = CELL_MIN; /** fill the BW-th cell with min */ \
 	c.v.size = sizeof(cell_t); \
-	cell_t *p = c.pdp; \
+	cell_t *p = (cell_t *)c.pdp; \
 	c.v.clen = p[-1]; \
 	c.v.plen = p[-1 - p[-1]]; \
-	c.v.cv = (cell_t *)c.pdp - c.v.clen - 1; \
-	c.v.pv = (cell_t *)c.v.cv - c.v.plen - 1; \
+	c.v.cv = c.pdp - sizeof(cell_t) * (c.v.clen - 1); \
+	c.v.pv = c.v.cv - sizeof(cell_t) * (c.v.plen - 1); \
 }
 
 /**
