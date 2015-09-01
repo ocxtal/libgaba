@@ -129,9 +129,9 @@ void sea_aligned_free(void *ptr)
  */
 #if HAVE_ALLOCA_H
 	#define AFREE(ptr, size) { \
-	 	if((size) > ALLOCA_THRESH_SIZE) { \
-	 		sea_aligned_free(ptr); \
-	 	} \
+		if((size) > ALLOCA_THRESH_SIZE) { \
+			sea_aligned_free(ptr); \
+		} \
 	}
 #else
 	#define AFREE(ptr, size) { \

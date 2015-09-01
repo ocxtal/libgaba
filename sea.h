@@ -71,9 +71,9 @@ enum sea_flags_mask {
  */
 enum sea_flags_alg {
 	SEA_SW 					= 1<<SEA_FLAGS_POS_ALG,
-	SEA_SEA					= 2<<SEA_FLAGS_POS_ALG,
-	SEA_XSEA				= 3<<SEA_FLAGS_POS_ALG,
-	SEA_NW 					= 4<<SEA_FLAGS_POS_ALG
+	SEA_NW 					= 2<<SEA_FLAGS_POS_ALG,
+	SEA_SEA					= 3<<SEA_FLAGS_POS_ALG,
+	SEA_XSEA				= 4<<SEA_FLAGS_POS_ALG
 };
 
 /**

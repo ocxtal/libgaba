@@ -81,21 +81,27 @@ struct sea_writer {
 /**
  * @struct sea_ivec
  *
- * @brief (internal) init vector container
+ * @brief (internal) init vector container. (sizeof(struct sea_ivec) == 64)
  */
 struct sea_ivec {
-	uint8_t *cv, *pv;				/*!< pointers to the initial vectors (should be allocated in the stack by fixed length array, or alloca) */
-	int8_t clen, plen;			/*!< the lengths of the vectors */
-	int8_t size;				/*!< the size of a cell in the vector */
+	int64_t i, j, p, q;			/*!< (32) terminal coordinate */
+	int32_t *pv, *cv;			/*!< (16) pointers to the initial vectors (should be allocated in the stack by fixed length array, or alloca) */
+//	uint8_t dr;					/*!< previous direction */
+	uint32_t len;				/*!< (4) length of the pv vector */
+//	uint8_t *prev;				/*!< pointer to the previous block (previous pdp) */
+//	uint8_t _pad[4];			/*!< (4) */
+	int32_t max;				/*!< (4) max of the next block */
+	int64_t ep;					/*!< (8) terminal p-coordinate of the next band */
 };
+
+#define _ivec(pdp, member) 		((struct sea_ivec *)(pdp) - 1)->member
+#define DEF_VEC_LEN				( 32 )		/** default vector length */
 
 /**
  * @struct sea_coords
  * @brief (internal) a set of local-nonvolatile variables. (need write back / caller saved values)
  */
 struct sea_coords {
-	int32_t max;				/*!< (inout) current maximum score */
-	int64_t mi, mj, mp, mq;		/*!< maximum score position */
 	int64_t i, j, p, q;			/*!< temporary */
 	struct sea_writer l;		/*!< (inout) alignment writer */
 };
@@ -109,37 +115,47 @@ struct sea_process {
 	struct sea_ivec v;
 	struct sea_reader a, b;		/*!< (in) sequence readers */
 	struct sea_mem dp, dr;		/*!< (ref) a dynamic programming matrix */
-	uint8_t *pdp;					/*!< dynamic programming matrix */
-	uint8_t *pdr;				/*!< direction array */
-	int64_t asp, bsp;			/*!< the start position on the sequences */
-	int64_t aep, bep;			/*!< the end position on the sequences */
-	int64_t alim, blim;			/*!< the limit coordinate of the band */
-	int64_t size;				/*!< default malloc size */
 };
 
 /**
- * @struct sea_consts
+ * @struct sea_local_context
  *
  * @brief (internal) local constant container.
  */
-struct sea_consts {
+struct sea_local_context {
 	struct sea_aln_funcs const *f;
 
-	int8_t m;			/*!< a dynamic programming cost: match */
-	int8_t x;			/*!< a dynamic programming cost: mismatch */
-	int8_t gi;			/*!< a dynamic programming cost: gap open (in the affine-gap cost) or gap cost per base (in the linear-gap cost) */
-	int8_t ge;			/*!< a dynamic programming cost: gap extension */
+	int8_t m;					/*!< a dynamic programming cost: match */
+	int8_t x;					/*!< a dynamic programming cost: mismatch */
+	int8_t gi;					/*!< a dynamic programming cost: gap open (in the affine-gap cost) or gap cost per base (in the linear-gap cost) */
+	int8_t ge;					/*!< a dynamic programming cost: gap extension */
 
-	int8_t k;			/*!< heuristic search length stretch ratio. (default is k = 4) */
-	int8_t bw;			/*!< the width of the band. */
-	int16_t tx;			/*!< xdrop threshold. see sea_init for more details */
-	int16_t tc;			/*!< chain threshold */
-	int16_t tb; 		/*!< balloon termination threshold. */
-	int32_t min;		/*!< (in) lower bound of the score */
-	uint32_t alg;		/*!< algorithm flag (same as (ctx->flags) & SEA_FLAG_MASK_ALG) */
+	int8_t k;					/*!< heuristic search length stretch ratio. (default is k = 4) */
+	int8_t bw;					/*!< the width of the band. */
+	int16_t tx;					/*!< xdrop threshold. see sea_init for more details */
+	int32_t min;				/*!< (in) lower bound of the score */
+	uint32_t alg;				/*!< algorithm flag (same as (ctx->flags) & SEA_FLAG_MASK_ALG) */
 
-	size_t isize;		/*!< initial matsize */
-	size_t memaln;		/*!< memory alignment size (default: 32) */
+	size_t isize;				/*!< initial matsize */
+//	size_t memaln;				/*!< memory alignment size (default: 32) */
+
+	uint8_t *pdp;				/*!< dynamic programming matrix */
+	uint8_t *tdp;				/*!< the end of dp matrix */
+	uint8_t *pdr;				/*!< direction array */
+	uint8_t *tdr;				/*!< the end of direction array */
+	int64_t asp, bsp;			/*!< the start position on the sequences */
+	int64_t aep, bep;			/*!< the end position on the sequences */
+//	int64_t alim, blim;			/*!< the limit coordinate of the band */
+//	int64_t size;				/*!< default malloc size */
+
+	int8_t do_trace;			/*!< do traceback if nonzero */
+	int8_t _pad[3];
+
+	int32_t max;				/*!< (inout) current maximum score */
+	int64_t mi, mj, mp, mq;		/*!< maximum score position */
+
+	struct sea_reader a, b;		/*!< (in) sequence readers */
+	struct sea_writer l;		/*!< (inout) alignment writer */
 };
 
 /**
@@ -149,29 +165,17 @@ struct sea_consts {
  */
 struct sea_aln_funcs {
 	int32_t (*twig)(			/*!< diag 8bit */
-		struct sea_consts const *ctx,
-		struct sea_process *proc,
-		struct sea_coords *co);
+		struct sea_local_context *this);
 	int32_t (*branch)(			/*!< diag 16bit */
-		struct sea_consts const *ctx,
-		struct sea_process *proc,
-		struct sea_coords *co);
+		struct sea_local_context *this);
 	int32_t (*trunk)(			/*!< diag 32bit */
-		struct sea_consts const *ctx,
-		struct sea_process *proc,
-		struct sea_coords *co);
+		struct sea_local_context *this);
 	int32_t (*balloon)(			/*!< 32bit balloon algorithm */
-		struct sea_consts const *ctx,
-		struct sea_process *proc,
-		struct sea_coords *co);
+		struct sea_local_context *this);
 	int32_t (*bulge)(			/*!< 32bit bulge (guided balloon) algorithm */
-		struct sea_consts const *ctx,
-		struct sea_process *proc,
-		struct sea_coords *co);
+		struct sea_local_context *this);
 	int32_t (*cap)(				/*!< 32bit cap algorithm */
-		struct sea_consts const *ctx,
-		struct sea_process *proc,
-		struct sea_coords *co);
+		struct sea_local_context *this);
 };
 
 /**
@@ -217,161 +221,47 @@ struct sea_context {
 	struct sea_aln_funcs dynamic, guided;
 	struct sea_io_funcs fw, rv;
 	struct sea_ivec v;
-	struct sea_consts k;
 	int flags;			/*!< a bitfield of option flags */
 };
-
 
 /**
  * function declarations
  * naive, twig, branch, trunk, balloon, bulge, cap
  */
-int32_t
-naive_linear_dynamic(
-	struct sea_consts const *ctx,
-	struct sea_process *proc,
-	struct sea_coords *co);
-int32_t
-naive_affine_dynamic(
-	struct sea_consts const *ctx,
-	struct sea_process *proc,
-	struct sea_coords *co);
-int32_t
-naive_linear_guided(
-	struct sea_consts const *ctx,
-	struct sea_process *proc,
-	struct sea_coords *co);
-int32_t
-naive_affine_guided(
-	struct sea_consts const *ctx,
-	struct sea_process *proc,
-	struct sea_coords *co);
+int32_t naive_linear_dynamic(struct sea_local_context *this);
+int32_t naive_affine_dynamic(struct sea_local_context *this);
+int32_t naive_linear_guided(struct sea_local_context *this);
+int32_t naive_affine_guided(struct sea_local_context *this);
 
-int32_t
-twig_linear_dynamic(
-	struct sea_consts const *ctx,
-	struct sea_process *proc,
-	struct sea_coords *co);
-int32_t
-twig_affine_dynamic(
-	struct sea_consts const *ctx,
-	struct sea_process *proc,
-	struct sea_coords *co);
-int32_t
-twig_linear_guided(
-	struct sea_consts const *ctx,
-	struct sea_process *proc,
-	struct sea_coords *co);
-int32_t
-twig_affine_guided(
-	struct sea_consts const *ctx,
-	struct sea_process *proc,
-	struct sea_coords *co);
+int32_t twig_linear_dynamic(struct sea_local_context *this);
+int32_t twig_affine_dynamic(struct sea_local_context *this);
+int32_t twig_linear_guided(struct sea_local_context *this);
+int32_t twig_affine_guided(struct sea_local_context *this);
 
-int32_t
-branch_linear_dynamic(
-	struct sea_consts const *ctx,
-	struct sea_process *proc,
-	struct sea_coords *co);
-int32_t
-branch_affine_dynamic(
-	struct sea_consts const *ctx,
-	struct sea_process *proc,
-	struct sea_coords *co);
-int32_t
-branch_linear_guided(
-	struct sea_consts const *ctx,
-	struct sea_process *proc,
-	struct sea_coords *co);
-int32_t
-branch_affine_guided(
-	struct sea_consts const *ctx,
-	struct sea_process *proc,
-	struct sea_coords *co);
+int32_t branch_linear_dynamic(struct sea_local_context *this);
+int32_t branch_affine_dynamic(struct sea_local_context *this);
+int32_t branch_linear_guided(struct sea_local_context *this);
+int32_t branch_affine_guided(struct sea_local_context *this);
 
-int32_t
-trunk_linear_dynamic(
-	struct sea_consts const *ctx,
-	struct sea_process *proc,
-	struct sea_coords *co);
-int32_t
-trunk_affine_dynamic(
-	struct sea_consts const *ctx,
-	struct sea_process *proc,
-	struct sea_coords *co);
-int32_t
-trunk_linear_guided(
-	struct sea_consts const *ctx,
-	struct sea_process *proc,
-	struct sea_coords *co);
-int32_t
-trunk_affine_guided(
-	struct sea_consts const *ctx,
-	struct sea_process *proc,
-	struct sea_coords *co);
+int32_t trunk_linear_dynamic(struct sea_local_context *this);
+int32_t trunk_affine_dynamic(struct sea_local_context *this);
+int32_t trunk_linear_guided(struct sea_local_context *this);
+int32_t trunk_affine_guided(struct sea_local_context *this);
 
-int32_t
-balloon_linear_dynamic(
-	struct sea_consts const *ctx,
-	struct sea_process *proc,
-	struct sea_coords *co);
-int32_t
-balloon_affine_dynamic(
-	struct sea_consts const *ctx,
-	struct sea_process *proc,
-	struct sea_coords *co);
-int32_t
-balloon_linear_guided(
-	struct sea_consts const *ctx,
-	struct sea_process *proc,
-	struct sea_coords *co);
-int32_t
-balloon_affine_guided(
-	struct sea_consts const *ctx,
-	struct sea_process *proc,
-	struct sea_coords *co);
+int32_t balloon_linear_dynamic(struct sea_local_context *this);
+int32_t balloon_affine_dynamic(struct sea_local_context *this);
+int32_t balloon_linear_guided(struct sea_local_context *this);
+int32_t balloon_affine_guided(struct sea_local_context *this);
 
-int32_t
-bulge_linear_dynamic(
-	struct sea_consts const *ctx,
-	struct sea_process *proc,
-	struct sea_coords *co);
-int32_t
-bulge_affine_dynamic(
-	struct sea_consts const *ctx,
-	struct sea_process *proc,
-	struct sea_coords *co);
-int32_t
-bulge_linear_guided(
-	struct sea_consts const *ctx,
-	struct sea_process *proc,
-	struct sea_coords *co);
-int32_t
-bulge_affine_guided(
-	struct sea_consts const *ctx,
-	struct sea_process *proc,
-	struct sea_coords *co);
+int32_t bulge_linear_dynamic(struct sea_local_context *this);
+int32_t bulge_affine_dynamic(struct sea_local_context *this);
+int32_t bulge_linear_guided(struct sea_local_context *this);
+int32_t bulge_affine_guided(struct sea_local_context *this);
 
-int32_t
-cap_linear_dynamic(
-	struct sea_consts const *ctx,
-	struct sea_process *proc,
-	struct sea_coords *co);
-int32_t
-cap_affine_dynamic(
-	struct sea_consts const *ctx,
-	struct sea_process *proc,
-	struct sea_coords *co);
-int32_t
-cap_linear_guided(
-	struct sea_consts const *ctx,
-	struct sea_process *proc,
-	struct sea_coords *co);
-int32_t
-cap_affine_guided(
-	struct sea_consts const *ctx,
-	struct sea_process *proc,
-	struct sea_coords *co);
+int32_t cap_linear_dynamic(struct sea_local_context *this);
+int32_t cap_affine_dynamic(struct sea_local_context *this);
+int32_t cap_linear_guided(struct sea_local_context *this);
+int32_t cap_affine_guided(struct sea_local_context *this);
 
 /**
  * io functions
@@ -482,19 +372,19 @@ int64_t _finish_dir_r(uint8_t *p, int64_t pos);
  * flags
  */
 #define SW 								( SEA_SW )
+#define NW 								( SEA_NW )
 #define SEA 							( SEA_SEA )
 #define XSEA 							( SEA_XSEA )
-#define NW 								( SEA_NW )
 
 /**
  * coordinate conversion macros
  */
-#define	ADDR(p, q, band)			( (band)*(p)+(q)+(band)/2 )
-#define ADDRI(x, y, band) 			( ADDR(COP(x, y, band), COQ(x, y, band), band) )
-#define COX(p, q, band)				( ((p)>>1) - (q) )
-#define COY(p, q, band)				( (((p)+1)>>1) + (q) )
-#define COP(x, y, band)				( (x) + (y) )
-#define COQ(x, y, band) 			( ((y)-(x))>>1 )
+//#define	ADDR(p, q, band)			( (band)*(p)+(q)+(band)/2 )
+//#define ADDRI(x, y, band) 			( ADDR(COP(x, y, band), COQ(x, y, band), band) )
+#define cox(p, q, band)				( ((p)>>1) - (q) )
+#define coy(p, q, band)				( (((p)+1)>>1) + (q) )
+#define cop(x, y, band)				( (x) + (y) )
+#define coq(x, y, band) 			( ((y)-(x))>>1 )
 #define INSIDE(x, y, p, q, band)	( (COX(p, q, band) < (x)) && (COY(p, q, band) < (y)) )
 
 /**
@@ -774,7 +664,13 @@ enum _DIR2 {
  * @macro DECLARE_FUNC
  * @brief a function declaration macro for static (local in a file) functions.
  */
-#define DECLARE_FUNC(file, opt) 		static FUNC_WITH_SUFFIX(file, opt)
+#define DECLARE_FUNC(file, opt, suffix) static LABEL_WITH_SUFFIX(file, opt, suffix)
+
+/**
+ * @macro CALL_FUNC
+ * @brief call a local function
+ */
+#define CALL_FUNC(file, opt, suffix)	LABEL_WITH_SUFFIX(file, opt, suffix)
 
 /**
  * @macro DECLARE_FUNC_GLOBAL
@@ -783,39 +679,45 @@ enum _DIR2 {
 #define DECLARE_FUNC_GLOBAL(file, opt)	FUNC_WITH_SUFFIX(file, opt)
 
 /**
- * @macro CALL_FUNC
+ * @macro CALL_FUNC_GLOBAL
  * @brief a function call macro, which is an wrap of a function name composition macro.
  */
-#define CALL_FUNC(file, opt)			FUNC_WITH_SUFFIX(file, opt)
+#define CALL_FUNC_GLOBAL(file, opt)		FUNC_WITH_SUFFIX(file, opt)
 
 /**
  * @macro func_next
  */
 #define func_next(k, ptr) ( \
-	(k.f->twig == ptr) ? k.f->branch : k.f->trunk \
+	(k->f->twig == ptr) ? k->f->branch : k->f->trunk \
 )
 
 /**
  * @macro func_alt
  */
 #define func_alt(k, ptr) ( \
-	(k.f->balloon == ptr) ? k.f->trunk : k.f->balloon \
+	(k->f->balloon == ptr) ? k->f->trunk : k->f->balloon \
 )
 
 /**
- * @macro coord_save_m
+ * @macro load_coord
  * @brief save current (i, j)-coordinate to (mi, mj)
  */
-#define coord_save_m(t) { \
-	t.mi = t.i; t.mj = t.j; t.mp = t.p; t.mq = t.q; \
+#define load_coord(k, pdp) { \
+	k->mi = _ivec(pdp, i); \
+	k->mj = _ivec(pdp, j); \
+	k->mp = _ivec(pdp, p); \
+	k->mq = _ivec(pdp, q); \
 }
 
 /**
- * @macro coord_load_m
+ * @macro store_coord
  * @brief load current (mi, mj)-coordinate to (i, j)
  */
-#define coord_load_m(t) { \
-	t.i = t.mi; t.j = t.mj; t.p = t.mp; t.q = t.mq; \
+#define store_coord(k, pdp) { \
+	_ivec(pdp, i) = k->mi; \
+	_ivec(pdp, j) = k->mj; \
+	_ivec(pdp, p) = k->mp; \
+	_ivec(pdp, q) = k->mq; \
 }
 
 /**
@@ -823,6 +725,9 @@ enum _DIR2 {
  * @brief a label declaration macro.
  */
 #define LABEL(file, opt, label) 		LABEL_WITH_SUFFIX(file, opt, label)
+
+/* foreach */
+#define _for(iter, cnt)		for(iter = 0; iter < cnt; iter++)
 
 /* boolean */
 #define TRUE 			( 1 )
