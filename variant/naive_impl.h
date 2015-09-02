@@ -91,13 +91,13 @@
 	j = _ivec(pdp, j) + DEF_VEC_LEN/2; \
 	p = _ivec(pdp, p); \
 	q = _ivec(pdp, q); \
+	/** initialize direction array */ \
+	dir_init(r, k->pdr, p); \
 	/** load the first 32bytes of the vectors */ \
 	cell_t *s = (cell_t *)pdp, *t; \
 	for(q = 0, t = _ivec(pdp, pv); q < BW; q++) { *s++ = *t++; } \
 	for(q = 0, t = _ivec(pdp, cv); q < BW; q++) { *s++ = *t++; } \
 	pdp = (uint8_t *)s; \
-	/** initialize direction array */ \
-	dir_init(r, k->pdr, p); \
 }
 
 /**
@@ -223,9 +223,6 @@
  * @macro naive_linear_fill_finish
  */
 #define naive_linear_fill_finish(k, r) { \
-	/** save p-coordinate at the beginning of the block */ \
-	_ivec(k->pdp, max) = k->max; \
-	_ivec(k->pdp, ep) = p; \
 	/** retrieve chain vector pointers */ \
 	int32_t *pv = (int32_t *)pdp - 2*BW, *cv = (int32_t *)pdp - BW; \
 	/** create ivec at the end */ \
@@ -238,21 +235,37 @@
 	_ivec(pdp, pv) = pv; \
 	_ivec(pdp, cv) = cv; \
 	_ivec(pdp, len) = BW;	/** fixed to 32 */ \
+	/** save p-coordinate at the beginning of the block */ \
+	_ivec(k->pdp, max) = k->max; \
+	_ivec(k->pdp, ep) = p; \
 }
 
 /**
- * @macro naive_linear_search_terminal
+ * @macro naive_linear_set_terminal
  * 無条件に(mi, mj)を上書きして良い。
  */
-#define naive_linear_search_terminal(k, pdp) { \
-	_ivec(k->pdp, i) = k->aep; \
-	_ivec(k->pdp, j) = k->bep; \
-	_ivec(k->pdp, p) = cop(k->mi-k->asp, k->mj-k->bsp, BW) \
-		- cop(k->asp, k->bsp, BW); \
-	_ivec(k->pdp, q) = coq(k->mi-k->asp, k->mj-k->bsp, BW) \
-		- coq(_ivec(k->pdp, i)-k->asp, _ivec(k->pdp, j)-k->bsp, BW); \
+#define naive_linear_set_terminal(k, pdp) { \
+	int64_t i, j, p, q, as, bs, ae, be; \
+	/** load band terminal coordinate */ \
+	i = _ivec(k->pdp, i)-DEF_VEC_LEN/2; \
+	j = _ivec(k->pdp, j)+DEF_VEC_LEN/2; \
+	p = _ivec(k->pdp, p); \
+	q = _ivec(k->pdp, q); \
+	as = k->aep; bs = k->bsp; \
+	ae = k->aep; be = k->bep; \
+	/** check if the band reached the corner of the matrix */ \
+	if(p == cop(ae-as,be-bs,BW) \
+	&& (uint64_t)(coq(i,j,BW) - coq(ae,be,BW) + BW/2) < BW) { \
+		k->mi = ae; k->mj = be; \
+		k->mp = cop(ae-as, be-bs, BW); \
+		k->mq = coq(ae-as, be-bs, BW) - coq(i-as, j-bs, BW); \
+	} else { \
+		k->mi = as; k->mj = bs; \
+		k->mp = 0; k->mq = 0; \
+	} \
 }
 
+#if 0
 /**
  * @macro naive_linear_search_trigger
  * @brief compare current max with global max
@@ -268,6 +281,7 @@
 #define naive_linear_search_max_score(k, pdp) { \
 	/** no need to search */ \
 }
+#endif
 
 /**
  * @macro naive_linear_trace_decl

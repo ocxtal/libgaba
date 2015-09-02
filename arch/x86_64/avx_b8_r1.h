@@ -22,108 +22,108 @@
 /**
  * register declarations. 
  */
-#define DECLARE_VEC_CELL(v)			__m256i v
-#define DECLARE_VEC_CELL_REG(v)		__m256i register v
-#define DECLARE_VEC_CHAR_REG(v)		__m256i register v
+#define _vec_cell(v)			__m256i v
+#define _vec_cell_reg(v)		__m256i register v
+#define _vec_char_reg(v)		__m256i register v
 
 /**
  * substitution to cell vectors
  */
-#define VEC_ASSIGN(a, b) { \
+#define vec_assign(a, b) { \
 	(a) = (b); \
 }
 
-#define VEC_SET(v, i) { \
+#define vec_set(v, i) { \
 	(v) = _mm256_set1_epi8(i); \
 }
 
-#define VEC_SETZERO(v) { \
+#define vec_setzero(v) { \
 	(v) = _mm256_setzero_si256(); \
 }
 
-#define VEC_SETONES(v) { \
+#define vec_setones(v) { \
 	(v) = _mm256_set1_epi8(0xff); \
 }
 
 /**
  * substitution to char vectors
  */
-#define VEC_CHAR_SETZERO(v) { \
+#define vec_char_setzero(v) { \
 	(v) = _mm256_setzero_si256(); \
 }
 
-#define VEC_CHAR_SETONES(v) { \
+#define vec_char_setones(v) { \
 	(v) = _mm256_set1_epi8(0xff); \
 }
 
 /**
  * special substitution macros
  */
-#define VEC_SET_LHALF(v, i) { \
-	VEC_SET(v, i); (v) = _mm256_permute2x128_si256((v), (v), 0x80); \
+#define vec_set_lhalf(v, i) { \
+	vec_set(v, i); (v) = _mm256_permute2x128_si256((v), (v), 0x80); \
 }
 
-#define VEC_SET_UHALF(v, i) { \
-	VEC_SET(v, i); (v) = _mm256_permute2x128_si256((v), (v), 0x08); \
+#define vec_set_uhalf(v, i) { \
+	vec_set(v, i); (v) = _mm256_permute2x128_si256((v), (v), 0x08); \
 }
 
-#define VEC_SETF_MSB(v) { \
-	VEC_SETZERO(v); VEC_INSERT_MSB((v), 0xf0); \
+#define vec_setf_msb(v) { \
+	vec_setzero(v); vec_insert_msb((v), 0xf0); \
 }
 
-#define VEC_SETF_LSB(v) { \
-	VEC_SETZERO(v); VEC_INSERT_LSB((v), 0x0f); \
+#define vec_setf_lsb(v) { \
+	vec_setzero(v); vec_insert_lsb((v), 0x0f); \
 }
 
 /**
  * insertion and extraction macros
  */
-#define VEC_INSERT_MSB(v, a) { \
+#define vec_insert_msb(v, a) { \
 	(v) = _mm256_inserti128_si256( \
 		(v), \
 		_mm_insert_epi8(_mm256_extracti128_si256((v), 1), (a), sizeof(__m128i)-1), \
 		1); \
 }
 
-#define VEC_INSERT_LSB(v, a) { \
+#define vec_insert_lsb(v, a) { \
 	(v) = _mm256_inserti128_si256( \
 		(v), \
 		_mm_insert_epi8(_mm256_extracti128_si256((v), 0), (a), 0), \
 		0); \
 }
 
-#define VEC_MSB(v)		( (signed char)_mm_extract_epi8(_mm256_extracti128_si256((v), 1), sizeof(__m128i)/sizeof(char)-1) )
-#define VEC_LSB(v)		( (signed char)_mm_extract_epi8(_mm256_extracti128_si256((v), 0), 0) )
-#define VEC_CENTER(v)	( (signed char)_mm_extract_epi8(_mm256_extracti128_si256((v), 1), 0) )
+#define vec_msb(v)		( (signed char)_mm_extract_epi8(_mm256_extracti128_si256((v), 1), sizeof(__m128i)/sizeof(char)-1) )
+#define vec_lsb(v)		( (signed char)_mm_extract_epi8(_mm256_extracti128_si256((v), 0), 0) )
+#define vec_center(v)	( (signed char)_mm_extract_epi8(_mm256_extracti128_si256((v), 1), 0) )
 
 /**
  * arithmetic and logic operations
  */
-#define VEC_OR(a, b, c) { \
+#define vec_or(a, b, c) { \
 	(a) = _mm256_or_si256((b), (c)); \
 }
 
-#define VEC_ADD(a, b, c) { \
+#define vec_add(a, b, c) { \
 	(a) = _mm256_adds_epi8((b), (c)); \
 }
 
-#define VEC_ADDS(a, b, c) { \
+#define vec_adds(a, b, c) { \
 	(a) = _mm256_adds_epu8((b), (c)); \
 }
 
-#define VEC_SUB(a, b, c) { \
+#define vec_sub(a, b, c) { \
 	(a) = _mm256_subs_epi8((b), (c)); \
 }
 
-#define VEC_SUBS(a, b, c) { \
+#define vec_subs(a, b, c) { \
 	(a) = _mm256_subs_epu8((b), (c)); \
 }
 
-#define VEC_MAX(a, b, c) { \
+#define vec_max(a, b, c) { \
 	(a) = _mm256_max_epi8((b), (c)); \
 }
 
-#define VEC_MIN(a, b, c) { \
+#define vec_min(a, b, c) { \
 	(a) = _mm256_min_epi8((b), (c)); \
 }
 
@@ -131,7 +131,7 @@
  * shift operations
  *
  * Since AVX2 instruction sets does not have 256-bit through shift operations,
- * VEC_SHIFT_R and VEC_SHIFT_L macro need tricky implementation.
+ * vec_shift_r and vec_shift_l macro need tricky implementation.
  *
  * SHIFT_R:
  *     First, _mm256_permute2x128_si256((a), (a), 0x81) moves the upper half of the
@@ -177,14 +177,14 @@
  * output: | (a[255:128]<<128 | a[127:0])>>120 |     (a[127:0]<<128 | 0)>>120     |
  *         +-----------------------------------+----------------------------------+
  */
-#define VEC_SHIFT_R(a) { \
+#define vec_shift_r(a) { \
 	(a) = _mm256_alignr_epi8( \
 		_mm256_permute2x128_si256((a), (a), 0x81), \
 		(a), \
 		1); \
 }
 
-#define VEC_SHIFT_L(a) { \
+#define vec_shift_l(a) { \
 	(a) = _mm256_alignr_epi8( \
 		(a), \
 		_mm256_permute2x128_si256((a), (a), 0x08), \
@@ -194,22 +194,22 @@
 /**
  * compare and select
  */
-#define VEC_COMPARE(a, b, c) { \
+#define vec_comp(a, b, c) { \
 	(a) = _mm256_cmpeq_epi8((b), (c)); \
 }
 
-#define VEC_SELECT(a, b, c, d) { \
+#define vec_select(a, b, c, d) { \
 	(a) = _mm256_blendv_epi8((b), (c), (d)); \
 }
 
 /**
  * load and store operations
  */
-#define VEC_STORE(p, v) { \
+#define vec_store(p, v) { \
 	_mm256_store_si256((__m256i *)(p), v); p += sizeof(__m256i); \
 }
 
-#define VEC_STORE_PACKED(p, dv, dh) { \
+#define vec_store_packed(p, dv, dh) { \
 	_mm256_store_si256( \
 		(__m256i *)(p), \
 		_mm256_or_si256(_mm256_slli_epi64(dh, 4), dv)); \
@@ -219,28 +219,28 @@
 /**
  * char vector operations
  */
-#define VEC_CHAR_LOAD(p, v) { \
-	VEC_LOAD(p, v); \
+#define vec_char_load(p, v) { \
+	vec_load(p, v); \
 }
 
-#define VEC_CHAR_STORE(p, v) { \
-	VEC_STORE(p, v); \
+#define vec_char_store(p, v) { \
+	vec_store(p, v); \
 }
 
-#define VEC_CHAR_SHIFT_R(a) { \
-	VEC_SHIFT_R(a); \
+#define vec_char_shift_r(a) { \
+	vec_shift_r(a); \
 }
 
-#define VEC_CHAR_SHIFT_L(a) { \
-	VEC_SHIFT_L(a); \
+#define vec_char_shift_l(a) { \
+	vec_shift_l(a); \
 }
 
-#define VEC_CHAR_INSERT_MSB(x, y) { \
-	VEC_INSERT_MSB(x, y); \
+#define vec_char_insert_msb(x, y) { \
+	vec_insert_msb(x, y); \
 }
 
-#define VEC_CHAR_INSERT_LSB(x, y) { \
-	VEC_INSERT_LSB(x, y); \
+#define vec_char_insert_lsb(x, y) { \
+	vec_insert_lsb(x, y); \
 }
 
 #endif /* #ifndef _AVX_B8_R1_H_INCLUDED */

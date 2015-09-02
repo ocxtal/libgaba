@@ -593,14 +593,14 @@ enum _DIR2 {
 /**
  * char vector shift operations
  */
-#define PUSHQ(x, y) { \
-	VEC_CHAR_SHIFT_L(y, y); \
-	VEC_CHAR_INSERT_LSB(y, x); \
+#define pushq(x, y) { \
+	vec_char_shift_l(y, y); \
+	vec_char_insert_lsb(y, x); \
 }
 
-#define PUSHT(x, y) { \
-	VEC_CHAR_SHIFT_R(y, y); \
-	VEC_CHAR_INSERT_MSB(y, x); \
+#define pusht(x, y) { \
+	vec_char_shift_r(y, y); \
+	vec_char_insert_msb(y, x); \
 }
 
 /**

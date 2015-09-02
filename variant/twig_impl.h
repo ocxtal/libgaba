@@ -96,17 +96,17 @@
 	/** delegate to branch implementation */ \
 	branch_linear_fill_init_intl(k, r); \
 	/** initialize char vectors */ \
-	VEC_CHAR_SETZERO(wq);	/** vector on the top */ \
+	vec_char_setzero(wq);	/** vector on the top */ \
 	for(q = 0; q < BW/2; q++) { \
 		rd_fetch(k->a, i+q); \
 		debug("a: %d", rd_decode(k->a)); \
-		PUSHQ(rd_decode(k->a), wq); \
+		pushq(rd_decode(k->a), wq); \
 	} \
-	VEC_CHAR_SETONES(wt);	/** vector on the left */ \
+	vec_char_setones(wt);	/** vector on the left */ \
 	for(q = 0; q < BW/2-1; q++) { \
 		rd_fetch(k->b, j+q); \
 		debug("b: %d", rd_decode(k->b)); \
-		PUSHT(rd_decode(k->b), wt); \
+		pusht(rd_decode(k->b), wt); \
 	} \
 }
 

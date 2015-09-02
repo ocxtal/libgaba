@@ -40,194 +40,246 @@
 #endif
 
 /**
+ * @macro BLK
+ */
+#ifdef BLK
+#undef BLK
+#define BLK 		( 16 )
+#endif
+
+/**
  * @macro trunk_linear_bpl
  * @brief calculates bytes per line
  */
-#define trunk_linear_bpl(c) 		( sizeof(cell_t) * BW )
+#define trunk_linear_bpl(k) 		( sizeof(cell_t) * BW )
+#define trunk_affine_bpl(k)			( 3 * sizeof(cell_t) * BW )
 
 /**
  * @macro (internal) trunk_linear_topq, ...
  * @brief coordinate calculation helper macros
  */
-#define trunk_linear_topq(r, t, c)		naive_linear_topq(r, t, c)
-#define trunk_linear_leftq(r, t, c)		naive_linear_leftq(r, t, c)
-#define trunk_linear_topleftq(r, t, c)	naive_linear_topleftq(r, t, c)
-#define trunk_linear_top(r, t, c) 		naive_linear_top(r, t, c)
-#define trunk_linear_left(r, t, c)		naive_linear_left(r, t, c)
-#define trunk_linear_topleft(r, t, c)	naive_linear_topleft(r, t, c)
+#define trunk_linear_topq(r, k)			naive_linear_topq(r, k)
+#define trunk_linear_leftq(r, k)		naive_linear_leftq(r, k)
+#define trunk_linear_topleftq(r, k)		naive_linear_topleftq(r, k)
+#define trunk_linear_top(r, k) 			naive_linear_top(r, k)
+#define trunk_linear_left(r, k)			naive_linear_left(r, k)
+#define trunk_linear_topleft(r, k)		naive_linear_topleft(r, k)
+
+#define trunk_affine_topq(r, k)			naive_affine_topq(r, k)
+#define trunk_affine_leftq(r, k)		naive_affine_leftq(r, k)
+#define trunk_affine_topleftq(r, k)		naive_affine_topleftq(r, k)
+#define trunk_affine_top(r, k) 			naive_affine_top(r, k)
+#define trunk_affine_left(r, k)			naive_affine_left(r, k)
+#define trunk_affine_topleft(r, k)		naive_affine_topleft(r, k)
 
 /**
  * @macro trunk_linear_dir_exp
  * @brief determines the next direction of the lane in the dynamic algorithm.
  */
-#define trunk_linear_dir_exp_top(r, t, c) ( \
+#if 0
+#define trunk_linear_dir_exp_top(r, k, pdp) ( \
 	scl += ((dir(r) == TOP \
-		? VEC_MSB(dv) \
-		: VEC_MSB(dh)) + k.gi), \
+		? vec_msb(dv) \
+		: vec_msb(dh)) + k.gi), \
 	scu += ((dir(r) == TOP \
-		? VEC_LSB(dv) \
-		: VEC_LSB(dh)) + k.gi), \
+		? vec_lsb(dv) \
+		: vec_lsb(dh)) + k.gi), \
 	(scl > scu) ? SEA_TOP : SEA_LEFT \
 )
-#define trunk_linear_dir_exp_bottom(r, t, c) ( 0 )
+#endif
+#define trunk_linear_dir_exp_top(r, k, pdp) ( \
+	vec_acc_scl(acc) > vec_acc_scu(acc) ? SEA_TOP : SEA_LEFT \
+)
+#define trunk_linear_dir_exp_bottom(r, k, pdp) 	( 0 )
+#define trunk_affine_dir_exp_top(r, k, pdp) 	trunk_linear_dir_exp_top(r, k, pdp)
+#define trunk_affine_dir_exp_bottom(r, k, pdp)	trunk_linear_dir_exp_bottom(r, k, pdp)
+
 
 /**
  * @macro trunk_linear_fill_decl
  */
-#define trunk_linear_fill_decl(t, c, k, r) \
+#define trunk_linear_fill_decl(k, r) \
 	dir_t r; \
-	int32_t score, scu, scl; \
-	DECLARE_VEC_CELL_REG(mggv); \
-	DECLARE_VEC_CELL_REG(xggv); \
-	DECLARE_VEC_CHAR_REG(wq); \
-	DECLARE_VEC_CHAR_REG(wt); \
-	DECLARE_VEC_CELL_REG(dv); \
-	DECLARE_VEC_CELL_REG(dh); \
-	DECLARE_VEC_CELL_REG(dv_); \
-	DECLARE_VEC_CELL_REG(tmp);
+	int64_t i, j, p, q; \
+	_vec_acc(acc);		/** score accumulator */ \
+	_vec_acc(max); 		/** max holder */ \
+	_vec_single_const(mggv, k->m - 2*k->gi); \
+	_vec_single_const(xggv, k->x - 2*k->gi); \
+	_vec_char_reg(wq); \
+	_vec_char_reg(wt); \
+	_vec_cell_reg(dv); \
+	_vec_cell_reg(dh); \
+	_vec_cell_reg(t1); \
+	_vec_cell_reg(t2);
+
+#define trunk_affine_fill_decl(k, r) \
+	trunk_linear_fill_decl(k, r); \
+	_vec_cell_reg(de); \
+	_vec_cell_reg(df); \
 
 /**
  * @macro trunk_linear_fill_init
  */
-#define trunk_linear_fill_init(t, c, k, r) { \
-	t.i -= BW/2; \
-	t.j += BW/2; \
-	c.alim = c.aep - BW/2; \
-	c.blim = c.bep - BW/2 + 1; \
-	dir_init(r, c.pdr[t.p]); \
-	VEC_SET(mggv, k.m - 2*k.gi); \
-	VEC_SET(xggv, k.x - 2*k.gi); \
-	VEC_SETZERO(dv); \
-	VEC_SETZERO(dh); \
-	for(t.q = 0; t.q < BW; t.q++) { \
-		VEC_INSERT_MSB(dv, \
-			  _read(c.v.cv, t.q, c.v.size) \
-			- _read(c.v.pv, t.q + trunk_linear_topq(r, t, c), c.v.size) \
-			- k.gi); \
-		VEC_INSERT_MSB(dh, \
-			  _read(c.v.cv, t.q, c.v.size) \
-			- _read(c.v.pv, t.q + trunk_linear_leftq(r, t, c), c.v.size) \
-			- k.gi); \
-		VEC_SHIFT_R(dv, dv); \
-		VEC_SHIFT_R(dh, dh); \
+#define trunk_linear_fill_init(k, r) { \
+	/** load coordinates onto the local stack */ \
+	i = _ivec(pdp, i) - DEF_VEC_LEN/2; \
+	j = _ivec(pdp, j) + DEF_VEC_LEN/2; \
+	p = _ivec(pdp, p); \
+	q = _ivec(pdp, q); \
+	/** initialize direction array */ \
+	dir_init(r, k->pdr, p); \
+	/** load scores of the current vector */ \
+	vec_acc_set(acc, \
+		p, \
+		_ivec(pdp, cv)[BW-1], \
+		_ivec(pdp, cv)[BW/2], \
+		_ivec(pdp, cv)[0]); \
+	/** load vectors */ \
+	int32_t *s; \
+	vec_load32_dvdh( \
+		_ivec(pdp, pv), _ivec(pdp, cv), \
+		dv, dh, \
+		k->gi, dir(r)); \
+	vec_store_dvdh(pdp, dv, dh); \
+	/** initialize char vectors */ \
+	vec_char_setzero(wq); \
+	for(q = -BW/2; q < BW/2; q++) { \
+		rd_fetch(k->a, i+q); \
+		pushq(rd_decode(k->a), wq); \
 	} \
-	if(dir(r) == TOP) { \
-		VEC_INSERT_MSB(dh, 0); \
-	} else { \
-		VEC_INSERT_LSB(dv, 0); \
+	vec_char_setzero(wt); \
+	for(q = -BW/2; q < BW/2-1; q++) { \
+		rd_fetch(k->b, j+q); \
+		pusht(rd_decode(k->b), wt); \
 	} \
-	scu = _read(c.v.cv, 0, c.v.size); \
-	t.max = score = _read(c.v.cv, BW/2, c.v.size); \
-	scl = _read(c.v.cv, BW-1, c.v.size); \
-	c.pdp += trunk_linear_bpl(c); \
-	VEC_STORE_DVDH(c.pdp, dv, dh); \
-	VEC_CHAR_SETZERO(wq); \
-	for(t.q = -BW/2; t.q < BW/2; t.q++) { \
-		rd_fetch(c.a, t.i+t.q); \
-		PUSHQ(rd_decode(c.a), wq); \
-	} \
-	VEC_CHAR_SETZERO(wt); \
-	for(t.q = -BW/2; t.q < BW/2-1; t.q++) { \
-		rd_fetch(c.b, t.j+t.q); \
-		PUSHT(rd_decode(c.b), wt); \
-	} \
+}
+
+/**
+ * @macro trunk_linear_fill_start
+ */
+#define trunk_linear_fill_start(k, r) { \
+	/** update direction pointer */ \
+	dir_load_forward(r, k, pdp, p); \
 }
 
 /**
  * @macro trunk_linear_fill_former_body
  */
-#define trunk_linear_fill_former_body(t, c, k, r) { \
-	dir_next(r, t, c); \
+#define trunk_linear_fill_former_body(k, r) { \
+	/** update direction pointer */ \
+	dir_next(r, k, pdp, p); \
 	debug("scu(%d), score(%d), scl(%d)", scu, score, scl); \
 }
 
 /**
  * @macro trunk_linear_fill_go_down
  */
-#define trunk_linear_fill_go_down(t, c, k, r) { \
-	VEC_SHIFT_R(dv, dv); \
-	rd_fetch(c.b, t.j+BW/2-1); \
-	t.j++; \
-	PUSHT(rd_decode(c.b), wt); \
+#define trunk_linear_fill_go_down(k, r) { \
+	vec_shift_r(dv, dv); \
+	rd_fetch(k->b, j+BW/2-1); \
+	j++; \
+	pusht(rd_decode(k->b), wt); \
 }
 
 /**
  * @macro trunk_linear_fill_go_right
  */
-#define trunk_linear_fill_go_right(t, c, k, r) { \
-	VEC_SHIFT_L(dh, dh); \
-	rd_fetch(c.a, t.i+BW/2); \
-	t.i++; \
-	PUSHQ(rd_decode(c.a), wq); \
+#define trunk_linear_fill_go_right(k, r) { \
+	vec_shift_l(dh, dh); \
+	rd_fetch(k->a, i+BW/2); \
+	i++; \
+	pushq(rd_decode(k->a), wq); \
 }
 
 /**
  * @macro trunk_linear_fill_latter_body
  */
-#define trunk_linear_fill_latter_body(t, c, k, r) { \
-	VEC_COMPARE(tmp, wq, wt); \
-	VEC_SELECT(tmp, xggv, mggv, tmp); \
-	VEC_MAX(tmp, tmp, dv); \
-	VEC_MAX(tmp, tmp, dh); \
-	VEC_SUB(dv_, tmp, dh); \
-	VEC_SUB(dh, tmp, dv); \
-	VEC_ASSIGN(dv, dv_); \
-	VEC_STORE_DVDH(c.pdp, dv, dh); \
-	if(k.alg != NW && score >= t.max) { \
-		t.max = score; \
-		t.mi = t.i; t.mj = t.j; \
-		t.mp = COP(t.mi, t.mj, BW) - COP(c.asp, c.bsp, BW); t.mq = 0; \
-	} \
+#define trunk_linear_fill_latter_body(k, r) { \
+	vec_comp_sel(t1, wq, wt, mv, xv); \
+	vec_max(t1, t1, dv); \
+	vec_max(t1, t1, dh); \
+	vec_sub(t2, t1, dv); \
+	vec_sub(dv, t1, dh); \
+	vec_assign(dh, t2); \
+	vec_store_dvdh(pdp, dv, dh); \
+	if(dir(r) == TOP) { vec_assign(t1, dv); } else { vec_assign(t1, dh); } \
+	vec_acc_accum_max(acc, max, t1, k->gi); \
 }
+
+/**
+ * @macro trunk_linear_fill_end
+ */
+#define trunk_linear_fill_end(k, r) { \
+	/** store (i, j) to the end of pdp */ \
+	*((int64_t *)pdp) = i; pdp += sizeof(int64_t); \
+	*((int64_t *)pdp) = j; pdp += sizeof(int64_t); \
+}
+
+/**
+ * @macro trunk_linear_fill_test_xdrop
+ */
+#define trunk_linear_fill_test_xdrop(k, r) ( \
+	(XSEA - k->alg - 1) & (vec_acc_scc(acc) + k->tx - vec_acc_scc(max)) \
+)
+
+/**
+ * @macro trunk_linear_fill_test_mem
+ */
+#define trunk_linear_fill_test_mem(k, r) ( \
+	  (k->aep-i-BLK) \
+	| (k->bep-j-BLK) \
+	| (k->tdp - pdp \
+		-(BLK*(trunk_linear_bpl(k)+1) \
+		+ sizeof(struct sea_ivec) \
+		+ 2 * sizeof(int64_t)			/** (i, j) */ \
+		+ 2 * sizeof(int32_t) * BW))	/** pv + cv */ \
+)
+
+/**
+ * @macro trunk_linear_fill_test_chain
+ */
+#define trunk_linear_fill_test_chain(k, r)		( 0 )
+
+#if 0
+/**
+ * @macro trunk_linear_fill_check_alt
+ */
+#define trunk_linear_fill_check_alt(k, r) ( \
+	   (scl > score - k.tc) \
+	|| (scu > score - k.tc) \
+)
+#endif
 
 /**
  * @macro trunk_linear_fill_check_term
  */
-#define trunk_linear_fill_check_term(t, c, k, r) ( \
-	score += ((dir(r) == TOP \
-		? VEC_CENTER(dv) \
-		: VEC_CENTER(dh)) + k.gi), \
-	k.alg == XSEA && score + k.tx - t.max < 0 \
-)
-
-/**
- * @macro trunk_linear_fill_check_chain
- */
-#define trunk_linear_fill_check_chain(t, c, k, r)		( 0 )
-
-/**
- * @macro trunk_linear_fill_check_alt
- */
-#define trunk_linear_fill_check_alt(t, c, k, r) ( \
-	   (scl > score - k.tc) \
-	|| (scu > score - k.tc) \
-)
-
-/**
- * @macro trunk_linear_fill_check_mem
- */
-#define trunk_linear_fill_check_mem(t, c, k, r) ( \
-	((cell_t *)c.pdp + 2*BW) > (cell_t *)c.dp.ep \
+#define trunk_linear_fill_check_term(k, r) ( \
+	( trunk_linear_fill_test_xdrop(k, r) \
+	| trunk_linear_fill_test_mem(k, r) \
+	| trunk_linear_fill_test_chain(k, r)) >= 0 \
 )
 
 /**
  * @macro trunk_linear_fill_finish
  */
-#define trunk_linear_fill_finish(t, c, k, r) { \
-	VEC_SUB(tmp, dv, dh); \
-	VEC_STORE(c.pdp, tmp); \
-	print_lane((cell_t *)c.pdp - BW, c.pdp); \
-	VEC_STORE(c.pdp, dh); \
-	print_lane((cell_t *)c.pdp - BW, c.pdp); \
-	*((int32_t *)c.pdp) = scu; \
-	c.pdp += sizeof(int32_t); \
-	*((int32_t *)c.pdp) = score; \
-	c.pdp += sizeof(int32_t); \
-	*((int32_t *)c.pdp) = scl; \
-	c.pdp += sizeof(int32_t); \
-	*((int32_t *)c.pdp) = t.max; \
-	c.pdp += sizeof(int32_t); \
-	c.pdp += (trunk_linear_bpl(c) - sizeof(int32_t) * 4); \
+#define trunk_linear_fill_finish(k, r) { \
+	/** save vectors */ \
+	vec_store32_dvdh(pdp, dv, dh, vec_acc_scu(acc), k->gi, dir(r)); \
+	cell_t *pv = (cell_t *)pdp - 2*BW, *cv = (cell_t *)pdp - BW; \
+	/** create ivec at the end */ \
+	pdp += sizeof(struct sea_ivec); \
+	/** save terminal coordinates */ \
+	_ivec(pdp, i) = i+DEF_VEC_LEN/2; \
+	_ivec(pdp, j) = j-DEF_VEC_LEN/2; \
+	_ivec(pdp, p) = p; \
+	_ivec(pdp, q) = q; \
+	_ivec(pdp, pv) = (int32_t *)pv; \
+	_ivec(pdp, cv) = (int32_t *)cv; \
+	/** search max */ \
+
+	/** save p-coordinate at the beginning of the block */ \
+	_ivec(k->pdp, max) = vec_acc_scc(max); \
+	_ivec(k->pdp, ep) = p; \
 }
 
 /**
@@ -325,8 +377,8 @@
 	int64_t mep = MIN2(t.mp + BW * (k.m - 2*k.gi) / (2 * k.m), t.p); \
 	int32_t sc = 0, tsc; \
 	struct sea_coords x, y; \
-	DECLARE_VEC_CELL_REG(dv); \
-	DECLARE_VEC_CELL_REG(dh); \
+	_vec_cell_reg(dv); \
+	_vec_cell_reg(dh); \
 	\
 	debug("msp(%lld), mep(%lld)", msp, mep); \
 	debug("mi(%lld), mj(%lld), mp(%lld), mq(%lld), max(%d)", t.mi, t.mj, t.mp, t.mq, t.max); \
@@ -334,12 +386,12 @@
 	memset(&y, 0, sizeof(struct sea_coords)); \
 	c.pdp = (uint8_t *)(pb + ADDR(msp - sp, -BW/2, BW)); \
 	dir_init(r, c.pdr[msp]); \
-	VEC_LOAD_DVDH(c.pdp, dv, dh); \
+	vec_load_dvdh(c.pdp, dv, dh); \
 	for(x.p = msp; x.p < mep;) { \
 		dir_next_guided(r, x, c); \
-		VEC_LOAD_DVDH(c.pdp, dv, dh); \
+		vec_load_dvdh(c.pdp, dv, dh); \
 		debug("load: pdp(%p)", c.pdp); \
-		sc += (((dir(r) == TOP) ? VEC_LSB(dv) : VEC_LSB(dh)) + k.gi); \
+		sc += (((dir(r) == TOP) ? vec_lsb(dv) : vec_lsb(dh)) + k.gi); \
 		if(dir(r) == TOP) { x.j++; } else { x.i++; } \
 		debug("i(%lld), j(%lld), p(%lld), q(%lld), sc(%d)", x.i, x.j, x.p, x.q, sc); \
 		for(x.q = -BW/2, tsc = sc; x.q < BW/2; x.q++) { \
@@ -352,10 +404,10 @@
 				y = x; y.max = tsc; \
 				debug("anchor found: i(%lld), j(%lld), p(%lld), q(%lld), sc(%d), max(%d)", x.i, x.j, x.p, x.q, tsc, x.max); \
 			} \
-			tsc -= (VEC_LSB(dh) + k.gi); \
-			VEC_SHIFT_R(dh, dh); \
-			VEC_SHIFT_R(dv, dv); \
-			tsc += (VEC_LSB(dv) + k.gi); \
+			tsc -= (vec_lsb(dh) + k.gi); \
+			vec_shift_r(dh, dh); \
+			vec_shift_r(dv, dv); \
+			tsc += (vec_lsb(dv) + k.gi); \
 		} \
 	} \
 	debug("t: mi(%lld), mj(%lld), mp(%lld), mq(%lld), max(%d)", t.mi, t.mj, t.mp, t.mq, t.max); \
@@ -387,11 +439,11 @@
 	{ \
 		int64_t scu = 0, score = 0, scl = 0; \
 		t.max = 0; \
-		DECLARE_VEC_CELL_REG(dv); \
-		DECLARE_VEC_CELL_REG(dh); \
-		DECLARE_VEC_CELL_REG(tmp); \
-		VEC_LOAD_DVDH(c.pdp, dv, dh); \
-		trunk_linear_fill_finish(t, c, k, r); \
+		_vec_cell_reg(dv); \
+		_vec_cell_reg(dh); \
+		_vec_cell_reg(tmp); \
+		vec_load_dvdh(c.pdp, dv, dh); \
+		trunk_linear_fill_finish(k, r); \
 		trunk_linear_chain_push_ivec(t, c, k); \
 	} \
 	{ \
@@ -406,7 +458,7 @@
 /**
  * @macro trunk_linear_trace_decl
  */
-#define trunk_linear_trace_decl(t, c, k, r) \
+#define trunk_linear_trace_decl(k, r) \
 	dir_t r; \
 	cell_t *p = pb + ADDR(t.p - sp, t.q, BW);
 
@@ -416,7 +468,7 @@
  * push_ivecの実装を使って、absolute scoreに変換する。
  * ここからnon-diffの計算をし、maxの場所を特定する。
  */
-#define trunk_linear_trace_init(t, c, k, r) { \
+#define trunk_linear_trace_init(k, r) { \
 	dir_term(r, t, c); \
 	rd_fetch(c.a, t.i-1); \
 	rd_fetch(c.b, t.j-1); \
@@ -425,7 +477,7 @@
 /**
  * @macro trunk_linear_trace_body
  */
-#define trunk_linear_trace_body(t, c, k, r) { \
+#define trunk_linear_trace_body(k, r) { \
 	dir_prev(r, t, c); \
 	debug("dir: d(%d), d2(%d)", dir(r), dir2(r)); \
 	cell_t diag, dh, sc; \
@@ -467,7 +519,7 @@
 /**
  * @macro trunk_linear_trace_finish
  */
-#define trunk_linear_trace_finish(t, c, k, r) { \
+#define trunk_linear_trace_finish(k, r) { \
 	t.mq = (p - pb + BW) % BW - BW/2; /** correct the q-coordinate */ \
 }
 

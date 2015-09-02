@@ -55,7 +55,7 @@ DECLARE_FUNC(BASE, SUFFIX, _fill)(
 	bench_end(fill);
 	return(CONT);
 }
-#if 0
+
 /**
  * @fn prep_next_mem
  * @brief malloc the next memory, set pointers, and copy the content
@@ -65,15 +65,18 @@ DECLARE_FUNC(BASE, SUFFIX, prep_next_mem)(
 	struct sea_local_context *this)
 {
 	struct sea_local_context register *k = this;
+	uint8_t *p;
 
 	/** malloc the next dp, dr memory */
 	k->size *= 2;
-	k->dp.ep = (k->dp.sp = k->pdp = (uint8_t *)malloc(k->size)) + k->size;
+	p = (uint8_t *)malloc(k->size));
 	/** copy the content to be passed */
+	memcpy(p, k->pdp-sizeof(struct sea_ivec), sizeof(struct sea_ivec));
+	k->pdp = p + sizeof(struct sea_ivec);
 
 	return(p);
 }
-#endif
+
 /**
  * @fn chain
  * @brief chain to the next fill-in function
@@ -99,9 +102,9 @@ DECLARE_FUNC(BASE, SUFFIX, _chain)(
 	if(cfn != NULL) {
 		/** go forward */
 		if(stat == MEM) {
-			// uint8_t *p = CALL_FUNC(BASE, SUFFIX, prep_next_mem)(k);
+			uint8_t *p = CALL_FUNC(BASE, SUFFIX, prep_next_mem)(k);
 			ret = cfn(k);
-//			free(p);
+			free(p);
 		} else {
 			ret = cfn(k);	/** chain without malloc */
 		}
@@ -110,12 +113,14 @@ DECLARE_FUNC(BASE, SUFFIX, _chain)(
 		if(k->alg == NW) {
 			/** load terminal coordinate to (mi, mj) and (mp, mq) */
 			debug("set terminal");
-			search_terminal(k, pdp);
+			set_terminal(k, pdp);
 		}
+		wr_alloc(k->l, _ivec(pdp, p));
 	}
 	return(ret);
 }
 
+#if 0
 /**
  * @fn search
  * @brief search the max score
@@ -146,6 +151,7 @@ DECLARE_FUNC(BASE, SUFFIX, _search)(
 	bench_end(search);
 	return(0);
 }
+#endif
 
 /**
  * @fn trace
@@ -192,7 +198,7 @@ DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
 	CALL_FUNC(BASE, SUFFIX, _chain)(k, pdp, stat);
 
 	/** search */
-	CALL_FUNC(BASE, SUFFIX, _search)(k, pdp);
+//	CALL_FUNC(BASE, SUFFIX, _search)(k, pdp);
 
 	/** trace */
 	if(k->do_trace) {

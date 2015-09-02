@@ -78,7 +78,7 @@
  * @brief determines the next direction of the lane in the dynamic algorithm.
  */
 #define branch_linear_dir_exp_top(r, k, pdp) ( \
-	(VEC_MSB(cv) > VEC_LSB(cv)) ? SEA_TOP : SEA_LEFT \
+	(vec_msb(cv) > vec_lsb(cv)) ? SEA_TOP : SEA_LEFT \
 )
 #define branch_linear_dir_exp_bottom(r, k, pdp) ( 0 )
 #define branch_affine_dir_exp_top(r, k, pdp)	branch_linear_dir_exp_top(r, k, pdp)
@@ -90,8 +90,8 @@
 #define branch_linear_fill_decl(k, r) \
 	dir_t r; \
 	int64_t i, j, p, q; \
-	_vec_cell_const(mv, k->m);		/** (m, m, m, ..., m) */ \
-	_vec_cell_const(xv, k->x);		/** (x, x, x, ..., x) */ \
+	_vec_single_const(mv, k->m);	/** (m, m, m, ..., m) */ \
+	_vec_single_const(xv, k->x);	/** (x, x, x, ..., x) */ \
 	_vec_cell_const(gv, k->gi);		/** (g, g, g, ..., g) */ \
 	_vec_char_reg(wq);				/** a buffer for seq.a */ \
 	_vec_char_reg(wt);				/** a buffer for seq.b */ \
@@ -116,17 +116,17 @@
 	j = _ivec(pdp, j) + DEF_VEC_LEN/2; \
 	p = _ivec(pdp, p); \
 	q = _ivec(pdp, q); \
-	/** load vectors */ \
-	int32_t *s; \
-	s = _ivec(pdp, pv); VEC_LOAD32(s, pv); \
-	s = _ivec(pdp, cv); VEC_LOAD32(s, cv); \
-	VEC_STORE(pdp, pv); \
-	VEC_STORE(pdp, cv); \
-	/** initialize the other vectors */ \
-	VEC_SET(maxv, k->max); \
-	VEC_SET(zv, k->alg == SW ? 0 : CELL_MIN); \
 	/** initialize direction array */ \
 	dir_init(r, k->pdr, p); \
+	/** load vectors */ \
+	int32_t *s; \
+	s = _ivec(pdp, pv); vec_load32(s, pv); \
+	s = _ivec(pdp, cv); vec_load32(s, cv); \
+	vec_store(pdp, pv); \
+	vec_store(pdp, cv); \
+	/** initialize the other vectors */ \
+	vec_set(maxv, k->max); \
+	vec_set(zv, k->alg == SW ? 0 : CELL_MIN); \
 }
 
 /**
@@ -136,15 +136,15 @@
 	/** load coordinates and vectors, initialize misc variables */ \
 	branch_linear_fill_init_intl(k, r); \
 	/** initialize char vectors */ \
-	VEC_CHAR_SETZERO(wq);	/** vector on the top */ \
+	vec_char_setzero(wq);	/** vector on the top */ \
 	for(q = -BW/2; q < BW/2; q++) { \
 		rd_fetch(k->a, i+q); \
-		PUSHQ(rd_decode(k->a), wq); \
+		pushq(rd_decode(k->a), wq); \
 	} \
-	VEC_CHAR_SETZERO(wt);	/** vector on the left */ \
+	vec_char_setzero(wt);	/** vector on the left */ \
 	for(q = -BW/2; q < BW/2-1; q++) { \
 		rd_fetch(k->b, j+q); \
-		PUSHT(rd_decode(k->b), wt); \
+		pusht(rd_decode(k->b), wt); \
 	} \
 }
 
@@ -160,7 +160,7 @@
  * @macro branch_linear_fill_former_body
  */
 #define branch_linear_fill_former_body(k, r) { \
-	debug("%d, %d, %d", VEC_MSB(v), VEC_CENTER(v), VEC_LSB(v)); \
+	debug("%d, %d, %d", vec_msb(v), vec_center(v), vec_lsb(v)); \
 	dir_next(r, k, pdp, p); \
 }
 
@@ -169,14 +169,14 @@
  */
 #define branch_linear_fill_go_down(k, r) { \
 	if(dir2(r) == TT) { \
-		VEC_SHIFT_R(pv, pv); \
-		VEC_INSERT_MSB(pv, CELL_MIN); \
+		vec_shift_r(pv, pv); \
+		vec_insert_msb(pv, CELL_MIN); \
 	} \
-	VEC_SHIFT_R(tmp2, cv); \
-	VEC_INSERT_MSB(tmp2, CELL_MIN); \
+	vec_shift_r(tmp2, cv); \
+	vec_insert_msb(tmp2, CELL_MIN); \
 	rd_fetch(k->b, j+BW/2-1); \
 	j++; \
-	PUSHT(rd_decode(k->b), wt); \
+	pusht(rd_decode(k->b), wt); \
 }
 
 /**
@@ -184,32 +184,31 @@
  */
 #define branch_linear_fill_go_right(k, r) { \
 	if(dir2(r) == LL) { \
-		VEC_SHIFT_L(pv, pv); \
-		VEC_INSERT_LSB(pv, CELL_MIN); \
+		vec_shift_l(pv, pv); \
+		vec_insert_lsb(pv, CELL_MIN); \
 	} \
-	VEC_SHIFT_L(tmp2, cv); \
-	VEC_INSERT_LSB(tmp2, CELL_MIN); \
+	vec_shift_l(tmp2, cv); \
+	vec_insert_lsb(tmp2, CELL_MIN); \
 	rd_fetch(k->a, i+BW/2); \
 	i++; \
-	PUSHQ(rd_decode(k->a), wq); \
+	pushq(rd_decode(k->a), wq); \
 }
 
 /**
  * @macro branch_linear_fill_latter_body
  */
 #define branch_linear_fill_latter_body(k, r) { \
- 	VEC_ADD(tmp1, cv, gv); \
-	VEC_ADD(tmp2, tmp2, gv); \
-	VEC_MAX(tmp1, tmp1, tmp2); \
-	VEC_COMPARE(tmp2, wq, wt); \
-	VEC_SELECT(tmp2, xv, mv, tmp2); \
-	VEC_ADD(tmp2, pv, tmp2); \
-	VEC_MAX(tmp1, zv, tmp1); \
-	VEC_MAX(tmp1, tmp1, tmp2); \
-	VEC_ASSIGN(pv, cv); \
-	VEC_ASSIGN(cv, tmp1); \
-	VEC_MAX(maxv, maxv, cv); \
-	VEC_STORE(pdp, cv); \
+ 	vec_add(tmp1, cv, gv); \
+	vec_add(tmp2, tmp2, gv); \
+	vec_max(tmp1, tmp1, tmp2); \
+	vec_comp_sel(tmp2, wq, wt, mv, xv); \
+	vec_add(tmp2, pv, tmp2); \
+	vec_max(tmp1, zv, tmp1); \
+	vec_max(tmp1, tmp1, tmp2); \
+	vec_assign(pv, cv); \
+	vec_assign(cv, tmp1); \
+	vec_max(maxv, maxv, cv); \
+	vec_store(pdp, cv); \
 }
 
 /**
@@ -223,7 +222,7 @@
  * @macro branch_linear_fill_test_xdrop
  */
 #define branch_linear_fill_test_xdrop(k, r) ( \
-	(XSEA - k->alg - 1) & (VEC_CENTER(cv) + k->tx - VEC_CENTER(maxv)) \
+	(XSEA - k->alg - 1) & (vec_center(cv) + k->tx - vec_center(maxv)) \
 )
 
 /**
@@ -251,8 +250,8 @@
  * @macro branch_linear_fill_check_alt
  */
 #define branch_linear_fill_check_alt(k, r) ( \
-	   (VEC_LSB(v) > VEC_CENTER(v) - k.tc) \
-	|| (VEC_MSB(v) > VEC_CENTER(v) - k.tc) \
+	   (vec_lsb(v) > vec_center(v) - k.tc) \
+	|| (vec_msb(v) > vec_center(v) - k.tc) \
 )
 #endif
 
@@ -266,23 +265,47 @@
 )
 
 /**
+ * @macro (internal) branch_linear_fill_search_max_core
+ */
+#define branch_linear_fill_search_max_core(k, r, pdp, i, j, p, q, sp, max) {
+	int64_t bi = 0, bj = 0, bp = p; \
+	dir_load_term(r, k, pdp, p); \
+	for(pt = pl; *pt != max && bp > sp; pt -= BW) { \
+		dir_load_backward(r, k, pdp, bp); \
+		if(dir(r) == TOP) { bj--; } else { bi--; } \
+	} \
+	if(bp > k->mp) { \
+		k->max = max; \
+		k->mi = bi + i - bq; \
+		k->mj = bj + j + bq; \
+		k->mp = sp = bp; k->mq = q; \
+	} \
+}
+
+/**
+ * @macro (internal) branch_linear_fill_search_max
+ */
+#define branch_linear_fill_search_max(k, r, pdp, i, j, p, maxv) { \
+	/** search max */ \
+	int64_t bq, sp = _ivec(k->pdp, p); \
+	cell_t *pl = (cell_t *)(k->pdp + addr_linear( \
+		p-sp, -BW/2, BLK, BW)); \
+	cell_t *pt; \
+	for(bq = -BW/2; bq < BW/2; bq++, pl++) { \
+		if(vec_lsb(maxv) == max) { \
+			branch_linear_fill_search_max_core(k, r, pdp, i, j, p, bq, sp, max); \
+		} \
+		vec_shift_r(maxv, maxv); \
+	} \
+}
+
+/**
  * @macro branch_linear_fill_finish
  */
 #define branch_linear_fill_finish(k, r) { \
-	/** aggregate max */ \
-	VEC_STORE(pdp, maxv); \
-	VEC_ASSIGN(tmp1, maxv); \
-	for(q = 1; q < BW; q++) { \
-		VEC_SHIFT_R(tmp1, tmp1); \
-		VEC_MAX(maxv, tmp1, maxv); \
-	} \
-	k->max = VEC_LSB(maxv); \
-	/** save p-coordinate at the beginning of the block */ \
-	_ivec(k->pdp, max) = k->max; \
-	_ivec(k->pdp, ep) = p; \
 	/** save vectors */ \
-	VEC_STORE32(pdp, pv); \
-	VEC_STORE32(pdp, cv); \
+	vec_store32(pdp, pv); \
+	vec_store32(pdp, cv); \
 	cell_t *pv = (cell_t *)pdp - 2*BW, *cv = (cell_t *)pdp - BW; \
 	/** create ivec at the end */ \
 	pdp += sizeof(struct sea_ivec); \
@@ -293,8 +316,18 @@
 	_ivec(pdp, q) = q; \
 	_ivec(pdp, pv) = (int32_t *)pv; \
 	_ivec(pdp, cv) = (int32_t *)cv; \
+	/** aggregate max */ \
+	int32_t max = vec_hmax(maxv); \
+	/** save p-coordinate at the beginning of the block */ \
+	_ivec(k->pdp, max) = max; \
+	_ivec(k->pdp, ep) = p; \
+	/** search max if updated */ \
+	if(k->alg != NW && max > k->max) { \
+		branch_linear_fill_search_max(k, r, pdp, i, j, p, maxv); \
+	} \
 }
 
+#if 0
 /**
  * @macro branch_linear_search_terminal
  */
@@ -336,6 +369,7 @@
 		} \
 	} \
 }
+#endif
 
 /**
  * @macro branch_linear_trace_decl
