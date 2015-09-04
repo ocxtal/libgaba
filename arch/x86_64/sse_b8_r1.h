@@ -159,6 +159,23 @@
 	(a) = _mm_blendv_epi8((x), (m), _mm_cmpeq_epi8((q1), (q2))); \
 }
 
+/**
+ * @macro vec_hmax
+ * @brief horizontal max
+ */
+#define vec_hmax(val, v) { \
+	__m128i t; \
+	t = _mm_max_epi8(v, \
+		_mm_srli_si128(v, 1)); \
+	t = _mm_max_epi8(t, \
+		_mm_srli_si128(t, 2)); \
+	t = _mm_max_epi8(t, \
+		_mm_srli_si128(t, 4)); \
+	t = _mm_max_epi8(t, \
+		_mm_srli_si128(t, 8)); \
+	(val) = _mm_extract_epi8(t, 0); \
+}
+
 #if 0
 /**
  * @macro vec_maxpos

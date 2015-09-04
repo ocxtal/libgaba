@@ -79,22 +79,37 @@ struct sea_writer {
 };
 
 /**
- * @struct sea_ivec
+ * @struct sea_joint_head
  *
- * @brief (internal) init vector container. (sizeof(struct sea_ivec) == 64)
+ * @brief (internal) traceback start coordinate (coordinate at the beginning of the band) container
+ * sizeof(struct sea_joint_head) == 32
  */
-struct sea_ivec {
-	int64_t i, j, p, q;			/*!< (32) terminal coordinate */
-	int32_t *pv, *cv;			/*!< (16) pointers to the initial vectors (should be allocated in the stack by fixed length array, or alloca) */
-//	uint8_t dr;					/*!< previous direction */
-	uint32_t len;				/*!< (4) length of the pv vector */
-//	uint8_t *prev;				/*!< pointer to the previous block (previous pdp) */
-//	uint8_t _pad[4];			/*!< (4) */
-	int32_t max;				/*!< (4) max of the next block */
-	int64_t ep;					/*!< (8) terminal p-coordinate of the next band */
+struct sea_joint_head {
+	int64_t p, q, i;			/*!< (24) path start coordinate */
+	int32_t max;				/*!< (4) max */
+	uint8_t _pad[4];			/*!< (4) padding */
+//	int64_t ep;					/*!< (8) terminal p-coordinate */
 };
 
-#define _ivec(pdp, member) 		((struct sea_ivec *)(pdp) - 1)->member
+/**
+ * @struct sea_joint_tail
+ *
+ * @brief (internal) init vector container.
+ * sizeof(struct sea_joint_tail) == 32
+ */
+struct sea_joint_tail {
+	int64_t p, i;				/*!< (16) terminal coordinate */
+	uint8_t *v;					/*!< (8) pointer to the initial vector (pv) */
+	uint8_t bpc;				/*!< (1) bit per cell (4 / 8 / 16 / 32) */
+	uint8_t d2;					/*!< (1) previous direction (copy of the last r.d2) */
+	uint8_t _pad[6];			/*!< (6) */
+//	int32_t *pv, *cv;			/*!< (16) pointers to the initial vectors (should be allocated in the stack by fixed length array, or alloca) */
+//	uint16_t plen, clen;		/*!< (4) length of the pv vector */
+//	int32_t max;				/*!< (4) max of the next block */
+//	int64_t ep;					/*!< (8) terminal p-coordinate of the next band */
+};
+
+#define _tail(pdp, member) 		((struct sea_joint_tail *)(pdp) - 1)->member
 #define DEF_VEC_LEN				( 32 )		/** default vector length */
 
 /**
@@ -112,7 +127,7 @@ struct sea_coords {
  * @brief (internal) a set of local-volatile variables. (no need to write back)
  */
 struct sea_process {
-	struct sea_ivec v;
+	struct sea_joint_tail v;
 	struct sea_reader a, b;		/*!< (in) sequence readers */
 	struct sea_mem dp, dr;		/*!< (ref) a dynamic programming matrix */
 };
@@ -136,7 +151,7 @@ struct sea_local_context {
 	int32_t min;				/*!< (in) lower bound of the score */
 	uint32_t alg;				/*!< algorithm flag (same as (ctx->flags) & SEA_FLAG_MASK_ALG) */
 
-	size_t isize;				/*!< initial matsize */
+//	size_t isize;				/*!< initial matsize */
 //	size_t memaln;				/*!< memory alignment size (default: 32) */
 
 	uint8_t *pdp;				/*!< dynamic programming matrix */
@@ -146,7 +161,7 @@ struct sea_local_context {
 	int64_t asp, bsp;			/*!< the start position on the sequences */
 	int64_t aep, bep;			/*!< the end position on the sequences */
 //	int64_t alim, blim;			/*!< the limit coordinate of the band */
-//	int64_t size;				/*!< default malloc size */
+	int64_t size;				/*!< default malloc size */
 
 	int8_t do_trace;			/*!< do traceback if nonzero */
 	int8_t _pad[3];
@@ -220,7 +235,7 @@ struct sea_io_funcs {
 struct sea_context {
 	struct sea_aln_funcs dynamic, guided;
 	struct sea_io_funcs fw, rv;
-	struct sea_ivec v;
+	struct sea_joint_tail v;
 	int flags;			/*!< a bitfield of option flags */
 };
 
@@ -612,77 +627,33 @@ enum _DIR2 {
  * @brief a macro which takes two string and concatenates them.
  */
 #define JOIN2(i,j)						i##j
-
-/**
- * @macro JOIN3
- * @brief a macro which takes three string and concatenates them.
- */
 #define JOIN3(i,j,k)					i##j##k
-
-/**
- * @macro JOIN4
- * @brief a macro which takes four string and concatenates them.
- */
 #define JOIN4(i,j,k,l)					i##j##k##l
 
 /**
- * @macro Q
+ * @macro Q, QUOTE
  * @brief string quotation
  */
 #define Q(a)							#a
-
-/**
- * @macro QUOTE
- * @brief an wrapper of Q
- */
 #define QUOTE(a)						Q(a)
 
 /**
  * function name composition macros.
  */
-
-
 /**
- * @macro HEADER_WITH_SUFFIX
- * @brief an wrapper macro of JOIN2
+ * @macro func, func2, func3
  */
-#define HEADER_WITH_SUFFIX(a,b)			JOIN2(a,b)
+#define func(a)							a
+#define func2(a,b)						JOIN2(a,b)
+#define func3(a,b)						JOIN3(a,b)
 
 /**
- * @macro FUNC_WITH_SUFFIX
- * @brief an wrapper macro of JOIN2, for the use of function name composition.
- */
-#define FUNC_WITH_SUFFIX(a,b)			JOIN2(a,b)
-
-/**
- * @macro LABEL_WITH_SUFFIX
+ * @macro label2
  * @breif an wrapper of JOIN3
  */
-#define LABEL_WITH_SUFFIX(a,b,c)		JOIN3(a,b,c)
-
-/**
- * @macro DECLARE_FUNC
- * @brief a function declaration macro for static (local in a file) functions.
- */
-#define DECLARE_FUNC(file, opt, suffix) static LABEL_WITH_SUFFIX(file, opt, suffix)
-
-/**
- * @macro CALL_FUNC
- * @brief call a local function
- */
-#define CALL_FUNC(file, opt, suffix)	LABEL_WITH_SUFFIX(file, opt, suffix)
-
-/**
- * @macro DECLARE_FUNC_GLOBAL
- * @brief a function declaration macro for global functions.
- */
-#define DECLARE_FUNC_GLOBAL(file, opt)	FUNC_WITH_SUFFIX(file, opt)
-
-/**
- * @macro CALL_FUNC_GLOBAL
- * @brief a function call macro, which is an wrap of a function name composition macro.
- */
-#define CALL_FUNC_GLOBAL(file, opt)		FUNC_WITH_SUFFIX(file, opt)
+#define label(a)						a
+#define label2(a,b)						JOIN2(a,b)
+#define label3(a,b,c)					JOIN3(a,b,c)
 
 /**
  * @macro func_next
@@ -698,15 +669,16 @@ enum _DIR2 {
 	(k->f->balloon == ptr) ? k->f->trunk : k->f->balloon \
 )
 
+#if 0
 /**
  * @macro load_coord
  * @brief save current (i, j)-coordinate to (mi, mj)
  */
 #define load_coord(k, pdp) { \
-	k->mi = _ivec(pdp, i); \
-	k->mj = _ivec(pdp, j); \
-	k->mp = _ivec(pdp, p); \
-	k->mq = _ivec(pdp, q); \
+	k->mi = _tail(pdp, i); \
+	k->mj = _tail(pdp, j); \
+	k->mp = _tail(pdp, p); \
+	k->mq = _tail(pdp, q); \
 }
 
 /**
@@ -714,17 +686,12 @@ enum _DIR2 {
  * @brief load current (mi, mj)-coordinate to (i, j)
  */
 #define store_coord(k, pdp) { \
-	_ivec(pdp, i) = k->mi; \
-	_ivec(pdp, j) = k->mj; \
-	_ivec(pdp, p) = k->mp; \
-	_ivec(pdp, q) = k->mq; \
+	_tail(pdp, i) = k->mi; \
+	_tail(pdp, j) = k->mj; \
+	_tail(pdp, p) = k->mp; \
+	_tail(pdp, q) = k->mq; \
 }
-
-/**
- * @macro LABEL
- * @brief a label declaration macro.
- */
-#define LABEL(file, opt, label) 		LABEL_WITH_SUFFIX(file, opt, label)
+#endif
 
 /* foreach */
 #define _for(iter, cnt)		for(iter = 0; iter < cnt; iter++)

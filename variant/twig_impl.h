@@ -48,11 +48,22 @@
 #endif
 
 /**
- * @macro twig_linear_bpl
- * @brief calculates bytes per line
+ * @macro bpl, bpb
+ * @brief bytes per line, bytes per block
  */
-#define twig_linear_bpl(k) 					( sizeof(cell_t) * BW )
-#define twig_affine_bpl(k)					( 3 * sizeof(cell_t) *BW )
+#define twig_linear_bpl()					branch_linear_bpl()
+#define twig_linear_dp_size()				branch_linear_dp_size()
+#define twig_linear_co_size()				branch_linear_co_size()
+#define twig_linear_jam_size()				branch_linear_jam_size()
+#define twig_linear_phantom_size()			branch_linear_phantom_size()
+#define twig_linear_bpb()					branch_linear_bpb()
+
+#define twig_affine_bpl()					branch_affine_bpl()
+#define twig_affine_dp_size()				branch_affine_dp_size()
+#define twig_affine_co_size()				branch_affine_co_size()
+#define twig_affine_jam_size()				branch_affine_jam_size()
+#define twig_affine_phantom_size()			branch_affine_phantom_size()
+#define twig_affine_bpb()					branch_affine_bpb()
 
 /**
  * @macro (internal) twig_linear_topq, ...
@@ -173,10 +184,11 @@
 #define twig_linear_fill_finish(k, r)			branch_linear_fill_finish(k, r)
 
 /**
- * @macro twig_linear_search_terminal
+ * @macro twig_linear_set_terminal
  */
-#define twig_linear_search_terminal(k, pdp) 	naive_linear_search_terminal(k, pdp)
+#define twig_linear_set_terminal(k, pdp) 		naive_linear_set_terminal(k, pdp)
 
+#if 0
 /**
  * @macro twig_linear_search_trigger
  */
@@ -186,6 +198,7 @@
  * @macro twig_linear_search_max_score
  */
 #define twig_linear_search_max_score(k, pdp)	branch_linear_search_max_score(k, pdp)
+#endif
 
 /**
  * @macro twig_linear_trace_decl

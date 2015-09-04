@@ -243,8 +243,8 @@
 	(a##3) = _mm_blendv_epi8((x), (m), t2); \
 	(a##2) = _mm_cvtepi8_epi16(_mm_srli_si128((a##1), 8)); \
 	(a##4) = _mm_cvtepi8_epi16(_mm_srli_si128((a##3), 8)); \
-	(a##1) = _mm_cvtepi8_epi16((a##1));
-	(a##3) = _mm_cvtepi8_epi16((a##3));
+	(a##1) = _mm_cvtepi8_epi16((a##1)); \
+	(a##3) = _mm_cvtepi8_epi16((a##3)); \
 }
 
 /**

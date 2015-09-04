@@ -48,11 +48,22 @@
 #endif
 
 /**
- * @macro trunk_linear_bpl
- * @brief calculates bytes per line
+ * @macro bpl, bpb
+ * @brief bytes per line, bytes per block
  */
-#define trunk_linear_bpl(k) 		( sizeof(cell_t) * BW )
-#define trunk_affine_bpl(k)			( 3 * sizeof(cell_t) * BW )
+#define trunk_linear_bpl()				( BW * sizeof(cell_t) )
+#define trunk_linear_dp_size()			( BLK * trunk_linear_bpl() )
+#define trunk_linear_co_size()			( 2 * sizeof(int64_t) )
+#define trunk_linear_jam_size()			( trunk_linear_co_size() + dr_size() )
+#define trunk_linear_phantom_size()		( trunk_linear_bpl() + trunk_linear_phantom_size() )
+#define trunk_linear_bpb() 				( trunk_linear_dp_size() + trunk_linear_jam_size() )
+
+#define trunk_affine_bpl()				( 2 * BW * sizeof(cell_t) )
+#define trunk_affine_dp_size()			( BLK * trunk_affine_bpl() )
+#define trunk_affine_co_size()			( 2 * sizeof(int64_t) )
+#define trunk_affine_jam_size()			( trunk_affine_co_size() + dr_size() )
+#define trunk_affine_phantom_size()		( trunk_affine_bpl() + trunk_affine_phantom_size() )
+#define trunk_affine_bpb() 				( trunk_affine_dp_size() + trunk_affine_jam_size() )
 
 /**
  * @macro (internal) trunk_linear_topq, ...
@@ -122,25 +133,31 @@
  */
 #define trunk_linear_fill_init(k, r) { \
 	/** load coordinates onto the local stack */ \
-	i = _ivec(pdp, i) - DEF_VEC_LEN/2; \
-	j = _ivec(pdp, j) + DEF_VEC_LEN/2; \
-	p = _ivec(pdp, p); \
-	q = _ivec(pdp, q); \
+	p = _tail(k->pdp, p); \
+	i = _tail(k->pdp, i) - DEF_VEC_LEN/2; \
+	j = (p - 1) - (i - k->asp); \
 	/** initialize direction array */ \
-	dir_init(r, k->pdr, p); \
+	dir_init(r, k, k->pdr, p); \
+	/** make room for struct sea_joint_head */ \
+	pdp += sizeof(struct sea_joint_head); \
 	/** load scores of the current vector */ \
-	vec_acc_set(acc, \
-		p, \
-		_ivec(pdp, cv)[BW-1], \
-		_ivec(pdp, cv)[BW/2], \
-		_ivec(pdp, cv)[0]); \
-	/** load vectors */ \
-	int32_t *s; \
-	vec_load32_dvdh( \
-		_ivec(pdp, pv), _ivec(pdp, cv), \
-		dv, dh, \
-		k->gi, dir(r)); \
+	uint8_t *s = _tail(k->pdp); \
+	if(_tail(k->pdp, bpc) == 16) { \
+		/** load vectors */ \
+		vec_load16_dvdh(s, dv, dh, k->gi, dir(r)); \
+		/** initialize accumulator */ \
+		int16_t *t = s; \
+		vec_acc_set(acc, p, t[BW-1], t[BW/2], t[0]); \
+	} else { \
+		vec_load_dvdh(s, dv, dh); \
+		vec_add_load(s, acc); \
+	} \
 	vec_store_dvdh(pdp, dv, dh); \
+	/** store the first (i, j) */ \
+	*((int64_t *)pdp) = i; pdp += sizeof(int64_t); \
+	*((int64_t *)pdp) = j; pdp += sizeof(int64_t); \
+	/** write the first dr vector */ \
+	dir_end_block(r, k, pdp, p); \
 	/** initialize char vectors */ \
 	vec_char_setzero(wq); \
 	for(q = -BW/2; q < BW/2; q++) { \
@@ -159,7 +176,7 @@
  */
 #define trunk_linear_fill_start(k, r) { \
 	/** update direction pointer */ \
-	dir_load_forward(r, k, pdp, p); \
+	dir_start_block(r, k, pdp, p); \
 }
 
 /**
@@ -167,7 +184,7 @@
  */
 #define trunk_linear_fill_former_body(k, r) { \
 	/** update direction pointer */ \
-	dir_next(r, k, pdp, p); \
+	dir_load_forward(r, k, pdp, p); \
 	debug("scu(%d), score(%d), scl(%d)", scu, score, scl); \
 }
 
@@ -195,7 +212,7 @@
  * @macro trunk_linear_fill_latter_body
  */
 #define trunk_linear_fill_latter_body(k, r) { \
-	vec_comp_sel(t1, wq, wt, mv, xv); \
+	vec_comp_sel(t1, wq, wt, mggv, xggv); \
 	vec_max(t1, t1, dv); \
 	vec_max(t1, t1, dh); \
 	vec_sub(t2, t1, dv); \
@@ -213,6 +230,7 @@
 	/** store (i, j) to the end of pdp */ \
 	*((int64_t *)pdp) = i; pdp += sizeof(int64_t); \
 	*((int64_t *)pdp) = j; pdp += sizeof(int64_t); \
+	dir_end_block(r, k, pdp, p); \
 }
 
 /**
@@ -229,8 +247,8 @@
 	  (k->aep-i-BLK) \
 	| (k->bep-j-BLK) \
 	| (k->tdp - pdp \
-		-(BLK*(trunk_linear_bpl(k)+1) \
-		+ sizeof(struct sea_ivec) \
+		-(BLK*(trunk_linear_bpl()+1) \
+		+ sizeof(struct sea_joint_tail) \
 		+ 2 * sizeof(int64_t)			/** (i, j) */ \
 		+ 2 * sizeof(int32_t) * BW))	/** pv + cv */ \
 )
@@ -267,34 +285,35 @@
 	vec_store32_dvdh(pdp, dv, dh, vec_acc_scu(acc), k->gi, dir(r)); \
 	cell_t *pv = (cell_t *)pdp - 2*BW, *cv = (cell_t *)pdp - BW; \
 	/** create ivec at the end */ \
-	pdp += sizeof(struct sea_ivec); \
+	pdp += sizeof(struct sea_joint_tail); \
 	/** save terminal coordinates */ \
-	_ivec(pdp, i) = i+DEF_VEC_LEN/2; \
-	_ivec(pdp, j) = j-DEF_VEC_LEN/2; \
-	_ivec(pdp, p) = p; \
-	_ivec(pdp, q) = q; \
-	_ivec(pdp, pv) = (int32_t *)pv; \
-	_ivec(pdp, cv) = (int32_t *)cv; \
+	_tail(pdp, i) = i+DEF_VEC_LEN/2; \
+	_tail(pdp, j) = j-DEF_VEC_LEN/2; \
+	_tail(pdp, p) = p; \
+	_tail(pdp, q) = q; \
+	_tail(pdp, pv) = (int32_t *)pv; \
+	_tail(pdp, cv) = (int32_t *)cv; \
 	/** search max */ \
-
+\
 	/** save p-coordinate at the beginning of the block */ \
-	_ivec(k->pdp, max) = vec_acc_scc(max); \
-	_ivec(k->pdp, ep) = p; \
+	_tail(k->pdp, max) = vec_acc_scc(max); \
+	_tail(k->pdp, ep) = p; \
 }
 
+#if 0
 /**
  * @macro trunk_linear_chain_save_len
  */
 #define trunk_linear_chain_save_len(t, c, k)		( 3 * BW )
 
 /**
- * @macro trunk_linear_chain_push_ivec
+ * @macro trunk_linear_chain_push_tail
  *
  * absolute valueへの変換をSIMDを使って高速にしたい。
  * extract -> scatter -> addのループを32回回す。
  * prefix sumなので、log(32) = 5回のループでできないか。
  */
-#define trunk_linear_chain_push_ivec(t, c, k) { \
+#define trunk_linear_chain_push_tail(t, c, k) { \
 	int16_t psc, csc; \
 	cell_t *p = (cell_t *)c.pdp - 3*BW; \
 	t.i += BW/2; \
@@ -328,18 +347,21 @@
 	c.v.cv = c.pdp - sizeof(int16_t) * BW; \
 	debug("ivec: dir(%d)", c.pdr[t.p]); \
 }
+#endif
 
 /**
- * @macro trunk_linear_search_terminal
+ * @macro trunk_linear_set_terminal
  */
-#define trunk_linear_search_terminal(t, c, k) { \
+#define trunk_linear_set_terminal(k, pdp) { \
+}
+#if 0
 	dir_t r; \
-	cell_t *psc = pb + ADDR(t.p - sp, 0, BW); \
-	int64_t sc = pb[ADDR(t.p - sp + 1, -BW/2 + 1, BW)]; /** score */ \
+	cell_t *psc = pdp + addr(t.p - sp, 0); \
+	int64_t sc = pdp[addr(t.p - sp + 1, -BW/2 + 1)]; /** score */ \
 	t.mi = c.aep; \
 	t.mj = c.bep; \
-	t.mp = COP(t.mi, t.mj, BW) - COP(c.asp, c.bsp, BW); \
-	t.mq = COQ(t.mi, t.mj, BW) - COQ(t.i, t.j, BW); /** COP(mi, mj) == COP(i, j)でなければならない */ \
+	t.mp = cop(t.mi, t.mj, BW) - cop(c.asp, c.bsp, BW); \
+	t.mq = coq(t.mi, t.mj, BW) - coq(t.i, t.j, BW); /** COP(mi, mj) == COP(i, j)でなければならない */ \
 	dir_term(r, t, c); \
 	while(t.p > t.mp) { \
 		dir_prev(r, t, c); \
@@ -355,7 +377,9 @@
 		psc--; t.q--; \
 	} \
 }
+#endif
 
+#if 0
 /**
  * @macro trunk_linear_search_trigger
  */
@@ -444,7 +468,7 @@
 		_vec_cell_reg(tmp); \
 		vec_load_dvdh(c.pdp, dv, dh); \
 		trunk_linear_fill_finish(k, r); \
-		trunk_linear_chain_push_ivec(t, c, k); \
+		trunk_linear_chain_push_tail(t, c, k); \
 	} \
 	{ \
 		struct sea_coords b = t; \
@@ -454,21 +478,22 @@
 	} \
 }
 #endif
+#endif
 
 /**
  * @macro trunk_linear_trace_decl
  */
-#define trunk_linear_trace_decl(k, r) \
+#define trunk_linear_trace_decl(k, r, pdp) \
 	dir_t r; \
 	cell_t *p = pb + ADDR(t.p - sp, t.q, BW);
 
 /**
  * @macro trunk_linear_trace_init
  *
- * push_ivecの実装を使って、absolute scoreに変換する。
+ * push_tailの実装を使って、absolute scoreに変換する。
  * ここからnon-diffの計算をし、maxの場所を特定する。
  */
-#define trunk_linear_trace_init(k, r) { \
+#define trunk_linear_trace_init(k, r, pdp) { \
 	dir_term(r, t, c); \
 	rd_fetch(c.a, t.i-1); \
 	rd_fetch(c.b, t.j-1); \
@@ -477,7 +502,7 @@
 /**
  * @macro trunk_linear_trace_body
  */
-#define trunk_linear_trace_body(k, r) { \
+#define trunk_linear_trace_body(k, r, pdp) { \
 	dir_prev(r, t, c); \
 	debug("dir: d(%d), d2(%d)", dir(r), dir2(r)); \
 	cell_t diag, dh, sc; \
@@ -517,10 +542,35 @@
 }
 
 /**
+ * @macro trunk_linear_trace_test_bound
+ */
+#define trunk_linear_trace_test_bound(k, r, pdp) ( \
+	_tail(pdp, p) - p \
+)
+
+/**
+ * @macro trunk_linear_trace_test_sw
+ */
+#define trunk_linear_trace_test_sw(k, r, pdp) ( \
+	((k->alg == SW) ? -1 : 0) & (score - 1) \
+)
+
+/**
+ * @macro trunk_linear_trace_check_term
+ */
+#define trunk_linear_trace_check_term(k, r, pdp) ( \
+	( trunk_linear_trace_test_bound(k, r, pdp) \
+	| trunk_linear_trace_test_sw(k, r, pdp)) >= 0 \
+)
+
+/**
  * @macro trunk_linear_trace_finish
  */
-#define trunk_linear_trace_finish(k, r) { \
-	t.mq = (p - pb + BW) % BW - BW/2; /** correct the q-coordinate */ \
+#define trunk_linear_trace_finish(k, r, pdp) { \
+	_tail(pdp, i) = i; \
+	_tail(pdp, j) = j; \
+	_tail(pdp, p) = p; \
+	_tail(pdp, q) = ((uint64_t)ptb - (uint64_t)pdp + BW) % BW - BW/2; /** correct q-coordinate */ \
 }
 
 #endif /* #ifndef _TRUNK_H_INCLUDED */

@@ -26,31 +26,32 @@ extern bench_t fill, search, trace;
  * @fn fill
  * @brief fill-in the matrix until the detection of termination
  */
-inline int32_t
-DECLARE_FUNC(BASE, SUFFIX, _fill)(
+static inline
+int32_t
+func2(VARIANT_LABEL, _fill)(
 	struct sea_local_context *this,
 	uint8_t *pdp)
 {
 	struct sea_local_context register *k = this;
 
 	bench_start(fill);
-	fill_decl(k, r);					/** declare variables */
-	fill_init(k, r);					/** load vectors and coordinates to registers */
+	fill_decl(k, r, pdp);					/** declare variables */
+	fill_init(k, r, pdp);					/** load vectors and coordinates to registers */
 
-	do {
-		fill_start(k, r);
+	while(fill_check_term(k, r, pdp)) {
+		fill_start(k, r, pdp);
 		for(int a = 0; a < BLK; a++) {
-			fill_former_body(k, r);		/** former calculations */
+			fill_former_body(k, r, pdp);	/** former calculations */
 			if(dir(r) == TOP) {
-				fill_go_down(k, r);		/** shift right the vectors */
+				fill_go_down(k, r, pdp);	/** shift right the vectors */
 			} else {
-				fill_go_right(k, r);	/** shift left */
+				fill_go_right(k, r, pdp);	/** shift left */
 			}
-			fill_latter_body(k, r);		/** latter calculations */
+			fill_latter_body(k, r, pdp);	/** latter calculations */
 		}
-		fill_end(k, r);
-	} while(fill_check_term(k, r));
-	fill_finish(k, r);					/** store vectors and coordinates to memory */
+		fill_end(k, r, pdp);
+	}
+	fill_finish(k, r, pdp);					/** store vectors and coordinates to memory */
 
 	bench_end(fill);
 	return(CONT);
@@ -60,29 +61,44 @@ DECLARE_FUNC(BASE, SUFFIX, _fill)(
  * @fn prep_next_mem
  * @brief malloc the next memory, set pointers, and copy the content
  */
-inline uint8_t *
-DECLARE_FUNC(BASE, SUFFIX, prep_next_mem)(
+static inline
+uint8_t *
+func2(VARIANT_LABEL, _prep_next_mem)(
 	struct sea_local_context *this)
 {
-	struct sea_local_context register *k = this;
 	uint8_t *p;
-
 	/** malloc the next dp, dr memory */
-	k->size *= 2;
-	p = (uint8_t *)malloc(k->size));
+	this->size *= 2;
+	p = (uint8_t *)malloc(this->size);
 	/** copy the content to be passed */
-	memcpy(p, k->pdp-sizeof(struct sea_ivec), sizeof(struct sea_ivec));
-	k->pdp = p + sizeof(struct sea_ivec);
-
+	memcpy(p, this->pdp - sizeof(struct sea_joint_tail), sizeof(struct sea_joint_tail));
+	this->pdp = p + sizeof(struct sea_joint_tail);
 	return(p);
+}
+
+/**
+ * @fn clean_next_mem
+ */
+static inline
+int32_t
+func2(VARIANT_LABEL, _clean_next_mem)(
+	struct sea_local_context *this,
+	uint8_t *pdp,
+	uint8_t *p)
+{
+	memcpy(pdp, p + sizeof(struct sea_joint_tail), sizeof(struct sea_joint_head));
+	this->size /= 2;
+	this->pdp = pdp;
+	return(0);
 }
 
 /**
  * @fn chain
  * @brief chain to the next fill-in function
  */
-inline int32_t
-DECLARE_FUNC(BASE, SUFFIX, _chain)(
+static inline
+int32_t
+func2(VARIANT_LABEL, _chain)(
 	struct sea_local_context *this,
 	uint8_t *pdp,
 	int32_t stat)
@@ -93,8 +109,8 @@ DECLARE_FUNC(BASE, SUFFIX, _chain)(
 	/** retrieve the next function */
 	int32_t (*cfn)(struct sea_local_context *) = NULL;
 	switch(stat) {
-		case MEM:   cfn = CALL_FUNC_GLOBAL(BASE, SUFFIX); break;
-		case CHAIN: cfn = func_next(k, CALL_FUNC_GLOBAL(BASE, SUFFIX)); break;
+		case MEM:   cfn = func(VARIANT_LABEL); break;
+		case CHAIN: cfn = func_next(k, func(VARIANT_LABEL)); break;
 		case CAP:   cfn = k->f->cap; break;
 		case TERM:  cfn = NULL; break;
 		default:    cfn = NULL; break;
@@ -102,9 +118,9 @@ DECLARE_FUNC(BASE, SUFFIX, _chain)(
 	if(cfn != NULL) {
 		/** go forward */
 		if(stat == MEM) {
-			uint8_t *p = CALL_FUNC(BASE, SUFFIX, prep_next_mem)(k);
+			uint8_t *p = func2(VARIANT_LABEL, _prep_next_mem)(k);
 			ret = cfn(k);
-			free(p);
+			func2(VARIANT_LABEL, _clean_next_mem)(k, pdp, p);
 		} else {
 			ret = cfn(k);	/** chain without malloc */
 		}
@@ -115,50 +131,17 @@ DECLARE_FUNC(BASE, SUFFIX, _chain)(
 			debug("set terminal");
 			set_terminal(k, pdp);
 		}
-		wr_alloc(k->l, _ivec(pdp, p));
+		wr_alloc(k->l, _tail(pdp, p));
 	}
 	return(ret);
 }
-
-#if 0
-/**
- * @fn search
- * @brief search the max score
- */
-inline int32_t
-DECLARE_FUNC(BASE, SUFFIX, _search)(
-	struct sea_local_context *this,
-	uint8_t *pdp)
-{
-	/** k contains the context after chaining */
-	struct sea_local_context register *k = this;
-
-	bench_start(search);
-
-	if(k->alg != NW) {
-		debug("check re-search is needed: t1.max(%d), t2.max(%d)", t.max, co->max);
-		/** compare max of the current block with the global max */
-		if(search_trigger(k, pdp)) {
-			search_max_score(k, pdp);
-			debug("check if replace is needed");
-			if(_ivec(pdp, max) > k->max - (_ivec(pdp, p) > k->mp)) {
-				wr_alloc(k->l, _ivec(pdp, p));
-				store_coord(k, pdp);
-			}
-		}
-	}
-
-	bench_end(search);
-	return(0);
-}
-#endif
 
 /**
  * @fn trace
  * @brief traceback until the given start position
  */
 inline int32_t
-DECLARE_FUNC(BASE, SUFFIX, _trace)(
+func2(VARIANT_LABEL, _trace)(
 	struct sea_local_context *this,
 	uint8_t *pdp)
 {
@@ -182,27 +165,24 @@ DECLARE_FUNC(BASE, SUFFIX, _trace)(
  * @brief base function of the dp
  */
 int32_t
-DECLARE_FUNC_GLOBAL(BASE, SUFFIX)(
+func(VARIANT_LABEL)(
 	struct sea_local_context *this)
 {
-	debug("entry point: (%p)", CALL_FUNC_GLOBAL(BASE, SUFFIX));
+	debug("entry point: (%p)", func(VARIANT_LABEL));
 	struct sea_local_context register *k = this;
 
 	/** save dp matrix pointer, direction array pointer, and p-coordinate */
 	uint8_t *pdp = k->pdp;
 
 	/** fill_in */
-	int32_t stat = CALL_FUNC(BASE, SUFFIX, _fill)(k, pdp);
+	int32_t stat = func2(VARIANT_LABEL, _fill)(k, pdp);
 
 	/** chain */
-	CALL_FUNC(BASE, SUFFIX, _chain)(k, pdp, stat);
-
-	/** search */
-//	CALL_FUNC(BASE, SUFFIX, _search)(k, pdp);
+	func2(VARIANT_LABEL, _chain)(k, pdp, stat);
 
 	/** trace */
 	if(k->do_trace) {
-		stat = CALL_FUNC(BASE, SUFFIX, _trace)(k, pdp);
+		stat = func2(VARIANT_LABEL, _trace)(k, pdp);
 	}
 	k->pdp = pdp;
 	return(stat);

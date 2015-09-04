@@ -144,9 +144,9 @@
 #define cap_linear_chain_save_len(t, c, k)			naive_linear_chain_save_len(t, c, k)
 
 /**
- * @macro cap_linear_chain_push_ivec
+ * @macro cap_linear_chain_push_tail
  */
-#define cap_linear_chain_push_ivec(t, c, k)			naive_linear_chain_push_ivec(t, c, k)
+#define cap_linear_chain_push_tail(t, c, k)			naive_linear_chain_push_tail(t, c, k)
 
 /**
  * @macro cap_linear_search_terminal

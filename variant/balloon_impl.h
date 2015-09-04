@@ -195,9 +195,9 @@
 )
 
 /**
- * @macro balloon_linear_chain_push_ivec
+ * @macro balloon_linear_chain_push_tail
  */
-#define balloon_linear_chain_push_ivec(t, c, k) { \
+#define balloon_linear_chain_push_tail(t, c, k) { \
 	t.p--; t.j--; /** always comes from top */ \
 	*((cell_t *)c.pdp) = BW; /** correct the lane width */ \
 	c.pdp += sizeof(cell_t); \
