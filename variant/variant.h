@@ -13,7 +13,6 @@
 
 #include "../sea.h"
 #include "../util/util.h"
-#include "../arch/dir.h"		/** simd appender */
 #include <stdint.h>
 
 /**
@@ -98,71 +97,80 @@
 #endif /* #if DP == DYNAMIC */
 
 /** variant label */
-#define VARIANT_LABEL		label3(BASE_LABEL, COST_SUFFIX, DP_SUFFIX)
+#define VARIANT_LABEL			label3(BASE_LABEL, COST_SUFFIX, DP_SUFFIX)
 
 /**
  * variant selector
  */
-#define header(base)		QUOTE(label2(base, _impl.h))
+#define header(base)			QUOTE(label2(base, _impl.h))
 
 /** dp variants */
 #include header(DP_LABEL)
 
 /** address calculation */
-#define blk_size			label2(DP_LABEL, _blk_size)
-#define blk_num				label2(DP_LABEL, _blk_num)
-#define addr 				label2(DP_LABEL, _addr)
+#define dr_size					label2(DP_LABEL, _dr_size)
+#define addr 					label2(DP_LABEL, _addr)
 
 /** direction accessors */
-#define dir 				label2(DP_LABEL, _dir)
-#define dir2 				label2(DP_LABEL, _dir2)
-#define dir_ue 				label2(DP_LABEL, _dir_ue)
-#define dir2_ue 			label2(DP_LABEL, _dir2_ue)
-#define dir_le 				label2(DP_LABEL, _dir_le)
-#define dir2_le 			label2(DP_LABEL, _dir2_le)
-#define dir_raw 			label2(DP_LABEL, _dir_raw)
+#define dir 					label2(DP_LABEL, _dir)
+#define dir2 					label2(DP_LABEL, _dir2)
+#define dir_ue 					label2(DP_LABEL, _dir_ue)
+#define dir2_ue 				label2(DP_LABEL, _dir2_ue)
+#define dir_le 					label2(DP_LABEL, _dir_le)
+#define dir2_le 				label2(DP_LABEL, _dir2_le)
+#define dir_raw 				label2(DP_LABEL, _dir_raw)
 
 /** direction determiners */
-#define dir_init 			label2(DP_LABEL, _dir_init)
-#define dir_start_block 	label2(DP_LABEL, _dir_start_block)
-#define dir_load_forward 	label2(DP_LABEL, _dir_load_forward)
-#define dir_end_block 		label2(DP_LABEL, _dir_end_block)
-#define dir_load_term 		label2(DP_LABEL, _dir_load_term)
-#define dir_load_backward 	label2(DP_LABEL, _dir_load_backward)
+#define dir_init 				label2(DP_LABEL, _dir_init)
+#define dir_start_block 		label2(DP_LABEL, _dir_start_block)
+#define dir_det_next 			label2(DP_LABEL, _dir_det_next)
+#define dir_end_block 			label2(DP_LABEL, _dir_end_block)
+#define dir_set_pdr 			label2(DP_LABEL, _dir_set_pdr)
+#define dir_load_backward 		label2(DP_LABEL, _dir_load_backward)
+#define dir_stride_jam			label2(DP_LABEL, _dir_stride_jam)
 
 /** base and cost variants */
 #include header(BASE_LABEL)
 
 /** address calculation */
-#define bpl					label3(BASE_LABEL, COST_SUFFIX, _bpl)
-#define bpb					label3(BASE_LABEL, COST_SUFFIX, _bpb)
-#define topq				label3(BASE_LABEL, COST_SUFFIX, _topq)
-#define leftq				label3(BASE_LABEL, COST_SUFFIX, _leftq)
-#define topleftq			label3(BASE_LABEL, COST_SUFFIX, _topleftq)
-#define dir_exp_top 		label3(BASE_LABEL, COST_SUFFIX, _dir_exp_top)
-#define dir_exp_bottom 		label3(BASE_LABEL, COST_SUFFIX, _dir_exp_bottom)
+#define bpl						label3(BASE_LABEL, COST_SUFFIX, _bpl)
+#define dp_size					label3(BASE_LABEL, COST_SUFFIX, _dp_size)
+#define co_size					label3(BASE_LABEL, COST_SUFFIX, _co_size)
+#define jam_size				label3(BASE_LABEL, COST_SUFFIX, _jam_size)
+#define phantom_size			label3(BASE_LABEL, COST_SUFFIX, _phantom_size)
+#define bpb						label3(BASE_LABEL, COST_SUFFIX, _bpb)
+#define topq					label3(BASE_LABEL, COST_SUFFIX, _topq)
+#define leftq					label3(BASE_LABEL, COST_SUFFIX, _leftq)
+#define topleftq				label3(BASE_LABEL, COST_SUFFIX, _topleftq)
+#define dir_exp_top 			label3(BASE_LABEL, COST_SUFFIX, _dir_exp_top)
+#define dir_exp_bottom 			label3(BASE_LABEL, COST_SUFFIX, _dir_exp_bottom)
 
 /** fill-in */
-#define fill_decl			label3(BASE_LABEL, COST_SUFFIX, _fill_decl)
-#define fill_init			label3(BASE_LABEL, COST_SUFFIX, _fill_init)
-#define fill_start 			label3(BASE_LABEL, COST_SUFFIX, _fill_start)
-#define fill_former_body	label3(BASE_LABEL, COST_SUFFIX, _fill_former_body)
-#define fill_go_down		label3(BASE_LABEL, COST_SUFFIX, _fill_go_down)
-#define fill_go_right		label3(BASE_LABEL, COST_SUFFIX, _fill_go_right)
-#define fill_latter_body	label3(BASE_LABEL, COST_SUFFIX, _fill_latter_body)
-#define fill_check_term		label3(BASE_LABEL, COST_SUFFIX, _fill_check_term)
-#define fill_end 			label3(BASE_LABEL, COST_SUFFIX, _fill_end)
-#define fill_finish			label3(BASE_LABEL, COST_SUFFIX, _fill_finish)
+#define fill_decl				label3(BASE_LABEL, COST_SUFFIX, _fill_decl)
+#define fill_init				label3(BASE_LABEL, COST_SUFFIX, _fill_init)
+#define fill_start 				label3(BASE_LABEL, COST_SUFFIX, _fill_start)
+#define fill_former_body		label3(BASE_LABEL, COST_SUFFIX, _fill_former_body)
+#define fill_go_down			label3(BASE_LABEL, COST_SUFFIX, _fill_go_down)
+#define fill_go_right			label3(BASE_LABEL, COST_SUFFIX, _fill_go_right)
+#define fill_latter_body		label3(BASE_LABEL, COST_SUFFIX, _fill_latter_body)
+#define fill_latter_body_cap	label3(BASE_LABEL, COST_SUFFIX, _fill_latter_body_cap)
+#define fill_test_xdrop			label3(BASE_LABEL, COST_SUFFIX, _fill_test_xdrop)
+#define fill_test_mem			label3(BASE_LABEL, COST_SUFFIX, _fill_test_mem)
+#define fill_test_chain			label3(BASE_LABEL, COST_SUFFIX, _fill_test_chain)
+#define fill_check_term			label3(BASE_LABEL, COST_SUFFIX, _fill_check_term)
+#define fill_check_term_cap		label3(BASE_LABEL, COST_SUFFIX, _fill_check_term_cap)
+#define fill_end 				label3(BASE_LABEL, COST_SUFFIX, _fill_end)
+#define fill_finish				label3(BASE_LABEL, COST_SUFFIX, _fill_finish)
 
 /** search terminal (NW) */
-#define set_terminal		label3(BASE_LABEL, COST_SUFFIX, _set_terminal)
+#define set_terminal			label3(BASE_LABEL, COST_SUFFIX, _set_terminal)
 
 /** traceback */
-#define trace_decl			label3(BASE_LABEL, COST_SUFFIX, _trace_decl)
-#define trace_init			label3(BASE_LABEL, COST_SUFFIX, _trace_init)
-#define trace_body			label3(BASE_LABEL, COST_SUFFIX, _trace_body)
-#define trace_check_term 	label3(BASE_LABEL, COST_SUFFIX, _trace_check_term)
-#define trace_finish		label3(BASE_LABEL, COST_SUFFIX, _trace_finish)
+#define trace_decl				label3(BASE_LABEL, COST_SUFFIX, _trace_decl)
+#define trace_init				label3(BASE_LABEL, COST_SUFFIX, _trace_init)
+#define trace_body				label3(BASE_LABEL, COST_SUFFIX, _trace_body)
+#define trace_check_term 		label3(BASE_LABEL, COST_SUFFIX, _trace_check_term)
+#define trace_finish			label3(BASE_LABEL, COST_SUFFIX, _trace_finish)
 
 #endif /* #ifndef _VARIANT_H_INCLUDED */
 

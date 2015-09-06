@@ -40,6 +40,7 @@ struct sea_mem {
  * @struct sea_reader
  *
  * @brief (internal) abstract sequence reader
+ * sizeof(struct sea_reader) == 24
  */
 struct sea_reader {
 	uint8_t *p;
@@ -47,12 +48,14 @@ struct sea_reader {
 		uint8_t const *p,
 		int64_t pos);
 	uint8_t b;
+	uint8_t _pad[7];
 };
 
 /**
  * @struct sea_writer
  *
  * @brief (internal) abstract sequence writer
+ * sizeof(struct sea_writer) == 80
  */
 struct sea_writer {
 	uint8_t *p;
@@ -76,6 +79,7 @@ struct sea_writer {
 	int64_t (*finish)(
 		uint8_t *ptr,
 		int64_t pos);
+//	uint8_t _pad[16];
 };
 
 /**
@@ -88,8 +92,9 @@ struct sea_joint_head {
 	int64_t p, q, i;			/*!< (24) path start coordinate */
 	int32_t max;				/*!< (4) max */
 	uint8_t _pad[4];			/*!< (4) padding */
-//	int64_t ep;					/*!< (8) terminal p-coordinate */
 };
+
+#define _head(pdp, member)		((struct sea_joint_head *)pdp)->member
 
 /**
  * @struct sea_joint_tail
@@ -103,39 +108,16 @@ struct sea_joint_tail {
 	uint8_t bpc;				/*!< (1) bit per cell (4 / 8 / 16 / 32) */
 	uint8_t d2;					/*!< (1) previous direction (copy of the last r.d2) */
 	uint8_t _pad[6];			/*!< (6) */
-//	int32_t *pv, *cv;			/*!< (16) pointers to the initial vectors (should be allocated in the stack by fixed length array, or alloca) */
-//	uint16_t plen, clen;		/*!< (4) length of the pv vector */
-//	int32_t max;				/*!< (4) max of the next block */
-//	int64_t ep;					/*!< (8) terminal p-coordinate of the next band */
 };
 
 #define _tail(pdp, member) 		((struct sea_joint_tail *)(pdp) - 1)->member
 #define DEF_VEC_LEN				( 32 )		/** default vector length */
 
 /**
- * @struct sea_coords
- * @brief (internal) a set of local-nonvolatile variables. (need write back / caller saved values)
- */
-struct sea_coords {
-	int64_t i, j, p, q;			/*!< temporary */
-	struct sea_writer l;		/*!< (inout) alignment writer */
-};
-
-/**
- * @struct sea_process
- *
- * @brief (internal) a set of local-volatile variables. (no need to write back)
- */
-struct sea_process {
-	struct sea_joint_tail v;
-	struct sea_reader a, b;		/*!< (in) sequence readers */
-	struct sea_mem dp, dr;		/*!< (ref) a dynamic programming matrix */
-};
-
-/**
  * @struct sea_local_context
  *
  * @brief (internal) local constant container.
+ * sizeof(struct sea_local_context) == 256
  */
 struct sea_local_context {
 	struct sea_aln_funcs const *f;
@@ -149,10 +131,7 @@ struct sea_local_context {
 	int8_t bw;					/*!< the width of the band. */
 	int16_t tx;					/*!< xdrop threshold. see sea_init for more details */
 	int32_t min;				/*!< (in) lower bound of the score */
-	uint32_t alg;				/*!< algorithm flag (same as (ctx->flags) & SEA_FLAG_MASK_ALG) */
-
-//	size_t isize;				/*!< initial matsize */
-//	size_t memaln;				/*!< memory alignment size (default: 32) */
+	int32_t alg;				/*!< algorithm flag (same as (ctx->flags) & SEA_FLAG_MASK_ALG) */
 
 	uint8_t *pdp;				/*!< dynamic programming matrix */
 	uint8_t *tdp;				/*!< the end of dp matrix */
@@ -160,17 +139,18 @@ struct sea_local_context {
 	uint8_t *tdr;				/*!< the end of direction array */
 	int64_t asp, bsp;			/*!< the start position on the sequences */
 	int64_t aep, bep;			/*!< the end position on the sequences */
-//	int64_t alim, blim;			/*!< the limit coordinate of the band */
 	int64_t size;				/*!< default malloc size */
 
 	int8_t do_trace;			/*!< do traceback if nonzero */
-	int8_t _pad[3];
+	uint8_t _pad[3];
 
 	int32_t max;				/*!< (inout) current maximum score */
-	int64_t mi, mj, mp, mq;		/*!< maximum score position */
+	int64_t mp, mq, mi;			/*!< maximum score position */
 
 	struct sea_reader a, b;		/*!< (in) sequence readers */
 	struct sea_writer l;		/*!< (inout) alignment writer */
+
+//	uint8_t _pad2[24];
 };
 
 /**
@@ -194,38 +174,6 @@ struct sea_aln_funcs {
 };
 
 /**
- * @struct sea_io_funcs
- * @brief (internal) a struct which holds io function pointers.
- */
-struct sea_io_funcs {
-	uint8_t (*popa)(			/*!< retrieve a character from sequence a */
-		uint8_t const *ptr,
-		int64_t pos);
-	uint8_t (*popb)(
-		uint8_t const *ptr,
-		int64_t pos);
-	int64_t (*init)(			/*!< forward alnwriter */
-		uint8_t *ptr,
-		int64_t fpos,
-		int64_t rpos);
-	int64_t (*pushm)(
-		uint8_t *ptr,
-		int64_t pos);
-	int64_t (*pushx)(
-		uint8_t *ptr,
-		int64_t pos);
-	int64_t (*pushi)(
-		uint8_t *ptr,
-		int64_t pos);
-	int64_t (*pushd)(
-		uint8_t *ptr,
-		int64_t pos);
-	int64_t (*finish)(
-		uint8_t *ptr,
-		int64_t pos);
-};
-
-/**
  * @struct sea_context
  *
  * @brief (API) an algorithmic context.
@@ -233,10 +181,16 @@ struct sea_io_funcs {
  * @sa sea_init, sea_close
  */
 struct sea_context {
+	/** constants */
 	struct sea_aln_funcs dynamic, guided;
-	struct sea_io_funcs fw, rv;
-	struct sea_joint_tail v;
-	int flags;			/*!< a bitfield of option flags */
+	struct sea_writer fw, rv;
+	int32_t pv[32];
+	int32_t cv[32];
+	/** templates */
+	struct sea_local_context k;
+	struct sea_joint_tail jt;
+	/** flags */
+	int32_t flags;		/*!< a bitfield of option flags */
 };
 
 /**
@@ -394,8 +348,6 @@ int64_t _finish_dir_r(uint8_t *p, int64_t pos);
 /**
  * coordinate conversion macros
  */
-//#define	ADDR(p, q, band)			( (band)*(p)+(q)+(band)/2 )
-//#define ADDRI(x, y, band) 			( ADDR(COP(x, y, band), COQ(x, y, band), band) )
 #define cox(p, q, band)				( ((p)>>1) - (q) )
 #define coy(p, q, band)				( (((p)+1)>>1) + (q) )
 #define cop(x, y, band)				( (x) + (y) )
@@ -431,11 +383,21 @@ enum _STATE {
 }
 
 /**
- * @macro rd_fetch
+ * @macro rd_fetch, rd_fetch_fast, rd_fetch_safe
  * @brief fetch a decoded base into r.b.
  */
 #define rd_fetch(r, pos) { \
 	(r).b = (r).pop((r).p, pos); \
+}
+#define rd_fetch_fast(r, pos, sp, ep, dummy) { \
+	rd_fetch(r, pos); \
+}
+#define rd_fetch_safe(r, pos, sp, ep, dummy) { \
+	if((uint64_t)((pos) - (sp)) < (uint64_t)((ep) - (sp))) { \
+		(r).b = (r).pop((r).p, pos); \
+	} else { \
+		(r).b = (dummy); \
+	} \
 }
 
 /**
@@ -556,9 +518,8 @@ enum _ALN_DIR {
 /**
  * @macro wr_finish
  * @brief finish the instance
- * @detail the size of the array (s) must have the same value as given to wr_alloc.
  */
-#define wr_finish(w, s) { \
+#define wr_finish(w) { \
 	int64_t p = (w).finish((w).p, (w).pos); \
 	if(p <= (w).pos) { \
 		(w).size = ((w).size - SEA_CLIP_LEN) - p - 1; \
@@ -669,30 +630,6 @@ enum _DIR2 {
 	(k->f->balloon == ptr) ? k->f->trunk : k->f->balloon \
 )
 
-#if 0
-/**
- * @macro load_coord
- * @brief save current (i, j)-coordinate to (mi, mj)
- */
-#define load_coord(k, pdp) { \
-	k->mi = _tail(pdp, i); \
-	k->mj = _tail(pdp, j); \
-	k->mp = _tail(pdp, p); \
-	k->mq = _tail(pdp, q); \
-}
-
-/**
- * @macro store_coord
- * @brief load current (mi, mj)-coordinate to (i, j)
- */
-#define store_coord(k, pdp) { \
-	_tail(pdp, i) = k->mi; \
-	_tail(pdp, j) = k->mj; \
-	_tail(pdp, p) = k->mp; \
-	_tail(pdp, q) = k->mq; \
-}
-#endif
-
 /* foreach */
 #define _for(iter, cnt)		for(iter = 0; iter < cnt; iter++)
 
@@ -716,29 +653,6 @@ enum _DIR2 {
  * @brief an macro for xdrop termination.
  */
 #define XCUT(d,m,x) 	( ((d) + (x) > (m) ? (d) : SEA_CELL_MIN )
-
-/**
- * @fn _read
- */
-int32_t static inline
-_read_impl(uint8_t *ptr, int64_t pos, size_t size)
-{
-	switch(size) {
-		case 1: return((int32_t)(((int8_t *)ptr)[pos]));
-		case 2: return((int32_t)(((int16_t *)ptr)[pos]));
-		case 4: return((int32_t)(((int32_t *)ptr)[pos]));
-		case 8: return((int32_t)(((int64_t *)ptr)[pos]));
-		default: return 0;
-	}
-}
-
-int32_t static inline
-_read(uint8_t *ptr, int64_t pos, size_t size)
-{
-	int32_t r = _read_impl(ptr, pos, size);
-	debug("_read: r(%d) at %p, %lld, %d", r, ptr, pos, (int32_t)size);
-	return(r);
-}
 
 /**
  * benchmark macros

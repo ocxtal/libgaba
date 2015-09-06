@@ -15,14 +15,12 @@
  * @macro BLK
  * @brief block split length
  */
-#define BLK 		( 16 )
+#define BLK 		( 32 )
 
 /**
  * address calculation macros
  */
-#define guided_blk_size() ( \
-	bpb() \
-)
+#define guided_dr_size()		( 0 )
 #define guided_blk_num(p, q) ( \
 	((p) & ~(BLK-1)) / BLK \
 )
@@ -30,7 +28,8 @@
 	((p) & (BLK-1)) * bpl() + (q) * sizeof(cell_t) \
 )
 #define guided_addr(p, q) ( \
-	guided_blk_num(p, q) * guided_blk_size() + guided_blk_addr(p, q) \
+	  guided_blk_num(p, q) * bpb() \
+	+ guided_blk_addr(p, q) \
 )
 
 /**
@@ -70,10 +69,10 @@ typedef struct _dir dir_t;
 }
 
 /**
- * @macro guided_dir_load_forward
+ * @macro guided_dir_det_next
  * @brief set 2-bit direction flag from direction array.
  */
-#define guided_dir_load_forward(r, k, dp, p) { \
+#define guided_dir_det_next(r, k, dp, p) { \
 	uint8_t d = (r).pdr[++(p)]; \
 	debug("guided band: d(%d)", d); \
 	(r).d2 = (d<<2) | ((r).d2>>2); \
@@ -87,11 +86,10 @@ typedef struct _dir dir_t;
 }
 
 /**
- * @macro guided_dir_load_term
+ * @macro guided_dir_set_pdr
  */
-#define guided_dir_load_term(r, k, dp, p) { \
+#define guided_dir_set_pdr(r, k, dp, p, sp) { \
 	(r).pdr = (k)->pdr; \
-	(r).d2 = (r).pdr[p]; \
 }
 
 /**
@@ -100,6 +98,13 @@ typedef struct _dir dir_t;
  */
 #define guided_dir_load_backward(r, k, dp, p) { \
 	(r).d2 = 0x0f & (((r).d2<<2) | (r).pdr[--p]); \
+}
+
+/**
+ * @macro guided_dir_stride_jam
+ */
+#define guided_dir_stride_jam(r, k, dp, p) { \
+	/** nothing to do */ \
 }
 
 #endif /* #ifndef _GUIDED_H_INCLUDED */

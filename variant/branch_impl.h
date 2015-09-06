@@ -257,7 +257,7 @@
 		- (branch_linear_bpb() \
 		+ sizeof(struct sea_joint_tail) \
 		+ sizeof(struct sea_joint_head) \
-		+ branch_linear_bpl()) 			/* max vector */ \
+		+ branch_linear_bpl()))		/* max vector */ \
 )
 
 /**
@@ -301,6 +301,8 @@
 		k->max = max; \
 		k->mi = -1; k->mp = p;	/** need_search */ \
 	} \
+	/** save max */ \
+	_head(k->pdp, max) = max; \
 }
 
 /**

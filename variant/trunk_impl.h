@@ -99,7 +99,7 @@
 )
 #endif
 #define trunk_linear_dir_exp_top(r, k, pdp) ( \
-	vec_acc_scl(acc) > vec_acc_scu(acc) ? SEA_TOP : SEA_LEFT \
+	vec_acc_diff(acc) > 0 ? SEA_TOP : SEA_LEFT \
 )
 #define trunk_linear_dir_exp_bottom(r, k, pdp) 	( 0 )
 #define trunk_affine_dir_exp_top(r, k, pdp) 	trunk_linear_dir_exp_top(r, k, pdp)
@@ -213,14 +213,16 @@
  */
 #define trunk_linear_fill_latter_body(k, r) { \
 	vec_comp_sel(t1, wq, wt, mggv, xggv); \
-	vec_max(t1, t1, dv); \
-	vec_max(t1, t1, dh); \
+	vec_max(t2, dv, dh); \
+	vec_max(t1, t1, t2); \
 	vec_sub(t2, t1, dv); \
 	vec_sub(dv, t1, dh); \
 	vec_assign(dh, t2); \
 	vec_store_dvdh(pdp, dv, dh); \
 	if(dir(r) == TOP) { vec_assign(t1, dv); } else { vec_assign(t1, dh); } \
 	vec_acc_accum_max(acc, max, t1, k->gi); \
+	/** caclculate the next advancing direction */ \
+	dir_load_forward(r, k, pdp, p); 	/** increment p */ \
 }
 
 /**
@@ -230,6 +232,7 @@
 	/** store (i, j) to the end of pdp */ \
 	*((int64_t *)pdp) = i; pdp += sizeof(int64_t); \
 	*((int64_t *)pdp) = j; pdp += sizeof(int64_t); \
+	/** store direction vector */ \
 	dir_end_block(r, k, pdp, p); \
 }
 
@@ -247,26 +250,17 @@
 	  (k->aep-i-BLK) \
 	| (k->bep-j-BLK) \
 	| (k->tdp - pdp \
-		-(BLK*(trunk_linear_bpl()+1) \
+		- (trunk_linear_bpb() \
 		+ sizeof(struct sea_joint_tail) \
+		+ sizeof(struct sea_joint_head) \
 		+ 2 * sizeof(int64_t)			/** (i, j) */ \
-		+ 2 * sizeof(int32_t) * BW))	/** pv + cv */ \
+		+ 2 * trunk_linear_bpl()))		/** v + maxv */ \
 )
 
 /**
  * @macro trunk_linear_fill_test_chain
  */
 #define trunk_linear_fill_test_chain(k, r)		( 0 )
-
-#if 0
-/**
- * @macro trunk_linear_fill_check_alt
- */
-#define trunk_linear_fill_check_alt(k, r) ( \
-	   (scl > score - k.tc) \
-	|| (scu > score - k.tc) \
-)
-#endif
 
 /**
  * @macro trunk_linear_fill_check_term
@@ -282,22 +276,21 @@
  */
 #define trunk_linear_fill_finish(k, r) { \
 	/** save vectors */ \
-	vec_store32_dvdh(pdp, dv, dh, vec_acc_scu(acc), k->gi, dir(r)); \
-	cell_t *pv = (cell_t *)pdp - 2*BW, *cv = (cell_t *)pdp - BW; \
+	uint8_t *v = pdp; \
+	vec_store_dvdh(pdp, dv, dh); \
+ 	vec_acc_store(pdp, acc); \
 	/** create ivec at the end */ \
 	pdp += sizeof(struct sea_joint_tail); \
 	/** save terminal coordinates */ \
-	_tail(pdp, i) = i+DEF_VEC_LEN/2; \
-	_tail(pdp, j) = j-DEF_VEC_LEN/2; \
 	_tail(pdp, p) = p; \
-	_tail(pdp, q) = q; \
-	_tail(pdp, pv) = (int32_t *)pv; \
-	_tail(pdp, cv) = (int32_t *)cv; \
+	_tail(pdp, i) = i + DEF_VEC_LEN/2; \
+	_tail(pdp, v) = v; \
+	_tail(pdp, bpc) = 4; \
+	_tail(pdp, d2) = dir_raw(r); \
 	/** search max */ \
 \
 	/** save p-coordinate at the beginning of the block */ \
-	_tail(k->pdp, max) = vec_acc_scc(max); \
-	_tail(k->pdp, ep) = p; \
+	_head(k->pdp, max) = vec_acc_scc(max); \
 }
 
 #if 0
@@ -324,7 +317,7 @@
 			*((int16_t *)c.pdp) = psc; \
 			psc += *p; \
 			csc = psc + *(p + BW) + k.gi; \
-			*((int16_t *)c.pdp + BW) = csc; \
+			*((int16_t *)c.pdp + BW) = csc]][]; \
 			debug("psc(%d), csc(%d)", psc, csc); \
 			p++; \
 			c.pdp += sizeof(int16_t); \

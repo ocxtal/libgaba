@@ -273,9 +273,7 @@ sea_t *sea_init(
 	int8_t x,
 	int8_t gi,
 	int8_t ge,
-	int32_t tx,
-	int32_t tc,
-	int32_t tb);
+	int32_t tx);
 
 /**
  * @fn sea_align

@@ -32,14 +32,14 @@
 #define naive_linear_dp_size()			( BLK * naive_linear_bpl() )
 #define naive_linear_co_size()			( 0 )
 #define naive_linear_jam_size()			( naive_linear_co_size() + dr_size() )
-#define naive_linear_phantom_size()		( 2 * naive_linear_bpl() + naive_linear_jam_size() )
+#define naive_linear_phantom_size()		( 2 * naive_linear_bpl() + naive_linear_jam_size() + sizeof(struct sea_joint_head) )
 #define naive_linear_bpb()				( naive_linear_dp_size() + naive_linear_jam_size() )
 
 #define naive_affine_bpl() 				( 3 * sizeof(cell_t) * BW )
 #define naive_affine_dp_size()			( BLK * naive_affine_bpl() )
 #define naive_affine_co_size()			( 0 )
 #define naive_affine_jam_size()			( naive_affine_co_size() + dr_size() )
-#define naive_affine_phantom_size()		( 2 * naive_affine_bpl() + naive_affine_jam_size() )
+#define naive_affine_phantom_size()		( 2 * naive_affine_bpl() + naive_affine_jam_size() + sizeof(struct sea_joint_head) )
 #define naive_affine_bpb()				( naive_affine_dp_size() + naive_affine_jam_size() )
 
 /**
@@ -68,13 +68,11 @@
  * @brief determines the next direction in the dynamic banded algorithm.
  */
 #define naive_linear_dir_exp_top(r, k, pdp) ( \
-	*((cell_t *)pdp-1) > *((cell_t *)pdp-BW) ? SEA_TOP : SEA_LEFT \
+	pvh[BW/2-1] > pvh[-BW/2] ? SEA_TOP : SEA_LEFT \
 )
-#define naive_linear_dir_exp_bottom(r, k, pdp) ( 0 )
-#define naive_affine_dir_exp(r, k, pdp) ( \
-	*((cell_t *)pdp-2*BW-1) > *((cell_t *)pdp-3*BW) ? SEA_TOP : SEA_LEFT \
-)
-#define naive_affine_dir_exp_bottom(r, k, pdp) ( 0 )
+#define naive_linear_dir_exp_bottom(r, k, pdp)	( 0 )
+#define naive_affine_dir_exp_top(r, k, pdp)		naive_linear_dir_exp_top(r, k, pdp)
+#define naive_affine_dir_exp_bottom(r, k, pdp)	naive_linear_dir_exp_bottom(r, k, pdp)
 
 /**
  * fill-in
@@ -85,6 +83,7 @@
 #define naive_linear_fill_decl(k, r, pdp) \
 	dir_t r; \
 	cell_t xacc = 0; \
+	cell_t *pdg, *pvh; \
 	int64_t i, j, p, q;
 
 /**
@@ -100,15 +99,17 @@
 	/** load coordinates onto local stack */ \
 	p = _tail(k->pdp, p); \
 	i = _tail(k->pdp, i) - DEF_VEC_LEN/2; \
-	j = (p - 1) - (i - k->asp); \
+	j = (p - 1) - (i - k->asp) + k->bsp; \
 	/** load the first direction pointer */ \
 	dir_init(r, k, k->pdp, p); \
 	/** make room for struct sea_joint_head */ \
 	pdp += sizeof(struct sea_joint_head); \
 	/** load the first 32bytes of the vectors */ \
-	cell_t *s = (cell_t *)pdp, *t = _tail(k->pdp, v); \
-	for(q = 0; q < BW; q++) { *s++ = *t++; } /** vector at sp-2 */ \
-	for(q = 0; q < BW; q++) { *s++ = *t++; } /** vector at sp-1 */ \
+	cell_t *s = (cell_t *)pdp, *t = (cell_t *)_tail(k->pdp, v); \
+	pdg = s + BW/2;		/** vector at p-2 */ \
+	for(q = 0; q < BW; q++) { *s++ = *t++; } \
+	pvh = s + BW/2;		/** vector at p-1 */ \
+	for(q = 0; q < BW; q++) { *s++ = *t++; } \
 	pdp = (uint8_t *)s; \
 	/** write the first dr vector */ \
 	dir_end_block(r, k, pdp, p); \
@@ -151,17 +152,20 @@
 }
 
 /**
- * @macro naive_linear_fill_latter_body
+ * @macro naive_linear_fill_latter_body_intl
  */
-#define naive_linear_fill_latter_body(k, r, pdp) { \
+#define naive_linear_fill_latter_body_intl(k, r, pdp, fetch) { \
 	cell_t u, d, l; \
-	xacc = 0; \
+	xacc = -1; \
 	for(q = -BW/2; q < BW/2; q++) { \
-		rd_fetch(k->a, (i-q)-1); \
-		rd_fetch(k->b, (j+q)-1); \
-		d = ((cell_t *)pdp)[naive_linear_topleft(r, k)] + (rd_cmp(k->a, k->b) ? k->m : k->x); \
-		u = ((cell_t *)pdp)[naive_linear_top(r, k)] + k->gi; \
-		l = ((cell_t *)pdp)[naive_linear_left(r, k)] + k->gi; \
+		/** fetch the next character */ \
+		fetch(k->a, (i-q)-1, k->asp, k->aep, 128); \
+		fetch(k->b, (j+q)-1, k->bsp, k->bep, 255); \
+		/** load previous cells */ \
+		d = pdg[q + naive_linear_topleftq(r, k)] + (rd_cmp(k->a, k->b) ? k->m : k->x); \
+		u = pvh[q + naive_linear_topq(r, k)] + k->gi; \
+		l = pvh[q + naive_linear_leftq(r, k)] + k->gi; \
+		/** mask edge */ \
 		if(q == -BW/2) { \
 			if(dir(r) == LEFT) { u = CELL_MIN; } \
 			if(dir2(r) == LL) { d = CELL_MIN; } \
@@ -169,15 +173,34 @@
 			if(dir(r) == TOP) { l = CELL_MIN; } \
 			if(dir2(r) == TT) { d = CELL_MIN; } \
 		} \
+		/** calculate and write back the cell */ \
+		debug("(%lld, %lld), (%lld, %lld), %d, %d, %d, %d", p, q, i, j, d, u, l, MAX4(d, u, l, k->min)); \
 		*((cell_t *)pdp) = d = MAX4(d, u, l, k->min); \
 		pdp += sizeof(cell_t); \
-		if(k->alg != NW && d >= k->max) { \
-			k->max = d; k->mi = i-q; k->mj = j+q; k->mp = p; k->mq = q; \
+		/** update max and xdrop accumulator */ \
+		if(d >= k->max) { \
+			k->max = d; k->mp = p; k->mq = q; k->mi = i-q; \
 		} \
 		xacc &= (d + k->tx - k->max); \
 	} \
+	/** update pdg and pvh */ \
+	pdg = pvh; pvh = (cell_t *)pdp - BW/2; \
 	/** calculate the next advancing direction */ \
-	dir_load_forward(r, k, pdp, p);		/** increment p */ \
+	dir_det_next(r, k, pdp, p);		/** increment p */ \
+}
+
+/**
+ * @macro naive_linear_fill_latter_body
+ */
+#define naive_linear_fill_latter_body(k, r, pdp) { \
+	naive_linear_fill_latter_body_intl(k, r, pdp, rd_fetch_fast); \
+}
+
+/**
+ * @macro naive_linear_fill_latter_body_cap
+ */
+#define naive_linear_fill_latter_body_cap(k, r, pdp) { \
+	naive_linear_fill_latter_body_intl(k, r, pdp, rd_fetch_safe); \
 }
 
 /**
@@ -186,6 +209,11 @@
 #define naive_linear_fill_end(k, r, pdp) { \
 	/** store direction vector */ \
 	dir_end_block(r, k, pdp, p); \
+	debug("fill end pdp(%p), (%lld, %lld), (%lld, %lld), (%lld, %lld)", pdp, i, j, p, q, k->aep, k->bep); \
+	debug("test xdrop(%d), mem(%d), chain(%d)", \
+		(int)naive_linear_fill_test_xdrop(k, r, pdp), \
+		(int)naive_linear_fill_test_mem(k, r, pdp), \
+		(int)naive_linear_fill_test_chain(k, r, pdp)); \
 }
 
 /**
@@ -193,7 +221,21 @@
  * @brief returns negative if xdrop test passed (= when termination is detected)
  */
 #define naive_linear_fill_test_xdrop(k, r, pdp) ( \
-	(XSEA - k->alg - 1) & xacc \
+	(int64_t)(XSEA - k->alg - 1) & (int64_t)xacc \
+)
+#define naive_linear_fill_test_xdrop_cap(k, r, pdp) ( \
+	naive_linear_fill_test_xdrop(k, r, pdp) \
+)
+
+/**
+ * @macro naive_linear_fill_test_bound
+ * @brief check boundary
+ */
+#define naive_linear_fill_test_bound(k, r, pdp) ( \
+	(k->aep-i-BLK) | (k->bep-j-BLK) \
+)
+#define naive_linear_fill_test_bound_cap(k, r, pdp) ( \
+	(k->aep-i+BW/2) | (k->bep-j+BW/2) | (cop(k->aep, k->bep, BW)-p) \
 )
 
 /**
@@ -201,9 +243,13 @@
  * @brief returns negative if i+BLK > aep OR j+BLK > bep OR pdp + block_memsize > tdp
  */
 #define naive_linear_fill_test_mem(k, r, pdp) ( \
-	  (k->aep-i-BLK) \
-	| (k->bep-j-BLK) \
-	| (k->tdp - pdp \
+	(int64_t)(k->tdp - pdp \
+		- (3*naive_linear_bpb() \
+		+ sizeof(struct sea_joint_tail) \
+		+ sizeof(struct sea_joint_head))) \
+)
+#define naive_linear_fill_test_mem_cap(k, r, pdp) ( \
+	(int64_t)(k->tdp - pdp \
 		- (naive_linear_bpb() \
 		+ sizeof(struct sea_joint_tail) \
 		+ sizeof(struct sea_joint_head))) \
@@ -216,15 +262,29 @@
 #define naive_linear_fill_test_chain(k, r, pdp) ( \
 	0 /** never chain */ \
 )
+#define naive_linear_fill_test_chain_cap(k, r, pdp) ( \
+	naive_linear_fill_test_chain(k, r, pdp) \
+)
 
 /**
  * @macro naive_linear_fill_check_term
- * @brief returns false if the next loop can't be executed
+ * @brief returns false if the next loop can be executed
  */
 #define naive_linear_fill_check_term(k, r, pdp) ( \
 	( naive_linear_fill_test_xdrop(k, r, pdp) \
+	| naive_linear_fill_test_bound(k, r, pdp) \
 	| naive_linear_fill_test_mem(k, r, pdp) \
-	| naive_linear_fill_test_chain(k, r, pdp)) >= 0 \
+	| naive_linear_fill_test_chain(k, r, pdp)) < 0 \
+)
+
+/**
+ * @macro naive_linear_fill_check_term_cap
+ */
+#define naive_linear_fill_check_term_cap(k, r, pdp) ( \
+	( naive_linear_fill_test_xdrop_cap(k, r, pdp) \
+	| naive_linear_fill_test_bound_cap(k, r, pdp) \
+	| naive_linear_fill_test_mem_cap(k, r, pdp) \
+	| naive_linear_fill_test_chain_cap(k, r, pdp)) < 0 \
 )
 
 /**
@@ -251,9 +311,9 @@
 #define naive_linear_set_terminal(k, pdp) { \
 	int64_t i, j, p, sp, as, bs, ae, be; \
 	/** load band terminal coordinate */ \
-	i = _tail(k->pdp, i) - DEF_VEC_LEN/2; \
-	j = _tail(k->pdp, j) + DEF_VEC_LEN/2; \
 	p = _tail(k->pdp, p) - 1;	/** end p-coordinate */ \
+	i = _tail(k->pdp, i) - DEF_VEC_LEN/2; \
+	j = p - (i - k->asp) + k->bsp; \
 	sp = _tail(pdp, p);			/** start p-coordinate */ \
 	as = k->aep; bs = k->bsp; \
 	ae = k->aep; be = k->bep; \
@@ -262,13 +322,12 @@
 		/** windback the direction */ \
 		/** check if the band contains the corner */ \
 		if((uint64_t)(coq(i, j, BW) - coq(ae, be, BW) + BW/2) < BW) { \
-			k->mi = ae; k->mj = be; \
 			k->mp = cop(ae-as, be-bs, BW); \
 			k->mq = coq(ae-as, be-bs, BW) - coq(i-as, j-bs, BW); \
+			k->mi = ae; \
 		} else { \
 			/** the band did not reach the other end */ \
-			k->mi = as; k->mj = bs; \
-			k->mp = 0; k->mq = 0; \
+			k->mp = 0; k->mq = 0; k->mi = as; \
 		} \
 	} \
 }
@@ -281,55 +340,77 @@
  */
 #define naive_linear_trace_decl(k, r, pdp) \
 	dir_t r; \
-	cell_t *ptb = (cell_t *)( \
-		pdp + addr( \
-			_tail(pdp, ep) - _tail(pdp, p), \
-			_tail(pdp, q))); \
-	cell_t score = *ptb; \
-	int64_t i, j, p;
+	cell_t *pdg, *pvh; \
+	cell_t score; \
+	int64_t i, j, p, q, sp;
+
+/**
+ * @macro naive_linear_trace_windback_ptr
+ */
+#define naive_linear_trace_windback_ptr(k, r, pdp) { \
+	/** load the next direction pointer */ \
+	dir_load_backward(r, k, pdp, p, sp); \
+	/** update pdg, pvh, and ptb */ \
+	pvh = pdg; pdg -= BW; \
+	if(((p - sp) & (BLK-1)) == 0) { \
+		dir_stride_jam(r, k, pdp, p, sp); \
+		pdg = (cell_t *)((uint8_t *)pdg - naive_linear_jam_size()); \
+	} \
+}
 
 /**
  * @macro naive_linear_trace_init
  */
 #define naive_linear_trace_init(k, r, pdp) { \
-	i = _tail(k->pdp, i) - DEF_VEC_LEN/2; \
-	j = _tail(k->pdp, j) + DEF_VEC_LEN/2; \
-	p = _tail(k->pdp, p); \
-	dir_load_term(r, k, pdp, p); \
-	debug("dir: d(%d), d2(%d)", dir(r), dir2(r)); \
-	/*rd_fetch(c.a, t.i-1);*/ \
-	/*rd_fetch(c.b, t.j-1);*/ \
+	/** load coordinates */ \
+	p = _head(k->pdp, p); \
+	q = _head(k->pdp, q); \
+	i = _head(k->pdp, i); \
+	j = p - (i - k->asp) + k->bsp; \
+	sp = _tail(pdp, p); \
+	debug("(%lld, %lld), (%lld, %lld), sp(%lld)", p, q, i, j, sp); \
+	/** initialize pointers */ \
+	debug("num(%lld), addr(%lld)", dynamic_blk_num(p-sp, 0), dynamic_blk_addr(p-sp, 0)); \
+	pdg = (cell_t *)(k->pdp + addr(p - sp, 0)); \
+	dir_set_pdr(r, k, pdp, p, sp); \
+	/** load score */ \
+	score = pdg[q]; \
+	for(int a = -BW/2; a < BW/2; a++) { \
+		debug("%d", pdg[a]); \
+	} \
+	/** windback pointers from p+1 to p */ \
+	p++; \
+	naive_linear_trace_windback_ptr(k, r, pdp); \
 }
 
 /**
  * @macro naive_linear_trace_body
  */
 #define naive_linear_trace_body(k, r, pdp) { \
-	dir_load_backward(r, k, pdp, p); \
+	/** windback to p-1 */ \
+	naive_linear_trace_windback_ptr(k, r, pdp); \
+	/** fetch characters */ \
 	rd_fetch(k->a, i-1); \
 	rd_fetch(k->b, j-1); \
-	debug("dir: d(%d), d2(%d)", dir(r), dir2(r)); \
-	cell_t diag = ptb[naive_linear_topleft(r, k)]; \
-	cell_t sc = rd_cmp(k->a, k->b) ? k->m : k->x; \
+	/** load diagonal cell and score */ \
 	cell_t h, v; \
-	debug("traceback: score(%d), diag(%d), sc(%d), h(%d), v(%d)", \
-		score, diag, sc, \
-		ptb[naive_linear_left(r, k)], ptb[naive_linear_top(r, k)]); \
+	cell_t diag = pdg[q + naive_linear_topleftq(r, k)]; \
+	cell_t sc = rd_cmp(k->a, k->b) ? k->m : k->x; \
 	if(score == (diag + sc)) { \
-		ptb += naive_linear_topleft(r, k); \
-		dir_load_backward(r, k, pdp, p); \
+		/** update direction and pointers */ \
+		q += naive_linear_topleftq(r, k); \
+		naive_linear_trace_windback_ptr(k, r, pdp); \
 		i--; /*rd_fetch(k->a, i-1);*/ \
 		j--; /*rd_fetch(k->b, j-1);*/ \
 		if(sc == k->m) { wr_pushm(k->l); } else { wr_pushx(k->l); } \
-		/*if(k->alg == SW && score <= sc) { return SEA_TERMINATED; }*/ \
 		score = diag; \
-	} else if(score == ((h = ptb[naive_linear_left(r, k)]) + k->gi)) { \
-		ptb += naive_linear_left(r, k); \
+	} else if(score == ((h = pvh[q + naive_linear_leftq(r, k)]) + k->gi)) { \
+		q += naive_linear_leftq(r, k); \
 		i--; /*rd_fetch(k->a, i-1);*/ \
 		wr_pushd(k->l); \
 		score = h; \
-	} else if(score == ((v = ptb[naive_linear_top(r, k)]) + k->gi)) { \
-		ptb += naive_linear_top(r, k); \
+	} else if(score == ((v = pvh[q + naive_linear_topq(r, k)]) + k->gi)) { \
+		q += naive_linear_topq(r, k); \
 		j--; /*rd_fetch(k->b, j-1);*/ \
 		wr_pushi(k->l); \
 		score = v; \
@@ -344,7 +425,7 @@
  * @brief returns negative if beginning bound is invaded
  */
 #define naive_linear_trace_test_bound(k, r, pdp) ( \
-	_tail_ld_p(pdp) - p \
+	p - sp \
 )
 
 /**
@@ -368,10 +449,9 @@
  * @macro naive_linear_trace_finish
  */
 #define naive_linear_trace_finish(k, r, pdp) { \
-	_tail(pdp, i) = i; \
-	_tail(pdp, j) = j; \
-	_tail(pdp, p) = p; \
-	_tail(pdp, q) = ((uint64_t)ptb - (uint64_t)pdp + BW) % BW - BW/2; /** correct q-coordinate */ \
+	_head(pdp, p) = p; \
+	_head(pdp, q) = q; \
+	_head(pdp, i) = i; \
 }
 
 #endif /* #ifndef _NAIVE_H_INCLUDED */

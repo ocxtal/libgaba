@@ -188,7 +188,7 @@
  * @macro vec_acc_set
  */
 #define vec_acc_set(acc, p, scl, scc, scu) { \
-	acc = _mm_set_epi32(p, scl, scc, scu); \
+	acc = _mm_set_epi32(p, scl, scc, scl - scu); \
 }
 
 /**
@@ -201,11 +201,12 @@
 #define vec_acc_p(acc)			vec_acc(acc, 3)
 #define vec_acc_scl(acc)		vec_acc(acc, 2)
 #define vec_acc_scc(acc)		vec_acc(acc, 1)
-#define vec_acc_scu(acc)		vec_acc(acc, 0)
+#define vec_acc_scu(acc)		vec_acc(acc, 2) - vec_acc(acc, 0)
+#define vec_add_diff(acc)		vec_acc(acc, 0)
 
 /**
  * @macro vec_acc_accum_max
- * @brief accumulate (num_call, v[31], v[16], v[0])
+ * @brief accumulate (num_call, v[31], v[16], v[31] - v[0])
  */
 #define vec_acc_accum_max(acc, max, v, gi) { \
 	__m128i const mask = _mm_set_epi8( \
@@ -215,13 +216,13 @@
 		0x80, 0x80, 0x80, 0x80, \
 		0x80, 0x80, 0x80, 0x0f, \
 		0x80, 0x80, 0x80, 0x00, \
-		0x80, 0x80, 0x80, 0x80); \
-	__m128i const inc = _mm_set_epi32(1, gi, gi, gi); \
+		0x80, 0x80, 0x80, 0x0f); \
+	__m128i const inc = _mm_set_epi32(1, gi, gi, 0); \
 	/** add difference */ \
 	acc = _mm_add_epi32(acc, \
-		_mm_or_si128( \
-			_mm_and_si128(v##1, mask), \
-			_mm_shuffle_epi8(v##2, shuf))); \
+		_mm_sub_epi32( \
+			_mm_shuffle_epi8(v##2, shuf),; \
+			_mm_and_si128(v##1, mask))), \
 	/** increment call counter and compensate gi */ \
 	acc = _mm_add_epi32(acc, inc); \
 	/** take max */ \
@@ -229,6 +230,20 @@
 		_mm_shuffle_epi32( \
 			_mm_cmplt_epi32(acc, max), \
 			0x55)); \
+}
+
+/**
+ * @macro vec_acc_load
+ */
+#define vec_acc_load(p, acc) { \
+	(acc) = _mm_load_si128((__m128i *)p); (p) += sizeof(__m128i); \
+}
+
+/**
+ * @macro vec_acc_store
+ */
+#define vec_acc_store(p, acc) { \
+	_mm_store_si128((__m128i *)p, acc); (p) += sizeof(__m128i); \
 }
 
 /**
