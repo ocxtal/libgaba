@@ -26,6 +26,7 @@
 /**
  * register declarations. 
  */
+#define vec_size()					( sizeof(__m128i) )
 #define _vec_cell(v)				__m128i v
 #define _vec_cell_const(v, k)		__m128i const v = _mm_set1_epi8(k)
 #define _vec_cell_reg(v)			__m128i register v
@@ -160,6 +161,15 @@
 }
 
 /**
+ * @macro vec_comp_mask
+ * @brief compare two vectors a and b, make int mask
+ */
+#define vec_comp_mask(mask, a, b) { \
+	__m128i t = _mm_cmpeq_epi8((a), (b)); \
+	(mask) = _mm_movemask_epi8(t); \
+}
+
+/**
  * @macro vec_hmax
  * @brief horizontal max
  */
@@ -209,18 +219,17 @@
  * load and store operations
  */
 #define vec_store(p, v) { \
-	_mm_store_si128((__m128i *)(p), v); p += sizeof(__m128i); \
+	_mm_store_si128((__m128i *)(p), v); \
 }
 
 #define vec_store_packed(p, dv, dh) { \
 	_mm_store_si128( \
 		(__m128i *)(p), \
 		_mm_or_si128(_mm_slli_epi64(dh, 4), dv)); \
-	p += sizeof(__m128i); \
 }
 
 #define vec_load(p, v) { \
-	v = _mm_load_si128((__m128i *)(p)); p += sizeof(__m128i); \
+	v = _mm_load_si128((__m128i *)(p)); \
 }
 
 #define vec_load_packed(p, dv, dh) { \
@@ -228,9 +237,13 @@
 	dv = _mm_load_si128((__m128i *)(p)); \
 	dh = _mm_and_si128(_mm_srli_epi64(dv, 4), mask); \
 	dv = _mm_and_si128(dv, mask); \
-	p += sizeof(__m128i); \
 }
 
+#define vec_load8(p, v) { \
+	v = _mm_load_si128((__m128i *)(p)); \
+}
+
+#if 0
 /**
  * store vector to 32-elem array of int32_t
  */
@@ -263,6 +276,7 @@
 		_mm_packs_epi16(t1, t2), \
 		_mm_packs_epi16(t3, t4)); \
 }
+#endif
 
 /**
  * print vector
@@ -272,9 +286,10 @@
 	void *p = (void *)b; \
 	vec_store(p, v); \
 	fprintf(s, \
-		"[%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d]\n", \
-		b[15], b[14], b[13], b[12], b[11], b[10], b[9], b[8], \
-		b[7], b[6], b[5], b[4], b[3], b[2], b[1], b[0]); \
+/*		"[%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d]\n",*/ \
+		"[%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x]\n", \
+		(uint8_t)b[15], (uint8_t)b[14], (uint8_t)b[13], (uint8_t)b[12], (uint8_t)b[11], (uint8_t)b[10], (uint8_t)b[9], (uint8_t)b[8], \
+		(uint8_t)b[7], (uint8_t)b[6], (uint8_t)b[5], (uint8_t)b[4], (uint8_t)b[3], (uint8_t)b[2], (uint8_t)b[1], (uint8_t)b[0]); \
 }
 
 /**

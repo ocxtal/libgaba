@@ -9,6 +9,7 @@
 
 #include "../sea.h"
 #include "../util/util.h"
+#include "../arch/dir.h"
 #include <stdint.h>
 
 /**
@@ -79,6 +80,13 @@ typedef struct _dir dir_t;
 }
 
 /**
+ * @macro guided_dir_empty
+ */
+#define guided_dir_empty(r, k, dp, p) { \
+	/** nothing to do */ \
+}
+
+/**
  * @macro guided_dir_end_block
  */
 #define guided_dir_end_block(r, k, dp, p) { \
@@ -86,9 +94,18 @@ typedef struct _dir dir_t;
 }
 
 /**
+ * @macro guided_dir_sum_i_blk
+ * @brief calculate sum of diff_i from p to the end of the block
+ */
+#define guided_dir_sum_i_blk(r, k, dp, p, sp) ( \
+	dir_vec_sum_i((r).pdr + (sp) + (((p) - (sp)) & ~(BLK-1)), ((p) - (sp)) & (BLK-1)) \
+)
+
+/**
  * @macro guided_dir_set_pdr
  */
 #define guided_dir_set_pdr(r, k, dp, p, sp) { \
+	(r).d2 = 0; \
 	(r).pdr = (k)->pdr; \
 }
 
@@ -96,14 +113,14 @@ typedef struct _dir dir_t;
  * @macro guided_dir_load_backward
  * @brief set 2-bit direction flag in reverse access.
  */
-#define guided_dir_load_backward(r, k, dp, p) { \
+#define guided_dir_load_backward(r, k, dp, p, sp) { \
 	(r).d2 = 0x0f & (((r).d2<<2) | (r).pdr[--p]); \
 }
 
 /**
  * @macro guided_dir_stride_jam
  */
-#define guided_dir_stride_jam(r, k, dp, p) { \
+#define guided_dir_stride_jam(r, k, dp, p, sp) { \
 	/** nothing to do */ \
 }
 

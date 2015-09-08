@@ -26,6 +26,8 @@
 /**
  * register declarations. 
  */
+#define vec_size()			( 4 * sizeof(__m128i) )
+
 #define _vec_cell(v) \
 	__m128i v##1, v##2, v##3, v##4;
 
@@ -248,6 +250,20 @@
 }
 
 /**
+ * @macro vec_comp_mask
+ * @brief compare two vectors a and b, make int mask
+ */
+#define vec_comp_mask(mask, a, b) { \
+	_vec_cell_reg(t); \
+	t1 = _mm_cmpeq_epi16((a##1), (b##1)); \
+	t2 = _mm_cmpeq_epi16((a##2), (b##2)); \
+	t3 = _mm_cmpeq_epi16((a##3), (b##3)); \
+	t4 = _mm_cmpeq_epi16((a##4), (b##4)); \
+	(mask) = _mm_movemask_epi8(_mm_packs_epi16(t1, t2)) \
+		  | (_mm_movemask_epi8(_mm_packs_epi16(t3, t4))<<16); \
+}
+
+/**
  * @macro vec_hmax
  * @brief horizontal max
  */
@@ -308,19 +324,32 @@
  * load and store operations
  */
 #define vec_store(p, v) { \
-	_mm_store_si128((__m128i *)(p), v##1); p += sizeof(__m128i); \
-	_mm_store_si128((__m128i *)(p), v##2); p += sizeof(__m128i); \
-	_mm_store_si128((__m128i *)(p), v##3); p += sizeof(__m128i); \
-	_mm_store_si128((__m128i *)(p), v##4); p += sizeof(__m128i); \
+	_mm_store_si128((__m128i *)(p),     v##1); \
+	_mm_store_si128((__m128i *)(p) + 1, v##2); \
+	_mm_store_si128((__m128i *)(p) + 2, v##3); \
+	_mm_store_si128((__m128i *)(p) + 3, v##4); \
 }
 
 #define vec_load(p, v) { \
-	(v##1) = _mm_load_si128((__m128i *)(p)); p += sizeof(__m128i); \
-	(v##2) = _mm_load_si128((__m128i *)(p)); p += sizeof(__m128i); \
-	(v##3) = _mm_load_si128((__m128i *)(p)); p += sizeof(__m128i); \
-	(v##4) = _mm_load_si128((__m128i *)(p)); p += sizeof(__m128i); \
+	(v##1) = _mm_load_si128((__m128i *)(p)    ); \
+	(v##2) = _mm_load_si128((__m128i *)(p) + 1); \
+	(v##3) = _mm_load_si128((__m128i *)(p) + 2); \
+	(v##4) = _mm_load_si128((__m128i *)(p) + 3); \
 }
 
+/**
+ * load vector from 16bytes int8_t array
+ */
+#define vec_load8(p, v) { \
+	__m128i l = _mm_load_si128((__m128i *)(p)); \
+	__m128i u = _mm_srli_si128(l, 8); \
+	(v##1) = _mm_set1_epi16(CELL_MIN); \
+	(v##2) = _mm_cvtepi8_epi16(l); \
+	(v##3) = _mm_cvtepi8_epi16(u); \
+	(v##4) = _mm_set1_epi16(CELL_MIN); \
+}
+
+#if 0
 /**
  * store vector to int32_t array
  */
@@ -350,7 +379,7 @@
 	v##3 = _mm_packs_epi32(t1, t2); \
 	v##4 = _mm_packs_epi32(t3, t4); \
 }
-
+#endif
 
 /**
  * print vector
@@ -395,8 +424,8 @@
 }
 
 #define vec_char_store(p, v) { \
-	_mm_store_si128((__m128i *)(p), v##1); p += sizeof(__m128i); \
-	_mm_store_si128((__m128i *)(p), v##2); p += sizeof(__m128i); \
+	_mm_store_si128((__m128i *)(p), v##1); \
+	_mm_store_si128((__m128i *)(p), v##2); \
 }
 
 #define vec_char_print(s, v) { \

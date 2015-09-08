@@ -181,14 +181,14 @@ struct sea_aln_funcs {
  * @sa sea_init, sea_close
  */
 struct sea_context {
-	/** constants */
-	struct sea_aln_funcs dynamic, guided;
-	struct sea_writer fw, rv;
-	int32_t pv[32];
-	int32_t cv[32];
 	/** templates */
 	struct sea_local_context k;
 	struct sea_joint_tail jt;
+	int8_t pv[16];
+	int8_t cv[16];
+	/** constants */
+	struct sea_writer fw, rv;
+	struct sea_aln_funcs dynamic, guided;
 	/** flags */
 	int32_t flags;		/*!< a bitfield of option flags */
 };
@@ -387,6 +387,7 @@ enum _STATE {
  * @brief fetch a decoded base into r.b.
  */
 #define rd_fetch(r, pos) { \
+	/*asm ("movq $2, %%rdi; movq $3, %%rsi; call *$1; movb %%al, $0" : "a" (r).b : "r" (r).pop, "D" (r).p, "S" pos : "rdi", "rsi", "rcx", "rax"); */ \
 	(r).b = (r).pop((r).p, pos); \
 }
 #define rd_fetch_fast(r, pos, sp, ep, dummy) { \

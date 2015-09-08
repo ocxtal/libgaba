@@ -26,6 +26,7 @@
 /**
  * register declarations. 
  */
+#define vec_size()					( 2 * sizeof(__m128i) )
 #define _vec_cell(v)				__m128i v##1, v##2
 #define _vec_cell_const(v, k)		__m128i const v##1 = _mm_set1_epi8(k), v##2 = _mm_set1_epi8(k)
 #define _vec_cell_reg(v)			__m128i register v##1, v##2
@@ -236,14 +237,14 @@
  * @macro vec_acc_load
  */
 #define vec_acc_load(p, acc) { \
-	(acc) = _mm_load_si128((__m128i *)p); (p) += sizeof(__m128i); \
+	(acc) = _mm_load_si128((__m128i *)(p)); \
 }
 
 /**
  * @macro vec_acc_store
  */
 #define vec_acc_store(p, acc) { \
-	_mm_store_si128((__m128i *)p, acc); (p) += sizeof(__m128i); \
+	_mm_store_si128((__m128i *)(p), acc); \
 }
 
 /**
@@ -343,19 +344,17 @@
  * load and store operations
  */
 #define vec_store(p, v) { \
-	_mm_store_si128((__m128i *)(p), v##1); p += sizeof(__m128i); \
-	_mm_store_si128((__m128i *)(p), v##2); p += sizeof(__m128i); \
+	_mm_store_si128((__m128i *)(p),     v##1); \
+	_mm_store_si128((__m128i *)(p) + 1, v##2); \
 }
 
 #define vec_store_packed(p, dv, dh) { \
 	_mm_store_si128( \
 		(__m128i *)(p), \
 		_mm_or_si128(_mm_slli_epi64((dh##1), 4), (dv##1))); \
-	p += sizeof(__m128i); \
 	_mm_store_si128( \
-		(__m128i *)(p), \
+		(__m128i *)(p) + 1, \
 		_mm_or_si128(_mm_slli_epi64((dh##2), 4), (dv##2))); \
-	p += sizeof(__m128i); \
 }
 
 #define vec_store_dvdh(p, dv, dh) { \
@@ -363,20 +362,20 @@
 }
 
 #define vec_load(p, v) { \
-	(v##1) = _mm_load_si128((__m128i *)(p)); p += sizeof(__m128i); \
-	(v##2) = _mm_load_si128((__m128i *)(p)); p += sizeof(__m128i); \
+	(v##1) = _mm_load_si128((__m128i *)(p)    ); \
+	(v##2) = _mm_load_si128((__m128i *)(p) + 1); \
 }
 
 #define vec_load_packed(p, dv, dh) { \
 	__m128i const mask = _mm_set1_epi8(0x0f); \
-	(dv##1) = _mm_load_si128((__m128i *)(p)); \
+	/** load vectors */ \
+	(dv##1) = _mm_load_si128((__m128i *)(p)    ); \
+	(dv##2) = _mm_load_si128((__m128i *)(p) + 1); \
+	/** unpack vectors */ \
 	(dh##1) = _mm_and_si128(_mm_srli_epi64((dv##1), 4), mask); \
 	(dv##1) = _mm_and_si128((dv##1), mask); \
-	p += sizeof(__m128i); \
-	(dv##2) = _mm_load_si128((__m128i *)(p)); \
 	(dh##2) = _mm_and_si128(_mm_srli_epi64((dv##2), 4), mask); \
 	(dv##2) = _mm_and_si128((dv##2), mask); \
-	p += sizeof(__m128i); \
 }
 
 #define vec_load_dvdh(p, dv, dh) { \
@@ -388,21 +387,21 @@
  */
 #define vec_store32(p, v) { \
 	__m128i t = v##1; \
-	vec_store(p, _mm_cvtepi8_epi32(t)); \
+	vec_store(p,                _mm_cvtepi8_epi32(t)); \
 	t = _mm_slli_si128(t, 4); \
-	vec_store(p, _mm_cvtepi8_epi32(t)); \
+	vec_store(p +   vec_size(), _mm_cvtepi8_epi32(t)); \
 	t = _mm_slli_si128(t, 4); \
-	vec_store(p, _mm_cvtepi8_epi32(t)); \
+	vec_store(p + 2*vec_size(), _mm_cvtepi8_epi32(t)); \
 	t = _mm_slli_si128(t, 4); \
-	vec_store(p, _mm_cvtepi8_epi32(t)); \
+	vec_store(p + 3*vec_size(), _mm_cvtepi8_epi32(t)); \
 	t = v##2; \
-	vec_store(p, _mm_cvtepi8_epi32(t)); \
+	vec_store(p + 4*vec_size(), _mm_cvtepi8_epi32(t)); \
 	t = _mm_slli_si128(t, 4); \
-	vec_store(p, _mm_cvtepi8_epi32(t)); \
+	vec_store(p + 5*vec_size(), _mm_cvtepi8_epi32(t)); \
 	t = _mm_slli_si128(t, 4); \
-	vec_store(p, _mm_cvtepi8_epi32(t)); \
+	vec_store(p + 6*vec_size(), _mm_cvtepi8_epi32(t)); \
 	t = _mm_slli_si128(t, 4); \
-	vec_store(p, _mm_cvtepi8_epi32(t)); \
+	vec_store(p + 7*vec_size(), _mm_cvtepi8_epi32(t)); \
 }
 
 /**
@@ -415,27 +414,27 @@
 	tmp = _mm_add_epi32(tmp, (bv)); \
 	tmp = _mm_sub_epi32(tmp, \
 		_mm_cvtepi8_epi32((t))); \
-	_mm_store_si128((__m128i *)p, tmp); p += sizeof(__m128i); \
+	_mm_store_si128((__m128i *)(p), tmp); \
 	(v##1) = _mm_srli_si128((v##1), 8); \
 	(t) = _mm_srli_si128((t), 4); \
 	tmp = _mm_cvtepi16_epi32((v##1)); \
 	tmp = _mm_add_epi32(tmp, (bv)); \
 	tmp = _mm_sub_epi32(tmp, \
 		_mm_cvtepi8_epi32((t))); \
-	_mm_store_si128((__m128i *)p, tmp); p += sizeof(__m128i); \
+	_mm_store_si128((__m128i *)(p) + 1, tmp); \
 	(t) = _mm_srli_si128((t), 4); \
 	tmp = _mm_cvtepi16_epi32((v##2)); \
 	tmp = _mm_add_epi32(tmp, (bv)); \
 	tmp = _mm_sub_epi32(tmp, \
 		_mm_cvtepi8_epi32((t))); \
-	_mm_store_si128((__m128i *)p, tmp); p += sizeof(__m128i); \
+	_mm_store_si128((__m128i *)(p) + 2, tmp); \
 	(v##2) = _mm_srli_si128((v##2), 8); \
 	(t) = _mm_srli_si128((t), 4); \
 	tmp = _mm_cvtepi16_epi32((v##2)); \
 	tmp = _mm_add_epi32(tmp, (bv)); \
 	tmp = _mm_sub_epi32(tmp, \
 		_mm_cvtepi8_epi32((t))); \
-	_mm_store_si128((__m128i *)p, tmp); p += sizeof(__m128i); \
+	_mm_store_si128((__m128i *)(p) + 3, tmp); \
 }
 
 /**
@@ -456,9 +455,9 @@
 	if((d) == TOP) { vec_assign(t, dv); } else { vec_assign(t, dh); } \
 	vec_subs(t, t, gv); \
 	/** expand and store lower 16 elems */ \
-	vec_store32_dvdh_intl(p, l, t1, base); \
+	vec_store32_dvdh_intl((__m128i *)(p),     l, t1, base); \
 	/** higher 16 elems */ \
-	vec_store32_dvdh_intl(p, h, t2, base); \
+	vec_store32_dvdh_intl((__m128i *)(p) + 4, h, t2, base); \
 }
 
 /**
@@ -466,17 +465,17 @@
  */
 #define vec_load32(p, v) { \
 	__m128i t1, t2, t3, t4; \
-	vec_load(p, t1); \
-	vec_load(p, t2); \
-	vec_load(p, t3); \
-	vec_load(p, t4); \
+	_mm_load_si128((__m128i *)(p),     t1); \
+	_mm_load_si128((__m128i *)(p) + 1, t2); \
+	_mm_load_si128((__m128i *)(p) + 2, t3); \
+	_mm_load_si128((__m128i *)(p) + 3, t4); \
 	v##1 = _mm_packs_epi32( \
 		_mm_packs_epi16(t1, t2), \
 		_mm_packs_epi16(t3, t4)); \
-	vec_load(p, t1); \
-	vec_load(p, t2); \
-	vec_load(p, t3); \
-	vec_load(p, t4); \
+	_mm_load_si128((__m128i *)(p) + 4, t1); \
+	_mm_load_si128((__m128i *)(p) + 5, t2); \
+	_mm_load_si128((__m128i *)(p) + 6, t3); \
+	_mm_load_si128((__m128i *)(p) + 7, t4); \
 	v##2 = _mm_packs_epi32( \
 		_mm_packs_epi16(t1, t2), \
 		_mm_packs_epi16(t3, t4)); \
@@ -496,8 +495,8 @@
 	carry = zv;						/** clear carry */ \
 	for(i = 0; i < 4; i++) { \
 		/** load 32bit vectors */ \
-		p = _mm_load_si128((__m128i *)pv); pv += sizeof(__m128i); \
-		c = _mm_load_si128((__m128i *)cv); cv += sizeof(__m128i); \
+		p = _mm_load_si128((__m128i *)(pv)); \
+		c = _mm_load_si128((__m128i *)(cv)); \
 		t1 = _mm_sub_epi32(c, p);	/** cv - pv */ \
 		/** shift by one element and make t */ \
 		ct = _mm_or_si128( \
@@ -517,8 +516,8 @@
 	/** load upper half */ \
 	for(i = 0; i < 4; i++) { \
 		/** load 32bit vectors */ \
-		p = _mm_load_si128((__m128i *)pv); pv += sizeof(__m128i); \
-		c = _mm_load_si128((__m128i *)cv); cv += sizeof(__m128i); \
+		p = _mm_load_si128((__m128i *)(pv) + 1); \
+		c = _mm_load_si128((__m128i *)(cv) + 1); \
 		t1 = _mm_sub_epi32(c, p);	/** cv - pv */ \
 		/** shift by one element and make t */ \
 		ct = _mm_or_si128( \

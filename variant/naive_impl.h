@@ -134,6 +134,9 @@
 #define naive_linear_fill_former_body(k, r, pdp) { \
 	/** nothing to do */ \
 }
+#define naive_linear_fill_former_body_cap(k, r, pdp) { \
+	naive_linear_fill_former_body(k, r, pdp); \
+}
 
 /**
  * @macro naive_linear_fill_go_down
@@ -142,6 +145,9 @@
 	/** increment local coordinate */ \
 	j++; \
 }
+#define naive_linear_fill_go_down_cap(k, r, pdp) { \
+	naive_linear_fill_go_down(k, r, pdp); \
+}
 
 /**
  * @macro naive_linear_fill_go_right
@@ -149,6 +155,9 @@
 #define naive_linear_fill_go_right(k, r, pdp) { \
 	/** increment local coordinate */ \
 	i++; \
+}
+#define naive_linear_fill_go_right_cap(k, r, pdp) { \
+	naive_linear_fill_go_right(k, r, pdp); \
 }
 
 /**
@@ -201,6 +210,14 @@
  */
 #define naive_linear_fill_latter_body_cap(k, r, pdp) { \
 	naive_linear_fill_latter_body_intl(k, r, pdp, rd_fetch_safe); \
+}
+
+/**
+ * @macro naive_linear_fill_empty_body
+ */
+#define naive_linear_fill_empty_body(k, r, pdp) { \
+	pdp += bpl(); \
+	dir_empty(r, k, pdp, p); \
 }
 
 /**
@@ -301,7 +318,7 @@
 	_tail(pdp, v) = v; \
 	_tail(pdp, bpc) = 8*sizeof(cell_t); \
 	_tail(pdp, d2) = dir_raw(r); \
-	/** save p-coordinate at the beginning of the block */ \
+	/** save max */ \
 	_head(k->pdp, max) = k->max; \
 }
 
@@ -341,7 +358,7 @@
 #define naive_linear_trace_decl(k, r, pdp) \
 	dir_t r; \
 	cell_t *pdg, *pvh; \
-	cell_t score; \
+	cell_t cc;		/** current cell */ \
 	int64_t i, j, p, q, sp;
 
 /**
@@ -354,7 +371,7 @@
 	pvh = pdg; pdg -= BW; \
 	if(((p - sp) & (BLK-1)) == 0) { \
 		dir_stride_jam(r, k, pdp, p, sp); \
-		pdg = (cell_t *)((uint8_t *)pdg - naive_linear_jam_size()); \
+		pdg = (cell_t *)((uint8_t *)pdg - jam_size()); \
 	} \
 }
 
@@ -370,18 +387,20 @@
 	sp = _tail(pdp, p); \
 	debug("(%lld, %lld), (%lld, %lld), sp(%lld)", p, q, i, j, sp); \
 	/** initialize pointers */ \
-	debug("num(%lld), addr(%lld)", dynamic_blk_num(p-sp, 0), dynamic_blk_addr(p-sp, 0)); \
-	pdg = (cell_t *)(k->pdp + addr(p - sp, 0)); \
+	debug("num(%lld), addr(%lld)", blk_num(p-sp, 0), blk_addr(p-sp, 0)); \
+	pdg = (cell_t *)(pdp + addr(p - sp, 0)); \
 	dir_set_pdr(r, k, pdp, p, sp); \
 	/** load score */ \
-	score = pdg[q]; \
-	for(int a = -BW/2; a < BW/2; a++) { \
-		debug("%d", pdg[a]); \
-	} \
+	cc = pdg[q]; \
 	/** windback pointers from p+1 to p */ \
 	p++; \
 	naive_linear_trace_windback_ptr(k, r, pdp); \
 }
+
+#if 0
+
+
+#endif
 
 /**
  * @macro naive_linear_trace_body
@@ -396,24 +415,32 @@
 	cell_t h, v; \
 	cell_t diag = pdg[q + naive_linear_topleftq(r, k)]; \
 	cell_t sc = rd_cmp(k->a, k->b) ? k->m : k->x; \
-	if(score == (diag + sc)) { \
+	for(int a = i-20; a < i+20; a++) { putchar(k->a.p[a]); } \
+	printf("\n"); \
+	for(int a = j-20; a < j+20; a++) { putchar(k->b.p[a]); } \
+	printf("\n"); \
+	for(int a = -20; a < 20; a++) { putchar(a == -1 ? '^' : ' '); } \
+	printf("\n"); \
+	debug("(%lld, %lld), (%lld, %lld), d(%d), v(%d), h(%d), sc(%d), cc(%d)", \
+		p, q, i, j, diag, pvh[q + naive_linear_leftq(r, k)], pvh[q + naive_linear_topq(r, k)], sc, cc); \
+	if(cc == (diag + sc)) { \
 		/** update direction and pointers */ \
 		q += naive_linear_topleftq(r, k); \
 		naive_linear_trace_windback_ptr(k, r, pdp); \
 		i--; /*rd_fetch(k->a, i-1);*/ \
 		j--; /*rd_fetch(k->b, j-1);*/ \
 		if(sc == k->m) { wr_pushm(k->l); } else { wr_pushx(k->l); } \
-		score = diag; \
-	} else if(score == ((h = pvh[q + naive_linear_leftq(r, k)]) + k->gi)) { \
+		cc = diag; \
+	} else if(cc == ((h = pvh[q + naive_linear_leftq(r, k)]) + k->gi)) { \
 		q += naive_linear_leftq(r, k); \
 		i--; /*rd_fetch(k->a, i-1);*/ \
 		wr_pushd(k->l); \
-		score = h; \
-	} else if(score == ((v = pvh[q + naive_linear_topq(r, k)]) + k->gi)) { \
+		cc = h; \
+	} else if(cc == ((v = pvh[q + naive_linear_topq(r, k)]) + k->gi)) { \
 		q += naive_linear_topq(r, k); \
 		j--; /*rd_fetch(k->b, j-1);*/ \
 		wr_pushi(k->l); \
-		score = v; \
+		cc = v; \
 	} else { \
 		debug("out of band"); \
 		return SEA_ERROR_OUT_OF_BAND; \
@@ -433,16 +460,16 @@
  * @brief returns negative if sw traceback reached zero
  */
 #define naive_linear_trace_test_sw(k, r, pdp) ( \
-	((k->alg == SW) ? -1 : 0) & (score - 1) \
+	((k->alg == SW) ? -1 : 0) & (cc - 1) \
 )
 
 /**
  * @macro naive_linear_trace_check_term
- * @brief returns false if the next traceback loop can't be executed
+ * @brief returns false if the next traceback loop can be executed
  */
 #define naive_linear_trace_check_term(k, r, pdp) ( \
 	( naive_linear_trace_test_bound(k, r, pdp) \
-	| naive_linear_trace_test_sw(k, r, pdp)) >= 0 \
+	| naive_linear_trace_test_sw(k, r, pdp)) < 0 \
 )
 
 /**

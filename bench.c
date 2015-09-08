@@ -168,11 +168,11 @@ int main(int argc, char *argv[])
 	d = sea_init(
 		  SEA_SEA | SEA_LINEAR_GAP_COST | SEA_DYNAMIC
 		| SEA_SEQ_A_2BIT | SEA_SEQ_B_2BIT | SEA_ALN_ASCII,
-		2, -3, -5, -1, 60, 30, 30);
+		2, -3, -5, -1, 60);
 	g = sea_init(
 		  SEA_SEA | SEA_LINEAR_GAP_COST | SEA_GUIDED
 		| SEA_SEQ_A_2BIT | SEA_SEQ_B_2BIT | SEA_ALN_ASCII,
-		2, -3, -5, -1, 60, 30, 30);
+		2, -3, -5, -1, 60);
 	bench_init(fill);
 	bench_init(search);
 	bench_init(trace);

@@ -18,6 +18,7 @@
 #include <stddef.h>				/** offsetof */
 #include "sea.h"				/** global declarations */
 #include "util/util.h"			/** internal declarations */
+#include "arch/arch_util.h"		/** architecture-dependent utilities */
 #include "variant/variant.h"	/** dynamic programming variants */
 
 extern bench_t fill, search, trace;
@@ -32,10 +33,13 @@ func2(VARIANT_LABEL, _fill)(
 	struct sea_local_context *this,
 	uint8_t *pdp)
 {
+	int64_t a;								/** iteration counter */
 	struct sea_local_context register *k = this;
 	int32_t stat = CONT;
  
 	debug("enter fill (%p), pdp(%p)", func2(VARIANT_LABEL, _fill), pdp);
+
+	dump(k, sizeof(struct sea_local_context));
 
 	bench_start(fill);
 	fill_decl(k, r, pdp);					/** declare variables */
@@ -44,7 +48,7 @@ func2(VARIANT_LABEL, _fill)(
 	/** bulk fill */
 	while(!fill_check_term(k, r, pdp)) {
 		fill_start(k, r, pdp);
-		for(int a = 0; a < BLK/2; a++) {
+		for(a = 0; a < BLK; a++) {
 			/** unroll loop: 1 */
 			fill_former_body(k, r, pdp);	/** former calculations */
 			if(dir(r) == TOP) {
@@ -53,7 +57,7 @@ func2(VARIANT_LABEL, _fill)(
 				fill_go_right(k, r, pdp);	/** shift left */
 			}
 			fill_latter_body(k, r, pdp);	/** latter calculations */
-			
+#if 0
 			/** unroll loop: 2 */
 			fill_former_body(k, r, pdp);	/** former calculations */
 			if(dir(r) == TOP) {
@@ -62,6 +66,7 @@ func2(VARIANT_LABEL, _fill)(
 				fill_go_right(k, r, pdp);	/** shift left */
 			}
 			fill_latter_body(k, r, pdp);	/** latter calculations */
+#endif
 		}
 		fill_end(k, r, pdp);
 	}
@@ -69,51 +74,57 @@ func2(VARIANT_LABEL, _fill)(
 	/** check flags */
 	debug("check flags");
 	if(fill_test_xdrop(k, r, pdp) < 0) {
+		debug("term");
 		stat = TERM;  goto label2(VARIANT_LABEL, _fill_finish_label);
 	} else if(fill_test_chain(k, r, pdp) < 0) {
+		debug("chain");
 		stat = CHAIN; goto label2(VARIANT_LABEL, _fill_finish_label);
 	} else if(fill_test_mem(k, r, pdp) < 0) {
+		debug("mem");
 		stat = MEM;   goto label2(VARIANT_LABEL, _fill_finish_label);
 	}
 
 	/** cap fill */
 	debug("cap fill");
 	stat = TERM;
-	while(1) {
+	int64_t t = 0;							/** termination flag */
+	while(t == 0) {
 		fill_start(k, r, pdp);
-		for(int a = 0; a < BLK/2; a++) {
+		for(a = 0; a < BLK; a++) {
 			/** unroll loop: 1 */
-			if(fill_check_term_cap(k, r, pdp)) {
-				goto label2(VARIANT_LABEL, _fill_end_label);
-			}
-			fill_former_body(k, r, pdp);
+			if(fill_check_term_cap(k, r, pdp)) { break; }
+			fill_former_body_cap(k, r, pdp);
 			if(dir(r) == TOP) {
-				fill_go_down(k, r, pdp);
+				fill_go_down_cap(k, r, pdp);
 			} else {
-				fill_go_right(k, r, pdp);
+				fill_go_right_cap(k, r, pdp);
 			}
 			fill_latter_body_cap(k, r, pdp);
-
+#if 0
 			/** unroll loop: 2 */
-			if(fill_check_term_cap(k, r, pdp)) {
-				goto label2(VARIANT_LABEL, _fill_end_label);
-			}
-			fill_former_body(k, r, pdp);
+			if(fill_check_term_cap(k, r, pdp)) { pdp -= bpl(); break; }
+			fill_former_body_cap(k, r, pdp);
 			if(dir(r) == TOP) {
-				fill_go_down(k, r, pdp);
+				fill_go_down_cap(k, r, pdp);
 			} else {
-				fill_go_right(k, r, pdp);
+				fill_go_right_cap(k, r, pdp);
 			}
 			fill_latter_body_cap(k, r, pdp);
+#endif
+		}
+		for(; a < BLK; t++, a++) {		/** increment termination flag */
+			fill_empty_body(k, r, pdp);
+//			fill_empty_body(k, r, pdp);
 		}
 		fill_end(k, r, pdp);
 	}
 
 	/** finish */
-label2(VARIANT_LABEL, _fill_end_label):
-	fill_end(k, r, pdp);
 label2(VARIANT_LABEL, _fill_finish_label):
 	fill_finish(k, r, pdp);					/** store vectors and coordinates to memory */
+
+	/** write back pdp */
+	k->pdp = pdp;
 
 	bench_end(fill);
 	return(stat);
@@ -133,7 +144,7 @@ func2(VARIANT_LABEL, _prep_next_mem)(
 	this->size *= 2;
 	p = (uint8_t *)malloc(this->size);
 	/** copy the content to be passed */
-	memcpy(p, this->pdp - sizeof(struct sea_joint_tail), sizeof(struct sea_joint_tail));
+	_aligned_block_memcpy(p, this->pdp - sizeof(struct sea_joint_tail), sizeof(struct sea_joint_tail));
 	this->pdp = p + sizeof(struct sea_joint_tail);
 	return(p);
 }
@@ -148,7 +159,7 @@ func2(VARIANT_LABEL, _clean_next_mem)(
 	uint8_t *pdp,
 	uint8_t *p)
 {
-	memcpy(pdp, p + sizeof(struct sea_joint_tail), sizeof(struct sea_joint_head));
+	_aligned_block_memcpy(pdp, p + sizeof(struct sea_joint_tail), sizeof(struct sea_joint_head));
 	this->size /= 2;
 	this->pdp = pdp;
 	return(0);
@@ -190,9 +201,9 @@ func2(VARIANT_LABEL, _chain)(
 		/** turn and go back (band reached the corner of the matrix) */
 		if(k->alg == NW) {
 			/** load terminal coordinate to (mi, mj) and (mp, mq) */
-			debug("set terminal");
 			set_terminal(k, pdp);
 		}
+		debug("set terminal p(%lld), q(%lld), i(%lld)", k->mp, k->mq, k->mi);
 		_head(k->pdp, p) = k->mp;
 		_head(k->pdp, q) = k->mq;
 		_head(k->pdp, i) = k->mi;
@@ -217,7 +228,7 @@ func2(VARIANT_LABEL, _trace)(
 
 	trace_decl(k, r, pdp);
 	trace_init(k, r, pdp);
-	while(trace_check_term(k, r, pdp)) {
+	while(!trace_check_term(k, r, pdp)) {
 		trace_body(k, r, pdp);
 	}
 	trace_finish(k, r, pdp);
@@ -246,8 +257,15 @@ func(VARIANT_LABEL)(
 	/** chain */
 	func2(VARIANT_LABEL, _chain)(k, pdp, stat);
 
+//	dump(pdp, k->pdp-pdp);
+
 	/** trace */
-	if(k->do_trace) {
+	debug("pdp(%p), k->pdp(%p)", pdp, k->pdp);
+	int64_t sp = _tail(pdp, p);
+	int64_t ep = _tail(k->pdp, p);
+	int64_t p  = _head(k->pdp, p);
+	debug("trace sp(%lld), ep(%lld), p(%lld), i(%lld)", sp, ep, p, _head(k->pdp, i));
+	if((uint64_t)(p - sp) < (ep - sp)) {
 		stat = func2(VARIANT_LABEL, _trace)(k, pdp);
 	}
 	k->pdp = pdp;

@@ -14,6 +14,7 @@
 #include <ctype.h>				/* isdigit */
 #include "sea.h"				/* definitions of public APIs and structures */
 #include "util/util.h"			/* definitions of internal utility functions */
+#include "arch/arch_util.h"		/* architecture-dependent utilities */
 // #include "build/config.h"
 
 #if HAVE_ALLOCA_H
@@ -47,8 +48,8 @@ struct sea_aln_funcs const aln_table[3][2] = {
 		{NULL, NULL, NULL, NULL, NULL, NULL}
 	},
 	{
-		{naive_linear_dynamic, NULL, NULL, NULL, NULL, NULL},
-		{NULL, NULL, NULL, NULL, NULL, NULL}
+		{twig_linear_dynamic, branch_linear_dynamic, NULL, NULL, NULL, NULL},
+		{twig_linear_guided, branch_linear_guided, NULL, NULL, NULL, NULL}
 	},
 	{
 		{NULL, NULL, NULL, NULL, NULL, NULL},
@@ -98,7 +99,7 @@ struct sea_writer const wr_table[4][2] = {
  */
 void *sea_aligned_malloc(size_t size, size_t align)
 {
-	void *ptr;
+	void *ptr = NULL;
 	posix_memalign(&ptr, align, size);
 	debug("posix_memalign(%p)", ptr);
 	return(ptr);
@@ -308,8 +309,8 @@ sea_init_joint_tail(
 	jt->bpc = 8;			/** 8bit */
 	jt->d2 = SEA_TOP<<2 | SEA_LEFT;
 
-	#define _Q(x)		( (x) - ctx->k.bw/2 )
-	for(i = 0; i < ctx->k.bw; i++) {
+	#define _Q(x)		( (x) - ctx->k.bw/4 )
+	for(i = 0; i < ctx->k.bw/2; i++) {
 		ctx->pv[i] = -ctx->k.gi + (_Q(i) < 0 ? -_Q(i) : _Q(i)+1) * (2 * ctx->k.gi - ctx->k.m);
 		ctx->cv[i] =              (_Q(i) < 0 ? -_Q(i) : _Q(i)  ) * (2 * ctx->k.gi - ctx->k.m);
 	}
@@ -350,7 +351,7 @@ sea_t *sea_init(
 	debug("initializing context");
 
 	/** malloc sea_context */
-	ctx = (struct sea_context *)malloc(sizeof(struct sea_context));
+	ctx = (struct sea_context *)sea_aligned_malloc(sizeof(struct sea_context), 32);
 	if(ctx == NULL) {
 		debug("out of mem");
 		error_label = SEA_ERROR_OUT_OF_MEM;
@@ -463,7 +464,7 @@ sea_align_intl(
 	int64_t const base_size = sizeof(struct sea_local_context)
 							+ sizeof(struct sea_joint_tail);
 	struct sea_local_context *k = (struct sea_local_context *)base;
-	memcpy(k, &ctx->k, base_size);
+	_aligned_block_memcpy(k, &ctx->k, base_size);
 	k->pdp = base + base_size;
 	k->tdp = base + mem_size;
 	k->asp = asp;
@@ -473,9 +474,9 @@ sea_align_intl(
 
 	/** initialize io */
 	if(dir == ALN_FW) {
-		memcpy(&k->l, &ctx->fw, sizeof(struct sea_writer));
+		_aligned_block_memcpy(&k->l, &ctx->fw, sizeof(struct sea_writer));
 	} else {
-		memcpy(&k->l, &ctx->rv, sizeof(struct sea_writer));
+		_aligned_block_memcpy(&k->l, &ctx->rv, sizeof(struct sea_writer));
 	}
 
 	/** initialize alignment function pointers and direction array */
@@ -494,6 +495,9 @@ sea_align_intl(
 	/** set pointers */
 	k->a.p = (uint8_t *)a;			/** sequence a */
 	k->b.p = (uint8_t *)b;			/** sequence b */
+
+	/** set coordinate */
+	_tail(k->pdp, i) += asp;
 
 	/* do alignment */
 	if((error_label = k->f->twig(k)) != SEA_SUCCESS) {

@@ -12,13 +12,14 @@
 // #include "../arch/dir.h"		/** simd appender */
 #include <stdint.h>
 
+#ifndef _DIR_H_INCLUDED
+
 /**
  * @macro BLK
  * @brief block split length
  */
 #define BLK 		( 32 )
 
-#ifndef _DIR_H_INCLUDED
 /**
  * 2-bit packed direction holder
  */
@@ -29,12 +30,10 @@
 	(v) = 0; \
 }
 #define dir_vec_append(v, d) { \
-	debug("v(%llx), d(%d)", v, d); \
-	(v) = ((v)>>2) | (((uint64_t)(d))<<62); \
+	(v) = ((v)>>2) | (((uint64_t)(d))<<2*(BLK-1)); \
 }
 #define dir_vec_store(ptr, v) { \
-	debug("v(%llx)", v); \
-	*((uint64_t *)ptr) = (v); ptr += dir_vec_size(); \
+	*((uint64_t *)ptr) = (v);\
 }
 #define dir_vec_stride_size()		( bpb() )
 #define dir_vec_base_addr(p, sp) ( \
@@ -43,8 +42,20 @@
 	- dr_size() \
 )
 #define dir_vec_acc(ptr, p, sp) ( \
-	0x03 & ((*((uint64_t *)ptr))>>((((p) - (sp)) & (BLK-1))<<1)) \
+	0x03 & ((*((uint64_t *)(ptr)))>>((((p) - (sp)) & (BLK-1))<<1)) \
 )
+
+/**
+ * calc diffs
+ */
+#define dir_vec_sum_i(ptr, dp) ( \
+	(int64_t)(BLK - 1 - (dp) \
+		- popcnt( \
+			((*((uint64_t *)(ptr)) & 0x5555555555555555)>>((dp)<<1))>>2) \
+		) \
+		/*- popcnt(*((uint64_t *)(ptr)) & (0x5555555555555555<<((p)<<1))))*/ \
+)
+
 #endif /* #ifndef _DIR_H_INCLUDED */
 
 /**
@@ -101,6 +112,7 @@ typedef struct _dir dir_t;
 	dir_vec_setzero((r).v); \
 	(r).pdr = NULL; \
 	(r).d2 = _tail((dp), d2); \
+	dir_vec_append((r).v, (r).d2); \
 }
 
 /**
@@ -120,9 +132,16 @@ typedef struct _dir dir_t;
 #define dynamic_dir_det_next(r, k, dp, p) { \
 	(p)++; \
 	uint8_t d = dir_exp_top(r, k, dp) | dir_exp_bottom(r, k, dp); \
-	debug("dynamic band: d(%d)", d); \
 	(r).d2 = (d<<2) | ((r).d2>>2); \
 	dir_vec_append((r).v, 0x03 & (r).d2); \
+}
+
+/**
+ * @macro dynamic_dir_empty
+ * @brief empty body
+ */
+#define dynamic_dir_empty(r, k, dp, p) { \
+	dir_vec_append((r).v, 0); \
 }
 
 /**
@@ -130,7 +149,7 @@ typedef struct _dir dir_t;
  */
 #define dynamic_dir_end_block(r, k, dp, p) { \
 	/** store direction vector at the end of the pdp */ \
-	dir_vec_store(dp, (r).v); \
+	dir_vec_store(dp, (r).v); (dp) += dir_vec_size(); \
 }
 
 /**
@@ -138,8 +157,17 @@ typedef struct _dir dir_t;
  */
 #define dynamic_dir_set_pdr(r, k, dp, p, sp) { \
 	/** calculate (virtual) pdr */ \
+	(r).d2 = 0; \
 	(r).pdr = (uint8_t *)(dp) + dir_vec_base_addr(p, sp); \
 }
+
+/**
+ * @macro dynamic_dir_sum_i_blk
+ * @brief calculate sum of diff_i from p to the end of the block
+ */
+#define dynamic_dir_sum_i_blk(r, k, dp, p, sp) ( \
+	dir_vec_sum_i((r).pdr, ((p) - (sp)) & (BLK-1)) \
+)
 
 /**
  * @macro dynamic_dir_load_backward
