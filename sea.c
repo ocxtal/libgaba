@@ -48,8 +48,8 @@ struct sea_aln_funcs const aln_table[3][2] = {
 		{NULL, NULL, NULL, NULL, NULL, NULL}
 	},
 	{
-		{twig_linear_dynamic, branch_linear_dynamic, NULL, NULL, NULL, NULL},
-		{twig_linear_guided, branch_linear_guided, NULL, NULL, NULL, NULL}
+		{twig_linear_dynamic, branch_linear_dynamic, trunk_linear_dynamic, NULL, NULL, NULL},
+		{twig_linear_guided, branch_linear_guided, trunk_linear_guided, NULL, NULL, NULL}
 	},
 	{
 		{NULL, NULL, NULL, NULL, NULL, NULL},

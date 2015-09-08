@@ -319,7 +319,7 @@
 	_tail(pdp, bpc) = 8*sizeof(cell_t); \
 	_tail(pdp, d2) = dir_raw(r); \
 	/** save max */ \
-	_head(k->pdp, max) = k->max; \
+	/*_head(k->pdp, max) = k->max;*/ \
 }
 
 /**
@@ -368,10 +368,10 @@
 	/** load the next direction pointer */ \
 	dir_load_backward(r, k, pdp, p, sp); \
 	/** update pdg, pvh, and ptb */ \
-	pvh = pdg; pdg -= BW; \
+	pvh = pdg; pdg -= bpl() / sizeof(cell_t); \
 	if(((p - sp) & (BLK-1)) == 0) { \
 		dir_stride_jam(r, k, pdp, p, sp); \
-		pdg = (cell_t *)((uint8_t *)pdg - jam_size()); \
+		pdg -= jam_size() / sizeof(cell_t); \
 	} \
 }
 
@@ -479,6 +479,7 @@
 	_head(pdp, p) = p; \
 	_head(pdp, q) = q; \
 	_head(pdp, i) = i; \
+	_head(pdp, score) = cc; \
 }
 
 #endif /* #ifndef _NAIVE_H_INCLUDED */

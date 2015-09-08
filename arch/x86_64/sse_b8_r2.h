@@ -30,8 +30,15 @@
 #define _vec_cell(v)				__m128i v##1, v##2
 #define _vec_cell_const(v, k)		__m128i const v##1 = _mm_set1_epi8(k), v##2 = _mm_set1_epi8(k)
 #define _vec_cell_reg(v)			__m128i register v##1, v##2
+
+/** for score accumulators (int32_t array) */
+#define vec_acc_size()				( sizeof(__m128i) )
 #define _vec_acc(v)					__m128i v
+
+/** for constants (m - 2g and x - 2g) */
 #define _vec_single_const(v, k)		__m128i const v = _mm_set1_epi8(k)
+
+/** for character vectors */
 #define _vec_char_reg(v)			__m128i register v##1, v##2
 
 /**
@@ -203,7 +210,7 @@
 #define vec_acc_scl(acc)		vec_acc(acc, 2)
 #define vec_acc_scc(acc)		vec_acc(acc, 1)
 #define vec_acc_scu(acc)		vec_acc(acc, 2) - vec_acc(acc, 0)
-#define vec_add_diff(acc)		vec_acc(acc, 0)
+#define vec_acc_diff(acc)		vec_acc(acc, 0)
 
 /**
  * @macro vec_acc_accum_max
@@ -222,8 +229,8 @@
 	/** add difference */ \
 	acc = _mm_add_epi32(acc, \
 		_mm_sub_epi32( \
-			_mm_shuffle_epi8(v##2, shuf),; \
-			_mm_and_si128(v##1, mask))), \
+			_mm_shuffle_epi8(v##2, shuf), \
+			_mm_and_si128(v##1, mask))); \
 	/** increment call counter and compensate gi */ \
 	acc = _mm_add_epi32(acc, inc); \
 	/** take max */ \
@@ -380,6 +387,123 @@
 
 #define vec_load_dvdh(p, dv, dh) { \
 	vec_load_packed(p, dv, dh); \
+}
+
+#if 0
+
+
+	for(i = 0; i < 4; i++) { \
+		if(i == 2) { (dv##1) = (dv##2); (dh##1) = (dh##2); } \
+		/** load 32bit vectors */ \
+		debug("load i(%d)", i); \
+		p = _mm_load_si128(pv + i); \
+		c = _mm_load_si128(cv + i); \
+		vec_print8(stdout, p); \
+		vec_print8(stdout, c); \
+		t1 = _mm_sub_epi16(c, p);	/** cv - pv */ \
+		/** shift by one element and make t */ \
+		ct = _mm_or_si128( \
+			_mm_slli_si128(c, 2), \
+			_mm_srli_si128(carry, 14)); /** cv<<1 */ \
+		vec_print8(stdout, ct); \
+		t2 = _mm_sub_epi16(ct, p);	/** cv<<1 - pv */ \
+		vec_print8(stdout, t1); \
+		vec_print8(stdout, t2); \
+		/** append to destination */ \
+		(dh##2) = _mm_or_si128( \
+			_mm_srli_si128(dh##2, 8), \
+			_mm_packs_epi16(zv, t1)); \
+		(dv##2) = _mm_or_si128( \
+			_mm_srli_si128(dv##2, 8), \
+			_mm_packs_epi16(zv, t2)); \
+		vec_print8(stdout, dh##2); \
+		vec_print8(stdout, dv##2); \
+		/** update carry */ \
+		carry = c; \
+	} \
+
+	/** adjust direction */ \
+	if(dir == TOP) { \
+		/** dv <- dh, dh <- dv>>1 */ \
+		vec_shift_r(t, dv); \
+		vec_assign(dv, dh); \
+		vec_assign(dh, t); \
+	} else { \
+		vec_insert_lsb(dv, 0); \
+	} \
+
+
+#endif
+
+/**
+ * load 16bit vector, convert it to a pair of 8bit diff vectors
+ */
+#define vec_load16_dvdh(ps, pt, dv, dh, gi, dir) { \
+	int i; \
+	__m128i p1, p2, p3, p4, c1, c2, c3, c4; \
+	__m128i ct, carry, t1, t2; \
+	__m128i const gv = _mm_set1_epi8(gi); \
+	__m128i const zv = _mm_setzero_si128(); \
+	__m128i *pv = (__m128i *)(ps); \
+	__m128i *cv = (__m128i *)(pt); \
+	/** load */ \
+	carry = zv;						/** clear carry */ \
+	p1 = _mm_load_si128(pv); \
+	p2 = _mm_load_si128(pv + 1); \
+	p3 = _mm_load_si128(pv + 2); \
+	p4 = _mm_load_si128(pv + 3); \
+	c1 = _mm_load_si128(cv); \
+	c2 = _mm_load_si128(cv + 1); \
+	c3 = _mm_load_si128(cv + 2); \
+	c4 = _mm_load_si128(cv + 3); \
+	if((0x01 & (dir)) == SEA_UE_TOP) { \
+		debug("load top"); \
+		(dv##1) = _mm_packs_epi16( \
+			_mm_sub_epi16(c1, p1), _mm_sub_epi16(c2, p2)); \
+		(dv##2) = _mm_packs_epi16( \
+			_mm_sub_epi16(c3, p3), _mm_sub_epi16(c4, p4)); \
+		(dh##1) = _mm_packs_epi16( \
+			_mm_sub_epi16(c1, \
+				_mm_or_si128(_mm_srli_si128(p1, 2), _mm_slli_si128(p2, 14))), \
+			_mm_sub_epi16(c2, \
+				_mm_or_si128(_mm_srli_si128(p2, 2), _mm_slli_si128(p3, 14)))); \
+		(dh##2) = _mm_packs_epi16( \
+			_mm_sub_epi16(c3, \
+				_mm_or_si128(_mm_srli_si128(p3, 2), _mm_slli_si128(p4, 14))), \
+			_mm_sub_epi16(c4, \
+				_mm_srli_si128(p4, 2))); \
+		vec_insert_msb(dh, 0); \
+		vec_print8(stdout, dv##1); \
+		vec_print8(stdout, dv##2); \
+		vec_print8(stdout, dh##1); \
+		vec_print8(stdout, dh##2); \
+	} else { \
+		debug("load left"); \
+		(dh##1) = _mm_packs_epi16( \
+			_mm_sub_epi16(c1, p1), _mm_sub_epi16(c2, p2)); \
+		(dh##2) = _mm_packs_epi16( \
+			_mm_sub_epi16(c3, p3), _mm_sub_epi16(c4, p4)); \
+		(dv##1) = _mm_packs_epi16( \
+			_mm_sub_epi16(c1, \
+				_mm_slli_si128(p1, 2)), \
+			_mm_sub_epi16(c2, \
+				_mm_or_si128(_mm_slli_si128(p2, 2), _mm_srli_si128(p1, 14)))); \
+		(dv##2) = _mm_packs_epi16( \
+			_mm_sub_epi16(c3, \
+				_mm_or_si128(_mm_slli_si128(p3, 2), _mm_srli_si128(p2, 14))), \
+			_mm_sub_epi16(c4, \
+				_mm_or_si128(_mm_slli_si128(p4, 2), _mm_srli_si128(p3, 14)))); \
+		vec_insert_lsb(dv, 0); \
+		vec_print8(stdout, dv##1); \
+		vec_print8(stdout, dv##2); \
+		vec_print8(stdout, dh##1); \
+		vec_print8(stdout, dh##2); \
+	} \
+	/** add offset */ \
+	(dv##1) = _mm_subs_epi8(dv##1, gv); \
+	(dv##2) = _mm_subs_epi8(dv##2, gv); \
+	(dh##1) = _mm_subs_epi8(dh##1, gv); \
+	(dh##2) = _mm_subs_epi8(dh##2, gv); \
 }
 
 /**
@@ -581,6 +705,16 @@
 		b[23], b[22], b[21], b[20], b[19], b[18], b[17], b[16], \
 		b[15], b[14], b[13], b[12], b[11], b[10], b[9], b[8], \
 		b[7], b[6], b[5], b[4], b[3], b[2], b[1], b[0]); \
+}
+
+#define vec_print8(s, v) { \
+	int8_t b[16]; \
+	_mm_store_si128((__m128i *)b, v); \
+	fprintf(s, \
+/*		"[%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d]\n",*/ \
+		"[%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x]\n", \
+		(uint8_t)b[15], (uint8_t)b[14], (uint8_t)b[13], (uint8_t)b[12], (uint8_t)b[11], (uint8_t)b[10], (uint8_t)b[9], (uint8_t)b[8], \
+		(uint8_t)b[7], (uint8_t)b[6], (uint8_t)b[5], (uint8_t)b[4], (uint8_t)b[3], (uint8_t)b[2], (uint8_t)b[1], (uint8_t)b[0]); \
 }
 
 /**

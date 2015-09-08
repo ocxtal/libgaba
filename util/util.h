@@ -90,7 +90,7 @@ struct sea_writer {
  */
 struct sea_joint_head {
 	int64_t p, q, i;			/*!< (24) path start coordinate */
-	int32_t max;				/*!< (4) max */
+	int32_t score;				/*!< (4) score at (p, q) */
 	uint8_t _pad[4];			/*!< (4) padding */
 };
 

@@ -169,18 +169,23 @@
 #define twig_linear_fill_test_mem(k, r, pdp) 		branch_linear_fill_test_mem(k, r, pdp)
 #define twig_linear_fill_test_mem_cap(k, r, pdp)	branch_linear_fill_test_mem_cap(k, r, pdp)
 
+#if 0
 /**
  * @macro twig_linear_fill_test_chain
  */
 #define twig_linear_fill_test_chain(k, r, pdp) 		branch_linear_fill_test_chain(k, r, pdp)
 #define twig_linear_fill_test_chain_cap(k, r, pdp)	branch_linear_fill_test_chain_cap(k, r, pdp)
-
-#if 0
-/**
- * @macro twig_linear_fill_check_alt
- */
-#define twig_linear_fill_check_alt(k, r, pdp)		( 0 )
 #endif
+
+/**
+ * @macro twig_linear_fill_test_chain
+ */
+#define twig_linear_fill_test_chain(k, r, pdp) ( \
+	/*(CELL_MAX / k->m)*/ 32 - p \
+)
+#define twig_linear_fill_test_chain_cap(k, r, pdp) ( \
+	twig_linear_fill_test_chain(k, r, pdp) \
+)
 
 /**
  * @macro twig_linear_fill_check_term

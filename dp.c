@@ -39,12 +39,11 @@ func2(VARIANT_LABEL, _fill)(
  
 	debug("enter fill (%p), pdp(%p)", func2(VARIANT_LABEL, _fill), pdp);
 
-	dump(k, sizeof(struct sea_local_context));
-
 	bench_start(fill);
 	fill_decl(k, r, pdp);					/** declare variables */
 	fill_init(k, r, pdp);					/** load vectors and coordinates to registers */
 
+	debug("start loop");
 	/** bulk fill */
 	while(!fill_check_term(k, r, pdp)) {
 		fill_start(k, r, pdp);
@@ -253,6 +252,8 @@ func(VARIANT_LABEL)(
 
 	/** fill_in */
 	int32_t stat = func2(VARIANT_LABEL, _fill)(k, pdp);
+
+	dump(pdp, k->pdp - pdp);
 
 	/** chain */
 	func2(VARIANT_LABEL, _chain)(k, pdp, stat);

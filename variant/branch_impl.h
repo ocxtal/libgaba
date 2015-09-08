@@ -268,8 +268,8 @@
  * @macro branch_linear_fill_test_xdrop
  */
 #define branch_linear_fill_test_xdrop(k, r, pdp) ( \
-	  (int64_t)(XSEA - k->alg - 1) \
-	& (int64_t)(vec_center(cv) + k->tx - vec_center(maxv)) \
+	  ((int64_t)XSEA - k->alg - 1) \
+	& ((int64_t)vec_center(cv) + k->tx - vec_center(maxv)) \
 )
 #define branch_linear_fill_test_xdrop_cap(k, r, pdp) ( \
 	branch_linear_fill_test_xdrop(k, r, pdp) \
@@ -307,7 +307,7 @@
  * @macro branch_linear_fill_test_chain
  */
 #define branch_linear_fill_test_chain(k, r, pdp) ( \
-	(CELL_MAX / k->m) - p \
+	/*(CELL_MAX / k->m)*/ 64 - p \
 )
 #define branch_linear_fill_test_chain_cap(k, r, pdp) ( \
 	branch_linear_fill_test_chain(k, r, pdp) \
@@ -350,7 +350,7 @@
 	_tail(pdp, bpc) = 8*sizeof(cell_t); \
 	_tail(pdp, d2) = dir_raw(r); \
 	/** save max */ \
-	_head(k->pdp, max) = max; \
+	/*_head(k->pdp, max) = max;*/ \
 	/** search max if updated */ \
 	if(k->alg != NW && max >= k->max) { \
 		k->max = max; \
@@ -404,7 +404,7 @@
 
 #define branch_linear_trace_search_max(k, r, pdp) { \
 	/** vectors */ \
-	_vec_cell_const(mv, _head(pdp, max)); \
+	_vec_cell_const(mv, _head(k->pdp, score)); \
 	_vec_cell_reg(tv); \
 	/** p-coordinate */ \
 	sp = _tail(pdp, p); \
