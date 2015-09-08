@@ -189,7 +189,7 @@
 	} \
 	vec_shift_r(tmp2, cv); \
 	vec_insert_msb(tmp2, CELL_MIN); \
-	fetch(k->b, j+BW/2-1, k->asp, k->aep, 128); \
+	fetch(k->b, j+BW/2-1, k->bsp, k->bep, 255); \
 	j++; \
 	pusht(rd_decode(k->b), wt); \
 }
@@ -210,7 +210,7 @@
 	} \
 	vec_shift_l(tmp2, cv); \
 	vec_insert_lsb(tmp2, CELL_MIN); \
-	fetch(k->a, i+BW/2, k->bsp, k->bep, 255); \
+	fetch(k->a, i+BW/2, k->asp, k->aep, 128); \
 	i++; \
 	pushq(rd_decode(k->a), wq); \
 }
@@ -279,10 +279,10 @@
  * @macro branch_linear_fill_test_bound
  */
 #define branch_linear_fill_test_bound(k, r, pdp) ( \
-	(k->aep-i-BLK) | (k->bep-j-BLK) \
+	naive_linear_fill_test_bound(k, r, pdp) \
 )
 #define branch_linear_fill_test_bound_cap(k, r, pdp) ( \
-	(k->aep-i+BW/2) | (k->bep-j+BW/2) | (cop(k->aep, k->bep, BW)-p) \
+	naive_linear_fill_test_bound_cap(k, r, pdp) \
 )
 
 /**
@@ -334,7 +334,7 @@
  */
 #define branch_linear_fill_finish(k, r, pdp) { \
 	/** retrieve chain vector pointers */ \
-	uint8_t *v = pdp - 2*branch_linear_bpl() - branch_linear_jam_size(); \
+	uint8_t *v = pdp - jam_size() - 2*bpl(); \
 	/** aggregate max */ \
 	int32_t max; \
 	vec_hmax(max, maxv); \
@@ -485,6 +485,9 @@
 	/** windback pointers from p+1 to p */ \
 	p++; \
 	naive_linear_trace_windback_ptr(k, r, pdp); \
+	/** fetch characters */ \
+	rd_fetch(k->a, i-1); \
+	rd_fetch(k->b, j-1); \
 }
 
 /**

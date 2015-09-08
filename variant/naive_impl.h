@@ -395,6 +395,9 @@
 	/** windback pointers from p+1 to p */ \
 	p++; \
 	naive_linear_trace_windback_ptr(k, r, pdp); \
+	/** fetch characters */ \
+	rd_fetch(k->a, i-1); \
+	rd_fetch(k->b, j-1); \
 }
 
 #if 0
@@ -408,9 +411,6 @@
 #define naive_linear_trace_body(k, r, pdp) { \
 	/** windback to p-1 */ \
 	naive_linear_trace_windback_ptr(k, r, pdp); \
-	/** fetch characters */ \
-	rd_fetch(k->a, i-1); \
-	rd_fetch(k->b, j-1); \
 	/** load diagonal cell and score */ \
 	cell_t h, v; \
 	cell_t diag = pdg[q + naive_linear_topleftq(r, k)]; \
@@ -427,18 +427,18 @@
 		/** update direction and pointers */ \
 		q += naive_linear_topleftq(r, k); \
 		naive_linear_trace_windback_ptr(k, r, pdp); \
-		i--; /*rd_fetch(k->a, i-1);*/ \
-		j--; /*rd_fetch(k->b, j-1);*/ \
+		i--; rd_fetch(k->a, i-1); \
+		j--; rd_fetch(k->b, j-1); \
 		if(sc == k->m) { wr_pushm(k->l); } else { wr_pushx(k->l); } \
 		cc = diag; \
 	} else if(cc == ((h = pvh[q + naive_linear_leftq(r, k)]) + k->gi)) { \
 		q += naive_linear_leftq(r, k); \
-		i--; /*rd_fetch(k->a, i-1);*/ \
+		i--; rd_fetch(k->a, i-1); \
 		wr_pushd(k->l); \
 		cc = h; \
 	} else if(cc == ((v = pvh[q + naive_linear_topq(r, k)]) + k->gi)) { \
 		q += naive_linear_topq(r, k); \
-		j--; /*rd_fetch(k->b, j-1);*/ \
+		j--; rd_fetch(k->b, j-1); \
 		wr_pushi(k->l); \
 		cc = v; \
 	} else { \
