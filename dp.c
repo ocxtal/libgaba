@@ -47,7 +47,7 @@ func2(VARIANT_LABEL, _fill)(
 	/** bulk fill */
 	while(!fill_check_term(k, r, pdp)) {
 		fill_start(k, r, pdp);
-		for(a = 0; a < BLK; a++) {
+		for(a = 0; a < BLK/2; a++) {
 			/** unroll loop: 1 */
 			fill_former_body(k, r, pdp);	/** former calculations */
 			if(dir(r) == TOP) {
@@ -56,7 +56,7 @@ func2(VARIANT_LABEL, _fill)(
 				fill_go_right(k, r, pdp);	/** shift left */
 			}
 			fill_latter_body(k, r, pdp);	/** latter calculations */
-#if 0
+
 			/** unroll loop: 2 */
 			fill_former_body(k, r, pdp);	/** former calculations */
 			if(dir(r) == TOP) {
@@ -65,7 +65,7 @@ func2(VARIANT_LABEL, _fill)(
 				fill_go_right(k, r, pdp);	/** shift left */
 			}
 			fill_latter_body(k, r, pdp);	/** latter calculations */
-#endif
+
 		}
 		fill_end(k, r, pdp);
 	}
@@ -90,8 +90,9 @@ func2(VARIANT_LABEL, _fill)(
 	while(t == 0) {
 		fill_start(k, r, pdp);
 		for(a = 0; a < BLK; a++) {
-			/** unroll loop: 1 */
-			if(fill_check_term_cap(k, r, pdp)) { break; }
+			if(fill_check_term_cap(k, r, pdp)) {
+				break;
+			}
 			fill_former_body_cap(k, r, pdp);
 			if(dir(r) == TOP) {
 				fill_go_down_cap(k, r, pdp);
@@ -99,21 +100,9 @@ func2(VARIANT_LABEL, _fill)(
 				fill_go_right_cap(k, r, pdp);
 			}
 			fill_latter_body_cap(k, r, pdp);
-#if 0
-			/** unroll loop: 2 */
-			if(fill_check_term_cap(k, r, pdp)) { pdp -= bpl(); break; }
-			fill_former_body_cap(k, r, pdp);
-			if(dir(r) == TOP) {
-				fill_go_down_cap(k, r, pdp);
-			} else {
-				fill_go_right_cap(k, r, pdp);
-			}
-			fill_latter_body_cap(k, r, pdp);
-#endif
 		}
-		for(; a < BLK; t++, a++) {		/** increment termination flag */
+		for(; a < BLK; t++, a++) {			/** increment termination flag */
 			fill_empty_body(k, r, pdp);
-//			fill_empty_body(k, r, pdp);
 		}
 		fill_end(k, r, pdp);
 	}
@@ -228,7 +217,10 @@ func2(VARIANT_LABEL, _trace)(
 
 	trace_decl(k, r, pdp);
 	trace_init(k, r, pdp);
-	while(!trace_check_term(k, r, pdp)) {
+	while(1) {
+		if(trace_check_term(k, r, pdp)) { break; }
+		trace_body(k, r, pdp);
+		if(trace_check_term(k, r, pdp)) { break; }
 		trace_body(k, r, pdp);
 	}
 	trace_finish(k, r, pdp);
