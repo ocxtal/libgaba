@@ -10,17 +10,19 @@
 #include <smmintrin.h>
 #include <stdint.h>
 
+
+#if DP == DYNAMIC
+
 /**
  * @macro BLK
  * @brief block split length
  */
-#define BLK 		( 32 )
+#define BLK 		( 16 )
 
-#if DP == DYNAMIC
 /**
  * direction holder register
  */
-#define dir_vec(v)		__m128i v;
+#define _dir_vec(v)		__m128i v;
 #define dir_vec_size()	( sizeof(__m128i) )
 
 #define dir_vec_setzero(v) { \
@@ -29,7 +31,10 @@
 
 #define dir_vec_append(v, d) { \
 	(v) = _mm_srli_si128(v, 1); \
-	(v) = _mm_insert_epi8(v, (d) & 0x03, BLK-1); \
+	(v) = _mm_insert_epi8(v, (d), BLK-1); \
+}
+#define dir_vec_append_empty(v) { \
+	(v) = _mm_srli_si128(v, 1); \
 }
 
 #define dir_vec_store(ptr, v) { \
@@ -38,8 +43,8 @@
 
 #define dir_vec_stride_size()		( bpb() - dir_vec_size() )
 #define dir_vec_base_addr(p, sp) ( \
-	  phantom_size() \
-	+ (dynamic_blk_num(p-sp, 0) + 1) * dir_vec_stride_size() \
+	  head_size() \
+	+ (blk_num(p-sp, 0) + 1) * dp_size() \
 	- sp \
 )
 

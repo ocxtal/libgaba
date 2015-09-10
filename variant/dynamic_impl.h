@@ -23,7 +23,7 @@
 /**
  * 2-bit packed direction holder
  */
-#define dir_vec(v)		uint64_t v;
+#define _dir_vec(v)		uint64_t v, _dummy;
 #define dir_vec_size()	( 2*sizeof(uint64_t) )
 
 #define dir_vec_setzero(v) { \
@@ -32,14 +32,17 @@
 #define dir_vec_append(v, d) { \
 	(v) = ((v)>>2) | (((uint64_t)(d))<<2*(BLK-1)); \
 }
+#define dir_vec_append_empty(v) { \
+	(v) = (v)>>2; \
+}
 #define dir_vec_store(ptr, v) { \
 	*((uint64_t *)ptr) = (v);\
 }
 #define dir_vec_stride_size()		( bpb() )
 #define dir_vec_base_addr(p, sp) ( \
-	  phantom_size() \
-	+ (dynamic_blk_num(p-sp, 0) + 1) * dir_vec_stride_size() \
-	- dr_size() \
+	  head_size() \
+	+ (blk_num(p-sp, 0) + 1) * dir_vec_stride_size() \
+	- dir_vec_size() \
 )
 #define dir_vec_acc(ptr, p, sp) ( \
 	0x03 & ((*((uint64_t *)(ptr)))>>((((p) - (sp)) & (BLK-1))<<1)) \
@@ -73,7 +76,7 @@
 #define dynamic_addr(p, q) ( \
 	  dynamic_blk_num(p, q) * bpb() \
 	+ dynamic_blk_addr(p, q) \
-	+ phantom_size() \
+	+ head_size() \
 )
 
 /**
@@ -84,7 +87,7 @@
  * @brief direction flag container.
  */
 struct _dir {
-	dir_vec(v);
+	_dir_vec(v);
 	uint8_t *pdr;
 	uint8_t d2;
 };
@@ -133,7 +136,7 @@ typedef struct _dir dir_t;
 	(p)++; \
 	uint8_t d = dir_exp_top(r, k, dp) | dir_exp_bottom(r, k, dp); \
 	(r).d2 = (d<<2) | ((r).d2>>2); \
-	dir_vec_append((r).v, 0x03 & (r).d2); \
+	dir_vec_append((r).v, (r).d2); \
 }
 
 /**
@@ -141,7 +144,7 @@ typedef struct _dir dir_t;
  * @brief empty body
  */
 #define dynamic_dir_empty(r, k, dp, p) { \
-	dir_vec_append((r).v, 0); \
+	dir_vec_append_empty((r).v); \
 }
 
 /**
@@ -153,12 +156,24 @@ typedef struct _dir dir_t;
 }
 
 /**
+ * @macro (internal) dir_vec_acc_prev
+ */
+#define dir_vec_acc_prev(dr, p, sp) ( \
+	dir_vec_acc((dr) \
+		- ((((p) - (sp)) & (BLK-1)) == 0 \
+			? dir_vec_stride_size() : 0), \
+		(p)-1, (sp)) \
+)
+
+/**
  * @macro dynamic_dir_set_pdr
  */
 #define dynamic_dir_set_pdr(r, k, dp, p, sp) { \
 	/** calculate (virtual) pdr */ \
-	(r).d2 = 0; \
 	(r).pdr = (uint8_t *)(dp) + dir_vec_base_addr(p, sp); \
+	(r).d2 = (dir_vec_acc((r).pdr, p, sp)<<2) \
+		| dir_vec_acc_prev((r).pdr, p, sp); \
+	debug("d2(%d)", (r).d2); \
 }
 
 /**
@@ -170,20 +185,68 @@ typedef struct _dir dir_t;
 )
 
 /**
- * @macro dynamic_dir_load_backward
+ * @macro dynamic_dir_load_forward
  */
-#define dynamic_dir_load_backward(r, k, dp, p, sp) { \
-	p--; \
-	(r).d2 = 0x0f & (((r).d2<<2) | dir_vec_acc((r).pdr, p, sp)); \
+#define dynamic_dir_load_forward(r, k, dp, p, sp) { \
+	p++; \
+	if((((p) - (sp)) & (BLK-1)) == 0) { \
+		(r).pdr += dir_vec_stride_size(); \
+	} \
+	(r).d2 = (dir_vec_acc((r).pdr, p, sp)<<2) | (r).d2>>2; \
 }
 
 /**
- * @macro dynamic_dir_stride_jam
+ * @macro dynamic_dir_go_forward
  */
-#define dynamic_dir_stride_jam(r, k, dp, p, sp) { \
+#define dynamic_dir_go_forward(r, k, dp, p, sp) { \
+	p++; \
+	if((((p) - (sp)) & (BLK-1)) == 0) { \
+		(r).pdr += dir_vec_stride_size(); \
+	} \
+}
+
+#if 0
+/**
+ * @macro dynamic_dir_jump_forward
+ * must be called when (p - sp) % BLK == BLK-1 before loading the next direction
+ */
+#define dynamic_dir_jump_forward(r, k, dp, p, sp) { \
+	(r).pdr += dir_vec_stride_size(); \
+}
+#endif
+
+/**
+ * @macro dynamic_dir_load_backward
+ */
+#define dynamic_dir_load_backward(r, k, dp, p, sp) { \
+	if((((p) - (sp)) & (BLK-1)) == 0) { \
+		(r).pdr -= dir_vec_stride_size(); \
+	} \
+	p--; \
+	(r).d2 = 0x0f & (dir_vec_acc_prev((r).pdr, p, sp) | ((r).d2<<2)); \
+}
+
+/**
+ * @macro dynamic_dir_go_backward
+ * this macro do not update direction pointer
+ */
+#define dynamic_dir_go_backward(r, k, dp, p, sp) { \
+	if((((p) - (sp)) & (BLK-1)) == 0) { \
+		(r).pdr -= dir_vec_stride_size(); \
+	} \
+	p--; \
+}
+
+#if 0
+/**
+ * @macro dynamic_dir_jump_backward
+ * must be called when (p - sp) % BLK == 
+ */
+#define dynamic_dir_jump_backward(r, k, dp, p, sp) { \
 	/** windback by a block (dp matrix and (i, j)) */ \
 	(r).pdr -= dir_vec_stride_size(); \
 }
+#endif
 
 #endif /* #ifndef _DYNAMIC_H_INCLUDED */
 /**

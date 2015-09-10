@@ -16,7 +16,7 @@
  * @macro BLK
  * @brief block split length
  */
-#define BLK 		( 32 )
+#define BLK 		( 16 )
 
 /**
  * address calculation macros
@@ -94,6 +94,14 @@ typedef struct _dir dir_t;
 }
 
 /**
+ * @macro guided_dir_set_pdr
+ */
+#define guided_dir_set_pdr(r, k, dp, p, sp) { \
+	(r).pdr = (k)->pdr; \
+	(r).d2 = ((r).pdr[p]<<2) | (r).pdr[p-1]; \
+}
+
+/**
  * @macro guided_dir_sum_i_blk
  * @brief calculate sum of diff_i from p to the end of the block
  */
@@ -102,27 +110,43 @@ typedef struct _dir dir_t;
 )
 
 /**
- * @macro guided_dir_set_pdr
+ * @macro guided_dir_load_forward
  */
-#define guided_dir_set_pdr(r, k, dp, p, sp) { \
-	(r).d2 = 0; \
-	(r).pdr = (k)->pdr; \
+#define guided_dir_load_forward(r, k, dp, p, sp) { \
+	(r).d2 = ((r).pdr[++(p)]<<2) | ((r).d2>>2); \
 }
+#define guided_dir_go_forward(r, k, dp, p, sp) { \
+	p++; \
+}
+
+#if 0
+/**
+ * @macro guided_dir_jump_forward
+ */
+#define guided_dir_jump_forward(r, k, dp, p, sp) { \
+	/** nothing to do */ \
+}
+#endif
 
 /**
  * @macro guided_dir_load_backward
  * @brief set 2-bit direction flag in reverse access.
  */
 #define guided_dir_load_backward(r, k, dp, p, sp) { \
-	(r).d2 = 0x0f & (((r).d2<<2) | (r).pdr[--p]); \
+	(r).d2 = 0x0f & (((r).d2<<2) | (r).pdr[--p - 1]); \
+}
+#define guided_dir_go_backward(r, k, dp, p, sp) { \
+	p--; \
 }
 
+#if 0
 /**
- * @macro guided_dir_stride_jam
+ * @macro guided_dir_jump_backward
  */
-#define guided_dir_stride_jam(r, k, dp, p, sp) { \
+#define guided_dir_jump_backward(r, k, dp, p, sp) { \
 	/** nothing to do */ \
 }
+#endif
 
 #endif /* #ifndef _GUIDED_H_INCLUDED */
 /**

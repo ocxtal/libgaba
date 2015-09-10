@@ -17,18 +17,16 @@
  * @brief cell type in the branch algorithms
  */
 #ifdef cell_t
-
 	/** undefine types (previously defined in naive_impl.h) */
 	#undef cell_t
 	#undef CELL_MIN
 	#undef CELL_MAX
-
-	/** new defines */
-	#define cell_t 		int16_t
-	#define CELL_MIN	( INT16_MIN )
-	#define CELL_MAX	( INT16_MAX )
-
 #endif
+
+/** new defines */
+#define cell_t 		int16_t
+#define CELL_MIN	( INT16_MIN )
+#define CELL_MAX	( INT16_MAX )
 
 /**
  * @macro BW
@@ -36,8 +34,30 @@
  */
 #ifdef BW
 #undef BW
-#define BW 			( 32 )
 #endif
+
+#define BW 			( 32 )
+
+/**
+ * @struct branch_linear_block
+ */
+struct branch_linear_block {
+	cell_t dp[BLK][BW];
+	int64_t i, j;
+	_vec_cell(maxv);
+#if DP == DYNAMIC
+	_dir_vec(dr);
+#endif
+};
+
+/**
+ * @macro linear_block_t
+ */
+#ifdef linear_block_t
+	#undef linear_block_t
+#endif
+
+#define linear_block_t	struct branch_linear_block
 
 /**
  * @macro bpl, bpb
@@ -47,14 +67,16 @@
 #define branch_linear_dp_size()				( BLK * branch_linear_bpl() )
 #define branch_linear_co_size()				( 2 * sizeof(int64_t) + vec_size() )
 #define branch_linear_jam_size()			( branch_linear_co_size() + dr_size() )
-#define branch_linear_phantom_size()		( 2 * branch_linear_bpl() + branch_linear_jam_size() + sizeof(struct sea_joint_head) )
+#define branch_linear_head_size()			( 2 * branch_linear_bpl() + branch_linear_jam_size() + sizeof(struct sea_joint_head) )
+#define branch_linear_tail_size()			( sizeof(struct sea_joint_tail) )
 #define branch_linear_bpb()					( branch_linear_dp_size() + branch_linear_jam_size() )
 
 #define branch_affine_bpl()					( 3 * vec_size() )
 #define branch_affine_dp_size()				( BLK * branch_affine_bpl() )
 #define branch_affine_co_size()				( 2 * sizeof(int64_t) + vec_size() )
 #define branch_affine_jam_size()			( branch_affine_co_size() + dr_size() )
-#define branch_affine_phantom_size()		( 2 * branch_affine_bpl() + branch_affine_jam_size() + sizeof(struct sea_joint_head) )
+#define branch_affine_head_size()			( 2 * branch_affine_bpl() + branch_affine_jam_size() + sizeof(struct sea_joint_head) )
+#define branch_affine_tail_size()			( sizeof(struct sea_joint_tail) )
 #define branch_affine_bpb()					( branch_affine_dp_size() + branch_affine_jam_size() )
 
 /**
@@ -307,7 +329,7 @@
  * @macro branch_linear_fill_test_chain
  */
 #define branch_linear_fill_test_chain(k, r, pdp) ( \
-	/*(CELL_MAX / k->m)*/ 64 - p \
+	/*(CELL_MAX / k->m)*/64 - p \
 )
 #define branch_linear_fill_test_chain_cap(k, r, pdp) ( \
 	branch_linear_fill_test_chain(k, r, pdp) \
@@ -334,7 +356,8 @@
  */
 #define branch_linear_fill_finish(k, r, pdp) { \
 	/** retrieve chain vector pointers */ \
-	uint8_t *v = pdp - jam_size() - 2*bpl(); \
+	/*uint8_t *v = pdp - jam_size() - 2*bpl();*/ \
+	uint8_t *v = (uint8_t *)(((linear_block_t *)pdp - 1)->dp[BLK-2]); \
 	/** aggregate max */ \
 	int32_t max; \
 	vec_hmax(max, maxv); \
@@ -399,9 +422,6 @@
 }
 #endif
 
-#define branch_linear_trace_search_detect_break(ptr, diff_ptr, p, diff_p, sp, pm, cm, mv) { \
-}
-
 #define branch_linear_trace_search_max(k, r, pdp) { \
 	/** vectors */ \
 	_vec_cell_const(mv, _head(k->pdp, score)); \
@@ -411,52 +431,35 @@
 	/** masks */ \
 	uint64_t cm = 0, pm = 0; \
 	/** load address of the last max vector */ \
-	int64_t const ofs = dp_size() + co_size() - vec_size();		/** offset */ \
 	int64_t bn = blk_num((_tail(k->pdp, p)-1) - sp, 0);			/** num of the last block */ \
-	uint8_t *pbk = pdp + addr(bn*BLK, -BW/2) + ofs; \
-	debug("sp(%lld), ep(%lld), bn(%lld), bp(%lld)", sp, (_tail(k->pdp, p)-1), bn, bn*BLK+sp); \
-	/** determine the block */ \
+	linear_block_t *pbk = (linear_block_t *)(pdp + head_size()) + bn; \
 	/** load the first vector */ \
-	vec_load(pbk, tv);					/** load max of n */ \
+	vec_load(&pbk->maxv1, tv);				/** load max of bn */ \
 	vec_comp_mask(cm, tv, mv); \
-	debug("pbk(%p)", pbk); \
-	vec_print(stdout, tv); \
-	debug("cm(%llu)", cm); \
 	/** search a breakpoint */ \
-	int64_t bp;							/** head p-coord of the last block */ \
-	for(bp = bn*BLK + sp; bp > sp; bp -= BLK, pbk -= bpb(), cm = pm) { \
-		vec_load(pbk - bpb(), tv);		/** load max of n-1 */ \
+	int64_t b;							/** head p-coord of the last block */ \
+	for(b = bn; b > 0; b--, pbk--) { \
+		vec_load(&(pbk - 1)->maxv1, tv); \
 		vec_comp_mask(pm, tv, mv); \
-		debug("pbk(%p)", pbk - bpb()); \
-		vec_print(stdout, tv); \
-		debug("cm(%llu), pm(%llu)", cm, pm); \
 		if(pm != cm) { break; }			/** breakpoint found */ \
 	} \
-	debug("bp(%lld)", bp); \
-	/** move to the last vector of the block */ \
-	pbk -= ofs;							/** head of the block */ \
-	uint8_t *pln = pbk + (dp_size() - bpl()); \
 	/** determine the vector (and p-coordinate) */ \
-	for(p = bp + (BLK-1); p > bp; p--, pln -= bpl()) { \
-		vec_load(pln, tv);				/** load p */ \
+	for(p = BLK-1; p >= 0; p--) { \
+		vec_load(&pbk->dp[p], tv); \
 		vec_comp_mask(pm, tv, mv); \
-		vec_print(stdout, tv); \
 		if(pm != 0) { break; } \
 	} \
-	debug("p(%lld), pm(%llx)", p, pm); \
-	/** initialize pointers */ \
-	pdg = (cell_t *)pln + BW/2; \
-	dir_set_pdr(r, k, pdp, p, sp); \
 	/** calculate coordinates */ \
+	p += (b*BLK + sp); \
 	q = (int64_t)tzcnt(pm) - BW/2; \
-	i = *((int64_t *)(pbk + dp_size())) \
-		- dir_sum_i_blk(r, k, pdp, p, sp) - q; \
+	/** initialize direction pointer with p, before calculating i */ \
+	dir_set_pdr(r, k, pdp, p, sp); \
+	i = pbk->i - dir_sum_i_blk(r, k, pdp, p, sp) - q; \
 	j = p - (i - k->asp) + k->bsp; \
 	/** write back coordinates */ \
 	_head(k->pdp, p) = k->mp = p; \
 	_head(k->pdp, q) = k->mq = q; \
 	_head(k->pdp, i) = k->mi = i; \
-	debug("i(%lld), j(%lld), di(%lld)", ((int64_t *)(pbk + dp_size()))[0], ((int64_t *)(pbk + dp_size()))[1], dir_sum_i_blk(r, k, pdp, p, sp)); \
 }
 
 /**
@@ -466,7 +469,7 @@
 	if(_head(k->pdp, i) == -1) { \
 		/** max found in this block but pos is not determined yet */ \
 		debug("search max"); \
-		branch_linear_trace_search_max(k, r, pdp); \
+		branch_linear_trace_search_max(k, r, pdp);	/** search and load coordinates */ \
 	} else { \
 		/** load coordinates */ \
 		p = _head(k->pdp, p); \
@@ -477,14 +480,12 @@
 		debug("(%lld, %lld), (%lld, %lld), sp(%lld)", p, q, i, j, sp); \
 		/** initialize pointers */ \
 		debug("num(%lld), addr(%lld)", blk_num(p-sp, 0), blk_addr(p-sp, 0)); \
-		pdg = (cell_t *)(pdp + addr(p - sp, 0)); \
 		dir_set_pdr(r, k, pdp, p, sp); \
 	} \
-	/** load score */ \
-	cc = pdg[q]; \
-	/** windback pointers from p+1 to p */ \
-	p++; \
-	naive_linear_trace_windback_ptr(k, r, pdp); \
+	/** load score and pointers */ \
+	cc = *((cell_t *)(pdp + addr(p - sp, q))); \
+	pvh = (cell_t *)(pdp + addr((p - 1) - sp, 0)); \
+	pdg = (cell_t *)(pdp + addr((p - 2) - sp, 0)); \
 	/** fetch characters */ \
 	rd_fetch(k->a, i-1); \
 	rd_fetch(k->b, j-1); \

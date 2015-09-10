@@ -25,6 +25,26 @@
 #define BW 			( 32 )
 
 /**
+ * @struct naive_linear_block
+ */
+struct naive_linear_block {
+	cell_t dp[BLK][BW];
+#if DP == DYNAMIC
+	_dir_vec(dr);
+#endif
+};
+
+/**
+ * @macro linear_block_t
+ */
+#ifdef linear_block_t
+	#undef linear_block_t
+#endif
+
+#define linear_block_t	struct naive_linear_block
+
+
+/**
  * @macro naive_linear_bpl, naive_affine_bpl
  * @brief calculates bytes per lane
  */
@@ -32,14 +52,16 @@
 #define naive_linear_dp_size()			( BLK * naive_linear_bpl() )
 #define naive_linear_co_size()			( 0 )
 #define naive_linear_jam_size()			( naive_linear_co_size() + dr_size() )
-#define naive_linear_phantom_size()		( 2 * naive_linear_bpl() + naive_linear_jam_size() + sizeof(struct sea_joint_head) )
+#define naive_linear_head_size()		( 2 * naive_linear_bpl() + naive_linear_jam_size() + sizeof(struct sea_joint_head) )
+#define naive_linear_tail_size()		( sizeof(struct sea_joint_tail) )
 #define naive_linear_bpb()				( naive_linear_dp_size() + naive_linear_jam_size() )
 
 #define naive_affine_bpl() 				( 3 * sizeof(cell_t) * BW )
 #define naive_affine_dp_size()			( BLK * naive_affine_bpl() )
 #define naive_affine_co_size()			( 0 )
 #define naive_affine_jam_size()			( naive_affine_co_size() + dr_size() )
-#define naive_affine_phantom_size()		( 2 * naive_affine_bpl() + naive_affine_jam_size() + sizeof(struct sea_joint_head) )
+#define naive_affine_head_size()		( 2 * naive_affine_bpl() + naive_affine_jam_size() + sizeof(struct sea_joint_head) )
+#define naive_affine_tail_size()		( sizeof(struct sea_joint_tail) )
 #define naive_affine_bpb()				( naive_affine_dp_size() + naive_affine_jam_size() )
 
 /**
@@ -309,7 +331,7 @@
  */
 #define naive_linear_fill_finish(k, r, pdp) { \
 	/** retrieve chain vector pointers */ \
-	uint8_t *v = pdp - 2*naive_linear_bpl() - naive_linear_jam_size(); \
+	uint8_t *v = pdp - 2*bpl() - jam_size(); \
 	/** create ivec at the end */ \
 	pdp += sizeof(struct sea_joint_tail); \
 	/** save terminal coordinates */ \
@@ -367,13 +389,20 @@
 #define naive_linear_trace_windback_ptr(k, r, pdp) { \
 	/** load the next direction pointer */ \
 	dir_load_backward(r, k, pdp, p, sp); \
-	/** update pdg, pvh, and ptb */ \
+	/** update pdg, pvh, and ptb (cell_t *) */ \
 	pvh = pdg; pdg -= bpl() / sizeof(cell_t); \
-	if(((p - sp) & (BLK-1)) == 0) { \
-		dir_stride_jam(r, k, pdp, p, sp); \
+	if((((p - 1) - sp) & (BLK-1)) == 0) { \
 		pdg -= jam_size() / sizeof(cell_t); \
 	} \
 }
+
+/*
+	pdg = (cell_t *)((uint8_t *)pvh - bpl()); \
+	if((((p - 1) - sp) & (BLK-1)) == 0) { \
+		pdg -= jam_size() / sizeof(cell_t); \
+	} \
+
+*/
 
 /**
  * @macro naive_linear_trace_init
@@ -388,13 +417,14 @@
 	debug("(%lld, %lld), (%lld, %lld), sp(%lld)", p, q, i, j, sp); \
 	/** initialize pointers */ \
 	debug("num(%lld), addr(%lld)", blk_num(p-sp, 0), blk_addr(p-sp, 0)); \
-	pdg = (cell_t *)(pdp + addr(p - sp, 0)); \
-	dir_set_pdr(r, k, pdp, p, sp); \
+	/**p++;*/ 								/** p = (p of start pos) + 1 */ \
+	dir_set_pdr(r, k, pdp, p, sp);		/** load direction of p and p-1 */ \
+	pvh = (cell_t *)(pdp + addr((p - 1) - sp, 0)); \
+	pdg = (cell_t *)(pdp + addr((p - 2) - sp, 0)); \
+	/*pdg = (cell_t *)((uint8_t *)pdg - bpl() - (((p - sp) & (BLK-1)) == 0 ? jam_size() : 0));*/ \
+	/*naive_linear_trace_windback_ptr(k, r, pdp);*/ \
 	/** load score */ \
-	cc = pdg[q]; \
-	/** windback pointers from p+1 to p */ \
-	p++; \
-	naive_linear_trace_windback_ptr(k, r, pdp); \
+	cc = _head(k->pdp, score); \
 	/** fetch characters */ \
 	rd_fetch(k->a, i-1); \
 	rd_fetch(k->b, j-1); \
@@ -409,8 +439,6 @@
  * @macro naive_linear_trace_body
  */
 #define naive_linear_trace_body(k, r, pdp) { \
-	/** windback to p-1 */ \
-	naive_linear_trace_windback_ptr(k, r, pdp); \
 	/** load diagonal cell and score */ \
 	cell_t h, v; \
 	cell_t diag = pdg[q + naive_linear_topleftq(r, k)]; \
@@ -445,6 +473,8 @@
 		debug("out of band"); \
 		return SEA_ERROR_OUT_OF_BAND; \
 	} \
+	/** windback to p-1 */ \
+	naive_linear_trace_windback_ptr(k, r, pdp); \
 }
 
 /**

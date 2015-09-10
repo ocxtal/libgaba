@@ -18,16 +18,14 @@
  * @brief cell type in the twig algorithms
  */
 #ifdef cell_t
-
 	#undef cell_t
 	#undef CELL_MIN
 	#undef CELL_MAX
-
-	#define cell_t 		int8_t
-	#define CELL_MIN	( INT8_MIN )
-	#define CELL_MAX	( INT8_MAX )
-
 #endif
+
+#define cell_t 		int8_t
+#define CELL_MIN	( INT8_MIN )
+#define CELL_MAX	( INT8_MAX )
 
 /**
  * @macro BW
@@ -35,25 +33,51 @@
  */
 #ifdef BW
 #undef BW
-#define BW 			( 16 )
 #endif
+
+#define BW 			( 16 )
+
+/**
+ * @struct twig_linear_block
+ */
+struct twig_linear_block {
+	cell_t dp[BLK][BW];
+	int64_t i, j;
+	_vec_cell(maxv);
+#if DP == DYNAMIC
+	_dir_vec(dr);
+#endif
+};
+
+/**
+ * @macro linear_block_t
+ */
+#ifdef linear_block_t
+	#undef linear_block_t
+#endif
+
+#define linear_block_t	struct twig_linear_block
 
 /**
  * @macro bpl, bpb
  * @brief bytes per line, bytes per block
  */
+typedef struct twig_linear_block _linear_block;
 #define twig_linear_bpl()					branch_linear_bpl()
 #define twig_linear_dp_size()				branch_linear_dp_size()
 #define twig_linear_co_size()				branch_linear_co_size()
 #define twig_linear_jam_size()				branch_linear_jam_size()
-#define twig_linear_phantom_size()			branch_linear_phantom_size()
+#define twig_linear_head_size()				branch_linear_head_size()
+#define twig_linear_tail_size()				branch_linear_tail_size()
 #define twig_linear_bpb()					branch_linear_bpb()
 
+/* typedef struct twig_affine_block _affine_block; */
 #define twig_affine_bpl()					branch_affine_bpl()
 #define twig_affine_dp_size()				branch_affine_dp_size()
 #define twig_affine_co_size()				branch_affine_co_size()
 #define twig_affine_jam_size()				branch_affine_jam_size()
-#define twig_affine_phantom_size()			branch_affine_phantom_size()
+#define twig_affine_head_size()				branch_affine_head_size()
+#define twig_affine_tail_size()				branch_affine_tail_size()
 #define twig_affine_bpb()					branch_affine_bpb()
 
 /**

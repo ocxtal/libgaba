@@ -206,6 +206,7 @@ func2(VARIANT_LABEL, _chain)(
 		_head(k->pdp, p) = k->mp;
 		_head(k->pdp, q) = k->mq;
 		_head(k->pdp, i) = k->mi;
+		_head(k->pdp, score) = k->max;
 		wr_alloc(k->l, _head(k->pdp, p));
 	}
 	return(ret);

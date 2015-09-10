@@ -130,8 +130,10 @@
 #define dir_end_block 			label2(DP_LABEL, _dir_end_block)
 #define dir_sum_i_blk			label2(DP_LABEL, _dir_sum_i_blk)
 #define dir_set_pdr 			label2(DP_LABEL, _dir_set_pdr)
+#define dir_load_forward		label2(DP_LABEL, _dir_load_forward)
+#define dir_go_forward			label2(DP_LABEL, _dir_go_forward)
 #define dir_load_backward 		label2(DP_LABEL, _dir_load_backward)
-#define dir_stride_jam			label2(DP_LABEL, _dir_stride_jam)
+#define dir_go_backward			label2(DP_LABEL, _dir_go_backward)
 
 /** base and cost variants */
 #include header(BASE_LABEL)
@@ -141,7 +143,8 @@
 #define dp_size					label3(BASE_LABEL, COST_SUFFIX, _dp_size)
 #define co_size					label3(BASE_LABEL, COST_SUFFIX, _co_size)
 #define jam_size				label3(BASE_LABEL, COST_SUFFIX, _jam_size)
-#define phantom_size			label3(BASE_LABEL, COST_SUFFIX, _phantom_size)
+#define head_size				label3(BASE_LABEL, COST_SUFFIX, _head_size)
+#define tail_size				label3(BASE_LABEL, COST_SUFFIX, _tail_size)
 #define bpb						label3(BASE_LABEL, COST_SUFFIX, _bpb)
 #define topq					label3(BASE_LABEL, COST_SUFFIX, _topq)
 #define leftq					label3(BASE_LABEL, COST_SUFFIX, _leftq)
