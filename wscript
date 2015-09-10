@@ -19,7 +19,7 @@ def configure(conf):
 
 	conf.env.append_value('CFLAGS', '-fmacro-backtrace-limit=0')
 	conf.env.append_value('CFLAGS', '-g')
-	conf.env.append_value('CFLAGS', '-DDEBUG')
+	# conf.env.append_value('CFLAGS', '-DDEBUG')
 	# conf.env.append_value('CFLAGS', '-DBENCH')
 	conf.env.append_value('CFLAGS', '-Wall')
 	# conf.env.append_value('CFLAGS', '-O3')

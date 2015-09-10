@@ -271,10 +271,11 @@ struct naive_linear_block {
  * @brief check boundary
  */
 #define naive_linear_fill_test_bound(k, r, pdp) ( \
-	(k->aep-i-BLK) | (k->bep-j-BLK) \
+	(k->aep-i-BLK) | (k->bep-j-BLK) | dir_test_bound(r, k, pdp, p) \
 )
 #define naive_linear_fill_test_bound_cap(k, r, pdp) ( \
-	(k->aep-i+BW/2) | (k->bep-j+BW/2) | (cop(k->aep, k->bep, BW)-p) \
+	  (k->aep-i+BW/2) | (k->bep-j+BW/2) \
+	| (cop(k->aep, k->bep, BW)-p) | dir_test_bound_cap(r, k, pdp, p) \
 )
 
 /**
@@ -432,6 +433,13 @@ struct naive_linear_block {
 
 #if 0
 
+	for(int a = i-20; a < i+20; a++) { putchar(k->a.p[a]); } \
+	printf("\n"); \
+	for(int a = j-20; a < j+20; a++) { putchar(k->b.p[a]); } \
+	printf("\n"); \
+	for(int a = -20; a < 20; a++) { putchar(a == -1 ? '^' : ' '); } \
+	printf("\n"); \
+
 
 #endif
 
@@ -443,14 +451,8 @@ struct naive_linear_block {
 	cell_t h, v; \
 	cell_t diag = pdg[q + naive_linear_topleftq(r, k)]; \
 	cell_t sc = rd_cmp(k->a, k->b) ? k->m : k->x; \
-	for(int a = i-20; a < i+20; a++) { putchar(k->a.p[a]); } \
-	printf("\n"); \
-	for(int a = j-20; a < j+20; a++) { putchar(k->b.p[a]); } \
-	printf("\n"); \
-	for(int a = -20; a < 20; a++) { putchar(a == -1 ? '^' : ' '); } \
-	printf("\n"); \
-	debug("(%lld, %lld), (%lld, %lld), d(%d), v(%d), h(%d), sc(%d), cc(%d)", \
-		p, q, i, j, diag, pvh[q + naive_linear_leftq(r, k)], pvh[q + naive_linear_topq(r, k)], sc, cc); \
+	/*debug("(%lld, %lld), (%lld, %lld), d(%d), v(%d), h(%d), sc(%d), cc(%d)",*/ \
+		/*p, q, i, j, diag, pvh[q + naive_linear_leftq(r, k)], pvh[q + naive_linear_topq(r, k)], sc, cc);*/ \
 	if(cc == (diag + sc)) { \
 		/** update direction and pointers */ \
 		q += naive_linear_topleftq(r, k); \

@@ -52,10 +52,13 @@
  * calc diffs
  */
 #define dir_vec_sum_i(ptr, dp) ( \
-	(int64_t)(BLK - 1 - (dp) \
-		- popcnt( \
-			((*((uint64_t *)(ptr)) & 0x5555555555555555)>>((dp)<<1))>>2) \
+	(int64_t)(((dp) + 1) \
+		- popcnt((*((uint64_t *)(ptr)) & 0x5555555555555555)<<((BLK-1-(dp))<<1)) \
 		) \
+	/*(int64_t)(BLK - 1 - (dp)*/ \
+		/*- popcnt(*/ \
+		/*	((*((uint64_t *)(ptr)) & 0x5555555555555555)>>((dp)<<1))>>2)*/ \
+		/*)*/ \
 		/*- popcnt(*((uint64_t *)(ptr)) & (0x5555555555555555<<((p)<<1))))*/ \
 )
 
@@ -156,6 +159,12 @@ typedef struct _dir dir_t;
 }
 
 /**
+ * @macro dynamic_dir_test_bound
+ */
+#define dynamic_dir_test_bound(r, k, dp, p)			( 0 )
+#define dynamic_dir_test_bound_cap(r, k, dp, p)		( 0 )
+
+/**
  * @macro (internal) dir_vec_acc_prev
  */
 #define dir_vec_acc_prev(dr, p, sp) ( \
@@ -177,14 +186,6 @@ typedef struct _dir dir_t;
 }
 
 /**
- * @macro dynamic_dir_sum_i_blk
- * @brief calculate sum of diff_i from p to the end of the block
- */
-#define dynamic_dir_sum_i_blk(r, k, dp, p, sp) ( \
-	dir_vec_sum_i((r).pdr, ((p) - (sp)) & (BLK-1)) \
-)
-
-/**
  * @macro dynamic_dir_load_forward
  */
 #define dynamic_dir_load_forward(r, k, dp, p, sp) { \
@@ -204,16 +205,6 @@ typedef struct _dir dir_t;
 		(r).pdr += dir_vec_stride_size(); \
 	} \
 }
-
-#if 0
-/**
- * @macro dynamic_dir_jump_forward
- * must be called when (p - sp) % BLK == BLK-1 before loading the next direction
- */
-#define dynamic_dir_jump_forward(r, k, dp, p, sp) { \
-	(r).pdr += dir_vec_stride_size(); \
-}
-#endif
 
 /**
  * @macro dynamic_dir_load_backward
@@ -237,16 +228,13 @@ typedef struct _dir dir_t;
 	p--; \
 }
 
-#if 0
 /**
- * @macro dynamic_dir_jump_backward
- * must be called when (p - sp) % BLK == 
+ * @macro dynamic_dir_sum_i_blk
+ * @brief calculate sum of diff_i from p to the end of the block
  */
-#define dynamic_dir_jump_backward(r, k, dp, p, sp) { \
-	/** windback by a block (dp matrix and (i, j)) */ \
-	(r).pdr -= dir_vec_stride_size(); \
-}
-#endif
+#define dynamic_dir_sum_i_blk(r, k, dp, p, sp) ( \
+	dir_vec_sum_i((r).pdr, ((p) - (sp)) & (BLK-1)) \
+)
 
 #endif /* #ifndef _DYNAMIC_H_INCLUDED */
 /**

@@ -281,16 +281,24 @@
 /**
  * print vector
  */
-#define vec_print(s, v) { \
+#ifdef DEBUG
+
+#define vec_print(v) { \
 	int8_t b[16]; \
 	void *p = (void *)b; \
 	vec_store(p, v); \
-	fprintf(s, \
+	fprintf(stderr, \
 /*		"[%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d]\n",*/ \
 		"[%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x]\n", \
 		(uint8_t)b[15], (uint8_t)b[14], (uint8_t)b[13], (uint8_t)b[12], (uint8_t)b[11], (uint8_t)b[10], (uint8_t)b[9], (uint8_t)b[8], \
 		(uint8_t)b[7], (uint8_t)b[6], (uint8_t)b[5], (uint8_t)b[4], (uint8_t)b[3], (uint8_t)b[2], (uint8_t)b[1], (uint8_t)b[0]); \
 }
+
+#else
+
+#define vec_print(v)		;
+
+#endif
 
 /**
  * char vector operations

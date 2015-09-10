@@ -54,16 +54,23 @@
 #endif /* DP == DYNAMIC */
 
 #define dir_vec_sum_i(ptr, dp) ( \
-	(int64_t)(BLK - 1 - (dp) \
-		- popcnt( \
+	(int64_t)(((dp) + 1) \
+		- popcnt(0xffffffff & ( \
 			( _mm_movemask_epi8(_mm_slli_epi64( \
 				_mm_lddqu_si128((__m128i *)(ptr)), 7)) \
-			| _mm_movemask_epi8(_mm_slli_epi64( \
-				_mm_lddqu_si128((__m128i *)(ptr) + 1), 7))<<16) \
-			>>((dp)+1)) \
+			| (_mm_movemask_epi8(_mm_slli_epi64( \
+				_mm_lddqu_si128((__m128i *)(ptr) + 1), 7))<<16)) \
+			<<(BLK-1-(dp)))) \
 		) \
+	/*(int64_t)(BLK - 1 - (dp)*/ \
+		/*- popcnt(*/ \
+			/*( _mm_movemask_epi8(_mm_slli_epi64(*/ \
+				/*_mm_lddqu_si128((__m128i *)(ptr)), 7))*/ \
+			/*| (_mm_movemask_epi8(_mm_slli_epi64(*/ \
+				/*_mm_lddqu_si128((__m128i *)(ptr) + 1), 7))<<16))*/ \
+			/*>>((dp)+1))*/ \
+		/*)*/ \
 )
-
 
 #endif /* #ifndef _DIR_H_INCLUDED */
 /**

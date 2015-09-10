@@ -16,7 +16,7 @@
  * @macro BLK
  * @brief block split length
  */
-#define BLK 		( 16 )
+#define BLK 		( 32 )
 
 /**
  * address calculation macros
@@ -26,11 +26,12 @@
 	((p) & ~(BLK-1)) / BLK \
 )
 #define guided_blk_addr(p, q) ( \
-	((p) & (BLK-1)) * bpl() + (q) * sizeof(cell_t) \
+	((p) & (BLK-1)) * bpl() + ((q)+BW/2) * sizeof(cell_t) \
 )
 #define guided_addr(p, q) ( \
 	  guided_blk_num(p, q) * bpb() \
 	+ guided_blk_addr(p, q) \
+	+ head_size() \
 )
 
 /**
@@ -59,7 +60,8 @@ typedef struct _dir dir_t;
  */
 #define guided_dir_init(r, k, dp, p) { \
 	(r).pdr = (k)->pdr; \
-	(r).d2 = (r).pdr[(p)-1]<<2;	/** SEA_LEFT or SEA_TOP */ \
+	(r).d2 = ((r).pdr[p]<<2) | (r).pdr[p-1]; \
+	/*(r).d2 = (r).pdr[(p)-1]<<2;*/	/** SEA_LEFT or SEA_TOP */ \
 }
 
 /**
@@ -94,20 +96,22 @@ typedef struct _dir dir_t;
 }
 
 /**
+ * @macro guided_dir_test_bound
+ */
+#define guided_dir_test_bound(r, k, dp, p) ( \
+	(k)->tdr - (r).pdr - p - BLK \
+)
+#define guided_dir_test_bound_cap(r, k, dp, p) ( \
+	(k)->tdr - (r).pdr - p \
+)
+
+/**
  * @macro guided_dir_set_pdr
  */
 #define guided_dir_set_pdr(r, k, dp, p, sp) { \
 	(r).pdr = (k)->pdr; \
 	(r).d2 = ((r).pdr[p]<<2) | (r).pdr[p-1]; \
 }
-
-/**
- * @macro guided_dir_sum_i_blk
- * @brief calculate sum of diff_i from p to the end of the block
- */
-#define guided_dir_sum_i_blk(r, k, dp, p, sp) ( \
-	dir_vec_sum_i((r).pdr + (sp) + (((p) - (sp)) & ~(BLK-1)), ((p) - (sp)) & (BLK-1)) \
-)
 
 /**
  * @macro guided_dir_load_forward
@@ -119,34 +123,26 @@ typedef struct _dir dir_t;
 	p++; \
 }
 
-#if 0
-/**
- * @macro guided_dir_jump_forward
- */
-#define guided_dir_jump_forward(r, k, dp, p, sp) { \
-	/** nothing to do */ \
-}
-#endif
-
 /**
  * @macro guided_dir_load_backward
  * @brief set 2-bit direction flag in reverse access.
  */
 #define guided_dir_load_backward(r, k, dp, p, sp) { \
-	(r).d2 = 0x0f & (((r).d2<<2) | (r).pdr[--p - 1]); \
+	p--; \
+	(r).d2 = 0x0f & (((r).d2<<2) | (r).pdr[p - 1]); \
 }
 #define guided_dir_go_backward(r, k, dp, p, sp) { \
 	p--; \
 }
 
-#if 0
 /**
- * @macro guided_dir_jump_backward
+ * @macro guided_dir_sum_i_blk
+ * @brief calculate sum of diff_i from p to the end of the block
  */
-#define guided_dir_jump_backward(r, k, dp, p, sp) { \
-	/** nothing to do */ \
-}
-#endif
+#define guided_dir_sum_i_blk(r, k, dp, p, sp) ( \
+	dir_vec_sum_i((r).pdr + (sp) + (((p) - (sp)) & ~(BLK-1)), \
+		((p) - (sp)) & (BLK-1)) \
+)
 
 #endif /* #ifndef _GUIDED_H_INCLUDED */
 /**

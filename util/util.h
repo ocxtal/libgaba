@@ -501,19 +501,19 @@ enum _ALN_DIR {
  */
 #define wr_pushm(w) { \
 	(w).pos = (w).pushm((w).p, (w).pos); (w).len++; \
-	debug("pushm: %c, pos(%lld)", (w).p[(w).pos], (w).pos); \
+	/*debug("pushm: %c, pos(%lld)", (w).p[(w).pos], (w).pos);*/ \
 }
 #define wr_pushx(w) { \
 	(w).pos = (w).pushx((w).p, (w).pos); (w).len++; \
-	debug("pushx: %c, pos(%lld)", (w).p[(w).pos], (w).pos); \
+	/*debug("pushx: %c, pos(%lld)", (w).p[(w).pos], (w).pos);*/ \
 }
 #define wr_pushi(w) { \
 	(w).pos = (w).pushi((w).p, (w).pos); (w).len++; \
-	debug("pushi: %c, pos(%lld)", (w).p[(w).pos], (w).pos); \
+	/*debug("pushi: %c, pos(%lld)", (w).p[(w).pos], (w).pos);*/ \
 }
 #define wr_pushd(w) { \
 	(w).pos = (w).pushd((w).p, (w).pos); (w).len++; \
-	debug("pushd: %c, pos(%lld)", (w).p[(w).pos], (w).pos); \
+	/*debug("pushd: %c, pos(%lld)", (w).p[(w).pos], (w).pos);*/ \
 }
 
 /**

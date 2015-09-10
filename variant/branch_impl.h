@@ -150,13 +150,10 @@ struct branch_linear_block {
 	/** load vectors */ \
 	debug("load vectors BW(%d)", BW); \
 	uint8_t *s = _tail(k->pdp, v); \
-	dump(s, 8*BW); \
 	vec_load8(s, pv); \
 	vec_load8(s + 16, cv); \
 	vec_store(pdp, pv); pdp += vec_size(); \
 	vec_store(pdp, cv); pdp += vec_size(); \
-	vec_print(stderr, pv); \
-	vec_print(stderr, cv); \
 	/** store the first (i, j) */ \
 	*((int64_t *)pdp) = i; pdp += sizeof(int64_t); \
 	*((int64_t *)pdp) = j; pdp += sizeof(int64_t); \
@@ -196,7 +193,7 @@ struct branch_linear_block {
  * @macro branch_linear_fill_former_body
  */
 #define branch_linear_fill_former_body(k, r, pdp) { \
-	debug("%d, %d, %d", vec_msb(cv), vec_center(cv), vec_lsb(cv)); \
+	/*debug("%d, %d, %d", vec_msb(cv), vec_center(cv), vec_lsb(cv));*/ \
 }
 #define branch_linear_fill_former_body_cap(k, r, pdp) { \
 }
@@ -257,8 +254,7 @@ struct branch_linear_block {
 	vec_assign(pv, cv); \
 	vec_assign(cv, tmp1); \
 	vec_max(maxv, maxv, cv); \
-	vec_print(stdout, cv); \
-	debug("p(%lld), i(%lld), j(%lld)", p, i, j); \
+	/*debug("p(%lld), i(%lld), j(%lld)", p, i, j);*/ \
 	vec_store(pdp, cv); pdp += vec_size(); \
 	/** calculate the next advancing direction */ \
 	dir_det_next(r, k, pdp, p); \
@@ -271,7 +267,9 @@ struct branch_linear_block {
  * @macro branch_linear_fill_empty_body
  */
 #define branch_linear_fill_empty_body(k, r, pdp) { \
-	naive_linear_fill_empty_body(k, r, pdp); \
+	vec_store(pdp, zv); pdp += vec_size(); \
+	dir_empty(r, k, pdp, p); \
+	/*naive_linear_fill_empty_body(k, r, pdp);*/ \
 }
 
 /**
@@ -361,7 +359,6 @@ struct branch_linear_block {
 	/** aggregate max */ \
 	int32_t max; \
 	vec_hmax(max, maxv); \
-	vec_print(stdout, maxv); \
 	/*vec_store(pdp, maxv); pdp += vec_size();*/ \
 	/** create ivec at the end */ \
 	pdp += sizeof(struct sea_joint_tail); \
@@ -436,26 +433,37 @@ struct branch_linear_block {
 	/** load the first vector */ \
 	vec_load(&pbk->maxv1, tv);				/** load max of bn */ \
 	vec_comp_mask(cm, tv, mv); \
+	/*vec_print(tv);*/ \
 	/** search a breakpoint */ \
+	debug("%lu, %lu", sizeof(linear_block_t), bpb()); \
+	debug("bn(%lld), p(%lld)", bn, _tail(k->pdp, p)); \
 	int64_t b;							/** head p-coord of the last block */ \
 	for(b = bn; b > 0; b--, pbk--) { \
 		vec_load(&(pbk - 1)->maxv1, tv); \
 		vec_comp_mask(pm, tv, mv); \
+		/*vec_print(tv);*/ \
+		debug("pm(%llx), cm(%llx)", pm, cm); \
 		if(pm != cm) { break; }			/** breakpoint found */ \
 	} \
+	debug("pbk(%p), %lld", pbk, (int64_t)((uint8_t *)pbk - pdp)); \
 	/** determine the vector (and p-coordinate) */ \
 	for(p = BLK-1; p >= 0; p--) { \
 		vec_load(&pbk->dp[p], tv); \
 		vec_comp_mask(pm, tv, mv); \
+		/*vec_print(tv);*/ \
+		/*vec_print(mv);*/ \
+		debug("pm(%llx)", pm); \
 		if(pm != 0) { break; } \
 	} \
+	debug("b(%lld), p(%lld)", b, p); \
 	/** calculate coordinates */ \
 	p += (b*BLK + sp); \
 	q = (int64_t)tzcnt(pm) - BW/2; \
 	/** initialize direction pointer with p, before calculating i */ \
 	dir_set_pdr(r, k, pdp, p, sp); \
-	i = pbk->i - dir_sum_i_blk(r, k, pdp, p, sp) - q; \
+	i = (pbk-1)->i + dir_sum_i_blk(r, k, pdp, p, sp) - q; \
 	j = p - (i - k->asp) + k->bsp; \
+	debug("i(%lld), pbk->i(%lld), di(%lld)", i, (pbk-1)->i, dir_sum_i_blk(r, k, pdp, p, sp)); \
 	/** write back coordinates */ \
 	_head(k->pdp, p) = k->mp = p; \
 	_head(k->pdp, q) = k->mq = q; \
@@ -482,6 +490,7 @@ struct branch_linear_block {
 		debug("num(%lld), addr(%lld)", blk_num(p-sp, 0), blk_addr(p-sp, 0)); \
 		dir_set_pdr(r, k, pdp, p, sp); \
 	} \
+	debug("size(%lu), size(%lu)", bpb(), sizeof(linear_block_t)); \
 	/** load score and pointers */ \
 	cc = *((cell_t *)(pdp + addr(p - sp, q))); \
 	pvh = (cell_t *)(pdp + addr((p - 1) - sp, 0)); \

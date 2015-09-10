@@ -139,7 +139,8 @@ struct trunk_linear_block {
 	_vec_cell_reg(dv); \
 	_vec_cell_reg(dh); \
 	_vec_cell_reg(t1); \
-	_vec_cell_reg(t2);
+	_vec_cell_reg(t2); \
+	_vec_cell_const(zv, 0);
 
 #define trunk_affine_fill_decl(k, r, pdp) \
 	trunk_linear_fill_decl(k, r, pdp); \
@@ -169,8 +170,6 @@ struct trunk_linear_block {
 		int16_t *t = (int16_t *)s + BW; \
 		/** load vectors */ \
 		vec_load16_dvdh(s, t, dv, dh, k->gi, _tail(k->pdp, d2)); \
-		vec_print(stderr, dv); \
-		vec_print(stderr, dh); \
 		debug("init acc p(%lld), scl(%d), scc(%d), scu(%d)", p, t[BW-1], t[BW/2], t[0]); \
 		/** initialize accumulator */ \
 		vec_acc_set(accv, p, t[BW-1], t[BW/2], t[0]); \
@@ -262,8 +261,6 @@ struct trunk_linear_block {
 	vec_sub(t2, t1, dv); \
 	vec_sub(dv, t1, dh); \
 	vec_assign(dh, t2); \
-	vec_print(stderr, dv); \
-	vec_print(stderr, dh); \
 	vec_store_dvdh(pdp, dv, dh); pdp += vec_size(); \
 	if(dir(r) == TOP) { vec_assign(t1, dv); } else { vec_assign(t1, dh); } \
 	vec_acc_accum_max(accv, maxv, t1, k->gi); \
@@ -280,7 +277,9 @@ struct trunk_linear_block {
  */
 #define trunk_linear_fill_empty_body(k, r, pdp) { \
 	/** increment pdp, and shift direction cache */ \
-	naive_linear_fill_empty_body(k, r, pdp); \
+	vec_store(pdp, zv); pdp += vec_size(); \
+	dir_empty(r, k, pdp, p); \
+	/*naive_linear_fill_empty_body(k, r, pdp);*/ \
 }
 
 /**
@@ -420,7 +419,7 @@ struct trunk_linear_block {
 	uint32_t *pmk = (uint32_t *)pdp;	/** tail of the section, as mask temporary */ \
 	/*debug("pbs(%p), pbe(%p), pmk(%p), k->pdp(%p), pdp(%p)", pbs, pbe, pmk, k->pdp, pdp);*/ \
 	int64_t sb = MAX2(b - 1, 0); \
-	int64_t eb = MIN2(b + 2, bn); \
+	int64_t eb = MIN2(b + 2, bn + 1); \
 	linear_block_t *pbk = (linear_block_t *)(k->pdp + head_size()) + sb; \
 	linear_block_t *pbs = pbk-1;		/** base block */ \
 	/** initialize accumulator */ \
@@ -441,8 +440,8 @@ struct trunk_linear_block {
 			vec_max(t2, t2, t1); \
 			vec_comp_mask(m, t1, t2); \
 			debug("p(%lld), m(%u)", p, m); \
-			vec_print(stdout, t1); \
-			vec_print(stdout, t2); \
+			vec_print(t1); \
+			vec_print(t2); \
 			*pmk++ = m; 	/** save mask */ \
 			/** load the next direction */ \
 			dir_load_forward(r, k, pdp, p, sp); \
@@ -469,8 +468,9 @@ struct trunk_linear_block {
 		debug("p(%lld), m(%u), b(%lld)", p, m & mask, 1+b-sb); \
 		k->mp = p; \
 		k->mq = pos - BW/2; \
-		debug("i(%lld), di(%lld)", (pbs + b/BLK + 1)->i, dir_sum_i_blk(r, k, pdp, p, sp)); \
-		k->mi = (pbs + b/BLK + 1)->i - dir_sum_i_blk(r, k, pdp, p, sp) - (pos - BW/2); \
+		debug("i(%lld), di(%lld)", (pbs + b/BLK)->i, dir_sum_i_blk(r, k, pdp, p, sp)); \
+		k->mi = (pbs + b/BLK)->i + dir_sum_i_blk(r, k, pdp, p, sp) - (pos - BW/2); \
+		/*k->mi = (pbs + b/BLK + 1)->i - dir_sum_i_blk(r, k, pdp, p, sp) - (pos - BW/2);*/ \
 		/*k->mi = *((int64_t *)pco) - dir_sum_i_blk(r, k, pdp, p, sp);*/ \
 		k->max = max; \
 	} \
@@ -763,6 +763,17 @@ struct trunk_linear_block {
 	rd_fetch(k->b, j-1); \
 }
 
+#if 0
+
+	for(int a = i-20; a < i+20; a++) { putchar(k->a.p[a]); } \
+	printf("\n"); \
+	for(int a = j-20; a < j+20; a++) { putchar(k->b.p[a]); } \
+	printf("\n"); \
+	for(int a = -20; a < 20; a++) { putchar(a == -1 ? '^' : ' '); } \
+	printf("\n"); \
+
+#endif
+
 /**
  * @macro trunk_linear_trace_body
  */
@@ -772,12 +783,6 @@ struct trunk_linear_block {
 	cell_t dh = DH(pvh + q, k->gi); \
 	cell_t diag = dh + DV(pdg + q + trunk_linear_leftq(r, k), k->gi); \
 	cell_t sc = rd_cmp(k->a, k->b) ? k->m : k->x; \
-	for(int a = i-20; a < i+20; a++) { putchar(k->a.p[a]); } \
-	printf("\n"); \
-	for(int a = j-20; a < j+20; a++) { putchar(k->b.p[a]); } \
-	printf("\n"); \
-	for(int a = -20; a < 20; a++) { putchar(a == -1 ? '^' : ' '); } \
-	printf("\n"); \
 	debug("traceback: (%lld, %lld), (%lld, %lld), diag(%d), sc(%d), dh(%d), dv(%d), dh-1(%d), dv-1(%d), left(%d), top(%d)", \
 		p, q, i, j, \
 		diag, sc, \

@@ -128,12 +128,15 @@
 #define dir_det_next 			label2(DP_LABEL, _dir_det_next)
 #define dir_empty				label2(DP_LABEL, _dir_empty)
 #define dir_end_block 			label2(DP_LABEL, _dir_end_block)
-#define dir_sum_i_blk			label2(DP_LABEL, _dir_sum_i_blk)
+#define dir_test_bound			label2(DP_LABEL, _dir_test_bound)
+#define dir_test_bound_cap		label2(DP_LABEL, _dir_test_bound_cap)
+
 #define dir_set_pdr 			label2(DP_LABEL, _dir_set_pdr)
 #define dir_load_forward		label2(DP_LABEL, _dir_load_forward)
 #define dir_go_forward			label2(DP_LABEL, _dir_go_forward)
 #define dir_load_backward 		label2(DP_LABEL, _dir_load_backward)
 #define dir_go_backward			label2(DP_LABEL, _dir_go_backward)
+#define dir_sum_i_blk			label2(DP_LABEL, _dir_sum_i_blk)
 
 /** base and cost variants */
 #include header(BASE_LABEL)

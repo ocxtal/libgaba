@@ -4,6 +4,7 @@
 #include <string.h>
 #include <sys/time.h>
 #include "sea.h"
+#include "util/log.h"
 
 /**
  * random sequence generator, modifier.
@@ -92,40 +93,40 @@ int main(int argc, char *argv[])
 	printf("%s\n%s\n", a, b);
 
 	int lm = 5, rm = 5;
-/*
+
 	dres = sea_align(d,
 		a, lm, strlen(a)-rm,
 		b, lm, strlen(b)-rm,
 		NULL, 0);
+
+	rres = sea_align(r,
+		a, lm, strlen(a)-rm,
+		b, lm, strlen(b)-rm,
+		dres->aln, dres->slen);
 
 	cres = sea_align(c,
 		a, lm, strlen(a)-rm,
 		b, lm, strlen(b)-rm,
 		dres->aln, dres->slen);
 
-	rres = sea_align(r,
-		a, lm, strlen(a)-rm,
-		b, lm, strlen(b)-rm,
-		dres->aln, dres->slen);
-*/
 	res = sea_align(r,
 		a, lm, strlen(a)-rm,
 		b, lm, strlen(b)-rm,
 		NULL, 0);
 
-	sea_add_clips(c, res, lm, rm, SEA_CLIP_HARD);
+//	sea_add_clips(c, res, lm, rm, SEA_CLIP_HARD);
 
-//	printf("%d, %lld\n", dres->score, dres->plen);
-//	printf("%d, %lld, %s\n", cres->score, cres->plen, cres->aln);
-//	printf("%d, %lld, %s\n", rres->score, rres->plen, rres->aln);
+	printf("%d, %lld\n", dres->score, dres->plen);
+	printf("%d, %lld, %s\n", cres->score, cres->plen, cres->aln);
+	printf("%d, %lld, %s\n", rres->score, rres->plen, rres->aln);
 	printf("%d, %lld, %s\n", res->score, res->plen, res->aln);
 
 	free(a);
 	free(b);
 
-//	sea_aln_free(d, dres);
-//	sea_aln_free(c, cres);
-//	sea_aln_free(r, rres);
+	sea_aln_free(d, dres);
+	sea_aln_free(c, cres);
+	sea_aln_free(r, rres);
 	sea_aln_free(c, res);
 
 	sea_close(d);

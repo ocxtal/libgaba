@@ -254,12 +254,8 @@ func(VARIANT_LABEL)(
 	/** fill_in */
 	int32_t stat = func2(VARIANT_LABEL, _fill)(k, pdp);
 
-	dump(pdp, k->pdp - pdp);
-
 	/** chain */
 	func2(VARIANT_LABEL, _chain)(k, pdp, stat);
-
-//	dump(pdp, k->pdp-pdp);
 
 	/** trace */
 	debug("pdp(%p), k->pdp(%p)", pdp, k->pdp);

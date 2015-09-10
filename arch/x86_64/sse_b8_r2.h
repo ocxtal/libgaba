@@ -279,19 +279,16 @@
 		_mm_slli_si128(tt2, 1), \
 		_mm_srli_si128(tt1, 15))); \
 	tt1 = _mm_adds_epi8(tt1, _mm_slli_si128(tt1, 1)); \
-	vec_print(stdout, tt); \
 	/** shift 2 */ \
 	tt2 = _mm_adds_epi8(tt2, _mm_or_si128( \
 		_mm_slli_si128(tt2, 2), \
 		_mm_srli_si128(tt1, 14))); \
 	tt1 = _mm_adds_epi8(tt1, _mm_slli_si128(tt1, 2)); \
-	vec_print(stdout, tt); \
 	/** shift 4 */ \
 	tt2 = _mm_adds_epi8(tt2, _mm_or_si128( \
 		_mm_slli_si128(tt2, 4), \
 		_mm_srli_si128(tt1, 12))); \
 	tt1 = _mm_adds_epi8(tt1, _mm_slli_si128(tt1, 4)); \
-	vec_print(stdout, tt); \
 	/** expand to 16bit */ \
 	lv##1 = _mm_cvtepi8_epi16(tt1); \
 	lv##2 = _mm_cvtepi8_epi16(_mm_srli_si128(tt1, 8)); \
@@ -381,11 +378,8 @@
 	vec_sub(t, dv, t);		/** t2 = dv - dh<<1 */ \
 	/** calculate prefix sum */ \
 	debug("calculate prefix sum"); \
-	vec_print(stdout, dv); \
-	vec_print(stdout, dh); \
-	vec_print(stdout, t); \
 	vec_psum(h, l, t); \
-	vec_print16(stdout, l, h); \
+	vec_print16(l, h); \
 	/** add offset */ \
 	(l##1) = _mm_adds_epi16(_mm_cvtepi8_epi16(of##1), l##1); \
 	(of##1) = _mm_srli_si128(of##1, 8); \
@@ -393,7 +387,7 @@
 	(h##1) = _mm_adds_epi16(_mm_cvtepi8_epi16(of##2), h##1); \
 	(of##2) = _mm_srli_si128(of##2, 8); \
 	(h##2) = _mm_adds_epi16(_mm_cvtepi8_epi16(of##2), h##2); \
-	vec_print16(stdout, l, h); \
+	vec_print16(l, h); \
 	/** calc maxpos */ \
 	int32_t posh, valh; \
 	vec_maxpos16((pos), (val), l); \
@@ -527,10 +521,6 @@
 			_mm_sub_epi16(c4, \
 				_mm_srli_si128(p4, 2))); \
 		vec_insert_msb(dh, 0); \
-		vec_print8(stdout, dv##1); \
-		vec_print8(stdout, dv##2); \
-		vec_print8(stdout, dh##1); \
-		vec_print8(stdout, dh##2); \
 	} else { \
 		debug("load left"); \
 		(dh##1) = _mm_packs_epi16( \
@@ -548,10 +538,6 @@
 			_mm_sub_epi16(c4, \
 				_mm_or_si128(_mm_slli_si128(p4, 2), _mm_srli_si128(p3, 14)))); \
 		vec_insert_lsb(dv, 0); \
-		vec_print8(stdout, dv##1); \
-		vec_print8(stdout, dv##2); \
-		vec_print8(stdout, dh##1); \
-		vec_print8(stdout, dh##2); \
 	} \
 	/** add offset */ \
 	(dv##1) = _mm_subs_epi8(dv##1, gv); \
@@ -748,11 +734,13 @@
 /**
  * print vector
  */
-#define vec_print(s, v) { \
+#ifdef DEBUG
+
+#define vec_print(v) { \
 	int8_t b[32]; \
 	void *p = (void *)b; \
 	vec_store(p, v); \
-	fprintf(s, \
+	fprintf(stderr, \
 		"[%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d," \
 		"%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d]\n", \
 		b[31], b[30], b[29], b[28], b[27], b[26], b[25], b[24], \
@@ -761,23 +749,23 @@
 		b[7], b[6], b[5], b[4], b[3], b[2], b[1], b[0]); \
 }
 
-#define vec_print8(s, v) { \
+#define vec_print8(v) { \
 	int8_t b[16]; \
 	_mm_store_si128((__m128i *)b, v); \
-	fprintf(s, \
+	fprintf(stderr, \
 /*		"[%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d]\n",*/ \
 		"[%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x]\n", \
 		(uint8_t)b[15], (uint8_t)b[14], (uint8_t)b[13], (uint8_t)b[12], (uint8_t)b[11], (uint8_t)b[10], (uint8_t)b[9], (uint8_t)b[8], \
 		(uint8_t)b[7], (uint8_t)b[6], (uint8_t)b[5], (uint8_t)b[4], (uint8_t)b[3], (uint8_t)b[2], (uint8_t)b[1], (uint8_t)b[0]); \
 }
 
-#define vec_print16(s, v1, v2) { \
+#define vec_print16(v1, v2) { \
 	int16_t b[32]; \
 	_mm_store_si128((__m128i *)b, v1##1); \
 	_mm_store_si128((__m128i *)b + 1, v1##2); \
 	_mm_store_si128((__m128i *)b + 2, v2##1); \
 	_mm_store_si128((__m128i *)b + 3, v2##2); \
-	fprintf(s, \
+	fprintf(stderr, \
 		"[%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d," \
 		"%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d]\n", \
 		b[31], b[30], b[29], b[28], b[27], b[26], b[25], b[24], \
@@ -785,6 +773,14 @@
 		b[15], b[14], b[13], b[12], b[11], b[10], b[9], b[8], \
 		b[7], b[6], b[5], b[4], b[3], b[2], b[1], b[0]); \
 }
+
+#else /* #ifdef DEBUG */
+
+#define vec_print(v)		;
+#define vec_print8(v)		;
+#define vec_print16(v1, v2)	;
+
+#endif /* #ifdef DEBUG */
 
 /**
  * char vector operations
