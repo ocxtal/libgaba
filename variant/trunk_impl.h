@@ -430,8 +430,8 @@ struct trunk_linear_block {
 	p = sb*BLK+sp; \
 	dir_set_pdr(r, k, k->pdp, p, sp); \
 	/** accumulate */ \
-	int64_t a, l; \
-	for(a = sb; a < eb; a++, pbk++) { \
+	int64_t bb, l; \
+	for(bb = sb; bb < eb; bb++, pbk++) { \
 		for(l = 0; l < BLK; l++) { \
 			vec_load_dvdh(pbk->dp[l], dv, dh); \
 			if(dir(r) == TOP) { vec_add(t1, t1, dv); } \
@@ -460,12 +460,12 @@ struct trunk_linear_block {
 		/** search breakpoint */ \
 		uint32_t mask = 0x01<<pos; \
 		/*uint8_t *pco = pbe + bpl();*/ \
-		for(b = (eb-sb)*BLK; b > 0; b--) { \
-			debug("b(%lld), p(%lld), m(%u)", b, p, *(pmk-1)); \
+		for(b = (eb-sb)*BLK-1; b >= 0; b--) { \
+			debug("b(%lld), p(%lld), m(%u)", b, p, *(pmk-1) & mask); \
 			dir_go_backward(r, k, pdp, p, sp); \
 			if((*--pmk & mask) != 0) { break; } \
 		} \
-		debug("p(%lld), m(%u), b(%lld)", p, m & mask, 1+b-sb); \
+		debug("p(%lld), m(%u), b(%lld)", p, m & mask, b); \
 		k->mp = p; \
 		k->mq = pos - BW/2; \
 		debug("i(%lld), di(%lld)", (pbs + b/BLK)->i, dir_sum_i_blk(r, k, pdp, p, sp)); \

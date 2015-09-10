@@ -17,12 +17,12 @@ def configure(conf):
 	conf.recurse('util')
 	conf.recurse('arch')
 
-	conf.env.append_value('CFLAGS', '-fmacro-backtrace-limit=0')
-	conf.env.append_value('CFLAGS', '-g')
+	# conf.env.append_value('CFLAGS', '-fmacro-backtrace-limit=0')
+	# conf.env.append_value('CFLAGS', '-g')
 	# conf.env.append_value('CFLAGS', '-DDEBUG')
-	# conf.env.append_value('CFLAGS', '-DBENCH')
+	conf.env.append_value('CFLAGS', '-DBENCH')
 	conf.env.append_value('CFLAGS', '-Wall')
-	# conf.env.append_value('CFLAGS', '-O3')
+	conf.env.append_value('CFLAGS', '-O3')
 	conf.env.append_value('CFLAGS', '-std=c99')
 	# conf.env.append_value('CFLAGS', '-D_POSIX_C_SOURCE=200112L')	# for posix_memalign and clock_gettime
 	conf.env.append_value('CFLAGS', '-fPIC')
