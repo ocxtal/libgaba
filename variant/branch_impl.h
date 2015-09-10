@@ -327,7 +327,7 @@ struct branch_linear_block {
  * @macro branch_linear_fill_test_chain
  */
 #define branch_linear_fill_test_chain(k, r, pdp) ( \
-	/*(CELL_MAX / k->m)*/64 - p \
+	(CELL_MAX / k->m)/*64*/ - p \
 )
 #define branch_linear_fill_test_chain_cap(k, r, pdp) ( \
 	branch_linear_fill_test_chain(k, r, pdp) \
