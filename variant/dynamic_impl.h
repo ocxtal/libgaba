@@ -110,6 +110,9 @@ typedef struct _dir dir_t;
 #define dynamic_dir_raw(r)	( (r).d2 )
 
 /**
+ * direction determiners for fill-in functions
+ */
+/**
  * @macro dynamic_dir_init
  * @brief initialize _dir struct
  */
@@ -164,6 +167,10 @@ typedef struct _dir dir_t;
 #define dynamic_dir_test_bound(r, k, dp, p)			( 0 )
 #define dynamic_dir_test_bound_cap(r, k, dp, p)		( 0 )
 
+
+/**
+ * direction loaders for search and traceback functions
+ */
 /**
  * @macro (internal) dir_vec_acc_prev
  */
@@ -235,6 +242,36 @@ typedef struct _dir dir_t;
 #define dynamic_dir_sum_i_blk(r, k, dp, p, sp) ( \
 	dir_vec_sum_i((r).pdr, ((p) - (sp)) & (BLK-1)) \
 )
+
+/**
+ * fast direction loaders (does not support sum_i_blk)
+ */
+/**
+ * @macro dynamic_dir_set_pdr_fast
+ */
+#define dynamic_dir_set_pdr_fast(r, k, dp, p, sp) { \
+	/** calculate (virtual) pdr */ \
+	(r).pdr = (uint8_t *)(dp) + dir_vec_base_addr(p, sp); \
+	(r).d2 = dir_vec_acc((r).pdr, p, sp)<<2; \
+	/** adjust pdr to point dir at p-1 */ \
+	if((((p) - (sp)) & (BLK-1)) == 0) { \
+		(r).pdr -= dir_vec_stride_size(); \
+	} \
+	(r).d2 |= dir_vec_acc((r).pdr, p-1, sp); \
+	debug("d2(%d)", (r).d2); \
+}
+
+/**
+ * @macro dynamic_dir_load_backward_fast
+ * @brief _fast variants does not support sum_i_blk function
+ */
+#define dynamic_dir_load_backward_fast(r, k, dp, p, sp) { \
+	p--; \
+	if((((p) - (sp)) & (BLK-1)) == 0) { \
+		(r).pdr -= dir_vec_stride_size(); \
+	} \
+	(r).d2 = 0x0f & (dir_vec_acc((r).pdr, p-1, sp) | ((r).d2<<2)); \
+}
 
 #endif /* #ifndef _DYNAMIC_H_INCLUDED */
 /**

@@ -389,7 +389,7 @@ struct naive_linear_block {
  */
 #define naive_linear_trace_windback_ptr(k, r, pdp) { \
 	/** load the next direction pointer */ \
-	dir_load_backward(r, k, pdp, p, sp); \
+	dir_load_backward_fast(r, k, pdp, p, sp); \
 	/** update pdg, pvh, and ptb (cell_t *) */ \
 	pvh = pdg; pdg -= bpl() / sizeof(cell_t); \
 	if((((p - 1) - sp) & (BLK-1)) == 0) { \
@@ -419,7 +419,7 @@ struct naive_linear_block {
 	/** initialize pointers */ \
 	debug("num(%lld), addr(%lld)", blk_num(p-sp, 0), blk_addr(p-sp, 0)); \
 	/**p++;*/ 								/** p = (p of start pos) + 1 */ \
-	dir_set_pdr(r, k, pdp, p, sp);		/** load direction of p and p-1 */ \
+	dir_set_pdr_fast(r, k, pdp, p, sp);		/** load direction of p and p-1 */ \
 	pvh = (cell_t *)(pdp + addr((p - 1) - sp, 0)); \
 	pdg = (cell_t *)(pdp + addr((p - 2) - sp, 0)); \
 	/*pdg = (cell_t *)((uint8_t *)pdg - bpl() - (((p - sp) & (BLK-1)) == 0 ? jam_size() : 0));*/ \

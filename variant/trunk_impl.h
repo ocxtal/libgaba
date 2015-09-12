@@ -731,7 +731,7 @@ struct trunk_linear_block {
  */
 #define trunk_linear_trace_windback_ptr(k, r, pdp) { \
 	/** load the next direction pointer */ \
-	dir_load_backward(r, k, pdp, p, sp); \
+	dir_load_backward_fast(r, k, pdp, p, sp); \
 	/** update pdg, pvh, and ptb (cell_t *) before loading the next direction */ \
 	pvh = pdg; pdg -= bpl() / sizeof(cell_t); \
 	if(((p - sp) & (BLK-1)) == 0) { \
@@ -757,7 +757,7 @@ struct trunk_linear_block {
 	/** initialize pointers */ \
 	pvh = (cell_t *)(pdp + addr(p - sp, 0)); \
 	pdg = (cell_t *)(pdp + addr((p - 1) - sp, 0)); \
-	dir_set_pdr(r, k, pdp, p, sp); \
+	dir_set_pdr_fast(r, k, pdp, p, sp); \
 	/** fetch the last characters */ \
 	rd_fetch(k->a, i-1); \
 	rd_fetch(k->b, j-1); \

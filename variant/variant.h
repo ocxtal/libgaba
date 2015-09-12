@@ -137,6 +137,8 @@
 #define dir_load_backward 		label2(DP_LABEL, _dir_load_backward)
 #define dir_go_backward			label2(DP_LABEL, _dir_go_backward)
 #define dir_sum_i_blk			label2(DP_LABEL, _dir_sum_i_blk)
+#define dir_set_pdr_fast 		label2(DP_LABEL, _dir_set_pdr_fast)
+#define dir_load_backward_fast 	label2(DP_LABEL, _dir_load_backward_fast)
 
 /** base and cost variants */
 #include header(BASE_LABEL)

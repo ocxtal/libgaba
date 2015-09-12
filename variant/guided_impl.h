@@ -56,6 +56,9 @@ typedef struct _dir dir_t;
 #define guided_dir_raw(r) 	( (r).d2 )
 
 /**
+ * direction determiners for fill-in macros
+ */
+/**
  * @macro guided_dir_init
  */
 #define guided_dir_init(r, k, dp, p) { \
@@ -106,6 +109,9 @@ typedef struct _dir dir_t;
 )
 
 /**
+ * direction loaders for search and traceback functions
+ */
+/**
  * @macro guided_dir_set_pdr
  */
 #define guided_dir_set_pdr(r, k, dp, p, sp) { \
@@ -143,6 +149,16 @@ typedef struct _dir dir_t;
 	dir_vec_sum_i((r).pdr + (sp) + (((p) - (sp)) & ~(BLK-1)), \
 		((p) - (sp)) & (BLK-1)) \
 )
+
+/**
+ * fast direction loaders
+ */
+#define guided_dir_set_pdr_fast(r, k, dp, p, sp) { \
+	guided_dir_set_pdr(r, k, dp, p, sp); \
+}
+#define guided_dir_load_backward_fast(r, k, dp, p, sp) { \
+	guided_dir_load_backward(r, k, dp, p, sp); \
+}
 
 #endif /* #ifndef _GUIDED_H_INCLUDED */
 /**
