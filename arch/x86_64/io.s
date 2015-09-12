@@ -358,9 +358,9 @@ __pushm_cigar_r:
 	cmpb $61, %r8b
 	je __pushm_cigar_r_incr
 	pxor %xmm0, %xmm0
-	pxor %xmm1, %xmm1
+	# pxor %xmm1, %xmm1
 	movd %r8d, %xmm0
-	movq $1, %r9		# %r9 holds the length of array in %r8
+	movq $1, %r8		# %r8 holds the length of array in %xmm0
 	movq %rsi, %rdx
 	addq $1, %rdx
 	movl (%rdi, %rdx), %eax
@@ -369,14 +369,15 @@ __pushm_cigar_r_loop:
 	movq $0, %rdx
 	divq %rcx
 	addq $48, %rdx
-	movd %edx, %xmm1
+	# movd %edx, %xmm1
 	pslldq $1, %xmm0
-	por %xmm1, %xmm0
-	addq $1, %r9
+	# por %xmm1, %xmm0
+	pinsrb $0, %edx, %xmm0
+	addq $1, %r8
 	cmpl $0, %eax
 	jne __pushm_cigar_r_loop
 	movdqu %xmm0, (%rdi, %rsi)
-	addq %r9, %rsi
+	addq %r8, %rsi
 	movb $61, (%rdi, %rsi)
 	movq %rsi, %rax
 	addq $1, %rsi
@@ -396,9 +397,9 @@ __pushx_cigar_r:
 	cmpb $88, %r8b
 	je __pushx_cigar_r_incr
 	pxor %xmm0, %xmm0
-	pxor %xmm1, %xmm1
+	# pxor %xmm1, %xmm1
 	movd %r8d, %xmm0
-	movq $1, %r9		# %r9 holds the length of array in %r8
+	movq $1, %r8		# %r8 holds the length of array in %xmm0
 	movq %rsi, %rdx
 	addq $1, %rdx
 	movl (%rdi, %rdx), %eax
@@ -407,14 +408,15 @@ __pushx_cigar_r_loop:
 	movq $0, %rdx
 	divq %rcx
 	addq $48, %rdx
-	movd %edx, %xmm1
+	# movd %edx, %xmm1
 	pslldq $1, %xmm0
-	por %xmm1, %xmm0
-	addq $1, %r9
+	# por %xmm1, %xmm0
+	pinsrb $0, %edx, %xmm0
+	addq $1, %r8
 	cmpl $0, %eax
 	jne __pushx_cigar_r_loop
 	movdqu %xmm0, (%rdi, %rsi)
-	addq %r9, %rsi
+	addq %r8, %rsi
 	movb $88, (%rdi, %rsi)
 	movq %rsi, %rax
 	addq $1, %rsi
@@ -434,9 +436,9 @@ __pushi_cigar_r:
 	cmpb $73, %r8b
 	je __pushi_cigar_r_incr
 	pxor %xmm0, %xmm0
-	pxor %xmm1, %xmm1
+	# pxor %xmm1, %xmm1
 	movd %r8d, %xmm0
-	movq $1, %r9		# %r9 holds the length of array in %r8
+	movq $1, %r8		# %r8 holds the length of array in %xmm0
 	movq %rsi, %rdx
 	addq $1, %rdx
 	movl (%rdi, %rdx), %eax
@@ -445,14 +447,15 @@ __pushi_cigar_r_loop:
 	movq $0, %rdx
 	divq %rcx
 	addq $48, %rdx
-	movd %edx, %xmm1
+	# movd %edx, %xmm1
 	pslldq $1, %xmm0
-	por %xmm1, %xmm0
-	addq $1, %r9
+	# por %xmm1, %xmm0
+	pinsrb $0, %edx, %xmm0
+	addq $1, %r8
 	cmpl $0, %eax
 	jne __pushi_cigar_r_loop
 	movdqu %xmm0, (%rdi, %rsi)
-	addq %r9, %rsi
+	addq %r8, %rsi
 	movb $73, (%rdi, %rsi)
 	movq %rsi, %rax
 	addq $1, %rsi
@@ -472,9 +475,9 @@ __pushd_cigar_r:
 	cmpb $68, %r8b
 	je __pushd_cigar_r_incr
 	pxor %xmm0, %xmm0
-	pxor %xmm1, %xmm1
+	# pxor %xmm1, %xmm1
 	movd %r8d, %xmm0
-	movq $1, %r9		# %r9 holds the length of array in %r8
+	movq $1, %r8		# %r8 holds the length of array in %xmm0
 	movq %rsi, %rdx
 	addq $1, %rdx
 	movl (%rdi, %rdx), %eax
@@ -483,14 +486,15 @@ __pushd_cigar_r_loop:
 	movq $0, %rdx
 	divq %rcx
 	addq $48, %rdx
-	movd %edx, %xmm1
+	# movd %edx, %xmm1
 	pslldq $1, %xmm0
-	por %xmm1, %xmm0
-	addq $1, %r9
+	# por %xmm1, %xmm0
+	pinsrb $0, %edx, %xmm0
+	addq $1, %r8
 	cmpl $0, %eax
 	jne __pushd_cigar_r_loop
 	movdqu %xmm0, (%rdi, %rsi)
-	addq %r9, %rsi
+	addq %r8, %rsi
 	movb $68, (%rdi, %rsi)
 	movq %rsi, %rax
 	addq $1, %rsi
@@ -508,9 +512,9 @@ _finish_cigar_r:
 __finish_cigar_r:
 	movb (%rdi, %rsi), %r8b
 	pxor %xmm0, %xmm0
-	pxor %xmm1, %xmm1
+	# pxor %xmm1, %xmm1
 	movd %r8d, %xmm0
-	movq $1, %r9		# %r9 holds the length of array in %r8
+	movq $1, %r8		# %r8 holds the length of array in %xmm0
 	movq %rsi, %rdx
 	addq $1, %rdx
 	movl (%rdi, %rdx), %eax
@@ -519,14 +523,15 @@ __finish_cigar_r_loop:
 	movq $0, %rdx
 	divq %rcx
 	addq $48, %rdx
-	movd %edx, %xmm1
+	# movd %edx, %xmm1
 	pslldq $1, %xmm0
-	por %xmm1, %xmm0
-	addq $1, %r9
+	# por %xmm1, %xmm0
+	pinsrb $0, %edx, %xmm0
+	addq $1, %r8
 	cmpl $0, %eax
 	jne __finish_cigar_r_loop
 	movdqu %xmm0, (%rdi, %rsi)
-	addq %r9, %rsi
+	addq %r8, %rsi
 	movb $0, (%rdi, %rsi)
 	movq %rsi, %rax
 	addq $1, %rax

@@ -487,15 +487,11 @@
  * load 16bit vector, convert it to a pair of 8bit diff vectors
  */
 #define vec_load16_dvdh(ps, pt, dv, dh, gi, dir) { \
-	int i; \
 	__m128i p1, p2, p3, p4, c1, c2, c3, c4; \
-	__m128i ct, carry, t1, t2; \
 	__m128i const gv = _mm_set1_epi8(gi); \
-	__m128i const zv = _mm_setzero_si128(); \
 	__m128i *pv = (__m128i *)(ps); \
 	__m128i *cv = (__m128i *)(pt); \
 	/** load */ \
-	carry = zv;						/** clear carry */ \
 	p1 = _mm_load_si128(pv); \
 	p2 = _mm_load_si128(pv + 1); \
 	p3 = _mm_load_si128(pv + 2); \
