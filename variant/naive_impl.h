@@ -427,8 +427,8 @@ struct naive_linear_block {
 	/** load score */ \
 	cc = _head(k->pdp, score); \
 	/** fetch characters */ \
-	rd_fetch(k->a, i-1); \
-	rd_fetch(k->b, j-1); \
+	/*rd_fetch(k->a, i-1);*/	/** to avoid fetch before boundary check */ \
+	/*rd_fetch(k->b, j-1);*/	/** to avoid fetch before boundary check */ \
 }
 
 #if 0
@@ -448,27 +448,31 @@ struct naive_linear_block {
  */
 #define naive_linear_trace_body(k, r, pdp) { \
 	/** load diagonal cell and score */ \
+	debug("p(%lld), q(%lld), i(%lld), j(%lld)", p, q, i, j); \
+	rd_fetch(k->a, i-1); \
+	rd_fetch(k->b, j-1); \
 	cell_t h, v; \
 	cell_t diag = pdg[q + naive_linear_topleftq(r, k)]; \
 	cell_t sc = rd_cmp(k->a, k->b) ? k->m : k->x; \
-	/*debug("(%lld, %lld), (%lld, %lld), d(%d), v(%d), h(%d), sc(%d), cc(%d)",*/ \
-		/*p, q, i, j, diag, pvh[q + naive_linear_leftq(r, k)], pvh[q + naive_linear_topq(r, k)], sc, cc);*/ \
+	debug("(%lld, %lld), (%lld, %lld), d(%d), v(%d), h(%d), sc(%d), cc(%d)", \
+		p, q, i, j, diag, pvh[q + naive_linear_leftq(r, k)], pvh[q + naive_linear_topq(r, k)], sc, cc); \
 	if(cc == (diag + sc)) { \
+		debug("match"); \
 		/** update direction and pointers */ \
 		q += naive_linear_topleftq(r, k); \
 		naive_linear_trace_windback_ptr(k, r, pdp); \
-		i--; rd_fetch(k->a, i-1); \
-		j--; rd_fetch(k->b, j-1); \
+		i--; /*rd_fetch(k->a, i-1);*/	/** to avoid fetch before boundary check */ \
+		j--; /*rd_fetch(k->b, j-1);*/	/** to avoid fetch before boundary check */ \
 		if(sc == k->m) { wr_pushm(k->l); } else { wr_pushx(k->l); } \
 		cc = diag; \
 	} else if(cc == ((h = pvh[q + naive_linear_leftq(r, k)]) + k->gi)) { \
 		q += naive_linear_leftq(r, k); \
-		i--; rd_fetch(k->a, i-1); \
+		i--; /*rd_fetch(k->a, i-1);*/	/** to avoid fetch before boundary check */ \
 		wr_pushd(k->l); \
 		cc = h; \
 	} else if(cc == ((v = pvh[q + naive_linear_topq(r, k)]) + k->gi)) { \
 		q += naive_linear_topq(r, k); \
-		j--; rd_fetch(k->b, j-1); \
+		j--; /*rd_fetch(k->b, j-1);*/	/** to avoid fetch before boundary check */ \
 		wr_pushi(k->l); \
 		cc = v; \
 	} else { \
@@ -484,7 +488,21 @@ struct naive_linear_block {
  * @brief returns negative if beginning bound is invaded
  */
 #define naive_linear_trace_test_bound(k, r, pdp) ( \
-	p - sp \
+	(i - k->asp - 1) | (j - k->bsp - 1) \
+)
+#define naive_linear_trace_test_bound_cap(k, r, pdp) ( \
+	(i - k->asp - 1) | (j - k->bsp - 1) \
+)
+
+/**
+ * @macro naive_linear_trace_test_joint
+ * @brief returns negative if beginning bound is invaded
+ */
+#define naive_linear_trace_test_joint(k, r, pdp) ( \
+	(p - sp) \
+)
+#define naive_linear_trace_test_joint_cap(k, r, pdp) ( \
+	(p - sp) \
 )
 
 /**
@@ -494,15 +512,33 @@ struct naive_linear_block {
 #define naive_linear_trace_test_sw(k, r, pdp) ( \
 	((k->alg == SW) ? -1 : 0) & (cc - 1) \
 )
+#define naive_linear_trace_test_sw_cap(k, r, pdp) ( \
+	naive_linear_trace_test_sw(k, r, pdp) \
+)
 
 /**
  * @macro naive_linear_trace_check_term
  * @brief returns false if the next traceback loop can be executed
  */
 #define naive_linear_trace_check_term(k, r, pdp) ( \
-	( naive_linear_trace_test_bound(k, r, pdp) \
-	| naive_linear_trace_test_sw(k, r, pdp)) < 0 \
+	( trace_test_bound(k, r, pdp) \
+	| trace_test_joint(k, r, pdp) \
+	| trace_test_sw(k, r, pdp)) < 0 \
 )
+#define naive_linear_trace_check_term_cap(k, r, pdp) ( \
+	( trace_test_bound_cap(k, r, pdp) \
+	| trace_test_joint_cap(k, r, pdp) \
+	| trace_test_sw_cap(k, r, pdp)) < 0 \
+)
+
+/**
+ * @macro naive_linear_trace_add_cap
+ */
+#define naive_linear_trace_add_cap(k, r, pdp) { \
+	debug("add cap i(%lld), j(%lld), asp(%lld), bsp(%lld)", i, j, k->asp, k->bsp); \
+	while(i-- > k->asp) { wr_pushd(k->l); } \
+	while(j-- > k->bsp) { wr_pushi(k->l); } \
+}
 
 /**
  * @macro naive_linear_trace_finish

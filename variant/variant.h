@@ -190,7 +190,15 @@
 #define trace_decl				label3(BASE_LABEL, COST_SUFFIX, _trace_decl)
 #define trace_init				label3(BASE_LABEL, COST_SUFFIX, _trace_init)
 #define trace_body				label3(BASE_LABEL, COST_SUFFIX, _trace_body)
+#define trace_test_bound		label3(BASE_LABEL, COST_SUFFIX, _trace_test_bound)
+#define trace_test_bound_cap	label3(BASE_LABEL, COST_SUFFIX, _trace_test_bound_cap)
+#define trace_test_joint		label3(BASE_LABEL, COST_SUFFIX, _trace_test_joint)
+#define trace_test_joint_cap	label3(BASE_LABEL, COST_SUFFIX, _trace_test_joint_cap)
+#define trace_test_sw			label3(BASE_LABEL, COST_SUFFIX, _trace_test_sw)
+#define trace_test_sw_cap		label3(BASE_LABEL, COST_SUFFIX, _trace_test_sw_cap)
 #define trace_check_term 		label3(BASE_LABEL, COST_SUFFIX, _trace_check_term)
+#define trace_check_term_cap 	label3(BASE_LABEL, COST_SUFFIX, _trace_check_term_cap)
+#define trace_add_cap			label3(BASE_LABEL, COST_SUFFIX, _trace_add_cap)
 #define trace_finish			label3(BASE_LABEL, COST_SUFFIX, _trace_finish)
 
 #endif /* #ifndef _VARIANT_H_INCLUDED */

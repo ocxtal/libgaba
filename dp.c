@@ -223,6 +223,10 @@ func2(VARIANT_LABEL, _trace)(
 		if(trace_check_term(k, r, pdp)) { break; }
 		trace_body(k, r, pdp);
 	}
+	debug("p(%lld), q(%lld), i(%lld), j(%lld)", p, q, i, j);
+	if(trace_test_bound(k, r, pdp) < 0) {
+		trace_add_cap(k, r, pdp);
+	}
 	trace_finish(k, r, pdp);
 
 	bench_end(trace);
@@ -247,7 +251,10 @@ func(VARIANT_LABEL)(
 	int32_t stat = func2(VARIANT_LABEL, _fill)(k, pdp);
 
 	/** chain */
-	func2(VARIANT_LABEL, _chain)(k, pdp, stat);
+	stat = func2(VARIANT_LABEL, _chain)(k, pdp, stat);
+	if(stat != SEA_SUCCESS) {
+		return(stat);
+	}
 
 	/** trace */
 	debug("pdp(%p), k->pdp(%p)", pdp, k->pdp);
@@ -257,6 +264,8 @@ func(VARIANT_LABEL)(
 	debug("trace sp(%lld), ep(%lld), p(%lld), i(%lld)", sp, ep, p, _head(k->pdp, i));
 	if((uint64_t)(p - sp) < (ep - sp)) {
 		stat = func2(VARIANT_LABEL, _trace)(k, pdp);
+	} else {
+		_aligned_block_memcpy(pdp, k->pdp, sizeof(struct sea_joint_head));
 	}
 	k->pdp = pdp;
 	return(stat);

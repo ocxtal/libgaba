@@ -80,7 +80,6 @@ typedef struct _dir dir_t;
  */
 #define guided_dir_det_next(r, k, dp, p) { \
 	uint8_t d = (r).pdr[++(p)]; \
-	debug("guided band: d(%d)", d); \
 	(r).d2 = (d<<2) | ((r).d2>>2); \
 }
 

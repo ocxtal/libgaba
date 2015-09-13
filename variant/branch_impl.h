@@ -142,6 +142,7 @@ struct branch_linear_block {
 	p = _tail(k->pdp, p); \
 	i = _tail(k->pdp, i) - DEF_VEC_LEN/2; \
 	j = (p - 1) - (i - k->asp) + k->bsp; \
+	debug("p(%lld), i(%lld), j(%lld)", _tail(k->pdp, p), i, j); \
 	/** initialize direction array */ \
 	debug("dir_init"); \
 	dir_init(r, k, k->pdp, p); \
@@ -169,6 +170,7 @@ struct branch_linear_block {
 	/** load coordinates and vectors, initialize misc variables */ \
 	branch_linear_fill_init_intl(k, r, pdp); \
 	/** initialize char vectors */ \
+	debug("init char vectors"); \
 	vec_char_setzero(wq);	/** vector on the top */ \
 	for(q = -BW/2; q < BW/2; q++) { \
 		rd_fetch(k->a, i+q); \
@@ -491,6 +493,9 @@ struct branch_linear_block {
 		dir_set_pdr(r, k, pdp, p, sp); \
 	} \
 	debug("size(%lu), size(%lu)", bpb(), sizeof(linear_block_t)); \
+	debug("(%lld, %lld), (%lld, %lld), sp(%lld)", p, q, i, j, sp); \
+	/** initialize pointers */ \
+	debug("num(%lld), addr(%lld)", blk_num(p-sp, 0), blk_addr(p-sp, 0)); \
 	/** load score and pointers */ \
 	cc = *((cell_t *)(pdp + addr(p - sp, q))); \
 	pvh = (cell_t *)(pdp + addr((p - 1) - sp, 0)); \
@@ -503,17 +508,41 @@ struct branch_linear_block {
 /**
  * @macro branch_linear_trace_body
  */
-#define branch_linear_trace_body(k, r, pdp)			naive_linear_trace_body(k, r, pdp)
+#define branch_linear_trace_body(k, r, pdp)				naive_linear_trace_body(k, r, pdp)
+
+/**
+ * @macro branch_linear_trace_test_bound
+ */
+#define branch_linear_trace_test_bound(k, r, pdp)		naive_linear_trace_test_bound(k, r, pdp)
+#define branch_linear_trace_test_bound_cap(k, r, pdp)	naive_linear_trace_test_bound_cap(k, r, pdp)
+
+/**
+ * @macro branch_linear_trace_test_joint
+ */
+#define branch_linear_trace_test_joint(k, r, pdp)		naive_linear_trace_test_joint(k, r, pdp)
+#define branch_linear_trace_test_joint_cap(k, r, pdp)	naive_linear_trace_test_joint_cap(k, r, pdp)
+
+/**
+ * @macro branch_linear_trace_test_sw
+ */
+#define branch_linear_trace_test_sw(k, r, pdp)			naive_linear_trace_test_sw(k, r, pdp)
+#define branch_linear_trace_test_sw_cap(k, r, pdp)		naive_linear_trace_test_sw_cap(k, r, pdp)
 
 /**
  * @macro branch_linear_trace_check_term
  */
-#define branch_linear_trace_check_term(k, r, pdp)	naive_linear_trace_check_term(k, r, pdp)
+#define branch_linear_trace_check_term(k, r, pdp)		naive_linear_trace_check_term(k, r, pdp)
+#define branch_linear_trace_check_term_cap(k, r, pdp)	naive_linear_trace_check_term_cap(k, r, pdp)
+
+/**
+ * @macro branch_linear_trace_add_cap
+ */
+#define branch_linear_trace_add_cap(k, r, pdp)			naive_linear_trace_add_cap(k, r, pdp)
 
 /**
  * @macro branch_linear_trace_finish
  */
-#define branch_linear_trace_finish(k, r, pdp)		naive_linear_trace_finish(k, r, pdp)
+#define branch_linear_trace_finish(k, r, pdp)			naive_linear_trace_finish(k, r, pdp)
 
 #endif /* #ifndef _BRANCH_H_INCLUDED */
 /**

@@ -759,8 +759,8 @@ struct trunk_linear_block {
 	pdg = (cell_t *)(pdp + addr((p - 1) - sp, 0)); \
 	dir_set_pdr_fast(r, k, pdp, p, sp); \
 	/** fetch the last characters */ \
-	rd_fetch(k->a, i-1); \
-	rd_fetch(k->b, j-1); \
+	/*rd_fetch(k->a, i-1);*/	/** to avoid fetch before boundary check */ \
+	/*rd_fetch(k->b, j-1);*/	/** to avoid fetch before boundary check */ \
 }
 
 #if 0
@@ -780,6 +780,8 @@ struct trunk_linear_block {
 #define trunk_linear_trace_body(k, r, pdp) { \
 	/** calculate diagonal difference */ \
 	debug("dir: d(%d), d2(%d)", dir(r), dir2(r)); \
+	rd_fetch(k->a, i-1); \
+	rd_fetch(k->b, j-1); \
 	cell_t dh = DH(pvh + q, k->gi); \
 	cell_t diag = dh + DV(pdg + q + trunk_linear_leftq(r, k), k->gi); \
 	cell_t sc = rd_cmp(k->a, k->b) ? k->m : k->x; \
@@ -793,17 +795,17 @@ struct trunk_linear_block {
 	if(sc == diag) { \
 		q += trunk_linear_topleftq(r, k); \
 		trunk_linear_trace_windback_ptr(k, r, pdp); \
-		i--; rd_fetch(k->a, i-1); \
-		j--; rd_fetch(k->b, j-1); \
+		i--; /*rd_fetch(k->a, i-1);*/	/** to avoid fetch before boundary check */ \
+		j--; /*rd_fetch(k->b, j-1);*/	/** to avoid fetch before boundary check */ \
 		if(sc == k->m) { wr_pushm(k->l); } else { wr_pushx(k->l); } \
 	} else if(dh == k->gi) { \
 		q += trunk_linear_leftq(r, k); \
-		i--; rd_fetch(k->a, i-1); \
+		i--; /*rd_fetch(k->a, i-1);*/	/** to avoid fetch before boundary check */ \
 		debug("del"); \
 		wr_pushd(k->l); \
 	} else if(DV(pvh + q, k->gi) == k->gi) { \
 		q += trunk_linear_topq(r, k); \
-		j--; rd_fetch(k->b, j-1); \
+		j--; /*rd_fetch(k->b, j-1);*/	/** to avoid fetch before boundary check */ \
 		debug("ins"); \
 		wr_pushi(k->l); \
 	} else { \
@@ -821,24 +823,39 @@ struct trunk_linear_block {
 /**
  * @macro trunk_linear_trace_test_bound
  */
-#define trunk_linear_trace_test_bound(k, r, pdp) ( \
-	p - sp \
-)
+#define trunk_linear_trace_test_bound(k, r, pdp)		naive_linear_trace_test_bound(k, r, pdp)
+#define trunk_linear_trace_test_bound_cap(k, r, pdp)	naive_linear_trace_test_bound_cap(k, r, pdp)
+
+/**
+ * @macro trunk_linear_trace_test_joint
+ */
+#define trunk_linear_trace_test_joint(k, r, pdp)		naive_linear_trace_test_joint(k, r, pdp)
+#define trunk_linear_trace_test_joint_cap(k, r, pdp)	naive_linear_trace_test_joint_cap(k, r, pdp)
 
 /**
  * @macro trunk_linear_trace_test_sw
  */
-#define trunk_linear_trace_test_sw(k, r, pdp) ( \
-	0 /*((k->alg == SW) ? -1 : 0) & (cc - 1)*/ \
-)
+#define trunk_linear_trace_test_sw(k, r, pdp)			( 0 )
+#define trunk_linear_trace_test_sw_cap(k, r, pdp)		( 0 )
 
 /**
  * @macro trunk_linear_trace_check_term
  */
 #define trunk_linear_trace_check_term(k, r, pdp) ( \
 	( trunk_linear_trace_test_bound(k, r, pdp) \
+	| trunk_linear_trace_test_joint(k, r, pdp) \
 	| trunk_linear_trace_test_sw(k, r, pdp)) < 0 \
 )
+#define trunk_linear_trace_check_term_cap(k, r, pdp) ( \
+	( trunk_linear_trace_test_bound_cap(k, r, pdp) \
+	| trunk_linear_trace_test_joint_cap(k, r, pdp) \
+	| trunk_linear_trace_test_sw_cap(k, r, pdp)) < 0 \
+)
+
+/**
+ * @macro trunk_linear_trace_add_cap
+ */
+#define trunk_linear_trace_add_cap(k, r, pdp)		naive_linear_trace_add_cap(k, r, pdp)
 
 /**
  * @macro trunk_linear_trace_finish

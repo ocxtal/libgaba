@@ -205,7 +205,7 @@ typedef struct twig_linear_block _linear_block;
  * @macro twig_linear_fill_test_chain
  */
 #define twig_linear_fill_test_chain(k, r, pdp) ( \
-	/*(CELL_MAX / k->m)*/ 32 - p \
+	(CELL_MAX / k->m) /*32*/ - p \
 )
 #define twig_linear_fill_test_chain_cap(k, r, pdp) ( \
 	twig_linear_fill_test_chain(k, r, pdp) \
@@ -243,9 +243,33 @@ typedef struct twig_linear_block _linear_block;
 #define twig_linear_trace_body(k, r, pdp)			branch_linear_trace_body(k, r, pdp)
 
 /**
- * @macro twig_lienar_trace_check_term
+ * @macro twig_linear_trace_test_bound
+ */
+#define twig_linear_trace_test_bound(k, r, pdp)		branch_linear_trace_test_bound(k, r, pdp)
+#define twig_linear_trace_test_bound_cap(k, r, pdp)	branch_linear_trace_test_bound_cap(k, r, pdp)
+
+/**
+ * @macro twig_linear_trace_test_joint
+ */
+#define twig_linear_trace_test_joint(k, r, pdp)		branch_linear_trace_test_joint(k, r, pdp)
+#define twig_linear_trace_test_joint_cap(k, r, pdp)	branch_linear_trace_test_joint_cap(k, r, pdp)
+
+/**
+ * @macro twig_linear_trace_test_sw
+ */
+#define twig_linear_trace_test_sw(k, r, pdp)		branch_linear_trace_test_sw(k, r, pdp)
+#define twig_linear_trace_test_sw_cap(k, r, pdp)	branch_linear_trace_test_sw_cap(k, r, pdp)
+
+/**
+ * @macro twig_linear_trace_check_term
  */
 #define twig_linear_trace_check_term(k, r, pdp)		branch_linear_trace_check_term(k, r, pdp)
+#define twig_linear_trace_check_term_cap(k, r, pdp)	branch_linear_trace_check_term_cap(k, r, pdp)
+
+/**
+ * @macro twig_linear_trace_add_cap
+ */
+#define twig_linear_trace_add_cap(k, r, pdp)		branch_linear_trace_add_cap(k, r, pdp)
 
 /**
  * @macro twig_linear_trace_finish
