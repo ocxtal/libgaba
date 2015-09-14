@@ -661,9 +661,9 @@ __push_dir_f:
 	andq $3, %r8
 	addq $-2, %rsi
 	shlq $8, %r8
-	addq %rdx, %rsi
-	movw %r8w, (%rdi, %rsi)
 	movq %rsi, %rax
+	movw %r8w, (%rdi, %rsi)
+	addq %rdx, %rax
 	ret
 
 	.globl _pushm_dir_f
