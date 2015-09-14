@@ -2,7 +2,11 @@
 /**
  * @file variant.h
  *
- * @brief macro implementations
+ * @brief variant selector
+ *
+ * select one of the variant from
+ * {naive, branch, twig, ...} x {linear, affine} x {dynamic, guided}
+ * according to the macros (defines) and include a set of proper headers.
  */
 #ifndef _VARIANT_H_INCLUDED
 #define _VARIANT_H_INCLUDED
@@ -12,199 +16,196 @@
 #include <stdint.h>
 
 /**
- * define constants
+ * constants for selector
  */
-#define DYNAMIC		( 2 )		// avoid 1
-#define GUIDED 		( 3 )
-#define LINEAR 		( 4 )
-#define AFFINE 		( 5 )
+/** base variant */
+#define NAIVE 		( 2 )
+#define BRANCH 		( 3 )
+#define TWIG 		( 4 )
+#define TRUNK 		( 5 )
+#define CAP 		( 6 )
+#define BULGE 		( 7 )
+#define BALOON 		( 8 )
+
+/** cost variant */
+#define LINEAR 		( 10 )
+#define AFFINE 		( 11 )
+
+/** dp variant */
+#define DYNAMIC		( 20 )		// avoid 1
+#define GUIDED 		( 21 )
 
 /**
  * defaults
  */
+// #define BASE 			NAIVE
 // #define DP 				GUIDED
 // #define COST 			LINEAR
 
 /**
- * direction determiner variants
- */
-
-/**
- * @struct _dir
- * @brief direction flag container.
- */
-struct _dir {
-	uint8_t d2;
-};
-
-typedef struct _dir dir_t;
-
-/**
- * @macro dir_init
- * @brief initialize _dir struct
- */
-#define dir_init(r, dir) { \
-	(r).d2 = (dir)<<2; \
-}
-
-/**
- * @macro dir_ue
- * @brief direction of the upper edge
- */
-#define dir_ue(r)	( 0x04 & (r).d2 )
-
-/**
- * @macro dir2_ue
- * @brief 2-bit direction flag of the upper edge
- */
-#define dir2_ue(r) 	( 0x05 & (r).d2 )
-
-/**
- * @macro dir_le
- * @brief direction of the upper edge
- */
-#define dir_le(r)	( (0x08 & (r).d2)>>1 )
-
-/**
- * @macro dir2_le
- * @brief 2-bit direction flag of the upper edge
- */
-#define dir2_le(r) 	( (0x0a & (r).d2)>>1 )
-
-/**
- * @macro dir
- * @brief extract the most recent direction flag
- */
-#define dir(r)		dir_ue(r)
-
-/**
- * @macro dir2
- * @brief extract the most recent 2-bit direction flag
- */
-#define dir2(r) 	dir2_ue(r)
-
-/**
- * @macro dir_next_dynamic
- * @brief set 2-bit direction flag from external expression.
- *
- * @detail
- * dir_exp_top and dir_exp_bottom must be aliased to a direction determiner.
- */
-#define dir_next_dynamic(r, t, c) { \
-	uint8_t d = dir_exp_top(r, t, c) | dir_exp_bottom(r, t, c); \
-	debug("dynamic band: d(%d)", d); \
-	(c).pdr[++(t).p] = d; \
-	(r).d2 = (d<<2) | ((r).d2>>2); \
-}
-
-/**
- * @macro dir_next_guided
- * @brief set 2-bit direction flag from direction array.
- */
-#define dir_next_guided(r, t, c) { \
-	uint8_t d = (c).pdr[++(t).p]; \
-	debug("guided band: d(%d)", d); \
-	(r).d2 = (d<<2) | ((r).d2>>2); \
-}
-
-/**
- * @macro dir_check_term_dynamic
- */
-#define dir_check_term_dynamic(r, t, c)		( 1 )
-
-/**
- * @macro dir_check_term_guided
- */
-#define dir_check_term_guided(r, t, c)		( t.p < (c.dr.ep - c.dr.sp) )
-
-/**
- * @macro dir_term
- */
-#define dir_term(r, t, c) { \
-	int8_t d = (c).pdr[(t).p]; \
-	(r).d2 = d; \
-}
-
-/**
- * @macro dir_prev
- * @brief set 2-bit direction flag in reverse access.
- */
-#define dir_prev(r, t, c) { \
-	int8_t d = (c).pdr[--(t).p]; \
-/*	(r).d = 0x01 & (r).d2; */ \
-	(r).d2 = 0x0f & (((r).d2<<2) | d); \
-}
-
-/**
  * macro aliasing
  */
+
+/** base variant */
+#ifndef BASE
+	#error "BASE undefined"
+#endif
+#if BASE == NAIVE
+	#define BASE_LABEL 			naive
+#elif BASE == BRANCH
+	#define BASE_LABEL 			branch
+#elif BASE == TWIG
+	#define BASE_LABEL 			twig
+#elif BASE == TRUNK
+	#define BASE_LABEL 			trunk
+#elif BASE == CAP
+	#define BASE_LABEL 			cap
+#elif BASE == BULGE
+	#define BASE_LABEL 			bulge
+#elif BASE == BALOON
+	#define BASE_LABEL 			baloon
+#else
+	#error "invalid BASE"
+#endif /* #if BASE == NAIVE */
+
+/** cost variant */
+#ifndef COST
+	#error "COST undefined"
+#endif
+#if COST == LINEAR
+	#define COST_LABEL 			linear
+	#define COST_SUFFIX 		_linear
+#elif COST == AFFINE
+	#define COST_LABEL	 		affine
+	#define COST_SUFFIX 		_affine
+#else /* #if COST == LINEAR */
+	#error "COST must be LINEAR or AFFINE."
+#endif /* #if COST == LINEAR */
+
+/** dp variant */
 #ifndef DP
 	#warning "DP undefined"
 #endif
-
 #if DP == DYNAMIC
-	#define dir_next 			dir_next_dynamic
-	#define dir_check_term		dir_check_term_dynamic
+	#define DP_LABEL 			dynamic
+	#define DP_SUFFIX 			_dynamic
 #elif DP == GUIDED
-	#define dir_next 			dir_next_guided
-	#define dir_check_term 		dir_check_term_guided
-#else /* #if DP == DYNAMIC */
-	#error "DP must be DYNAMIC or GUIDED."
+	#define DP_LABEL 			guided
+	#define DP_SUFFIX 			_guided
+#else
+	#error "invalid DP"
 #endif /* #if DP == DYNAMIC */
 
+/** variant label */
+#define VARIANT_LABEL			label3(BASE_LABEL, COST_SUFFIX, DP_SUFFIX)
 
 /**
  * variant selector
  */
-#define HEADER(base)			QUOTE(HEADER_WITH_SUFFIX(base, _impl.h))
-#include HEADER(BASE)
+#define header(base)			QUOTE(label2(base, _impl.h))
 
-#ifndef COST
-	#warning "COST undefined"
+/** dp variants */
+#include header(DP_LABEL)
+
+/** address calculation */
+#define dr_size					label2(DP_LABEL, _dr_size)
+#define blk_num					label2(DP_LABEL, _blk_num)
+#define blk_addr				label2(DP_LABEL, _blk_addr)
+#define addr 					label2(DP_LABEL, _addr)
+
+/** direction accessors */
+#define dir 					label2(DP_LABEL, _dir)
+#define dir2 					label2(DP_LABEL, _dir2)
+#define dir_ue 					label2(DP_LABEL, _dir_ue)
+#define dir2_ue 				label2(DP_LABEL, _dir2_ue)
+#define dir_le 					label2(DP_LABEL, _dir_le)
+#define dir2_le 				label2(DP_LABEL, _dir2_le)
+#define dir_raw 				label2(DP_LABEL, _dir_raw)
+
+#if 0
+#define dir_leftq				label2(DP_LABEL, _dir_leftq)
+#define dir_topq				label2(DP_LABEL, _dir_topq)
+#define dir_topleftq			label2(DP_LABEL, _dir_topleftq)
 #endif
 
-static int32_t const _cost = COST;
+/** direction determiners */
+#define dir_init 				label2(DP_LABEL, _dir_init)
+#define dir_start_block 		label2(DP_LABEL, _dir_start_block)
+#define dir_det_next 			label2(DP_LABEL, _dir_det_next)
+#define dir_empty				label2(DP_LABEL, _dir_empty)
+#define dir_end_block 			label2(DP_LABEL, _dir_end_block)
+#define dir_test_bound			label2(DP_LABEL, _dir_test_bound)
+#define dir_test_bound_cap		label2(DP_LABEL, _dir_test_bound_cap)
 
-#if COST == LINEAR
+#define dir_set_pdr 			label2(DP_LABEL, _dir_set_pdr)
+#define dir_load_forward		label2(DP_LABEL, _dir_load_forward)
+#define dir_go_forward			label2(DP_LABEL, _dir_go_forward)
+#define dir_load_backward 		label2(DP_LABEL, _dir_load_backward)
+#define dir_go_backward			label2(DP_LABEL, _dir_go_backward)
+#define dir_sum_i_blk			label2(DP_LABEL, _dir_sum_i_blk)
+#define dir_set_pdr_fast 		label2(DP_LABEL, _dir_set_pdr_fast)
+#define dir_load_backward_fast 	label2(DP_LABEL, _dir_load_backward_fast)
 
-	#define COST_SUFFIX 		_linear
+/** base and cost variants */
+#include header(BASE_LABEL)
 
-#elif COST == AFFINE
+/** address calculation */
+#define bpl						label3(BASE_LABEL, COST_SUFFIX, _bpl)
+#define dp_size					label3(BASE_LABEL, COST_SUFFIX, _dp_size)
+#define co_size					label3(BASE_LABEL, COST_SUFFIX, _co_size)
+#define jam_size				label3(BASE_LABEL, COST_SUFFIX, _jam_size)
+#define head_size				label3(BASE_LABEL, COST_SUFFIX, _head_size)
+#define tail_size				label3(BASE_LABEL, COST_SUFFIX, _tail_size)
+#define bpb						label3(BASE_LABEL, COST_SUFFIX, _bpb)
+#define topq					label3(BASE_LABEL, COST_SUFFIX, _topq)
+#define leftq					label3(BASE_LABEL, COST_SUFFIX, _leftq)
+#define topleftq				label3(BASE_LABEL, COST_SUFFIX, _topleftq)
+#define dir_exp_top 			label3(BASE_LABEL, COST_SUFFIX, _dir_exp_top)
+#define dir_exp_bottom 			label3(BASE_LABEL, COST_SUFFIX, _dir_exp_bottom)
 
-	#define COST_SUFFIX 		_affine
+/** fill-in */
+#define fill_decl				label3(BASE_LABEL, COST_SUFFIX, _fill_decl)
+#define fill_init				label3(BASE_LABEL, COST_SUFFIX, _fill_init)
+#define fill_start 				label3(BASE_LABEL, COST_SUFFIX, _fill_start)
+#define fill_former_body		label3(BASE_LABEL, COST_SUFFIX, _fill_former_body)
+#define fill_former_body_cap	label3(BASE_LABEL, COST_SUFFIX, _fill_former_body_cap)
+#define fill_go_down			label3(BASE_LABEL, COST_SUFFIX, _fill_go_down)
+#define fill_go_down_cap		label3(BASE_LABEL, COST_SUFFIX, _fill_go_down_cap)
+#define fill_go_right			label3(BASE_LABEL, COST_SUFFIX, _fill_go_right)
+#define fill_go_right_cap		label3(BASE_LABEL, COST_SUFFIX, _fill_go_right_cap)
+#define fill_latter_body		label3(BASE_LABEL, COST_SUFFIX, _fill_latter_body)
+#define fill_latter_body_cap	label3(BASE_LABEL, COST_SUFFIX, _fill_latter_body_cap)
+#define fill_empty_body			label3(BASE_LABEL, COST_SUFFIX, _fill_empty_body)
+#define fill_test_xdrop			label3(BASE_LABEL, COST_SUFFIX, _fill_test_xdrop)
+#define fill_test_xdrop_cap		label3(BASE_LABEL, COST_SUFFIX, _fill_test_xdrop_cap)
+#define fill_test_bound 		label3(BASE_LABEL, COST_SUFFIX, _fill_test_bound)
+#define fill_test_bound_cap		label3(BASE_LABEL, COST_SUFFIX, _fill_test_bound_cap)
+#define fill_test_mem			label3(BASE_LABEL, COST_SUFFIX, _fill_test_mem)
+#define fill_test_mem_cap		label3(BASE_LABEL, COST_SUFFIX, _fill_test_mem_cap)
+#define fill_test_chain			label3(BASE_LABEL, COST_SUFFIX, _fill_test_chain)
+#define fill_test_chain_cap		label3(BASE_LABEL, COST_SUFFIX, _fill_test_chain_cap)
+#define fill_check_term			label3(BASE_LABEL, COST_SUFFIX, _fill_check_term)
+#define fill_check_term_cap		label3(BASE_LABEL, COST_SUFFIX, _fill_check_term_cap)
+#define fill_end 				label3(BASE_LABEL, COST_SUFFIX, _fill_end)
+#define fill_finish				label3(BASE_LABEL, COST_SUFFIX, _fill_finish)
 
-#else /* #if COST == LINEAR */
+/** search terminal (NW) */
+#define set_terminal			label3(BASE_LABEL, COST_SUFFIX, _set_terminal)
 
-	#error "COST must be LINEAR or AFFINE."
-
-#endif /* #if COST == LINEAR */
-
-#define bpl					LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _bpl)
-#define topq				LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _topq)
-#define leftq				LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _leftq)
-#define topleftq			LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _topleftq)
-#define dir_exp_top 		LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _dir_exp_top)
-#define dir_exp_bottom 		LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _dir_exp_bottom)
-#define fill_decl			LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _fill_decl)
-#define fill_init			LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _fill_init)
-#define fill_former_body	LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _fill_former_body)
-#define fill_go_down		LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _fill_go_down)
-#define fill_go_right		LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _fill_go_right)
-#define fill_latter_body	LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _fill_latter_body)
-#define fill_check_term		LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _fill_check_term)
-#define fill_check_chain	LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _fill_check_chain)
-#define fill_check_alt		LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _fill_check_alt)
-#define fill_check_mem		LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _fill_check_mem)
-#define fill_finish			LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _fill_finish)
-#define chain_save_len		LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _chain_save_len)
-#define chain_push_ivec		LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _chain_push_ivec)
-#define search_terminal		LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _search_terminal)
-#define search_trigger		LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _search_trigger)
-#define search_max_score	LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _search_max_score)
-#define trace_decl			LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _trace_decl)
-#define trace_init			LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _trace_init)
-#define trace_body			LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _trace_body)
-#define trace_finish		LABEL_WITH_SUFFIX(BASE, COST_SUFFIX, _trace_finish)
+/** traceback */
+#define trace_decl				label3(BASE_LABEL, COST_SUFFIX, _trace_decl)
+#define trace_init				label3(BASE_LABEL, COST_SUFFIX, _trace_init)
+#define trace_body				label3(BASE_LABEL, COST_SUFFIX, _trace_body)
+#define trace_test_bound		label3(BASE_LABEL, COST_SUFFIX, _trace_test_bound)
+#define trace_test_bound_cap	label3(BASE_LABEL, COST_SUFFIX, _trace_test_bound_cap)
+#define trace_test_joint		label3(BASE_LABEL, COST_SUFFIX, _trace_test_joint)
+#define trace_test_joint_cap	label3(BASE_LABEL, COST_SUFFIX, _trace_test_joint_cap)
+#define trace_test_sw			label3(BASE_LABEL, COST_SUFFIX, _trace_test_sw)
+#define trace_test_sw_cap		label3(BASE_LABEL, COST_SUFFIX, _trace_test_sw_cap)
+#define trace_check_term 		label3(BASE_LABEL, COST_SUFFIX, _trace_check_term)
+#define trace_check_term_cap 	label3(BASE_LABEL, COST_SUFFIX, _trace_check_term_cap)
+#define trace_add_cap			label3(BASE_LABEL, COST_SUFFIX, _trace_add_cap)
+#define trace_finish			label3(BASE_LABEL, COST_SUFFIX, _trace_finish)
 
 #endif /* #ifndef _VARIANT_H_INCLUDED */
 

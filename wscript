@@ -1,12 +1,9 @@
 #! /usr/bin/env python
 # encoding: utf-8
 
-variants = ['naive', 'twig', 'branch', 'trunk', 'balloon', 'cap']
-cost = ['linear', 'affine']
-dp = ['dynamic', 'guided']
-
-cost_flag = {'linear': 'LINEAR', 'affine': 'LINEAR'}
-dp_flag = {'dynamic': 'DYNAMIC', 'guided': 'GUIDED'}
+variants = ['naive', 'twig', 'branch', 'trunk'] #, 'balloon', 'cap']
+costs = ['linear'] #, 'affine']
+dps = ['dynamic', 'guided']
 
 def suffix(c, d):
 	return('_' + c + '_' + d)
@@ -14,17 +11,29 @@ def suffix(c, d):
 def options(opt):
 	opt.load('compiler_c')
 
+	opt.add_option('', '--debug',
+		action = 'store_true',
+		dest = 'debug',
+		help = 'debug build')
+
+
 def configure(conf):
 	conf.load('compiler_c')
 
 	conf.recurse('util')
 	conf.recurse('arch')
 
-	# conf.env.append_value('CFLAGS', '-g')
-	# conf.env.append_value('CFLAGS', '-DDEBUG')
+	# debug options
+	if conf.options.debug is True:
+		conf.env.append_value('CFLAGS', '-fmacro-backtrace-limit=0')
+		conf.env.append_value('CFLAGS', '-g')
+		conf.env.append_value('CFLAGS', '-DDEBUG')
+	else:
+		# conf.env.append_value('CFLAGS', '-g')
+		conf.env.append_value('CFLAGS', '-O3')
+
 	conf.env.append_value('CFLAGS', '-DBENCH')
 	conf.env.append_value('CFLAGS', '-Wall')
-	conf.env.append_value('CFLAGS', '-O3')
 	conf.env.append_value('CFLAGS', '-std=c99')
 	# conf.env.append_value('CFLAGS', '-D_POSIX_C_SOURCE=200112L')	# for posix_memalign and clock_gettime
 	conf.env.append_value('CFLAGS', '-fPIC')
@@ -45,7 +54,7 @@ def configure(conf):
 		pass
 
 	from itertools import product
-	for (v, c, d) in product(variants, cost, dp):
+	for (v, c, d) in product(variants, costs, dps):
 		conf.env.append_value('OBJ', v + suffix(c, d))
 
 
@@ -55,15 +64,11 @@ def build(bld):
 	bld.recurse('arch')
 
 	from itertools import product
-	for (v, c, d) in product(variants, cost, dp):
+	for (v, c, d) in product(variants, costs, dps):
 		bld.objects(
 			source = 'dp.c',			# 'dp.c' + 'variant/naive_impl.h'
 			target = v + suffix(c, d),	# 'naive_linear_dynamic'
-			defines = [
-				'BASE=' + v,
-				'COST=' + cost_flag[c],
-				'DP=' + dp_flag[d],
-				'SUFFIX=' + suffix(c, d)])
+			defines = ['BASE=' + v.upper(), 'COST=' + c.upper(), 'DP=' + d.upper()])
 
 #	bld.shlib(
 #		source = 'sea.c',

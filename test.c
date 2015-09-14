@@ -4,6 +4,7 @@
 #include <string.h>
 #include <sys/time.h>
 #include "sea.h"
+#include "util/log.h"
 
 /**
  * random sequence generator, modifier.
@@ -64,15 +65,15 @@ int main(int argc, char *argv[])
 
 	d = sea_init(
 		SEA_LINEAR_GAP_COST | SEA_XSEA | SEA_ALN_DIR,
-		2, -3, -5, -1, 100, 20, 30);
+		2, -3, -5, -1, 100);
 
 	c = sea_init(
 		SEA_LINEAR_GAP_COST | SEA_XSEA | SEA_ALN_CIGAR,
-		2, -3, -5, -1, 100, 20, 30);
+		2, -3, -5, -1, 100);
 
 	r = sea_init(
 		SEA_LINEAR_GAP_COST | SEA_XSEA | SEA_ALN_ASCII,
-		2, -3, -5, -1, 100, 20, 30);
+		2, -3, -5, -1, 100);
 
 
 //	printf("%x\n", ctx->flags);
@@ -98,22 +99,22 @@ int main(int argc, char *argv[])
 		b, lm, strlen(b)-rm,
 		NULL, 0);
 
-	cres = sea_align(c,
-		a, lm, strlen(a)-rm,
-		b, lm, strlen(b)-rm,
-		dres->aln, dres->slen);
-
 	rres = sea_align(r,
 		a, lm, strlen(a)-rm,
 		b, lm, strlen(b)-rm,
 		dres->aln, dres->slen);
 
-	res = sea_align(c,
+	cres = sea_align(c,
+		a, lm, strlen(a)-rm,
+		b, lm, strlen(b)-rm,
+		dres->aln, dres->slen);
+
+	res = sea_align(r,
 		a, lm, strlen(a)-rm,
 		b, lm, strlen(b)-rm,
 		NULL, 0);
 
-	sea_add_clips(c, res, lm, rm, SEA_CLIP_HARD);
+//	sea_add_clips(c, res, lm, rm, SEA_CLIP_HARD);
 
 	printf("%d, %lld\n", dres->score, dres->plen);
 	printf("%d, %lld, %s\n", cres->score, cres->plen, cres->aln);

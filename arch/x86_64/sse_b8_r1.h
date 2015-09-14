@@ -26,175 +26,301 @@
 /**
  * register declarations. 
  */
-#define DECLARE_VEC_CELL(v)			__m128i v
-#define DECLARE_VEC_CELL_REG(v)		__m128i register v
-#define DECLARE_VEC_CHAR_REG(v)		__m128i register v
+#define vec_size()					( sizeof(__m128i) )
+#define _vec_cell(v)				__m128i v##1
+#define _vec_cell_const(v, k)		__m128i const v##1 = _mm_set1_epi8(k)
+#define _vec_cell_reg(v)			__m128i register v##1
+#define _vec_single_const(v, k)		__m128i const v##1 = _mm_set1_epi8(k)
+#define _vec_char_reg(v)			__m128i register v##1
 
 /**
  * substitution to cell vectors
  */
-#define VEC_ASSIGN(a, b) { \
-	(a) = (b); \
+#define vec_assign(a, b) { \
+	(a##1) = (b##1); \
 }
 
-#define VEC_SET(v, i) { \
-	(v) = _mm_set1_epi8(i); \
+#define vec_set(v, i) { \
+	(v##1) = _mm_set1_epi8(i); \
 }
 
-#define VEC_SETZERO(v) { \
-	(v) = _mm_setzero_si128(); \
+#define vec_setzero(v) { \
+	(v##1) = _mm_setzero_si128(); \
 }
 
-#define VEC_SETONES(v) { \
-	(v) = _mm_set1_epi8(0xff); \
+#define vec_setones(v) { \
+	(v##1) = _mm_set1_epi8(0xff); \
 }
 
 /**
  * substitution to char vectors
  */
-#define VEC_CHAR_SETZERO(v) { \
-	(v) = _mm_setzero_si128(); \
+#define vec_char_setzero(v) { \
+	(v##1) = _mm_setzero_si128(); \
 }
 
-#define VEC_CHAR_SETONES(v) { \
-	(v) = _mm_set1_epi8(0xff); \
+#define vec_char_setones(v) { \
+	(v##1) = _mm_set1_epi8(0xff); \
 }
 
 /**
  * special substitution macros
  */
-#define VEC_SET_LHALF(v, i) { \
-	VEC_SET(v, i); (v) = _mm_srli_si128((v), BAND_WIDTH/2); \
+#define vec_set_lhalf(v, i) { \
+	vec_set(v, i); (v##1) = _mm_srli_si128((v##1), BAND_WIDTH/2); \
 }
 
-#define VEC_SET_UHALF(v, i) { \
-	VEC_SET(v, i); (v) = _mm_slli_si128((v), BAND_WIDTH/2); \
+#define vec_set_uhalf(v, i) { \
+	vec_set(v, i); (v##1) = _mm_slli_si128((v##1), BAND_WIDTH/2); \
 }
 
-#define VEC_SETF_MSB(v) { \
-	VEC_SETZERO(v); VEC_INSERT_MSB((v), 0xf0); \
+#define vec_setf_msb(v) { \
+	vec_setzero(v); vec_insert_msb((v), 0xf0); \
 }
 
-#define VEC_SETF_LSB(v) { \
-	VEC_SETZERO(v); VEC_INSERT_LSB((v), 0x0f); \
+#define vec_setf_lsb(v) { \
+	vec_setzero(v); vec_insert_lsb((v), 0x0f); \
 }
 
 /**
  * insertion and extraction macros
  */
-#define VEC_INSERT_MSB(v, a) { \
-	(v) = _mm_insert_epi8((v), (a), sizeof(__m128i)-1); \
+#define vec_insert_msb(v, a) { \
+	(v##1) = _mm_insert_epi8((v##1), (a), sizeof(__m128i)-1); \
 }
 
-#define VEC_INSERT_LSB(v, a) { \
-	(v) = _mm_insert_epi8((v), (a), 0); \
+#define vec_insert_lsb(v, a) { \
+	(v##1) = _mm_insert_epi8((v##1), (a), 0); \
 }
 
-#define VEC_MSB(v)		( (signed char)_mm_extract_epi8((v), sizeof(__m128i)-1) )
-#define VEC_LSB(v)		( (signed char)_mm_extract_epi8((v), 0) )
-#define VEC_CENTER(v)	( (signed char)_mm_extract_epi8((v), 8) )
+#define vec_msb(v)		( (signed char)_mm_extract_epi8((v##1), sizeof(__m128i)-1) )
+#define vec_lsb(v)		( (signed char)_mm_extract_epi8((v##1), 0) )
+#define vec_center(v)	( (signed char)_mm_extract_epi8((v##1), 8) )
 
 /**
  * arithmetic and logic operations
  */
-#define VEC_OR(a, b, c) { \
-	(a) = _mm_or_si128((b), (c)); \
+#define vec_or(a, b, c) { \
+	(a##1) = _mm_or_si128((b##1), (c##1)); \
 }
 
-#define VEC_ADD(a, b, c) { \
-	(a) = _mm_adds_epi8((b), (c)); \
+#define vec_add(a, b, c) { \
+	(a##1) = _mm_adds_epi8((b##1), (c##1)); \
 }
 
-#define VEC_ADDS(a, b, c) { \
-	(a) = _mm_adds_epu8((b), (c)); \
+#define vec_adds(a, b, c) { \
+	(a##1) = _mm_adds_epu8((b##1), (c##1)); \
 }
 
-#define VEC_SUB(a, b, c) { \
-	(a) = _mm_subs_epi8((b), (c)); \
+#define vec_sub(a, b, c) { \
+	(a##1) = _mm_subs_epi8((b##1), (c##1)); \
 }
 
-#define VEC_SUBS(a, b, c) { \
-	(a) = _mm_subs_epu8((b), (c)); \
+#define vec_subs(a, b, c) { \
+	(a##1) = _mm_subs_epu8((b##1), (c##1)); \
 }
 
-#define VEC_MAX(a, b, c) { \
-	(a) = _mm_max_epi8((b), (c)); \
+#define vec_max(a, b, c) { \
+	(a##1) = _mm_max_epi8((b##1), (c##1)); \
 }
 
-#define VEC_MIN(a, b, c) { \
-	(a) = _mm_min_epi8((b), (c)); \
+#define vec_min(a, b, c) { \
+	(a##1) = _mm_min_epi8((b##1), (c##1)); \
 }
 
 /**
  * shift operations
  */
-#define VEC_SHIFT_R(a, b) { \
-	(a) = _mm_srli_si128((b), 1); \
+#define vec_shift_r(a, b) { \
+	(a##1) = _mm_srli_si128((b##1), 1); \
 }
 
-#define VEC_SHIFT_L(a, b) { \
-	(a) = _mm_slli_si128((b), 1); \
+#define vec_shift_l(a, b) { \
+	(a##1) = _mm_slli_si128((b##1), 1); \
 }
 
+#if 0
 /**
  * compare and select
  */
-#define VEC_COMPARE(a, b, c) { \
-	(a) = _mm_cmpeq_epi8((b), (c)); \
+#define vec_comp(a, b, c) { \
+	(a##1) = _mm_cmpeq_epi8((b##1), (c##1)); \
 }
 
-#define VEC_SELECT(a, b, c, d) { \
-	(a) = _mm_blendv_epi8((b), (c), (d)); \
+#define vec_select(a, b, c, d) { \
+	(a##1) = _mm_blendv_epi8((b##1), (c##1), (d)); \
 }
+#endif
+
+/**
+ * @macro vec_comp_sel
+ * @brief compare two char vectors q1 and q2, select m if match, x otherwise
+ */
+#define vec_comp_sel(a, q1, q2, m, x) { \
+	(a##1) = _mm_blendv_epi8((x##1), (m##1), _mm_cmpeq_epi8((q1##1), (q2##1))); \
+}
+
+/**
+ * @macro vec_comp_mask
+ * @brief compare two vectors a and b, make int mask
+ */
+#define vec_comp_mask(mask, a, b) { \
+	__m128i t = _mm_cmpeq_epi8((a##1), (b##1)); \
+	(mask) = _mm_movemask_epi8(t); \
+}
+
+/**
+ * @macro vec_hmax
+ * @brief horizontal max
+ */
+#define vec_hmax(val, v) { \
+	__m128i t; \
+	t = _mm_max_epi8((v##1), \
+		_mm_srli_si128((v##1), 1)); \
+	t = _mm_max_epi8(t, \
+		_mm_srli_si128(t, 2)); \
+	t = _mm_max_epi8(t, \
+		_mm_srli_si128(t, 4)); \
+	t = _mm_max_epi8(t, \
+		_mm_srli_si128(t, 8)); \
+	(val) = _mm_extract_epi8(t, 0); \
+}
+
+#if 0
+/**
+ * @macro vec_maxpos
+ */
+#define vec_maxpos(pos, val, v) { \
+	int32_t r1, r2; \
+	__m128i t1, t2; \
+	__m128i const offset = _mm_set1_epi16(0x7fff); \
+	/** expand vector */ \
+	t1 = _mm_cvtepi8_epi16(v); \
+	t2 = _mm_cvtepi8_epi16(_mm_srli_si128(v, 8)); \
+	/** negate vector */ \
+	t1 = _mm_sub_epu16(offset, t1); \
+	t2 = _mm_sub_epu16(offset, t2); \
+	/** calculate max position with phminposuw */ \
+	r1 = _mm_extract_epi32(_mm_minpos_epu16(t1), 0); \
+	r2 = _mm_extract_epi32(_mm_minpos_epu16(t2), 0); \
+	/** extract max value and pos */ \
+	int32_t val1, val2; \
+	val1 = 0x7fff - (int32_t)(r1 & 0xffff); \
+	val2 = 0x7fff - (int32_t)(r2 & 0xffff); \
+	if(val2 > val1) { \
+		(pos) = (r2>>16) + 8; (val) = val2; \
+	} else { \
+		(pos) = r1>>16; (val) = val1; \
+	} \
+}
+#endif
 
 /**
  * load and store operations
  */
-#define VEC_STORE(p, v) { \
-	_mm_store_si128((__m128i *)(p), v); p += sizeof(__m128i); \
+#define vec_store(p, v) { \
+	_mm_store_si128((__m128i *)(p), (v##1)); \
 }
 
-#define VEC_STORE_PACKED(p, dv, dh) { \
+#define vec_store_packed(p, dv, dh) { \
 	_mm_store_si128( \
 		(__m128i *)(p), \
-		_mm_or_si128(_mm_slli_epi64(dh, 4), dv)); \
-	p += sizeof(__m128i); \
+		_mm_or_si128(_mm_slli_epi64((dh##1), 4), (dv##1))); \
 }
+
+#define vec_load(p, v) { \
+	(v##1) = _mm_load_si128((__m128i *)(p)); \
+}
+
+#define vec_load_packed(p, dv, dh) { \
+	__m128i const mask = _mm_set1_epi8(0x0f); \
+	(dv##1) = _mm_load_si128((__m128i *)(p)); \
+	(dh##1) = _mm_and_si128(_mm_srli_epi64((dv##1), 4), mask); \
+	(dv##1) = _mm_and_si128((dv##1), mask); \
+}
+
+#define vec_load8(p, v) { \
+	(v##1) = _mm_load_si128((__m128i *)(p)); \
+}
+
+#if 0
+/**
+ * store vector to 32-elem array of int32_t
+ */
+#define vec_store32(p, v) { \
+	__m128i t = v; \
+ 	__m128i const m = _mm_set1_epi32(CELL_MIN); \
+ 	vec_store(p, m); vec_store(p, m);	/** margin */ \
+	vec_store(p, _mm_cvtepi8_epi32(t)); \
+	t = _mm_slli_si128(t, 4); \
+	vec_store(p, _mm_cvtepi8_epi32(t)); \
+	t = _mm_slli_si128(t, 4); \
+	vec_store(p, _mm_cvtepi8_epi32(t)); \
+	t = _mm_slli_si128(t, 4); \
+	vec_store(p, _mm_cvtepi8_epi32(t)); \
+ 	vec_store(p, m); vec_store(p, m);	/** margin */ \
+}
+
+/**
+ * load vector from 32-elem array of int32_t
+ */
+#define vec_load32(p, v) { \
+	__m128i t1, t2, t3, t4; \
+	p += 2*sizeof(__m128i);	/** skip margin */ \
+	vec_load(p, t1); \
+	vec_load(p, t2); \
+	vec_load(p, t3); \
+	vec_load(p, t4); \
+	p += 2*sizeof(__m128i);	/** skip margin */ \
+	v = _mm_packs_epi32( \
+		_mm_packs_epi16(t1, t2), \
+		_mm_packs_epi16(t3, t4)); \
+}
+#endif
 
 /**
  * print vector
  */
-#define VEC_PRINT(s, v) { \
+#ifdef DEBUG
+
+#define vec_print(v) { \
 	int8_t b[16]; \
 	void *p = (void *)b; \
-	VEC_STORE(p, v); \
-	fprintf(s, \
-		"[%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d]\n", \
-		b[15], b[14], b[13], b[12], b[11], b[10], b[9], b[8], \
-		b[7], b[6], b[5], b[4], b[3], b[2], b[1], b[0]); \
+	vec_store(p, v); \
+	fprintf(stderr, \
+/*		"[%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d]\n",*/ \
+		"[%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x]\n", \
+		(uint8_t)b[15], (uint8_t)b[14], (uint8_t)b[13], (uint8_t)b[12], (uint8_t)b[11], (uint8_t)b[10], (uint8_t)b[9], (uint8_t)b[8], \
+		(uint8_t)b[7], (uint8_t)b[6], (uint8_t)b[5], (uint8_t)b[4], (uint8_t)b[3], (uint8_t)b[2], (uint8_t)b[1], (uint8_t)b[0]); \
 }
+
+#else
+
+#define vec_print(v)		;
+
+#endif
 
 /**
  * char vector operations
  */
-#define VEC_CHAR_SHIFT_R(a, b) { \
-	VEC_SHIFT_R(a, b); \
+#define vec_char_shift_r(a, b) { \
+	vec_shift_r(a, b); \
 }
 
-#define VEC_CHAR_SHIFT_L(a, b) { \
-	VEC_SHIFT_L(a, b); \
+#define vec_char_shift_l(a, b) { \
+	vec_shift_l(a, b); \
 }
 
-#define VEC_CHAR_INSERT_MSB(x, y) { \
-	VEC_INSERT_MSB(x, y); \
+#define vec_char_insert_msb(x, y) { \
+	vec_insert_msb(x, y); \
 }
 
-#define VEC_CHAR_INSERT_LSB(x, y) { \
-	VEC_INSERT_LSB(x, y); \
+#define vec_char_insert_lsb(x, y) { \
+	vec_insert_lsb(x, y); \
 }
 
-#define VEC_CHAR_PRINT(s, v) { \
-	VEC_PRINT(s, v); \
+#define vec_char_print(s, v) { \
+	vec_print(s, v); \
 }
 
 #endif /* #ifndef _SIMD_INCLUDED */
