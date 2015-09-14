@@ -149,6 +149,9 @@ struct naive_linear_block {
 	/** nothing to do */ \
 	dir_start_block(r, k, pdp, p); \
 }
+#define naive_affine_fill_start(k, r, pdp) { \
+	naive_linear_fill_start(k, r, pdp); \
+}
 
 /**
  * @macro naive_linear_fill_former_body
@@ -454,9 +457,9 @@ struct naive_linear_block {
 	cell_t h, v; \
 	cell_t diag = pdg[q + naive_linear_topleftq(r, k)]; \
 	cell_t sc = rd_cmp(k->a, k->b) ? k->m : k->x; \
-	debug("%lld, %lld, %lld, %lld, %lld, %lld", \
-		naive_linear_leftq(r, k), naive_linear_topq(r, k), naive_linear_topleftq(r, k), \
-		dir_leftq(r), dir_topq(r), dir_topleftq(r)); \
+	/*debug("%lld, %lld, %lld, %lld, %lld, %lld",*/ \
+		/*naive_linear_leftq(r, k), naive_linear_topq(r, k), naive_linear_topleftq(r, k),*/ \
+		/*dir_leftq(r), dir_topq(r), dir_topleftq(r));*/ \
 	/*debug("(%lld, %lld), (%lld, %lld), d(%d), v(%d), h(%d), sc(%d), cc(%d)",*/ \
 	/*	p, q, i, j, diag, pvh[q + naive_linear_leftq(r, k)], pvh[q + naive_linear_topq(r, k)], sc, cc);*/ \
 	if(cc == (diag + sc)) { \

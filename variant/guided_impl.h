@@ -107,10 +107,10 @@ typedef struct _dir dir_t;
  * @macro guided_dir_test_bound
  */
 #define guided_dir_test_bound(r, k, dp, p) ( \
-	(k)->tdr - (r).pdr - p - BLK \
+	((k)->tdr - (r).pdr + 2) - p - BLK \
 )
 #define guided_dir_test_bound_cap(r, k, dp, p) ( \
-	(k)->tdr - (r).pdr - p \
+	((k)->tdr - (r).pdr + 2) - p \
 )
 
 /**

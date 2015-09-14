@@ -142,7 +142,7 @@ struct sea_local_context {
 	struct sea_reader a, b;		/*!< (in) sequence readers */
 	struct sea_writer l;		/*!< (inout) alignment writer */
 
-//	uint8_t _pad2[24];
+	uint8_t _pad2[16];
 };
 
 /**
@@ -174,13 +174,15 @@ struct sea_aln_funcs {
  */
 struct sea_context {
 	/** templates */
-	struct sea_local_context k;
-	struct sea_joint_tail jt;
-	int8_t pv[16];
-	int8_t cv[16];
+	struct sea_local_context k;	/** 256 */
+	struct sea_joint_tail jt;	/** 32 */
+	// int8_t pv[16];
+	// int8_t cv[16];
+	uint8_t v[2 * 3 * 16];		/** 96 */
+	// uint8_t _pad[8];			/** 8 */
 	/** constants */
-	struct sea_writer fw, rv;
-	struct sea_aln_funcs dynamic, guided;
+	struct sea_writer fw, rv;	/** 64 * 2 */
+	struct sea_aln_funcs dynamic, guided;	/** 48 */
 	/** flags */
 	int32_t flags;		/*!< a bitfield of option flags */
 };

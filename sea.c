@@ -300,21 +300,32 @@ sea_init_joint_tail(
 	struct sea_joint_tail *jt)
 {
 	int i;
+	int64_t const init_bw = ctx->k.bw/2;
 
 	debug("initializing joint_tail");
+	/** malloc initial vectors */
+	int64_t base_size = 2 * init_bw * sizeof(int8_t);
+	// ctx->v = (uint8_t *)sea_aligned_malloc(6 * base_size, 32);
+	memset(ctx->v, INT8_MIN, 3 * base_size);
 
-	jt->p = 1;				/** (p, q) = (1, 0) */
-	jt->i = ctx->k.bw/2;	/** (i, j) = (0, 0) */
-	jt->v = (uint8_t *)ctx->pv;
-	jt->bpc = 8;			/** 8bit */
-	jt->d2 = SEA_TOP<<2 | SEA_LEFT;
-
-	#define _Q(x)		( (x) - ctx->k.bw/4 )
-	for(i = 0; i < ctx->k.bw/2; i++) {
-		ctx->pv[i] = -ctx->k.gi + (_Q(i) < 0 ? -_Q(i) : _Q(i)+1) * (2 * ctx->k.gi - ctx->k.m);
-		ctx->cv[i] =              (_Q(i) < 0 ? -_Q(i) : _Q(i)  ) * (2 * ctx->k.gi - ctx->k.m);
+	/** fill initial vectors */
+	int8_t *pv = (int8_t *)ctx->v;
+	int8_t *cv = pv
+		+ (((ctx->flags & SEA_FLAGS_MASK_DP) == SEA_AFFINE_GAP_COST) ? 3 : 1)
+		* base_size;
+	#define _Q(x)		( (x) - init_bw/2 )
+	for(i = 0; i < init_bw; i++) {
+		pv[i] = -ctx->k.gi + (_Q(i) < 0 ? -_Q(i) : _Q(i)+1) * (2 * ctx->k.gi - ctx->k.m);
+		cv[i] =              (_Q(i) < 0 ? -_Q(i) : _Q(i)  ) * (2 * ctx->k.gi - ctx->k.m);
 	}
 	#undef _Q
+
+	/** initial coordinates */
+	jt->p = 1;				/** (p, q) = (1, 0) */
+	jt->i = init_bw;		/** (i, j) = (0, 0) */
+	jt->v = (uint8_t *)ctx->v;
+	jt->bpc = 8;			/** 8bit */
+	jt->d2 = SEA_TOP<<2 | SEA_LEFT;
 
 	return SEA_SUCCESS;
 }
@@ -766,6 +777,9 @@ void sea_close(
 	sea_t *ctx)
 {
 	if((struct sea_context *)ctx != NULL) {
+/*		if(ctx->v != NULL) {
+			free(ctx->v);
+		}*/
 		free((struct sea_context *)ctx);
 		return;
 	}
