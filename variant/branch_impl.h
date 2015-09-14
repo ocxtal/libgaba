@@ -246,7 +246,7 @@ struct branch_linear_block {
  * @macro branch_linear_fill_latter_body
  */
 #define branch_linear_fill_latter_body(k, r, pdp) { \
- 	vec_add(tmp1, cv, gv); \
+	vec_add(tmp1, cv, gv); \
 	vec_add(tmp2, tmp2, gv); \
 	vec_max(tmp1, tmp1, tmp2); \
 	vec_comp_sel(tmp2, wq, wt, mv, xv); \
