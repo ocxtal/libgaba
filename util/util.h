@@ -55,7 +55,7 @@ struct sea_reader {
  * @struct sea_writer
  *
  * @brief (internal) abstract sequence writer
- * sizeof(struct sea_writer) == 96
+ * sizeof(struct sea_writer) == 64
  */
 struct sea_writer {
 	uint8_t *p;
@@ -68,18 +68,6 @@ struct sea_writer {
 		uint8_t *p,
 		int64_t pos,
 		uint8_t c);
-	int64_t (*pushm)(
-		uint8_t *p,
-		int64_t pos);
-	int64_t (*pushx)(
-		uint8_t *p,
-		int64_t pos);
-	int64_t (*pushi)(
-		uint8_t *p,
-		int64_t pos);
-	int64_t (*pushd)(
-		uint8_t *p,
-		int64_t pos);
 	int64_t (*finish)(
 		uint8_t *ptr,
 		int64_t pos);

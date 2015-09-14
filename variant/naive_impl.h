@@ -539,8 +539,8 @@ struct naive_linear_block {
  */
 #define naive_linear_trace_add_cap(k, r, pdp) { \
 	debug("add cap i(%lld), j(%lld), asp(%lld), bsp(%lld)", i, j, k->asp, k->bsp); \
-	while(i-- > k->asp) { wr_pushd(k->l); } \
-	while(j-- > k->bsp) { wr_pushi(k->l); } \
+	while(i-- > k->asp) { wr_push(k->l, 'D'); } \
+	while(j-- > k->bsp) { wr_push(k->l, 'I'); } \
 }
 
 /**

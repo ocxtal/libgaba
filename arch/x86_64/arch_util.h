@@ -173,6 +173,8 @@ enum _ALN_DIR {
 	(w).len++; \
 	/*debug("pushm: %c, pos(%lld)", (w).p[(w).pos], (w).pos);*/ \
 }
+
+#if 0
 #define wr_pushm(w) { \
 	/*(w).pos = (w).pushm((w).p, (w).pos); */ \
 	__asm__ ( \
@@ -221,6 +223,7 @@ enum _ALN_DIR {
 	(w).len++; \
 	/*debug("pushd: %c, pos(%lld)", (w).p[(w).pos], (w).pos);*/ \
 }
+#endif
 
 /**
  * @macro wr_finish
