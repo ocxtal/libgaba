@@ -797,17 +797,20 @@ struct trunk_linear_block {
 		trunk_linear_trace_windback_ptr(k, r, pdp); \
 		i--; /*rd_fetch(k->a, i-1);*/	/** to avoid fetch before boundary check */ \
 		j--; /*rd_fetch(k->b, j-1);*/	/** to avoid fetch before boundary check */ \
-		if(sc == k->m) { wr_pushm(k->l); } else { wr_pushx(k->l); } \
+		wr_push(k->l, rd_cmp(k->a, k->b) ? 'M' : 'X'); \
+		/*if(sc == k->m) { wr_pushm(k->l); } else { wr_pushx(k->l); }*/ \
 	} else if(dh == k->gi) { \
 		q += trunk_linear_leftq(r, k); \
 		i--; /*rd_fetch(k->a, i-1);*/	/** to avoid fetch before boundary check */ \
 		debug("del"); \
-		wr_pushd(k->l); \
+		wr_push(k->l, 'D'); \
+		/*wr_pushd(k->l);*/ \
 	} else if(DV(pvh + q, k->gi) == k->gi) { \
 		q += trunk_linear_topq(r, k); \
 		j--; /*rd_fetch(k->b, j-1);*/	/** to avoid fetch before boundary check */ \
 		debug("ins"); \
-		wr_pushi(k->l); \
+		wr_push(k->l, 'I'); \
+		/*wr_pushi(k->l);*/ \
 	} else { \
 		debug("out of band"); \
 		return SEA_ERROR_OUT_OF_BAND; \
@@ -823,8 +826,8 @@ struct trunk_linear_block {
 /**
  * @macro trunk_linear_trace_test_bound
  */
-#define trunk_linear_trace_test_bound(k, r, pdp)		naive_linear_trace_test_bound(k, r, pdp)
-#define trunk_linear_trace_test_bound_cap(k, r, pdp)	naive_linear_trace_test_bound_cap(k, r, pdp)
+#define trunk_linear_trace_test_bound(k, r, pdp)		( 0 )
+#define trunk_linear_trace_test_bound_cap(k, r, pdp)	( 0 )
 
 /**
  * @macro trunk_linear_trace_test_joint

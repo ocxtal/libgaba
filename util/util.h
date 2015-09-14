@@ -55,7 +55,7 @@ struct sea_reader {
  * @struct sea_writer
  *
  * @brief (internal) abstract sequence writer
- * sizeof(struct sea_writer) == 80
+ * sizeof(struct sea_writer) == 96
  */
 struct sea_writer {
 	uint8_t *p;
@@ -64,6 +64,10 @@ struct sea_writer {
 		uint8_t *ptr,
 		int64_t fpos,
 		int64_t rpos);
+	int64_t (*push)(
+		uint8_t *p,
+		int64_t pos,
+		uint8_t c);
 	int64_t (*pushm)(
 		uint8_t *p,
 		int64_t pos);
@@ -79,7 +83,7 @@ struct sea_writer {
 	int64_t (*finish)(
 		uint8_t *ptr,
 		int64_t pos);
-//	uint8_t _pad[16];
+	uint8_t _pad[8];
 };
 
 /**
@@ -279,6 +283,7 @@ uint8_t _pop_2bit8packed(uint8_t const *p, int64_t pos);
  */
 /** forward writer */
 int64_t _init_ascii_f(uint8_t *p, int64_t fpos, int64_t rpos);
+int64_t _push_ascii_f(uint8_t *p, int64_t pos, uint8_t c);
 int64_t _pushm_ascii_f(uint8_t *p, int64_t pos);
 int64_t _pushx_ascii_f(uint8_t *p, int64_t pos);
 int64_t _pushi_ascii_f(uint8_t *p, int64_t pos);
@@ -287,6 +292,7 @@ int64_t _finish_ascii_f(uint8_t *p, int64_t pos);
 
 /** reverse writer */
 int64_t _init_ascii_r(uint8_t *p, int64_t fpos, int64_t rpos);
+int64_t _push_ascii_r(uint8_t *p, int64_t pos, uint8_t c);
 int64_t _pushm_ascii_r(uint8_t *p, int64_t pos);
 int64_t _pushx_ascii_r(uint8_t *p, int64_t pos);
 int64_t _pushi_ascii_r(uint8_t *p, int64_t pos);
@@ -301,6 +307,7 @@ int64_t _finish_ascii_r(uint8_t *p, int64_t pos);
  */
 /** forward writer */
 int64_t _init_cigar_f(uint8_t *p, int64_t fpos, int64_t rpos);
+int64_t _push_cigar_f(uint8_t *p, int64_t pos, uint8_t c);
 int64_t _pushm_cigar_f(uint8_t *p, int64_t pos);
 int64_t _pushx_cigar_f(uint8_t *p, int64_t pos);
 int64_t _pushi_cigar_f(uint8_t *p, int64_t pos);
@@ -309,6 +316,7 @@ int64_t _finish_cigar_f(uint8_t *p, int64_t pos);
 
 /** reverse writer */
 int64_t _init_cigar_r(uint8_t *p, int64_t fpos, int64_t rpos);
+int64_t _push_cigar_r(uint8_t *p, int64_t pos, uint8_t c);
 int64_t _pushm_cigar_r(uint8_t *p, int64_t pos);
 int64_t _pushx_cigar_r(uint8_t *p, int64_t pos);
 int64_t _pushi_cigar_r(uint8_t *p, int64_t pos);
@@ -323,6 +331,7 @@ int64_t _finish_cigar_r(uint8_t *p, int64_t pos);
  */
 /** forward writer */
 int64_t _init_dir_f(uint8_t *p, int64_t fpos, int64_t rpos);
+int64_t _push_dir_f(uint8_t *p, int64_t pos, uint8_t c);
 int64_t _pushm_dir_f(uint8_t *p, int64_t pos);
 int64_t _pushx_dir_f(uint8_t *p, int64_t pos);
 int64_t _pushi_dir_f(uint8_t *p, int64_t pos);
@@ -331,6 +340,7 @@ int64_t _finish_dir_f(uint8_t *p, int64_t pos);
 
 /** reverse writer */
 int64_t _init_dir_r(uint8_t *p, int64_t fpos, int64_t rpos);
+int64_t _push_dir_r(uint8_t *p, int64_t pos, uint8_t c);
 int64_t _pushm_dir_r(uint8_t *p, int64_t pos);
 int64_t _pushx_dir_r(uint8_t *p, int64_t pos);
 int64_t _pushi_dir_r(uint8_t *p, int64_t pos);

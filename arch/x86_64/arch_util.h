@@ -31,26 +31,26 @@
  * @brief fetch a decoded base into r.b.
  */
 #define rd_fetch(r, pos) { \
+	uint8_t register b; \
 	__asm__ ( \
 		"call *%1" \
-		: "=a"((r).b)		/** output list */ \
+		: "=a"(b)			/** output list */ \
 		: "r"((r).pop),		/** input list */ \
 		  "D"((r).p), \
 		  "S"(pos) \
 		: "rcx"); \
+	(r).b = b; \
 	/*(r).b = (r).pop((r).p, pos);*/ \
 }
 #define rd_fetch_fast(r, pos, sp, ep, dummy) { \
 	rd_fetch(r, pos); \
 }
 #define rd_fetch_safe(r, pos, sp, ep, dummy) { \
-	__asm__ ("###"); \
 	if((uint64_t)((pos) - (sp)) < (uint64_t)((ep) - (sp))) { \
 		rd_fetch(r, pos); \
 	} else { \
 		(r).b = (dummy); \
 	} \
-	__asm__ ("###"); \
 }
 
 /**
@@ -114,6 +114,7 @@ enum _ALN_DIR {
 #define wr_init(w, f) { \
 	(w).p = NULL; \
 	(w).init = (f).init; \
+	(w).push = (f).push; \
 	(w).pushm = (f).pushm; \
 	(w).pushx = (f).pushx; \
 	(w).pushi = (f).pushi; \
@@ -160,6 +161,18 @@ enum _ALN_DIR {
  * @macro wr_pushm, wr_pushx, wr_pushi, wr_pushd
  * @brief push an alignment character
  */
+#define wr_push(w, c) { \
+	__asm__ ( \
+		"call *%1" \
+		: "=a"((w).pos)		/** output list */ \
+		: "r"((w).push),	/** input list */ \
+		  "D"((w).p), \
+		  "S"((w).pos), \
+		  "d"(c) \
+		: "rcx", "r8", "xmm0"); \
+	(w).len++; \
+	/*debug("pushm: %c, pos(%lld)", (w).p[(w).pos], (w).pos);*/ \
+}
 #define wr_pushm(w) { \
 	/*(w).pos = (w).pushm((w).p, (w).pos); */ \
 	__asm__ ( \

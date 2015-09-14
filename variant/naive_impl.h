@@ -463,17 +463,20 @@ struct naive_linear_block {
 		naive_linear_trace_windback_ptr(k, r, pdp); \
 		i--; /*rd_fetch(k->a, i-1);*/	/** to avoid fetch before boundary check */ \
 		j--; /*rd_fetch(k->b, j-1);*/	/** to avoid fetch before boundary check */ \
-		if(sc == k->m) { wr_pushm(k->l); } else { wr_pushx(k->l); } \
+		wr_push(k->l, rd_cmp(k->a, k->b) ? 'M' : 'X'); \
+		/*if(sc == k->m) { wr_pushm(k->l); } else { wr_pushx(k->l); }*/ \
 		cc = diag; \
 	} else if(cc == ((h = pvh[q + naive_linear_leftq(r, k)]) + k->gi)) { \
 		q += naive_linear_leftq(r, k); \
 		i--; /*rd_fetch(k->a, i-1);*/	/** to avoid fetch before boundary check */ \
-		wr_pushd(k->l); \
+		wr_push(k->l, 'D'); \
+		/*wr_pushd(k->l);*/ \
 		cc = h; \
 	} else if(cc == ((v = pvh[q + naive_linear_topq(r, k)]) + k->gi)) { \
 		q += naive_linear_topq(r, k); \
 		j--; /*rd_fetch(k->b, j-1);*/	/** to avoid fetch before boundary check */ \
-		wr_pushi(k->l); \
+		wr_push(k->l, 'I'); \
+		/*wr_pushi(k->l);*/ \
 		cc = v; \
 	} else { \
 		debug("out of band"); \
@@ -488,7 +491,7 @@ struct naive_linear_block {
  * @brief returns negative if beginning bound is invaded
  */
 #define naive_linear_trace_test_bound(k, r, pdp) ( \
-	(i - k->asp - 1) | (j - k->bsp - 1) \
+	0 /*(i - k->asp - 1) | (j - k->bsp - 1)*/ \
 )
 #define naive_linear_trace_test_bound_cap(k, r, pdp) ( \
 	(i - k->asp - 1) | (j - k->bsp - 1) \
@@ -499,7 +502,7 @@ struct naive_linear_block {
  * @brief returns negative if beginning bound is invaded
  */
 #define naive_linear_trace_test_joint(k, r, pdp) ( \
-	(p - sp) \
+	(p - (sp + BW)) \
 )
 #define naive_linear_trace_test_joint_cap(k, r, pdp) ( \
 	(p - sp) \

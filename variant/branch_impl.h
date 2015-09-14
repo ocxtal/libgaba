@@ -513,8 +513,8 @@ struct branch_linear_block {
 /**
  * @macro branch_linear_trace_test_bound
  */
-#define branch_linear_trace_test_bound(k, r, pdp)		naive_linear_trace_test_bound(k, r, pdp)
-#define branch_linear_trace_test_bound_cap(k, r, pdp)	naive_linear_trace_test_bound_cap(k, r, pdp)
+#define branch_linear_trace_test_bound(k, r, pdp)		( 0 )
+#define branch_linear_trace_test_bound_cap(k, r, pdp)	( 0 )
 
 /**
  * @macro branch_linear_trace_test_joint

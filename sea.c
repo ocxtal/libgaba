@@ -70,20 +70,20 @@ struct sea_reader const rd_table[8] = {
 
 struct sea_writer const wr_table[4][2] = {
 	{
-		{NULL, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL},
-		{NULL, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL}
+		{NULL, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL},
+		{NULL, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL}
 	},
 	{
-		{NULL, 0, 0, 0, _init_ascii_f, _pushm_ascii_f, _pushx_ascii_f, _pushi_ascii_f, _pushd_ascii_f, _finish_ascii_f},
-		{NULL, 0, 0, 0, _init_ascii_r, _pushm_ascii_r, _pushx_ascii_r, _pushi_ascii_r, _pushd_ascii_r, _finish_ascii_r}
+		{NULL, 0, 0, 0, _init_ascii_f, _push_ascii_f, _pushm_ascii_f, _pushx_ascii_f, _pushi_ascii_f, _pushd_ascii_f, _finish_ascii_f},
+		{NULL, 0, 0, 0, _init_ascii_r, _push_ascii_r, _pushm_ascii_r, _pushx_ascii_r, _pushi_ascii_r, _pushd_ascii_r, _finish_ascii_r}
 	},
 	{
-		{NULL, 0, 0, 0, _init_cigar_f, _pushm_cigar_f, _pushx_cigar_f, _pushi_cigar_f, _pushd_cigar_f, _finish_cigar_f},
-		{NULL, 0, 0, 0, _init_cigar_r, _pushm_cigar_r, _pushx_cigar_r, _pushi_cigar_r, _pushd_cigar_r, _finish_cigar_r}
+		{NULL, 0, 0, 0, _init_cigar_f, _push_cigar_f, _pushm_cigar_f, _pushx_cigar_f, _pushi_cigar_f, _pushd_cigar_f, _finish_cigar_f},
+		{NULL, 0, 0, 0, _init_cigar_r, _push_cigar_r, _pushm_cigar_r, _pushx_cigar_r, _pushi_cigar_r, _pushd_cigar_r, _finish_cigar_r}
 	},
 	{
-		{NULL, 0, 0, 0, _init_dir_f, _pushm_dir_f, _pushx_dir_f, _pushi_dir_f, _pushd_dir_f, _finish_dir_f},
-		{NULL, 0, 0, 0, _init_dir_r, _pushm_dir_r, _pushx_dir_r, _pushi_dir_r, _pushd_dir_r, _finish_dir_r}
+		{NULL, 0, 0, 0, _init_dir_f, _push_dir_f, _pushm_dir_f, _pushx_dir_f, _pushi_dir_f, _pushd_dir_f, _finish_dir_f},
+		{NULL, 0, 0, 0, _init_dir_r, _push_dir_r, _pushm_dir_r, _pushx_dir_r, _pushi_dir_r, _pushd_dir_r, _finish_dir_r}
 	}
 };
 

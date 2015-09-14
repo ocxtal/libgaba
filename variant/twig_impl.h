@@ -245,8 +245,8 @@ typedef struct twig_linear_block _linear_block;
 /**
  * @macro twig_linear_trace_test_bound
  */
-#define twig_linear_trace_test_bound(k, r, pdp)		branch_linear_trace_test_bound(k, r, pdp)
-#define twig_linear_trace_test_bound_cap(k, r, pdp)	branch_linear_trace_test_bound_cap(k, r, pdp)
+#define twig_linear_trace_test_bound(k, r, pdp)		naive_linear_trace_test_bound(k, r, pdp)
+#define twig_linear_trace_test_bound_cap(k, r, pdp)	naive_linear_trace_test_bound_cap(k, r, pdp)
 
 /**
  * @macro twig_linear_trace_test_joint

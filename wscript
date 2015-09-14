@@ -29,6 +29,7 @@ def configure(conf):
 		conf.env.append_value('CFLAGS', '-g')
 		conf.env.append_value('CFLAGS', '-DDEBUG')
 	else:
+		# conf.env.append_value('CFLAGS', '-g')
 		conf.env.append_value('CFLAGS', '-O3')
 
 	conf.env.append_value('CFLAGS', '-DBENCH')

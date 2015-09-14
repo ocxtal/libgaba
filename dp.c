@@ -223,7 +223,11 @@ func2(VARIANT_LABEL, _trace)(
 		if(trace_check_term(k, r, pdp)) { break; }
 		trace_body(k, r, pdp);
 	}
-	debug("p(%lld), q(%lld), i(%lld), j(%lld)", p, q, i, j);
+	debug("switch to cap p(%lld), q(%lld), i(%lld), j(%lld)", p, q, i, j);
+	while(!trace_check_term_cap(k, r, pdp)) {
+		trace_body(k, r, pdp);
+	}
+	debug("end cap p(%lld), q(%lld), i(%lld), j(%lld)", p, q, i, j);
 	if(trace_test_bound(k, r, pdp) < 0) {
 		trace_add_cap(k, r, pdp);
 	}
