@@ -55,6 +55,12 @@ typedef struct _dir dir_t;
 #define guided_dir2(r) 		dir2_ue(r)
 #define guided_dir_raw(r) 	( (r).d2 )
 
+#if 0
+#define guided_dir_topq(r)		( (int64_t)-1 + (0x01 & ((r).d2>>2)) )
+#define guided_dir_leftq(r)		( (int64_t)0x01 & ((r).d2>>2) )
+#define guided_dir_topleftq(r)	( (int64_t)(0x01 & (r).d2) - (0x01 & ((~(r).d2)>>2)) )
+#endif
+
 /**
  * direction determiners for fill-in macros
  */

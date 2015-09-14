@@ -454,8 +454,11 @@ struct naive_linear_block {
 	cell_t h, v; \
 	cell_t diag = pdg[q + naive_linear_topleftq(r, k)]; \
 	cell_t sc = rd_cmp(k->a, k->b) ? k->m : k->x; \
-	debug("(%lld, %lld), (%lld, %lld), d(%d), v(%d), h(%d), sc(%d), cc(%d)", \
-		p, q, i, j, diag, pvh[q + naive_linear_leftq(r, k)], pvh[q + naive_linear_topq(r, k)], sc, cc); \
+	debug("%lld, %lld, %lld, %lld, %lld, %lld", \
+		naive_linear_leftq(r, k), naive_linear_topq(r, k), naive_linear_topleftq(r, k), \
+		dir_leftq(r), dir_topq(r), dir_topleftq(r)); \
+	/*debug("(%lld, %lld), (%lld, %lld), d(%d), v(%d), h(%d), sc(%d), cc(%d)",*/ \
+	/*	p, q, i, j, diag, pvh[q + naive_linear_leftq(r, k)], pvh[q + naive_linear_topq(r, k)], sc, cc);*/ \
 	if(cc == (diag + sc)) { \
 		debug("match"); \
 		/** update direction and pointers */ \

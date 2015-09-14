@@ -122,6 +122,12 @@
 #define dir2_le 				label2(DP_LABEL, _dir2_le)
 #define dir_raw 				label2(DP_LABEL, _dir_raw)
 
+#if 0
+#define dir_leftq				label2(DP_LABEL, _dir_leftq)
+#define dir_topq				label2(DP_LABEL, _dir_topq)
+#define dir_topleftq			label2(DP_LABEL, _dir_topleftq)
+#endif
+
 /** direction determiners */
 #define dir_init 				label2(DP_LABEL, _dir_init)
 #define dir_start_block 		label2(DP_LABEL, _dir_start_block)
