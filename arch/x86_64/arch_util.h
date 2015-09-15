@@ -32,13 +32,15 @@
  */
 #define rd_fetch(r, pos) { \
 	uint8_t register b; \
+	uint64_t register unused; \
 	__asm__ ( \
-		"call *%1" \
-		: "=a"(b)			/** output list */ \
-		: "r"((r).pop),		/** input list */ \
+		"call *%[fp]" \
+		: "=a"(b),				/** output list */ \
+		  "=S"(unused) \
+		: [fp]"r"((r).pop),		/** input list */ \
 		  "D"((r).p), \
 		  "S"(pos) \
-		: "rcx"); \
+		: /*rsi", */"rcx"); \
 	(r).b = b; \
 	/*(r).b = (r).pop((r).p, pos);*/ \
 }
@@ -146,14 +148,17 @@ enum _ALN_DIR {
 	/*(w).pos = (w).init((w).p,*/ \
 		/*(w).size - SEA_CLIP_LEN,*/ /** margin: must be consistent to wr_finish */ \
 		/*sizeof(struct sea_result) + SEA_CLIP_LEN);*/ /** margin: must be consistent to wr_finish */ \
+	uint64_t register unused1, unused2; \
 	__asm__ ( \
-		"call *%1" \
-		: "=a"((w).pos)		/** output list */ \
-		: "r"((w).init),	/** input list */ \
+		"call *%[fp]" \
+		: "=a"((w).pos),		/** output list */ \
+		  "=S"(unused1), \
+		  "=d"(unused2) \
+		: [fp]"r"((w).init),	/** input list */ \
 		  "D"((w).p), \
 		  "S"((w).size - SEA_CLIP_LEN), \
 		  "d"(sizeof(struct sea_result) + SEA_CLIP_LEN) \
-		: ); \
+		: /*"rsi", "rdx"*/); \
 	(w).len = 0; \
 }
 
@@ -162,68 +167,20 @@ enum _ALN_DIR {
  * @brief push an alignment character
  */
 #define wr_push(w, c) { \
+	uint64_t register unused1, unused2; \
 	__asm__ ( \
-		"call *%1" \
-		: "=a"((w).pos)		/** output list */ \
-		: "r"((w).push),	/** input list */ \
+		"call *%[fp]" \
+		: "=a"((w).pos),		/** output list */ \
+		  "=S"(unused1), \
+		  "=d"(unused2) \
+		: [fp]"r"((w).push),	/** input list */ \
 		  "D"((w).p), \
 		  "S"((w).pos), \
 		  "d"(c) \
-		: "rcx", "r8", "xmm0"); \
+		: /*"rsi", "rdx", */"rcx", "r8", "xmm0"); \
 	(w).len++; \
 	/*debug("pushm: %c, pos(%lld)", (w).p[(w).pos], (w).pos);*/ \
 }
-
-#if 0
-#define wr_pushm(w) { \
-	/*(w).pos = (w).pushm((w).p, (w).pos); */ \
-	__asm__ ( \
-		"call *%1" \
-		: "=a"((w).pos)		/** output list */ \
-		: "r"((w).pushm),	/** input list */ \
-		  "D"((w).p), \
-		  "S"((w).pos) \
-		: "rdx", "rcx", "r8", "xmm0"); \
-	(w).len++; \
-	/*debug("pushm: %c, pos(%lld)", (w).p[(w).pos], (w).pos);*/ \
-}
-#define wr_pushx(w) { \
-	/*(w).pos = (w).pushx((w).p, (w).pos); */ \
-	__asm__ ( \
-		"call *%1" \
-		: "=a"((w).pos)		/** output list */ \
-		: "r"((w).pushx),	/** input list */ \
-		  "D"((w).p), \
-		  "S"((w).pos) \
-		: "rdx", "rcx", "r8", "xmm0"); \
-	(w).len++; \
-	/*debug("pushx: %c, pos(%lld)", (w).p[(w).pos], (w).pos);*/ \
-}
-#define wr_pushi(w) { \
-	/*(w).pos = (w).pushi((w).p, (w).pos);*/ \
-	__asm__ ( \
-		"call *%1" \
-		: "=a"((w).pos)		/** output list */ \
-		: "r"((w).pushi),	/** input list */ \
-		  "D"((w).p), \
-		  "S"((w).pos) \
-		: "rdx", "rcx", "r8", "xmm0"); \
-	(w).len++; \
-	/*debug("pushi: %c, pos(%lld)", (w).p[(w).pos], (w).pos);*/ \
-}
-#define wr_pushd(w) { \
-	/*(w).pos = (w).pushd((w).p, (w).pos);*/ \
-	__asm__ ( \
-		"call *%1" \
-		: "=a"((w).pos)		/** output list */ \
-		: "r"((w).pushd),	/** input list */ \
-		  "D"((w).p), \
-		  "S"((w).pos) \
-		: "rdx", "rcx", "r8", "xmm0"); \
-	(w).len++; \
-	/*debug("pushd: %c, pos(%lld)", (w).p[(w).pos], (w).pos);*/ \
-}
-#endif
 
 /**
  * @macro wr_finish
@@ -231,14 +188,16 @@ enum _ALN_DIR {
  */
 #define wr_finish(w) { \
 	/*int64_t p = (w).finish((w).p, (w).pos);*/ \
+	uint64_t register unused; \
 	int64_t p; \
 	__asm__ ( \
-		"call *%1" \
-		: "=a"(p)			/** output list */ \
-		: "r"((w).finish),	/** input list */ \
+		"call *%[fp]" \
+		: "=a"(p),				/** output list */ \
+		  "=S"(unused) \
+		: [fp]"r"((w).finish),	/** input list */ \
 		  "D"((w).p), \
 		  "S"((w).pos) \
-		: "rdx", "rcx", "r8", "xmm0"); \
+		: /*"rsi", "rdx", */"rdx", "rcx", "r8", "xmm0"); \
 	if(p <= (w).pos) { \
 		(w).size = ((w).size - SEA_CLIP_LEN) - p - 1; \
 		(w).pos = p; \

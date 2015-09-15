@@ -505,7 +505,6 @@ struct naive_linear_block {
 	/*debug("(%lld, %lld), (%lld, %lld), d(%d), v(%d), h(%d), sc(%d), cc(%d)",*/ \
 	/*	p, q, i, j, diag, pvh[q + naive_linear_leftq(r, k)], pvh[q + naive_linear_topq(r, k)], sc, cc);*/ \
 	if(cc == (diag + sc)) { \
-		debug("match"); \
 		/** update direction and pointers */ \
 		q += naive_linear_topleftq(r, k); \
 		naive_linear_trace_windback_ptr(k, r, pdp); \
@@ -530,8 +529,10 @@ struct naive_linear_block {
 		debug("out of band"); \
 		return SEA_ERROR_OUT_OF_BAND; \
 	} \
+	debug("535 j(%lld)", j); \
 	/** windback to p-1 */ \
 	naive_linear_trace_windback_ptr(k, r, pdp); \
+	debug("538 j(%lld)", j); \
 }
 #define naive_affine_trace_body(k, r, pdp) { \
 	/** load diagonal cell and score */ \
@@ -542,7 +543,6 @@ struct naive_linear_block {
 	cell_t diag = pdg[q + naive_linear_topleftq(r, k)]; \
 	cell_t sc = rd_cmp(k->a, k->b) ? k->m : k->x; \
 	if(cc == (diag + sc)) { \
-		debug("match"); \
 		/** update direction and pointers */ \
 		q += naive_linear_topleftq(r, k); \
 		naive_linear_trace_windback_ptr(k, r, pdp); \

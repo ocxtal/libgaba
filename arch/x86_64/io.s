@@ -11,6 +11,10 @@
 # pop functions
 
 	# ascii
+	# input:  %rdi (pointer)
+	#         %rsi (index)    (modified)
+	# output: %rax
+	# work:   None
 	.globl _pop_ascii
 	.globl __pop_ascii
 _pop_ascii:
@@ -24,6 +28,10 @@ __pop_ascii:
 	ret
 
 	# 4bit encoded (1base per byte)
+	# input:  %rdi (pointer)
+	#         %rsi (index)    (modified)
+	# output: %rax
+	# work:   None
 	.globl _pop_4bit
 	.globl __pop_4bit
 _pop_4bit:
@@ -38,6 +46,10 @@ __pop_4bit:
 	ret
 
 	# 2bit encoded (1base per byte)
+	# input:  %rdi (pointer)
+	#         %rsi (index)
+	# output: %rax
+	# work:   None
 	.globl _pop_2bit
 	.globl __pop_2bit
 _pop_2bit:
@@ -46,6 +58,10 @@ __pop_2bit:
 	ret
 
 	# 4bit packed
+	# input:  %rdi (pointer)
+	#         %rsi (index)    (modified)
+	# output: %rax
+	# work:   %rcx
 	.globl _pop_4bit8packed
 	.globl __pop_4bit8packed
 _pop_4bit8packed:
@@ -65,6 +81,10 @@ __pop_4bit8packed:
 	ret
 
 	# 2bit packed
+	# input:  %rdi (pointer)
+	#         %rsi (index)    (modified)
+	# output: %rax
+	# work:   %rcx
 	.globl _pop_2bit8packed
 	.globl __pop_2bit8packed
 _pop_2bit8packed:
@@ -81,6 +101,11 @@ __pop_2bit8packed:
 # push functions
 
 	# ascii forward
+	# input:  %rdi (pointer)
+	#         %rsi (index)    (modified)
+	#         %rdx (index)
+	# output: %rax
+	# work:   None
 	.globl _init_ascii_f
 	.globl __init_ascii_f
 _init_ascii_f:
@@ -90,6 +115,11 @@ __init_ascii_f:
 	movq %rsi, %rax
 	ret
 
+	# input:  %rdi (pointer)
+	#         %rsi (index)    (modified)
+	#         %rdx (char)
+	# output: %rax
+	# work:   None
 	.globl _push_ascii_f
 	.globl __push_ascii_f
 _push_ascii_f:
@@ -99,42 +129,10 @@ __push_ascii_f:
 	movq %rsi, %rax
 	ret
 
-	.globl _pushm_ascii_f
-	.globl __pushm_ascii_f
-_pushm_ascii_f:
-__pushm_ascii_f:
-	addq $-1, %rsi
-	movb $77, (%rdi, %rsi)
-	movq %rsi, %rax
-	ret
-
-	.globl _pushx_ascii_f
-	.globl __pushx_ascii_f
-_pushx_ascii_f:
-__pushx_ascii_f:
-	addq $-1, %rsi
-	movb $88, (%rdi, %rsi)
-	movq %rsi, %rax
-	ret
-
-	.globl _pushi_ascii_f
-	.globl __pushi_ascii_f
-_pushi_ascii_f:
-__pushi_ascii_f:
-	addq $-1, %rsi
-	movb $73, (%rdi, %rsi)
-	movq %rsi, %rax
-	ret
-
-	.globl _pushd_ascii_f
-	.globl __pushd_ascii_f
-_pushd_ascii_f:
-__pushd_ascii_f:
-	addq $-1, %rsi
-	movb $68, (%rdi, %rsi)
-	movq %rsi, %rax
-	ret
-
+	# input:  %rdi (pointer)
+	#         %rsi (index)
+	# output: %rax
+	# work:   None
 	.globl _finish_ascii_f
 	.globl __finish_ascii_f
 _finish_ascii_f:
@@ -143,6 +141,11 @@ __finish_ascii_f:
 	ret
 
 	# ascii reverse
+	# input:  %rdi (pointer)
+	#         %rsi (index)
+	#         %rdx (index)
+	# output: %rax
+	# work:   None
 	.globl _init_ascii_r
 	.globl __init_ascii_r
 _init_ascii_r:
@@ -150,6 +153,11 @@ __init_ascii_r:
 	movq %rdx, %rax
 	ret
 
+	# input:  %rdi (pointer)
+	#         %rsi (index)
+	#         %rdx (char)
+	# output: %rax
+	# work:   None
 	.globl _push_ascii_r
 	.globl __push_ascii_r
 _push_ascii_r:
@@ -159,42 +167,10 @@ __push_ascii_r:
 	addq $1, %rax
 	ret
 
-	.globl _pushm_ascii_r
-	.globl __pushm_ascii_r
-_pushm_ascii_r:
-__pushm_ascii_r:
-	movb $77, (%rdi, %rsi)
-	movq %rsi, %rax
-	addq $1, %rax
-	ret
-
-	.globl _pushx_ascii_r
-	.globl __pushx_ascii_r
-_pushx_ascii_r:
-__pushx_ascii_r:
-	movb $88, (%rdi, %rsi)
-	movq %rsi, %rax
-	addq $1, %rax
-	ret
-
-	.globl _pushi_ascii_r
-	.globl __pushi_ascii_r
-_pushi_ascii_r:
-__pushi_ascii_r:
-	movb $73, (%rdi, %rsi)
-	movq %rsi, %rax
-	addq $1, %rax
-	ret
-
-	.globl _pushd_ascii_r
-	.globl __pushd_ascii_r
-_pushd_ascii_r:
-__pushd_ascii_r:
-	movb $68, (%rdi, %rsi)
-	movq %rsi, %rax
-	addq $1, %rax
-	ret
-
+	# input:  %rdi (pointer)
+	#         %rsi (index)
+	# output: %rax
+	# work:   None
 	.globl _finish_ascii_r
 	.globl __finish_ascii_r
 _finish_ascii_r:
@@ -205,6 +181,11 @@ __finish_ascii_r:
 	ret
 
 	# cigar forward
+	# input:  %rdi (pointer)
+	#         %rsi (index)    (modified)
+	#         %rdx (index)
+	# output: %rax
+	# work:   None
 	.globl _init_cigar_f
 	.globl __init_cigar_f
 _init_cigar_f:
@@ -218,6 +199,11 @@ __init_cigar_f:
 	movl $0, (%rdi, %rsi)
 	ret
 
+	# input:  %rdi (pointer)
+	#         %rsi (index)    (modified)
+	#         %rdx (char)     (modified)
+	# output: %rax
+	# work:   %rcx, %r8, %xmm0
 	.globl _push_cigar_f
 	.globl __push_cigar_f
 _push_cigar_f:
@@ -253,126 +239,10 @@ __push_cigar_f_incr:
 	addl $1, (%rdi, %rsi)
 	ret
 
-	.globl _pushm_cigar_f
-	.globl __pushm_cigar_f
-_pushm_cigar_f:
-__pushm_cigar_f:
-	cmpb $61, (%rdi, %rsi)
-	je __pushm_cigar_f_incr
-	movq %rsi, %rdx
-	addq $-4, %rdx
-	movl (%rdi, %rdx), %eax
-	movq $10, %rcx
-__pushm_cigar_f_loop:
-	movq $0, %rdx
-	divq %rcx
-	addq $48, %rdx
-	addq $-1, %rsi
-	movb %dl, (%rdi, %rsi)
-	cmpl $0, %eax
-	jne __pushm_cigar_f_loop
-	addq $-1, %rsi
-	movb $61, (%rdi, %rsi)
-	movq %rsi, %rax
-	addq $-4, %rsi
-	movl $1, (%rdi, %rsi)
-	ret
-__pushm_cigar_f_incr:
-	movq %rsi, %rax
-	addq $-4, %rsi
-	addl $1, (%rdi, %rsi)
-	ret
-
-	.globl _pushx_cigar_f
-	.globl __pushx_cigar_f
-_pushx_cigar_f:
-__pushx_cigar_f:
-	cmpb $88, (%rdi, %rsi)
-	je __pushx_cigar_f_incr
-	movq %rsi, %rdx
-	addq $-4, %rdx
-	movl (%rdi, %rdx), %eax
-	movq $10, %rcx
-__pushx_cigar_f_loop:
-	movq $0, %rdx
-	divq %rcx
-	addq $48, %rdx
-	addq $-1, %rsi
-	movb %dl, (%rdi, %rsi)
-	cmpl $0, %eax
-	jne __pushx_cigar_f_loop
-	addq $-1, %rsi
-	movb $88, (%rdi, %rsi)
-	movq %rsi, %rax
-	addq $-4, %rsi
-	movl $1, (%rdi, %rsi)
-	ret
-__pushx_cigar_f_incr:
-	movq %rsi, %rax
-	addq $-4, %rsi
-	addq $1, (%rdi, %rsi)
-	ret
-
-	.globl _pushi_cigar_f
-	.globl __pushi_cigar_f
-_pushi_cigar_f:
-__pushi_cigar_f:
-	cmpb $73, (%rdi, %rsi)
-	je __pushi_cigar_f_incr
-	movq %rsi, %rdx
-	addq $-4, %rdx
-	movl (%rdi, %rdx), %eax
-	movq $10, %rcx
-__pushi_cigar_f_loop:
-	movq $0, %rdx
-	divq %rcx
-	addq $48, %rdx
-	addq $-1, %rsi
-	movb %dl, (%rdi, %rsi)
-	cmpl $0, %eax
-	jne __pushi_cigar_f_loop
-	addq $-1, %rsi
-	movb $73, (%rdi, %rsi)
-	movq %rsi, %rax
-	addq $-4, %rsi
-	movl $1, (%rdi, %rsi)
-	ret
-__pushi_cigar_f_incr:
-	movq %rsi, %rax
-	addq $-4, %rsi
-	addq $1, (%rdi, %rsi)
-	ret
-
-	.globl _pushd_cigar_f
-	.globl __pushd_cigar_f
-_pushd_cigar_f:
-__pushd_cigar_f:
-	cmpb $68, (%rdi, %rsi)
-	je __pushd_cigar_f_incr
-	movq %rsi, %rdx
-	addq $-4, %rdx
-	movl (%rdi, %rdx), %eax
-	movq $10, %rcx
-__pushd_cigar_f_loop:
-	movq $0, %rdx
-	divq %rcx
-	addq $48, %rdx
-	addq $-1, %rsi
-	movb %dl, (%rdi, %rsi)
-	cmpl $0, %eax
-	jne __pushd_cigar_f_loop
-	addq $-1, %rsi
-	movb $68, (%rdi, %rsi)
-	movq %rsi, %rax
-	addq $-4, %rsi
-	movl $1, (%rdi, %rsi)
-	ret
-__pushd_cigar_f_incr:
-	movq %rsi, %rax
-	addq $-4, %rsi
-	addq $1, (%rdi, %rsi)
-	ret
-
+	# input:  %rdi (pointer)
+	#         %rsi (index)    (modified)
+	# output: %rax
+	# work:   %rdx
 	.globl _finish_cigar_f
 	.globl __finish_cigar_f
 _finish_cigar_f:
@@ -393,6 +263,11 @@ __finish_cigar_f_loop:
 	ret
 
 	# cigar reverse
+	# input:  %rdi (pointer)
+	#         %rsi (index)
+	#         %rdx (index)    (modified)
+	# output: %rax
+	# work:   None
 	.globl _init_cigar_r
 	.globl __init_cigar_r
 _init_cigar_r:
@@ -403,6 +278,11 @@ __init_cigar_r:
 	movl $0, (%rdi, %rdx)
 	ret
 
+	# input:  %rdi (pointer)
+	#         %rsi (index)    (modified)
+	#         %rdx (char)     (modified)
+	# output: %rax
+	# work:   %rcx, %r8, %xmm0
 	.globl _push_cigar_r
 	.globl __push_cigar_r
 _push_cigar_r:
@@ -448,162 +328,10 @@ __push_cigar_r_incr:
 	addl $1, (%rdi, %rsi)
 	ret
 
-	.globl _pushm_cigar_r
-	.globl __pushm_cigar_r
-_pushm_cigar_r:
-__pushm_cigar_r:
-	movb (%rdi, %rsi), %r8b
-	cmpb $61, %r8b
-	je __pushm_cigar_r_incr
-	pxor %xmm0, %xmm0
-	# pxor %xmm1, %xmm1
-	movd %r8d, %xmm0
-	movq $1, %r8		# %r8 holds the length of array in %xmm0
-	movq %rsi, %rdx
-	addq $1, %rdx
-	movl (%rdi, %rdx), %eax
-	movq $10, %rcx
-__pushm_cigar_r_loop:
-	movq $0, %rdx
-	divq %rcx
-	addq $48, %rdx
-	# movd %edx, %xmm1
-	pslldq $1, %xmm0
-	# por %xmm1, %xmm0
-	pinsrb $0, %edx, %xmm0
-	addq $1, %r8
-	cmpl $0, %eax
-	jne __pushm_cigar_r_loop
-	movdqu %xmm0, (%rdi, %rsi)
-	addq %r8, %rsi
-	movb $61, (%rdi, %rsi)
-	movq %rsi, %rax
-	addq $1, %rsi
-	movl $1, (%rdi, %rsi)
-	ret
-__pushm_cigar_r_incr:
-	movq %rsi, %rax
-	addq $1, %rsi
-	addl $1, (%rdi, %rsi)
-	ret
-
-	.globl _pushx_cigar_r
-	.globl __pushx_cigar_r
-_pushx_cigar_r:
-__pushx_cigar_r:
-	movb (%rdi, %rsi), %r8b
-	cmpb $88, %r8b
-	je __pushx_cigar_r_incr
-	pxor %xmm0, %xmm0
-	# pxor %xmm1, %xmm1
-	movd %r8d, %xmm0
-	movq $1, %r8		# %r8 holds the length of array in %xmm0
-	movq %rsi, %rdx
-	addq $1, %rdx
-	movl (%rdi, %rdx), %eax
-	movq $10, %rcx
-__pushx_cigar_r_loop:
-	movq $0, %rdx
-	divq %rcx
-	addq $48, %rdx
-	# movd %edx, %xmm1
-	pslldq $1, %xmm0
-	# por %xmm1, %xmm0
-	pinsrb $0, %edx, %xmm0
-	addq $1, %r8
-	cmpl $0, %eax
-	jne __pushx_cigar_r_loop
-	movdqu %xmm0, (%rdi, %rsi)
-	addq %r8, %rsi
-	movb $88, (%rdi, %rsi)
-	movq %rsi, %rax
-	addq $1, %rsi
-	movl $1, (%rdi, %rsi)
-	ret
-__pushx_cigar_r_incr:
-	movq %rsi, %rax
-	addq $1, %rsi
-	addl $1, (%rdi, %rsi)
-	ret
-
-	.globl _pushi_cigar_r
-	.globl __pushi_cigar_r
-_pushi_cigar_r:
-__pushi_cigar_r:
-	movb (%rdi, %rsi), %r8b
-	cmpb $73, %r8b
-	je __pushi_cigar_r_incr
-	pxor %xmm0, %xmm0
-	# pxor %xmm1, %xmm1
-	movd %r8d, %xmm0
-	movq $1, %r8		# %r8 holds the length of array in %xmm0
-	movq %rsi, %rdx
-	addq $1, %rdx
-	movl (%rdi, %rdx), %eax
-	movq $10, %rcx
-__pushi_cigar_r_loop:
-	movq $0, %rdx
-	divq %rcx
-	addq $48, %rdx
-	# movd %edx, %xmm1
-	pslldq $1, %xmm0
-	# por %xmm1, %xmm0
-	pinsrb $0, %edx, %xmm0
-	addq $1, %r8
-	cmpl $0, %eax
-	jne __pushi_cigar_r_loop
-	movdqu %xmm0, (%rdi, %rsi)
-	addq %r8, %rsi
-	movb $73, (%rdi, %rsi)
-	movq %rsi, %rax
-	addq $1, %rsi
-	movl $1, (%rdi, %rsi)
-	ret
-__pushi_cigar_r_incr:
-	movq %rsi, %rax
-	addq $1, %rsi
-	addl $1, (%rdi, %rsi)
-	ret
-
-	.globl _pushd_cigar_r
-	.globl __pushd_cigar_r
-_pushd_cigar_r:
-__pushd_cigar_r:
-	movb (%rdi, %rsi), %r8b
-	cmpb $68, %r8b
-	je __pushd_cigar_r_incr
-	pxor %xmm0, %xmm0
-	# pxor %xmm1, %xmm1
-	movd %r8d, %xmm0
-	movq $1, %r8		# %r8 holds the length of array in %xmm0
-	movq %rsi, %rdx
-	addq $1, %rdx
-	movl (%rdi, %rdx), %eax
-	movq $10, %rcx
-__pushd_cigar_r_loop:
-	movq $0, %rdx
-	divq %rcx
-	addq $48, %rdx
-	# movd %edx, %xmm1
-	pslldq $1, %xmm0
-	# por %xmm1, %xmm0
-	pinsrb $0, %edx, %xmm0
-	addq $1, %r8
-	cmpl $0, %eax
-	jne __pushd_cigar_r_loop
-	movdqu %xmm0, (%rdi, %rsi)
-	addq %r8, %rsi
-	movb $68, (%rdi, %rsi)
-	movq %rsi, %rax
-	addq $1, %rsi
-	movl $1, (%rdi, %rsi)
-	ret
-__pushd_cigar_r_incr:
-	movq %rsi, %rax
-	addq $1, %rsi
-	addl $1, (%rdi, %rsi)
-	ret
-
+	# input:  %rdi (pointer)
+	#         %rsi (index)    (modified)
+	# output: %rax
+	# work:   %rdx, %rcx, %r8, %xmm0
 	.globl _finish_cigar_r
 	.globl __finish_cigar_r
 _finish_cigar_r:
@@ -636,6 +364,11 @@ __finish_cigar_r_loop:
 	ret
 
 	# direction string forward
+	# input:  %rdi (pointer)
+	#         %rsi (index)    (modified)
+	#         %rdx (index)
+	# output: %rax
+	# work:   None
 	.globl _init_dir_f
 	.globl __init_dir_f
 _init_dir_f:
@@ -645,6 +378,11 @@ __init_dir_f:
 	movq %rsi, %rax
 	ret
 
+	# input:  %rdi (pointer)
+	#         %rsi (index)    (modified)
+	#         %rdx (char)
+	# output: %rax
+	# work:   %rcx, %r8
 	.globl _push_dir_f
 	.globl __push_dir_f
 _push_dir_f:
@@ -666,42 +404,10 @@ __push_dir_f:
 	addq %rdx, %rax
 	ret
 
-	.globl _pushm_dir_f
-	.globl __pushm_dir_f
-_pushm_dir_f:
-__pushm_dir_f:
-	addq $-2, %rsi
-	movw $3, (%rdi, %rsi)
-	movq %rsi, %rax
-	ret
-
-	.globl _pushx_dir_f
-	.globl __pushx_dir_f
-_pushx_dir_f:
-__pushx_dir_f:
-	addq $-2, %rsi
-	movw $3, (%rdi, %rsi)
-	movq %rsi, %rax
-	ret
-
-	.globl _pushi_dir_f
-	.globl __pushi_dir_f
-_pushi_dir_f:
-__pushi_dir_f:
-	addq $-1, %rsi
-	movb $3, (%rdi, %rsi)
-	movq %rsi, %rax
-	ret
-
-	.globl _pushd_dir_f
-	.globl __pushd_dir_f
-_pushd_dir_f:
-__pushd_dir_f:
-	addq $-1, %rsi
-	movb $0, (%rdi, %rsi)
-	movq %rsi, %rax
-	ret
-
+	# input:  %rdi (pointer)
+	#         %rsi (index)
+	# output: %rax
+	# work:   None
 	.globl _finish_dir_f
 	.globl __finish_dir_f
 _finish_dir_f:
@@ -709,8 +415,12 @@ __finish_dir_f:
 	movq %rsi, %rax
 	ret
 
-
 	# direction string reverse
+	# input:  %rdi (pointer)
+	#         %rsi (index)
+	#         %rdx (index)
+	# output: %rax
+	# work:   None
 	.globl _init_dir_r
 	.globl __init_dir_r
 _init_dir_r:
@@ -718,6 +428,11 @@ __init_dir_r:
 	movq %rdx, %rax
 	ret
 
+	# input:  %rdi (pointer)
+	#         %rsi (index)
+	#         %rdx (char)
+	# output: %rax
+	# work:   %rcx, %r8
 	.globl _push_dir_r
 	.globl __push_dir_r
 _push_dir_r:
@@ -738,42 +453,10 @@ __push_dir_r:
 	subq %rdx, %rax
 	ret
 
-	.globl _pushm_dir_r
-	.globl __pushm_dir_r
-_pushm_dir_r:
-__pushm_dir_r:
-	movw $3, (%rdi, %rsi)
-	movq %rsi, %rax
-	addq $2, %rax
-	ret
-
-	.globl _pushx_dir_r
-	.globl __pushx_dir_r
-_pushx_dir_r:
-__pushx_dir_r:
-	movw $3, (%rdi, %rsi)
-	movq %rsi, %rax
-	addq $2, %rax
-	ret
-
-	.globl _pushi_dir_r
-	.globl __pushi_dir_r
-_pushi_dir_r:
-__pushi_dir_r:
-	movb $3, (%rdi, %rsi)
-	movq %rsi, %rax
-	addq $1, %rax
-	ret
-
-	.globl _pushd_dir_r
-	.globl __pushd_dir_r
-_pushd_dir_r:
-__pushd_dir_r:
-	movb $0, (%rdi, %rsi)
-	movq %rsi, %rax
-	addq $1, %rax
-	ret
-
+	# input:  %rdi (pointer)
+	#         %rsi (index)
+	# output: %rax
+	# work:   None
 	.globl _finish_dir_r
 	.globl __finish_dir_r
 _finish_dir_r:

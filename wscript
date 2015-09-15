@@ -25,11 +25,12 @@ def configure(conf):
 
 	# debug options
 	if conf.options.debug is True:
-		conf.env.append_value('CFLAGS', '-fmacro-backtrace-limit=0')
+		# conf.env.append_value('CFLAGS', '-fmacro-backtrace-limit=0')
 		conf.env.append_value('CFLAGS', '-g')
 		conf.env.append_value('CFLAGS', '-DDEBUG')
 	else:
 		# conf.env.append_value('CFLAGS', '-g')
+		# conf.env.append_value('CFLAGS', '-DDEBUG')
 		conf.env.append_value('CFLAGS', '-O3')
 
 	conf.env.append_value('CFLAGS', '-DBENCH')

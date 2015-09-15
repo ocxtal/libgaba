@@ -205,7 +205,7 @@ typedef struct twig_linear_block _linear_block;
  * @macro twig_linear_fill_test_chain
  */
 #define twig_linear_fill_test_chain(k, r, pdp) ( \
-	(CELL_MAX / k->m) /*32*/ - p \
+	/*(CELL_MAX / k->m)*/32 - p \
 )
 #define twig_linear_fill_test_chain_cap(k, r, pdp) ( \
 	twig_linear_fill_test_chain(k, r, pdp) \
