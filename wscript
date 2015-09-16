@@ -18,6 +18,7 @@ def options(opt):
 
 
 def configure(conf):
+	conf.load('ar')
 	conf.load('compiler_c')
 
 	conf.recurse('util')
