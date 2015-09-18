@@ -529,10 +529,8 @@ struct naive_linear_block {
 		debug("out of band"); \
 		return SEA_ERROR_OUT_OF_BAND; \
 	} \
-	debug("535 j(%lld)", j); \
 	/** windback to p-1 */ \
 	naive_linear_trace_windback_ptr(k, r, pdp); \
-	debug("538 j(%lld)", j); \
 }
 #define naive_affine_trace_body(k, r, pdp) { \
 	/** load diagonal cell and score */ \
