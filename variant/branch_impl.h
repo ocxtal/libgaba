@@ -173,12 +173,14 @@ struct branch_linear_block {
 	debug("init char vectors"); \
 	vec_char_setzero(wq);	/** vector on the top */ \
 	for(q = -BW/2; q < BW/2; q++) { \
-		rd_fetch(k->a, i+q); \
+		/*rd_fetch(k->a, i+q);*/ \
+		rd_fetch_safe(k->a, i+q, k->asp, k->aep, 128); \
 		pushq(rd_decode(k->a), wq); \
 	} \
 	vec_char_setzero(wt);	/** vector on the left */ \
 	for(q = -BW/2; q < BW/2-1; q++) { \
-		rd_fetch(k->b, j+q); \
+		/*rd_fetch(k->b, 255);*/ \
+		rd_fetch_safe(k->b, j+q, k->bsp, k->bep, 255); \
 		pusht(rd_decode(k->b), wt); \
 	} \
 }
