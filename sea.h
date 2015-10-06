@@ -42,12 +42,11 @@ namespace sea {
  * @brief (internal) positions of option flag bit field.
  */
 enum sea_flags_pos {
-	SEA_FLAGS_POS_ALG 		= 0,
-	SEA_FLAGS_POS_COST 		= 3,
-	SEA_FLAGS_POS_DP 		= 5,
-	SEA_FLAGS_POS_SEQ_A 	= 14,
-	SEA_FLAGS_POS_SEQ_B		= 17,
-	SEA_FLAGS_POS_ALN 		= 20
+	SEA_FLAGS_POS_SEQ_A 	= 0,
+	SEA_FLAGS_POS_SEQ_A_DIR = 3,
+	SEA_FLAGS_POS_SEQ_B		= 5,
+	SEA_FLAGS_POS_SEQ_B_DIR = 8,
+	SEA_FLAGS_POS_ALN 		= 10
 };
 
 /**
@@ -56,44 +55,11 @@ enum sea_flags_pos {
  * @brief (internal) bit-field masks
  */
 enum sea_flags_mask {
-	SEA_FLAGS_MASK_ALG 		= 0x07<<SEA_FLAGS_POS_ALG,
-	SEA_FLAGS_MASK_COST		= 0x03<<SEA_FLAGS_POS_COST,
-	SEA_FLAGS_MASK_DP		= 0x07<<SEA_FLAGS_POS_DP,
-	SEA_FLAGS_MASK_SEQ_A	= 0x07<<SEA_FLAGS_POS_SEQ_A,
-	SEA_FLAGS_MASK_SEQ_B	= 0x07<<SEA_FLAGS_POS_SEQ_B,
-	SEA_FLAGS_MASK_ALN		= 0x03<<SEA_FLAGS_POS_ALN
-};
-
-/**
- * @enum sea_flags_alg
- *
- * @brief (API) constants of algorithm option.
- */
-enum sea_flags_alg {
-	SEA_SW 					= 1<<SEA_FLAGS_POS_ALG,
-	SEA_NW 					= 2<<SEA_FLAGS_POS_ALG,
-	SEA_SEA					= 3<<SEA_FLAGS_POS_ALG,
-	SEA_XSEA				= 4<<SEA_FLAGS_POS_ALG
-};
-
-/**
- * @enum sea_flags_cost
- *
- * @brief (API) constants of cost option.
- */
-enum sea_flags_cost {
-	SEA_LINEAR_GAP_COST 	= 1<<SEA_FLAGS_POS_COST,
-	SEA_AFFINE_GAP_COST 	= 2<<SEA_FLAGS_POS_COST
-};
-
-/**
- * @enum sea_flags_dp
- *
- * @brief (API) constants of the DP option.
- */
-enum sea_flags_dp {
-	SEA_DYNAMIC				= 1<<SEA_FLAGS_POS_DP,
-	SEA_GUIDED				= 2<<SEA_FLAGS_POS_DP
+	SEA_FLAGS_MASK_SEQ_A		= 0x07<<SEA_FLAGS_POS_SEQ_A,
+	SEA_FLAGS_MASK_SEQ_A_DIR 	= 0x03<<SEA_FLAGS_POS_SEQ_A_DIR,
+	SEA_FLAGS_MASK_SEQ_B		= 0x07<<SEA_FLAGS_POS_SEQ_B,
+	SEA_FLAGS_MASK_SEQ_B_DIR 	= 0x03<<SEA_FLAGS_POS_SEQ_B_DIR,
+	SEA_FLAGS_MASK_ALN			= 0x03<<SEA_FLAGS_POS_ALN
 };
 
 /**
@@ -111,6 +77,14 @@ enum sea_flags_seq_a {
 };
 
 /**
+ * @enum sea_flags_seq_a_dir
+ */
+enum sea_flags_seq_a {
+	SEA_SEQ_A_FW_ONLY		= 1<<SEA_FLAGS_POS_SEQ_A_DIR,
+	SEA_SEQ_A_FW_RV		 	= 2<<SEA_FLAGS_POS_SEQ_A_DIR
+};
+
+/**
  * @enum sea_flags_seq_b
  *
  * @brief (API) constants of the sequence format option.
@@ -122,6 +96,14 @@ enum sea_flags_seq_b {
 	SEA_SEQ_B_4BIT8PACKED 	= 4<<SEA_FLAGS_POS_SEQ_B,
 	SEA_SEQ_B_2BIT8PACKED 	= 5<<SEA_FLAGS_POS_SEQ_B,
 	SEA_SEQ_B_1BIT64PACKED 	= 6<<SEA_FLAGS_POS_SEQ_B
+};
+
+/**
+ * @enum sea_flags_seq_b_dir
+ */
+enum sea_flags_seq_b {
+	SEA_SEQ_B_FW_ONLY 		= 1<<SEA_FLAGS_POS_SEQ_B_DIR,
+	SEA_SEQ_B_FW_RV		 	= 2<<SEA_FLAGS_POS_SEQ_B_DIR
 };
 
 /**
@@ -191,15 +173,36 @@ enum sea_clip_type {
 };
 
 /**
- * @struct sea_checkpoint
+ * @struct sea_align_pair
+ */
+struct sea_align_pair {
+	void const *pa;
+	void const *pb;
+	uint64_t alen;
+	uint64_t blen;
+};
+
+/**
+ * @struct sea_align_checkpoint
  *
  * @brief input point container for checkpoint alignment function.
  */
-struct sea_checkpoint {
-	int64_t apos;			/** (apos, bpos) makes a checkpoint on seq a and seq b */
-	int64_t bpos;
-	int32_t type;			/** checkpoint type; see `enum sea_checkpoint_type'. */
-	struct sea_checkpoint *next;				/** linked list */
+struct sea_align_checkpoint {
+	uint64_t apos;			/** (apos, bpos) makes a checkpoint on seq a and seq b */
+	uint64_t bpos;
+//	int32_t type;			/** checkpoint type; see `enum sea_align_checkpoint_type'. */
+//	uint8_t _pad[4];
+//	struct sea_align_checkpoint *next;	/** linked list */
+};
+
+/**
+ * @struct sea_align_section
+ *
+ * @brief section container
+ */
+struct sea_align_section {
+	uint64_t aspos, bepos;
+	uint64_t aepos, bepos;
 };
 
 /**
@@ -222,12 +225,12 @@ struct sea_result {
 	void const *a; 			/*!< a pointer to the sequence a. */
 	void const *b;			/*!< a pointer to the sequence b. */
 	uint8_t *aln;			/*!< a pointer to the alignment result. */
-	int64_t slen;			/*!< the length of the alignment string (slen == strlen(aln)) */
-	int64_t plen;			/*!< the length of the path of the alignment (slen == tlen if ASCII) */
-	int64_t apos;			/*!< alignment start position on a. */
-	int64_t alen;			/*!< alignment length on a. the alignment interval is a[apos]..a[apos+alen-1] */
-	int64_t bpos;			/*!< alignment start position on b. */
-	int64_t blen;			/*!< alignment length on b. the alignment interval is b[bpos]..b[bpos+blen-1] */
+	uint64_t slen;			/*!< the length of the alignment string (slen == strlen(aln)) */
+	uint64_t plen;			/*!< the length of the path of the alignment (slen == tlen if ASCII) */
+	uint64_t apos;			/*!< alignment start position on a. */
+	uint64_t alen;			/*!< alignment length on a. the alignment interval is a[apos]..a[apos+alen-1] */
+	uint64_t bpos;			/*!< alignment start position on b. */
+	uint64_t blen;			/*!< alignment length on b. the alignment interval is b[bpos]..b[bpos+blen-1] */
 	int32_t score;			/*!< the alignment score. */
 };
 
@@ -275,6 +278,48 @@ sea_t *sea_init(
 	int8_t ge,
 	int32_t tx);
 
+/**
+ * @fn sea_align_semi_global
+ */
+sea_res_t *sea_align_semi_global(
+	sea_t const *ctx,
+	void const *a,
+	uint64_t alen,
+	void const *b,
+	uint64_t blen,
+	uint8_t const *guide,
+	uint64_t glen,
+	sea_section_t *section);
+
+/**
+ * @fn sea_align_global
+ */
+sea_res_t *sea_align_global(
+	sea_t const *ctx,
+	void const *a,
+	uint64_t alen,
+	void const *b,
+	uint64_t blen,
+	uint8_t const *guide,
+	uint64_t glen,
+	sea_section_t *section);
+
+/**
+ * @fn sea_align_checkpoint
+ */
+sea_res_t *sea_align_checkpoint(
+	sea_t const *ctx,
+	void const *a,
+	uint64_t alen,
+	void const *b,
+	uint64_t blen,
+	uint8_t const *guide,
+	uint64_t glen,
+	sea_section_t *section);
+
+/**
+ * old apis
+ */
 /**
  * @fn sea_align
  *
@@ -330,25 +375,6 @@ sea_res_t *sea_align_r(
 	void const *b,
 	int64_t bsp,
 	int64_t bep,
-	uint8_t const *guide,
-	int64_t glen);
-
-/**
- * @fn sea_align_checkpoint
- */
-sea_res_t *sea_align_checkpoint(
-	sea_t const *ctx,
-	void const *a,
-	void const *b,
-	struct sea_checkpoint *cp);
-
-/**
- * @fn sea_align_finish
- */
-sea_res_t *sea_align_finish(
-	sea_t const *ctx,
-	void const *a,
-	void const *b,
 	uint8_t const *guide,
 	int64_t glen);
 

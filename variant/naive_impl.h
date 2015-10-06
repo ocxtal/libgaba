@@ -10,6 +10,7 @@
 #include "../util/util.h"
 #include <stdint.h>
 
+#if 0
 /**
  * @macro cell_t
  * @brief cell type in the naive algorithms, alias to `(signed) int32_t'.
@@ -43,7 +44,6 @@ struct naive_linear_block {
 
 #define linear_block_t	struct naive_linear_block
 
-
 /**
  * @macro naive_linear_bpl, naive_affine_bpl
  * @brief calculates bytes per lane
@@ -63,6 +63,7 @@ struct naive_linear_block {
 #define naive_affine_head_size()		( 2 * naive_affine_bpl() + naive_affine_jam_size() + sizeof(struct sea_joint_head) )
 #define naive_affine_tail_size()		( sizeof(struct sea_joint_tail) )
 #define naive_affine_bpb()				( naive_affine_dp_size() + naive_affine_jam_size() )
+#endif
 
 /**
  * @macro (internal) naive_linear_topq, naive_linear_leftq, ...
@@ -89,12 +90,12 @@ struct naive_linear_block {
  * @macro naive_linear_dir_exp, naive_affine_dir_exp
  * @brief determines the next direction in the dynamic banded algorithm.
  */
-#define naive_linear_dir_exp_top(r, k, pdp) ( \
+#define naive_linear_dir_exp_top(r, k) ( \
 	pvh[BW/2-1] > pvh[-BW/2] ? SEA_TOP : SEA_LEFT \
 )
-#define naive_linear_dir_exp_bottom(r, k, pdp)	( 0 )
-#define naive_affine_dir_exp_top(r, k, pdp)		naive_linear_dir_exp_top(r, k, pdp)
-#define naive_affine_dir_exp_bottom(r, k, pdp)	naive_linear_dir_exp_bottom(r, k, pdp)
+#define naive_linear_dir_exp_bottom(r, k)	( 0 )
+#define naive_affine_dir_exp_top(r, k)		naive_linear_dir_exp_top(r, k)
+#define naive_affine_dir_exp_bottom(r, k)	naive_linear_dir_exp_bottom(r, k)
 
 /**
  * fill-in
@@ -102,103 +103,110 @@ struct naive_linear_block {
 /**
  * @macro naive_linear_fill_decl
  */
-#define naive_linear_fill_decl(k, r, pdp) \
+#define naive_linear_fill_decl(k, r) \
 	dir_t r; \
 	cell_t xacc = 0; \
-	cell_t *pdg, *pvh; \
-	int64_t i, j, p, q;
+	cell_t *cdp, *pdg, *pvh; \
+	int64_t i, j, p, q, sp;
 
 /**
  * @macro naive_affine_fill_decl
  */
-#define naive_affine_fill_decl(k, r, pdp)		naive_linear_fill_decl(k, r, pdp)
+#define naive_affine_fill_decl(k, r)		naive_linear_fill_decl(k, r)
 
 /**
  * @macro naive_linear_fill_init
  * @brief initialize fill-in step context
  */
-#define naive_linear_fill_init_intl(k, r, pdp) { \
+#define naive_linear_fill_init_intl(k, r, prev_tail) { \
 	/** load coordinates onto local stack */ \
-	p = _tail(k->pdp, p); \
-	i = _tail(k->pdp, i) - DEF_VEC_LEN/2; \
-	j = (p - 1) - (i - k->asp) + k->bsp; \
+	i = _tail(prev_tail, i) - DEF_VEC_LEN/2; \
+	j = _tail(prev_tail, j) + DEF_VEC_LEN/2; \
+	sp = _tail(prev_tail, psum); \
+	p = 0; \
+	/*j = (p - 1) - (i - k->asp) + k->bsp;*/ \
 	/** load the first direction pointer */ \
-	dir_init(r, k, k->pdp, p); \
+	dir_init(r, k, prev_tail, sp); \
 	/** make room for struct sea_joint_head */ \
-	pdp += sizeof(struct sea_joint_head); \
+	cdp = k->stack_top; \
+	/*_head(cdp, p) = p;*/ \
+	_head(cdp, i) = -1; \
+	/*_head(cdp, psum) = sp;*/ \
+	_head(cdp, ptail) = prev_tail; \
+	cdp += sizeof(struct sea_joint_head); \
 }
-#define naive_linear_fill_init(k, r, pdp) { \
-	naive_linear_fill_init_intl(k, r, pdp); \
+#define naive_linear_fill_init(k, r, prev_tail) { \
+	naive_linear_fill_init_intl(k, r, prev_tail); \
 	/** load the first 32bytes of the vectors */ \
-	cell_t *s = (cell_t *)pdp, *t = (cell_t *)_tail(k->pdp, v); \
+	cell_t *s = (cell_t *)cdp, *t = (cell_t *)_tail(prev_tail, v); \
 	pdg = s + BW/2;		/** vector at p-2 */ \
 	for(q = 0; q < BW; q++) { *s++ = *t++; } \
 	pvh = s + BW/2;		/** vector at p-1 */ \
 	for(q = 0; q < BW; q++) { *s++ = *t++; } \
-	pdp = (uint8_t *)s; \
+	cdp = (uint8_t *)s; \
 	/** write the first dr vector */ \
-	dir_end_block(r, k, pdp, p); \
+	dir_end_block(r, cdp); \
 }
-#define naive_affine_fill_init(k, r, pdp) { \
-	naive_linear_fill_init_intl(k, r, pdp); \
+#define naive_affine_fill_init(k, r, prev_tail) { \
+	naive_linear_fill_init_intl(k, r, prev_tail); \
 	/** load the first 32bytes of the vectors */ \
-	cell_t *s = (cell_t *)pdp, *t = (cell_t *)_tail(k->pdp, v); \
+	cell_t *s = (cell_t *)cdp, *t = (cell_t *)_tail(prev_tail, v); \
 	pdg = s + BW/2;		/** vector at p-2 */ \
 	for(q = 0; q < 3*BW; q++) { *s++ = *t++; } \
 	pvh = s + BW/2;		/** vector at p-1 */ \
 	for(q = 0; q < 3*BW; q++) { *s++ = *t++; } \
-	pdp = (uint8_t *)s; \
+	cdp = (uint8_t *)s; \
 	/** write the first dr vector */ \
-	dir_end_block(r, k, pdp, p); \
+	dir_end_block(r, cdp); \
 }
 
 /**
  * @macro naive_linear_fill_start
  */
-#define naive_linear_fill_start(k, r, pdp) { \
+#define naive_linear_fill_start(k, r) { \
 	/** nothing to do */ \
-	dir_start_block(r, k, pdp, p); \
+	dir_start_block(r); \
 }
-#define naive_affine_fill_start(k, r, pdp) { \
-	naive_linear_fill_start(k, r, pdp); \
+#define naive_affine_fill_start(k, r) { \
+	naive_linear_fill_start(k, r); \
 }
 
 /**
  * @macro naive_linear_fill_former_body
  */
-#define naive_linear_fill_former_body(k, r, pdp) { \
+#define naive_linear_fill_former_body(k, r) { \
 	/** nothing to do */ \
 }
-#define naive_linear_fill_former_body_cap(k, r, pdp)	naive_linear_fill_former_body(k, r, pdp)
-#define naive_affine_fill_former_body(k, r, pdp)		naive_linear_fill_former_body(k, r, pdp)
-#define naive_affine_fill_former_body_cap(k, r, pdp)	naive_affine_fill_former_body(k, r, pdp)
+#define naive_linear_fill_former_body_cap(k, r)		naive_linear_fill_former_body(k, r)
+#define naive_affine_fill_former_body(k, r)			naive_linear_fill_former_body(k, r)
+#define naive_affine_fill_former_body_cap(k, r)		naive_affine_fill_former_body(k, r)
 
 /**
  * @macro naive_linear_fill_go_down
  */
-#define naive_linear_fill_go_down(k, r, pdp) { \
+#define naive_linear_fill_go_down(k, r) { \
 	/** increment local coordinate */ \
 	j++; \
 }
-#define naive_linear_fill_go_down_cap(k, r, pdp)		naive_linear_fill_go_down(k, r, pdp)
-#define naive_affine_fill_go_down(k, r, pdp)			naive_linear_fill_go_down(k, r, pdp)
-#define naive_affine_fill_go_down_cap(k, r, pdp)		naive_affine_fill_go_down(k, r, pdp)
+#define naive_linear_fill_go_down_cap(k, r)			naive_linear_fill_go_down(k, r)
+#define naive_affine_fill_go_down(k, r)				naive_linear_fill_go_down(k, r)
+#define naive_affine_fill_go_down_cap(k, r)			naive_affine_fill_go_down(k, r)
 
 /**
  * @macro naive_linear_fill_go_right
  */
-#define naive_linear_fill_go_right(k, r, pdp) { \
+#define naive_linear_fill_go_right(k, r) { \
 	/** increment local coordinate */ \
 	i++; \
 }
-#define naive_linear_fill_go_right_cap(k, r, pdp)		naive_linear_fill_go_right(k, r, pdp)
-#define naive_affine_fill_go_right(k, r, pdp)			naive_linear_fill_go_right(k, r, pdp)
-#define naive_affine_fill_go_right_cap(k, r, pdp)		naive_affine_fill_go_right(k, r, pdp)
+#define naive_linear_fill_go_right_cap(k, r)		naive_linear_fill_go_right(k, r)
+#define naive_affine_fill_go_right(k, r)			naive_linear_fill_go_right(k, r)
+#define naive_affine_fill_go_right_cap(k, r)		naive_affine_fill_go_right(k, r)
 
 /**
  * @macro naive_linear_fill_latter_body_intl
  */
-#define naive_linear_fill_latter_body_intl(k, r, pdp, fetch) { \
+#define naive_linear_fill_latter_body_intl(k, r, fetch) { \
 	cell_t u, d, l; \
 	xacc = -1; \
 	for(q = -BW/2; q < BW/2; q++) { \
@@ -219,8 +227,8 @@ struct naive_linear_block {
 		} \
 		/** calculate and write back the cell */ \
 		debug("(%lld, %lld), (%lld, %lld), %d, %d, %d, %d", p, q, i, j, d, u, l, MAX4(d, u, l, k->min)); \
-		*((cell_t *)pdp) = d = MAX4(d, u, l, k->min); \
-		pdp += sizeof(cell_t); \
+		*((cell_t *)cdp) = d = MAX4(d, u, l, k->min); \
+		cdp += sizeof(cell_t); \
 		/** update max and xdrop accumulator */ \
 		if(d >= k->max) { \
 			k->max = d; k->mp = p; k->mq = q; k->mi = i-q; \
@@ -228,29 +236,29 @@ struct naive_linear_block {
 		xacc &= (d + k->tx - k->max); \
 	} \
 	/** update pdg and pvh */ \
-	pdg = pvh; pvh = (cell_t *)pdp - BW/2; \
+	pdg = pvh; pvh = (cell_t *)cdp - BW/2; \
 	/** calculate the next advancing direction */ \
-	dir_det_next(r, k, pdp, p);		/** increment p */ \
+	dir_det_next(r, p);		/** increment p */ \
 }
 
 /**
  * @macro naive_linear_fill_latter_body
  */
-#define naive_linear_fill_latter_body(k, r, pdp) { \
-	naive_linear_fill_latter_body_intl(k, r, pdp, rd_fetch_fast); \
+#define naive_linear_fill_latter_body(k, r) { \
+	naive_linear_fill_latter_body_intl(k, r, rd_fetch_fast); \
 }
 
 /**
  * @macro naive_linear_fill_latter_body_cap
  */
-#define naive_linear_fill_latter_body_cap(k, r, pdp) { \
-	naive_linear_fill_latter_body_intl(k, r, pdp, rd_fetch_safe); \
+#define naive_linear_fill_latter_body_cap(k, r) { \
+	naive_linear_fill_latter_body_intl(k, r, rd_fetch_safe); \
 }
 
 /**
  * @macro naive_affine_fill_latter_body_intl
  */
-#define naive_affine_fill_latter_body_intl(k, r, pdp) { \
+#define naive_affine_fill_latter_body_intl(k, r) { \
 	cell_t u, d, l; \
 	xacc = -1; \
 	for(q = -BW/2; q < BW/2; q++) { \
@@ -273,137 +281,144 @@ struct naive_linear_block {
 		} \
 		/** calculate and write back the cell */ \
 		debug("(%lld, %lld), (%lld, %lld), %d, %d, %d, %d", p, q, i, j, d, u, l, MAX4(d, u, l, k->min)); \
-		*((cell_t *)pdp) = d = MAX4(d, u, l, k->min); \
-		*((cell_t *)pdp + BW) = u; \
-		*((cell_t *)pdp + 2*BW) = l; \
-		pdp += sizeof(cell_t); \
+		*((cell_t *)cdp) = d = MAX4(d, u, l, k->min); \
+		*((cell_t *)cdp + BW) = u; \
+		*((cell_t *)cdp + 2*BW) = l; \
+		cdp += sizeof(cell_t); \
 		/** update max and xdrop accumulator */ \
 		if(d >= k->max) { \
-			k->max = d; k->mp = p; k->mq = q; k->mi = i-q; \
+			k->max = d; k->mp = p; k->mq = q; k->mi = i-q; k->m_tail = cdp; \
 		} \
 		xacc &= (d + k->tx - k->max); \
 	} \
 	/** update pdg and pvh */ \
-	pdg = pvh; pvh = (cell_t *)pdp - BW/2; \
+	pdg = pvh; pvh = (cell_t *)cdp - 2*BW - BW/2; \
 	/** calculate the next advancing direction */ \
-	dir_det_next(r, k, pdp, p);		/** increment p */ \
+	dir_det_next(r, p);		/** incremment p */ \
 }
 
 /**
  * @macro naive_linear_fill_empty_body
  */
-#define naive_linear_fill_empty_body(k, r, pdp) { \
+#define naive_linear_fill_empty_body(k, r) { \
 	pdp += bpl(); \
-	dir_empty(r, k, pdp, p); \
+	dir_empty(r); \
 }
-#define naive_affine_fill_empty_body(k, r, pdp)			naive_linear_fill_empty_body(k, r, pdp)
+#define naive_affine_fill_empty_body(k, r)				naive_linear_fill_empty_body(k, r)
 
 /**
  * @macro naive_linear_fill_end
  */
-#define naive_linear_fill_end(k, r, pdp) { \
+#define naive_linear_fill_end(k, r) { \
 	/** store direction vector */ \
-	dir_end_block(r, k, pdp, p); \
-	debug("fill end pdp(%p), (%lld, %lld), (%lld, %lld), (%lld, %lld)", pdp, i, j, p, q, k->aep, k->bep); \
+	dir_end_block(r, cdp); \
+	debug("fill end pdp(%p), (%lld, %lld), (%lld, %lld), (%lld, %lld)", cdp, i, j, p, q, k->aep, k->bep); \
 	debug("test xdrop(%d), mem(%d), chain(%d)", \
-		(int)naive_linear_fill_test_xdrop(k, r, pdp), \
-		(int)naive_linear_fill_test_mem(k, r, pdp), \
-		(int)naive_linear_fill_test_chain(k, r, pdp)); \
+		(int)naive_linear_fill_test_xdrop(k, r), \
+		(int)naive_linear_fill_test_mem(k, r), \
+		(int)naive_linear_fill_test_chain(k, r)); \
 }
-#define naive_affine_fill_end(k, r, pdp)				naive_linear_fill_end(k, r, pdp)
+#define naive_affine_fill_end(k, r)						naive_linear_fill_end(k, r)
 
 /**
  * @macro naive_linear_fill_test_xdrop
  * @brief returns negative if xdrop test passed (= when termination is detected)
  */
-#define naive_linear_fill_test_xdrop(k, r, pdp) ( \
+#define naive_linear_fill_test_xdrop(k, r) ( \
 	(int64_t)(XSEA - k->alg - 1) & (int64_t)xacc \
 )
-#define naive_linear_fill_test_xdrop_cap(k, r, pdp)		naive_linear_fill_test_xdrop(k, r, pdp)
-#define naive_affine_fill_test_xdrop(k, r, pdp)			naive_linear_fill_test_xdrop(k, r, pdp)
-#define naive_affine_fill_test_xdrop_cap(k, r, pdp)		naive_affine_fill_test_xdrop(k, r, pdp)
+#define naive_linear_fill_test_xdrop_cap(k, r)			naive_linear_fill_test_xdrop(k, r)
+#define naive_affine_fill_test_xdrop(k, r)				naive_linear_fill_test_xdrop(k, r)
+#define naive_affine_fill_test_xdrop_cap(k, r)			naive_affine_fill_test_xdrop(k, r)
 
 /**
  * @macro naive_linear_fill_test_bound
  * @brief check boundary
  */
-#define naive_linear_fill_test_bound(k, r, pdp) ( \
-	(k->aep-i-BLK) | (k->bep-j-BLK) | dir_test_bound(r, k, pdp, p) \
+#define naive_linear_fill_test_bound(k, r) ( \
+	(k->aep-i-BLK) | (k->bep-j-BLK) | dir_test_bound(r, k, cdp, p) \
 )
-#define naive_linear_fill_test_bound_cap(k, r, pdp) ( \
+#define naive_linear_fill_test_bound_cap(k, r) ( \
 	  (k->aep-i+BW/2) | (k->bep-j+BW/2) \
-	| (cop(k->aep, k->bep, BW)-p) | dir_test_bound_cap(r, k, pdp, p) \
+	| (cop(k->aep, k->bep, BW)-p) | dir_test_bound_cap(r, k, cdp, p) \
 )
-#define naive_affine_fill_test_bound(k, r, pdp)			naive_linear_fill_test_bound(k, r, pdp)
-#define naive_affine_fill_test_bound_cap(k, r, pdp)		naive_linear_fill_test_bound_cap(k, r, pdp)
+#define naive_affine_fill_test_bound(k, r)				naive_linear_fill_test_bound(k, r)
+#define naive_affine_fill_test_bound_cap(k, r)			naive_linear_fill_test_bound_cap(k, r)
 
 /**
  * @macro naive_linear_fill_test_mem
  * @brief returns negative if i+BLK > aep OR j+BLK > bep OR pdp + block_memsize > tdp
  */
-#define naive_linear_fill_test_mem(k, r, pdp) ( \
-	(int64_t)(k->tdp - pdp \
+#define naive_linear_fill_test_mem(k, r) ( \
+	(int64_t)(k->stack_end - cdp \
 		- (3*bpb() \
 		+ sizeof(struct sea_joint_tail) \
-		+ sizeof(struct sea_joint_head))) \
+		/*+ sizeof(struct sea_joint_head)*/)) \
 )
-#define naive_linear_fill_test_mem_cap(k, r, pdp) ( \
-	(int64_t)(k->tdp - pdp \
+#define naive_linear_fill_test_mem_cap(k, r) ( \
+	(int64_t)(k->stack_end - cdp \
 		- (bpb() \
 		+ sizeof(struct sea_joint_tail) \
-		+ sizeof(struct sea_joint_head))) \
+		/*+ sizeof(struct sea_joint_head)*/)) \
 )
-#define naive_affine_fill_test_mem(k, r, pdp)			naive_linear_fill_test_mem(k, r, pdp)
-#define naive_affine_fill_test_mem_cap(k, r, pdp)		naive_linear_fill_test_mem_cap(k, r, pdp)
+#define naive_affine_fill_test_mem(k, r)				naive_linear_fill_test_mem(k, r)
+#define naive_affine_fill_test_mem_cap(k, r)			naive_linear_fill_test_mem_cap(k, r)
 
 /**
  * @macro naive_linear_fill_test_chain
  * @brief returns negative if chain test passed
  */
-#define naive_linear_fill_test_chain(k, r, pdp) ( \
+#define naive_linear_fill_test_chain(k, r) ( \
 	0 /** never chain */ \
 )
-#define naive_linear_fill_test_chain_cap(k, r, pdp)		naive_linear_fill_test_chain(k, r, pdp)
-#define naive_affine_fill_test_chain(k, r, pdp)			naive_linear_fill_test_chain(k, r, pdp)
-#define naive_affine_fill_test_chain_cap(k, r, pdp)		naive_linear_fill_test_chain_cap(k, r, pdp)
+#define naive_linear_fill_test_chain_cap(k, r)			naive_linear_fill_test_chain(k, r)
+#define naive_affine_fill_test_chain(k, r)				naive_linear_fill_test_chain(k, r)
+#define naive_affine_fill_test_chain_cap(k, r)			naive_linear_fill_test_chain_cap(k, r)
 
 /**
  * @macro naive_linear_fill_check_term
  * @brief returns false if the next loop can be executed
  */
-#define naive_linear_fill_check_term(k, r, pdp) ( \
-	( fill_test_xdrop(k, r, pdp) \
-	| fill_test_bound(k, r, pdp) \
-	| fill_test_mem(k, r, pdp) \
-	| fill_test_chain(k, r, pdp)) < 0 \
+#define naive_linear_fill_check_term(k, r) ( \
+	( fill_test_xdrop(k, r) \
+	| fill_test_bound(k, r) \
+	| fill_test_mem(k, r) \
+	| fill_test_chain(k, r)) < 0 \
 )
-#define naive_linear_fill_check_term_cap(k, r, pdp) ( \
-	( fill_test_xdrop_cap(k, r, pdp) \
-	| fill_test_bound_cap(k, r, pdp) \
-	| fill_test_mem_cap(k, r, pdp) \
-	| fill_test_chain_cap(k, r, pdp)) < 0 \
+#define naive_linear_fill_check_term_cap(k, r) ( \
+	( fill_test_xdrop_cap(k, r) \
+	| fill_test_bound_cap(k, r) \
+	| fill_test_mem_cap(k, r) \
+	| fill_test_chain_cap(k, r)) < 0 \
 )
-#define naive_affine_fill_check_term(k, r, pdp)			naive_linear_fill_check_term(k, r, pdp)
-#define naive_affine_fill_check_term_cap(k, r, pdp)		naive_linear_fill_check_term_cap(k, r, pdp)
+#define naive_affine_fill_check_term(k, r)				naive_linear_fill_check_term(k, r)
+#define naive_affine_fill_check_term_cap(k, r)			naive_linear_fill_check_term_cap(k, r)
 
 /**
  * @macro naive_linear_fill_finish
  */
-#define naive_linear_fill_finish(k, r, pdp) { \
+#define naive_linear_fill_finish(k, r) { \
 	/** retrieve chain vector pointers */ \
-	uint8_t *v = pdp - 2*bpl() - jam_size(); \
+	uint8_t *v = cdp - 2*bpl() - jam_size(); \
 	/** create ivec at the end */ \
-	pdp += sizeof(struct sea_joint_tail); \
+	cdp += sizeof(struct sea_joint_tail); \
 	/** save terminal coordinates */ \
-	_tail(pdp, p) = p; \
-	_tail(pdp, i) = i + DEF_VEC_LEN/2; \
-	_tail(pdp, v) = v; \
-	_tail(pdp, bpc) = 8*sizeof(cell_t); \
-	_tail(pdp, d2) = dir_raw(r); \
-	/** save max */ \
-	/*_head(k->pdp, max) = k->max;*/ \
+	_tail(cdp, i) = i + DEF_VEC_LEN/2; \
+	_tail(cdp, j) = j - DEF_VEC_LEN/2; \
+	_tail(cdp, psum) = sp + p; \
+	_tail(cdp, p) = p; \
+	_tail(cdp, v) = v; \
+	_tail(cdp, size) = cdp - k->stack_top; \
+	_tail(cdp, var) = BASE; \
+	_tail(cdp, d2) = dir_raw(r); \
+	/** update m_tail */ \
+	if((uint64_t)(k->m_tail - k->stack_top) < (cdp - k->stack_top)) { \
+		k->m_tail = cdp; \
+	} \
+	/** write back cdp */ \
+	k->pdp = cdp; \
 }
-#define naive_affine_fill_finish(k, r, pdp)				naive_linear_fill_finish(k, r, pdp)
+#define naive_affine_fill_finish(k, r)					naive_linear_fill_finish(k, r)
 
 /**
  * @macro naive_linear_set_terminal
@@ -439,32 +454,42 @@ struct naive_linear_block {
 /**
  * @macro naive_linear_trace_decl
  */
-#define naive_linear_trace_decl(k, r, pdp) \
+#define naive_linear_trace_decl(k, r) \
 	dir_t r; \
 	cell_t *pdg, *pvh; \
 	cell_t cc;		/** current cell */ \
 	int64_t i, j, p, q, sp;
 
-#define naive_affine_trace_decl(k, r, pdp)				naive_linear_trace_decl(k, r, pdp)
+#define naive_affine_trace_decl(k, r)					naive_linear_trace_decl(k, r)
 
 /**
  * @macro naive_linear_trace_windback_ptr
  */
-#define naive_linear_trace_windback_ptr(k, r, pdp) { \
+#define naive_linear_trace_windback_ptr(k, r) { \
 	/** load the next direction pointer */ \
-	dir_load_backward_fast(r, k, pdp, p, sp); \
+	dir_load_backward_fast(r, k, cdp, p, sp); \
 	/** update pdg, pvh, and ptb (cell_t *) */ \
 	pvh = pdg; pdg -= bpl() / sizeof(cell_t); \
 	if((((p - 1) - sp) & (BLK-1)) == 0) { \
 		pdg -= jam_size() / sizeof(cell_t); \
 	} \
 }
-#define naive_affine_trace_windback_ptr(k, r, pdp)		naive_linear_trace_windback_ptr(k, r, pdp)
+#define naive_affine_trace_windback_ptr(k, r)			naive_linear_trace_windback_ptr(k, r)
 
 /**
  * @macro naive_linear_trace_init
  */
-#define naive_linear_trace_init(k, r, pdp) { \
+#define naive_linear_trace_init(k, r, prev_head) { \
+	uint8_t *tdp = _head(prev_head, dp); \
+	uint8_t *hdp = tdp - _tail(tdp, size); \
+	/** load coordinates */ \
+	p = _tail(tdp, p) + _head(prev_head, p); \
+	q = _head(prev_head, q); \
+	i = _head(prev_head, i); \
+	j = _head(prev_head, j); \
+	/*j = p - (i - k->asp) + k->bsp;*/ \
+	sp = _tail(_head(hdp), )
+
 	/** load coordinates */ \
 	p = _head(k->pdp, p); \
 	q = _head(k->pdp, q); \

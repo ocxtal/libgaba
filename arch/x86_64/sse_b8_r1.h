@@ -17,24 +17,106 @@
 #ifndef _SSE_B8_R1_H_INCLUDED
 #define _SSE_B8_R1_H_INCLUDED
 
-#ifndef _SIMD_INCLUDED
-#define _SIMD_INCLUDED
-
 #include <smmintrin.h>
 #include <stdint.h>
 
 /**
  * register declarations. 
  */
-#define vec_size()					( sizeof(__m128i) )
-#define _vec_cell(v)				__m128i v##1
-#define _vec_cell_const(v, k)		__m128i const v##1 = _mm_set1_epi8(k)
-#define _vec_cell_reg(v)			__m128i register v##1
-#define _vec_single_const(v, k)		__m128i const v##1 = _mm_set1_epi8(k)
-#define _vec_char_reg(v)			__m128i register v##1
+#define b8c16_size()				( sizeof(__m128i) )
+#define _b8c16_cell(v)				__m128i v##1
+#define _b8c16_cell_const(v, k)		__m128i const v##1 = _mm_set1_epi8(k)
+#define _b8c16_cell_reg(v)			__m128i register v##1
+#define _b8c16_single_const(v, k)	__m128i const v = _mm_set1_epi8(k)
+#define _b8c16_char_reg(v)			__m128i register v##1
 
 /**
- * substitution to cell vectors
+ * load and store operations
+ */
+#define b8c16_store(p, v) { \
+	_mm_store_si128((__m128i *)(p), (v##1)); \
+}
+
+#define b8c16_store_packed(p, dv, dh) { \
+	_mm_store_si128( \
+		(__m128i *)(p), \
+		_mm_or_si128(_mm_slli_epi64((dh##1), 4), (dv##1))); \
+}
+
+#define b8c16_load(p, v) { \
+	(v##1) = _mm_load_si128((__m128i *)(p)); \
+}
+
+#define b8c16_load_packed(p, dv, dh) { \
+	__m128i const mask = _mm_set1_epi8(0x0f); \
+	(dv##1) = _mm_load_si128((__m128i *)(p)); \
+	(dh##1) = _mm_and_si128(_mm_srli_epi64((dv##1), 4), mask); \
+	(dv##1) = _mm_and_si128((dv##1), mask); \
+}
+
+#define b8c16_load8(p, v) { \
+	(v##1) = _mm_load_si128((__m128i *)(p)); \
+}
+
+#define b8c16_char_store(p, v)	b8c16_store(p, v)
+#define b8c16_char_load(p, v)	b8c16_load(p, v)
+
+#if 0
+/**
+ * store vector to 32-elem array of int32_t
+ */
+#define vec_store32(p, v) { \
+	__m128i t = v; \
+ 	__m128i const m = _mm_set1_epi32(CELL_MIN); \
+ 	vec_store(p, m); vec_store(p, m);	/** margin */ \
+	vec_store(p, _mm_cvtepi8_epi32(t)); \
+	t = _mm_slli_si128(t, 4); \
+	vec_store(p, _mm_cvtepi8_epi32(t)); \
+	t = _mm_slli_si128(t, 4); \
+	vec_store(p, _mm_cvtepi8_epi32(t)); \
+	t = _mm_slli_si128(t, 4); \
+	vec_store(p, _mm_cvtepi8_epi32(t)); \
+ 	vec_store(p, m); vec_store(p, m);	/** margin */ \
+}
+
+/**
+ * load vector from 32-elem array of int32_t
+ */
+#define vec_load32(p, v) { \
+	__m128i t1, t2, t3, t4; \
+	p += 2*sizeof(__m128i);	/** skip margin */ \
+	vec_load(p, t1); \
+	vec_load(p, t2); \
+	vec_load(p, t3); \
+	vec_load(p, t4); \
+	p += 2*sizeof(__m128i);	/** skip margin */ \
+	v = _mm_packs_epi32( \
+		_mm_packs_epi16(t1, t2), \
+		_mm_packs_epi16(t3, t4)); \
+}
+#endif
+
+#ifndef _SIMD_INCLUDED
+#define _SIMD_INCLUDED
+
+#define vec_size					b8c16_size
+#define _vec_cell					_b8c16_cell
+#define _vec_cell_const				_b8c16_cell_const
+#define _vec_cell_reg				_b8c16_cell_reg
+#define _vec_single_const			_b8c16_single_const
+#define _vec_char_reg				_b8c16_char_reg
+
+/**
+ * load and store operations
+ */
+#define vec_store 					b8c16_store
+#define vec_store_packed			b8c16_store_packed
+#define vec_load 					b8c16_load
+#define vec_load_packed 			b8c16_load_packed
+#define vec_load8 					b8c16_load8
+
+/**
+ * assign to cell vectors
  */
 #define vec_assign(a, b) { \
 	(a##1) = (b##1); \
@@ -146,10 +228,6 @@
 #define vec_comp(a, b, c) { \
 	(a##1) = _mm_cmpeq_epi8((b##1), (c##1)); \
 }
-
-#define vec_select(a, b, c, d) { \
-	(a##1) = _mm_blendv_epi8((b##1), (c##1), (d)); \
-}
 #endif
 
 /**
@@ -158,6 +236,13 @@
  */
 #define vec_comp_sel(a, q1, q2, m, x) { \
 	(a##1) = _mm_blendv_epi8((x##1), (m##1), _mm_cmpeq_epi8((q1##1), (q2##1))); \
+}
+
+/**
+ * @macro vec_sel
+ */
+#define vec_sel(a, mask, m, x) { \
+	(a##1) = _mm_blendv_epi8((x), (m), (mask##1)); \
 }
 
 /**
@@ -212,69 +297,6 @@
 	} else { \
 		(pos) = r1>>16; (val) = val1; \
 	} \
-}
-#endif
-
-/**
- * load and store operations
- */
-#define vec_store(p, v) { \
-	_mm_store_si128((__m128i *)(p), (v##1)); \
-}
-
-#define vec_store_packed(p, dv, dh) { \
-	_mm_store_si128( \
-		(__m128i *)(p), \
-		_mm_or_si128(_mm_slli_epi64((dh##1), 4), (dv##1))); \
-}
-
-#define vec_load(p, v) { \
-	(v##1) = _mm_load_si128((__m128i *)(p)); \
-}
-
-#define vec_load_packed(p, dv, dh) { \
-	__m128i const mask = _mm_set1_epi8(0x0f); \
-	(dv##1) = _mm_load_si128((__m128i *)(p)); \
-	(dh##1) = _mm_and_si128(_mm_srli_epi64((dv##1), 4), mask); \
-	(dv##1) = _mm_and_si128((dv##1), mask); \
-}
-
-#define vec_load8(p, v) { \
-	(v##1) = _mm_load_si128((__m128i *)(p)); \
-}
-
-#if 0
-/**
- * store vector to 32-elem array of int32_t
- */
-#define vec_store32(p, v) { \
-	__m128i t = v; \
- 	__m128i const m = _mm_set1_epi32(CELL_MIN); \
- 	vec_store(p, m); vec_store(p, m);	/** margin */ \
-	vec_store(p, _mm_cvtepi8_epi32(t)); \
-	t = _mm_slli_si128(t, 4); \
-	vec_store(p, _mm_cvtepi8_epi32(t)); \
-	t = _mm_slli_si128(t, 4); \
-	vec_store(p, _mm_cvtepi8_epi32(t)); \
-	t = _mm_slli_si128(t, 4); \
-	vec_store(p, _mm_cvtepi8_epi32(t)); \
- 	vec_store(p, m); vec_store(p, m);	/** margin */ \
-}
-
-/**
- * load vector from 32-elem array of int32_t
- */
-#define vec_load32(p, v) { \
-	__m128i t1, t2, t3, t4; \
-	p += 2*sizeof(__m128i);	/** skip margin */ \
-	vec_load(p, t1); \
-	vec_load(p, t2); \
-	vec_load(p, t3); \
-	vec_load(p, t4); \
-	p += 2*sizeof(__m128i);	/** skip margin */ \
-	v = _mm_packs_epi32( \
-		_mm_packs_epi16(t1, t2), \
-		_mm_packs_epi16(t3, t4)); \
 }
 #endif
 

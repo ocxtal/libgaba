@@ -20,12 +20,11 @@
  */
 /** base variant */
 #define NAIVE 		( 2 )
-#define BRANCH 		( 3 )
-#define TWIG 		( 4 )
+#define TWIG 		( 3 )
+#define BRANCH 		( 4 )
 #define TRUNK 		( 5 )
 #define CAP 		( 6 )
-#define BULGE 		( 7 )
-#define BALOON 		( 8 )
+#define BALOON 		( 7 )
 
 /** cost variant */
 #define LINEAR 		( 10 )
@@ -96,19 +95,20 @@
 	#error "invalid DP"
 #endif /* #if DP == DYNAMIC */
 
+
 /** variant label */
 #define VARIANT_LABEL			label3(BASE_LABEL, COST_SUFFIX, DP_SUFFIX)
 
-/**
- * variant selector
- */
+/** variant selector */
 #define header(base)			QUOTE(label2(base, _impl.h))
 
-/** dp variants */
+/**
+ * dp variants
+ */
 #include header(DP_LABEL)
 
 /** address calculation */
-#define dr_size					label2(DP_LABEL, _dr_size)
+#define dir_size				label2(DP_LABEL, _dir_size)
 #define blk_num					label2(DP_LABEL, _blk_num)
 #define blk_addr				label2(DP_LABEL, _blk_addr)
 #define addr 					label2(DP_LABEL, _addr)
@@ -122,11 +122,9 @@
 #define dir2_le 				label2(DP_LABEL, _dir2_le)
 #define dir_raw 				label2(DP_LABEL, _dir_raw)
 
-#if 0
 #define dir_leftq				label2(DP_LABEL, _dir_leftq)
 #define dir_topq				label2(DP_LABEL, _dir_topq)
 #define dir_topleftq			label2(DP_LABEL, _dir_topleftq)
-#endif
 
 /** direction determiners */
 #define dir_init 				label2(DP_LABEL, _dir_init)
@@ -142,40 +140,45 @@
 #define dir_go_forward			label2(DP_LABEL, _dir_go_forward)
 #define dir_load_backward 		label2(DP_LABEL, _dir_load_backward)
 #define dir_go_backward			label2(DP_LABEL, _dir_go_backward)
+/*
 #define dir_sum_i_blk			label2(DP_LABEL, _dir_sum_i_blk)
 #define dir_set_pdr_fast 		label2(DP_LABEL, _dir_set_pdr_fast)
 #define dir_load_backward_fast 	label2(DP_LABEL, _dir_load_backward_fast)
+*/
 
 /** base and cost variants */
 #include header(BASE_LABEL)
 
 /** address calculation */
 #define bpl						label3(BASE_LABEL, COST_SUFFIX, _bpl)
-#define dp_size					label3(BASE_LABEL, COST_SUFFIX, _dp_size)
-#define co_size					label3(BASE_LABEL, COST_SUFFIX, _co_size)
-#define jam_size				label3(BASE_LABEL, COST_SUFFIX, _jam_size)
-#define head_size				label3(BASE_LABEL, COST_SUFFIX, _head_size)
-#define tail_size				label3(BASE_LABEL, COST_SUFFIX, _tail_size)
+// #define dp_size					label3(BASE_LABEL, COST_SUFFIX, _dp_size)
+// #define co_size					label3(BASE_LABEL, COST_SUFFIX, _co_size)
+// #define jam_size				label3(BASE_LABEL, COST_SUFFIX, _jam_size)
+// #define head_size				label3(BASE_LABEL, COST_SUFFIX, _head_size)
+// #define tail_size				label3(BASE_LABEL, COST_SUFFIX, _tail_size)
 #define bpb						label3(BASE_LABEL, COST_SUFFIX, _bpb)
-#define topq					label3(BASE_LABEL, COST_SUFFIX, _topq)
-#define leftq					label3(BASE_LABEL, COST_SUFFIX, _leftq)
-#define topleftq				label3(BASE_LABEL, COST_SUFFIX, _topleftq)
+// #define topq					label3(BASE_LABEL, COST_SUFFIX, _topq)
+// #define leftq					label3(BASE_LABEL, COST_SUFFIX, _leftq)
+// #define topleftq				label3(BASE_LABEL, COST_SUFFIX, _topleftq)
 #define dir_exp_top 			label3(BASE_LABEL, COST_SUFFIX, _dir_exp_top)
 #define dir_exp_bottom 			label3(BASE_LABEL, COST_SUFFIX, _dir_exp_bottom)
+
+#define joint_vec_t				struct label3(BASE_LABEL, COST_SUFFIX, _joint_vec)
+#define block_t					struct label3(BASE_LABEL, COST_SUFFIX, _block)
+#define block_trailer_t 		struct label3(BASE_LABEL, COST_SUFFIX, _block_trailer)
+#define head_t					struct label3(BASE_LABEL, COST_SUFFIX, _head)
+#define tail_t					struct label3(BASE_LABEL, COST_SUFFIX, _tail)
 
 /** fill-in */
 #define fill_decl				label3(BASE_LABEL, COST_SUFFIX, _fill_decl)
 #define fill_init				label3(BASE_LABEL, COST_SUFFIX, _fill_init)
 #define fill_start 				label3(BASE_LABEL, COST_SUFFIX, _fill_start)
-#define fill_former_body		label3(BASE_LABEL, COST_SUFFIX, _fill_former_body)
-#define fill_former_body_cap	label3(BASE_LABEL, COST_SUFFIX, _fill_former_body_cap)
-#define fill_go_down			label3(BASE_LABEL, COST_SUFFIX, _fill_go_down)
-#define fill_go_down_cap		label3(BASE_LABEL, COST_SUFFIX, _fill_go_down_cap)
-#define fill_go_right			label3(BASE_LABEL, COST_SUFFIX, _fill_go_right)
-#define fill_go_right_cap		label3(BASE_LABEL, COST_SUFFIX, _fill_go_right_cap)
-#define fill_latter_body		label3(BASE_LABEL, COST_SUFFIX, _fill_latter_body)
-#define fill_latter_body_cap	label3(BASE_LABEL, COST_SUFFIX, _fill_latter_body_cap)
+#define fill_start_cap 			label3(BASE_LABEL, COST_SUFFIX, _fill_start_cap)
+#define fill_body				label3(BASE_LABEL, COST_SUFFIX, _fill_body)
+#define fill_body_cap			label3(BASE_LABEL, COST_SUFFIX, _fill_body_cap)
 #define fill_empty_body			label3(BASE_LABEL, COST_SUFFIX, _fill_empty_body)
+#define fill_end 				label3(BASE_LABEL, COST_SUFFIX, _fill_end)
+#define fill_end_cap			label3(BASE_LABEL, COST_SUFFIX, _fill_end_cap)
 #define fill_test_xdrop			label3(BASE_LABEL, COST_SUFFIX, _fill_test_xdrop)
 #define fill_test_xdrop_cap		label3(BASE_LABEL, COST_SUFFIX, _fill_test_xdrop_cap)
 #define fill_test_bound 		label3(BASE_LABEL, COST_SUFFIX, _fill_test_bound)
@@ -186,26 +189,44 @@
 #define fill_test_chain_cap		label3(BASE_LABEL, COST_SUFFIX, _fill_test_chain_cap)
 #define fill_check_term			label3(BASE_LABEL, COST_SUFFIX, _fill_check_term)
 #define fill_check_term_cap		label3(BASE_LABEL, COST_SUFFIX, _fill_check_term_cap)
-#define fill_end 				label3(BASE_LABEL, COST_SUFFIX, _fill_end)
 #define fill_finish				label3(BASE_LABEL, COST_SUFFIX, _fill_finish)
 
 /** search terminal (NW) */
-#define set_terminal			label3(BASE_LABEL, COST_SUFFIX, _set_terminal)
+// #define set_terminal			label3(BASE_LABEL, COST_SUFFIX, _set_terminal)
 
 /** traceback */
 #define trace_decl				label3(BASE_LABEL, COST_SUFFIX, _trace_decl)
 #define trace_init				label3(BASE_LABEL, COST_SUFFIX, _trace_init)
 #define trace_body				label3(BASE_LABEL, COST_SUFFIX, _trace_body)
 #define trace_test_bound		label3(BASE_LABEL, COST_SUFFIX, _trace_test_bound)
-#define trace_test_bound_cap	label3(BASE_LABEL, COST_SUFFIX, _trace_test_bound_cap)
-#define trace_test_joint		label3(BASE_LABEL, COST_SUFFIX, _trace_test_joint)
-#define trace_test_joint_cap	label3(BASE_LABEL, COST_SUFFIX, _trace_test_joint_cap)
-#define trace_test_sw			label3(BASE_LABEL, COST_SUFFIX, _trace_test_sw)
-#define trace_test_sw_cap		label3(BASE_LABEL, COST_SUFFIX, _trace_test_sw_cap)
+// #define trace_test_bound_cap	label3(BASE_LABEL, COST_SUFFIX, _trace_test_bound_cap)
+// #define trace_test_joint		label3(BASE_LABEL, COST_SUFFIX, _trace_test_joint)
+// #define trace_test_joint_cap	label3(BASE_LABEL, COST_SUFFIX, _trace_test_joint_cap)
+// #define trace_test_sw			label3(BASE_LABEL, COST_SUFFIX, _trace_test_sw)
+// #define trace_test_sw_cap		label3(BASE_LABEL, COST_SUFFIX, _trace_test_sw_cap)
 #define trace_check_term 		label3(BASE_LABEL, COST_SUFFIX, _trace_check_term)
-#define trace_check_term_cap 	label3(BASE_LABEL, COST_SUFFIX, _trace_check_term_cap)
-#define trace_add_cap			label3(BASE_LABEL, COST_SUFFIX, _trace_add_cap)
+// #define trace_check_term_cap 	label3(BASE_LABEL, COST_SUFFIX, _trace_check_term_cap)
+// #define trace_add_cap			label3(BASE_LABEL, COST_SUFFIX, _trace_add_cap)
 #define trace_finish			label3(BASE_LABEL, COST_SUFFIX, _trace_finish)
+
+/**
+ * sequence reader aliasing
+ */
+#if BW == 16
+	#define _rd_vec_char_reg 		_rd_vec_char_reg_16
+	#define rd_prefetch 			rd_prefetch_16
+	#define rd_prefetch_cap 		rd_prefetch_cap_16
+	#define rd_cmp_vec 				rd_cmp_vec_16
+	#define rd_store 				rd_store_16
+#elif BW == 32
+	#define _rd_vec_char_reg 		_rd_vec_char_reg_32
+	#define rd_prefetch 			rd_prefetch_32
+	#define rd_prefetch_cap 		rd_prefetch_cap_32
+	#define rd_cmp_vec 				rd_cmp_vec_32
+	#define rd_store 				rd_store_32
+#else /* #if BW == 16 */
+	#error "BW must be 16 or 32"
+#endif /* #if BW == 16 */
 
 #endif /* #ifndef _VARIANT_H_INCLUDED */
 

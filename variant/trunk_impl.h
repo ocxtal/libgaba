@@ -127,9 +127,10 @@ struct trunk_linear_block {
 /**
  * @macro trunk_linear_fill_decl
  */
-#define trunk_linear_fill_decl(k, r, pdp) \
+#define trunk_linear_fill_decl(k, r) \
 	dir_t r; \
-	int64_t i, j, p, q; \
+	int64_t i, j, p, q, sp; \
+	uint8_t *cdp; \
 	_vec_acc(accv);		/** score accumulator */ \
 	_vec_acc(maxv); 	/** max holder */ \
 	_vec_single_const(mggv, k->m - 2*k->gi); \
@@ -142,8 +143,8 @@ struct trunk_linear_block {
 	_vec_cell_reg(t2); \
 	_vec_cell_const(zv, 0);
 
-#define trunk_affine_fill_decl(k, r, pdp) \
-	trunk_linear_fill_decl(k, r, pdp); \
+#define trunk_affine_fill_decl(k, r) \
+	trunk_linear_fill_decl(k, r); \
 	_vec_cell_reg(de); \
 	_vec_cell_reg(df); \
 
@@ -152,24 +153,24 @@ struct trunk_linear_block {
  */
 #define trunk_linear_fill_init(k, r, pdp) { \
 	/** initialize vectors */ \
-	debug("init k(%p), pdp(%p)", k, k->pdp); \
+	debug("init k(%p), pdp(%p)", k, pdp); \
 	vec_acc_set(maxv, 0, 0, INT32_MIN, 0); \
 	/** load coordinates onto the local stack */ \
-	p = _tail(k->pdp, p); \
-	i = _tail(k->pdp, i) - DEF_VEC_LEN/2; \
+	p = sp = _tail(pdp, p); \
+	i = _tail(pdp, i) - DEF_VEC_LEN/2; \
 	j = (p - 1) - (i - k->asp) + k->bsp; \
 	/** initialize direction array */ \
 	debug("init"); \
-	dir_init(r, k, k->pdp, p); \
+	dir_init(r, k, pdp, p); \
 	/** make room for struct sea_joint_head */ \
-	pdp += sizeof(struct sea_joint_head); \
+	cdp = k->pdp + sizeof(struct sea_joint_head); \
 	/** load scores of the current vector */ \
-	uint8_t *s = _tail(k->pdp, v); \
-	debug("init v(%p), dir(%d), d2(%d)", s, dir(r), _tail(k->pdp, d2)); \
-	if(_tail(k->pdp, bpc) == 16) { \
+	uint8_t *s = _tail(pdp, v); \
+	debug("init v(%p), dir(%d), d2(%d)", s, dir(r), _tail(pdp, d2)); \
+	if(_tail(pdp, bpc) == 16) { \
 		int16_t *t = (int16_t *)s + BW; \
 		/** load vectors */ \
-		vec_load16_dvdh(s, t, dv, dh, k->gi, _tail(k->pdp, d2)); \
+		vec_load16_dvdh(s, t, dv, dh, k->gi, _tail(pdp, d2)); \
 		debug("init acc p(%lld), scl(%d), scc(%d), scu(%d)", p, t[BW-1], t[BW/2], t[0]); \
 		/** initialize accumulator */ \
 		vec_acc_set(accv, p, t[BW-1], t[BW/2], t[0]); \
@@ -178,15 +179,15 @@ struct trunk_linear_block {
 		vec_acc_load(s + vec_size(), accv); \
 	} \
 	debug("init"); \
-	vec_store_dvdh(pdp, dv, dh); pdp += vec_size(); \
+	vec_store_dvdh(cdp, dv, dh); cdp += vec_size(); \
 	/** store the first (i, j) */ \
-	*((int64_t *)pdp) = i; pdp += sizeof(int64_t); \
-	*((int64_t *)pdp) = j; pdp += sizeof(int64_t); \
-	vec_acc_store(pdp, accv); pdp += vec_acc_size(); \
-	vec_acc_store(pdp, maxv); pdp += vec_acc_size(); \
+	*((int64_t *)cdp) = i; cdp += sizeof(int64_t); \
+	*((int64_t *)cdp) = j; cdp += sizeof(int64_t); \
+	vec_acc_store(cdp, accv); cdp += vec_acc_size(); \
+	vec_acc_store(cdp, maxv); cdp += vec_acc_size(); \
 	debug("init"); \
 	/** write the first dr vector */ \
-	dir_end_block(r, k, pdp, p); \
+	dir_end_block(r, k, cdp, p); \
 	/** initialize char vectors */ \
 	vec_char_setzero(wq); \
 	for(q = -BW/2; q < BW/2; q++) { \
@@ -204,162 +205,162 @@ struct trunk_linear_block {
 /**
  * @macro trunk_linear_fill_start
  */
-#define trunk_linear_fill_start(k, r, pdp) { \
+#define trunk_linear_fill_start(k, r) { \
 	/** nothing to do */ \
-	dir_start_block(r, k, pdp, p); \
+	dir_start_block(r, k, cdp, p); \
 }
 
 /**
  * @macro trunk_linear_fill_former_body
  */
-#define trunk_linear_fill_former_body(k, r, pdp) { \
+#define trunk_linear_fill_former_body(k, r) { \
 	/** nothing to do */ \
 }
-#define trunk_linear_fill_former_body_cap(k, r, pdp) { \
+#define trunk_linear_fill_former_body_cap(k, r) { \
 	/** nothing to do */ \
 }
 
 /**
  * @macro trunk_linear_fill_go_down
  */
-#define trunk_linear_fill_go_down_intl(k, r, pdp, fetch) { \
+#define trunk_linear_fill_go_down_intl(k, r, fetch) { \
 	vec_shift_r(dv, dv); \
 	fetch(k->b, j+BW/2-1, k->bsp, k->bep, 255); \
 	j++; \
 	pusht(rd_decode(k->b), wt); \
 }
-#define trunk_linear_fill_go_down(k, r, pdp) { \
-	trunk_linear_fill_go_down_intl(k, r, pdp, rd_fetch_fast); \
+#define trunk_linear_fill_go_down(k, r) { \
+	trunk_linear_fill_go_down_intl(k, r, rd_fetch_fast); \
 }
-#define trunk_linear_fill_go_down_cap(k, r, pdp) { \
-	trunk_linear_fill_go_down_intl(k, r, pdp, rd_fetch_safe); \
+#define trunk_linear_fill_go_down_cap(k, r) { \
+	trunk_linear_fill_go_down_intl(k, r, rd_fetch_safe); \
 }
 
 /**
  * @macro trunk_linear_fill_go_right
  */
-#define trunk_linear_fill_go_right_intl(k, r, pdp, fetch) { \
+#define trunk_linear_fill_go_right_intl(k, r, fetch) { \
 	vec_shift_l(dh, dh); \
 	fetch(k->a, i+BW/2, k->asp, k->aep, 128); \
 	i++; \
 	pushq(rd_decode(k->a), wq); \
 }
-#define trunk_linear_fill_go_right(k, r, pdp) { \
-	trunk_linear_fill_go_right_intl(k, r, pdp, rd_fetch_fast); \
+#define trunk_linear_fill_go_right(k, r) { \
+	trunk_linear_fill_go_right_intl(k, r, rd_fetch_fast); \
 }
-#define trunk_linear_fill_go_right_cap(k, r, pdp) { \
-	trunk_linear_fill_go_right_intl(k, r, pdp, rd_fetch_safe); \
+#define trunk_linear_fill_go_right_cap(k, r) { \
+	trunk_linear_fill_go_right_intl(k, r, rd_fetch_safe); \
 }
 
 /**
  * @macro trunk_linear_fill_latter_body
  */
-#define trunk_linear_fill_latter_body(k, r, pdp) { \
+#define trunk_linear_fill_latter_body(k, r) { \
 	vec_comp_sel(t1, wq, wt, mggv, xggv); \
 	vec_max(t2, dv, dh); \
 	vec_max(t1, t1, t2); \
 	vec_sub(t2, t1, dv); \
 	vec_sub(dv, t1, dh); \
 	vec_assign(dh, t2); \
-	vec_store_dvdh(pdp, dv, dh); pdp += vec_size(); \
+	vec_store_dvdh(cdp, dv, dh); cdp += vec_size(); \
 	if(dir(r) == TOP) { vec_assign(t1, dv); } else { vec_assign(t1, dh); } \
 	vec_acc_accum_max(accv, maxv, t1, k->gi); \
 	debug("scu(%d), score(%d), scl(%d), p(%lld), (%lld, %lld)", vec_acc_scu(accv), vec_acc_scc(accv), vec_acc_scl(accv), p, i, j); \
 	/** caclculate the next advancing direction */ \
-	dir_det_next(r, k, pdp, p); 	/** increment p */ \
+	dir_det_next(r, k, cdp, p); 	/** increment p */ \
 }
-#define trunk_linear_fill_latter_body_cap(k, r, pdp) { \
-	trunk_linear_fill_latter_body(k, r, pdp); \
+#define trunk_linear_fill_latter_body_cap(k, r) { \
+	trunk_linear_fill_latter_body(k, r); \
 }
 
 /**
  * @macro trunk_linear_fill_empty_body
  */
-#define trunk_linear_fill_empty_body(k, r, pdp) { \
+#define trunk_linear_fill_empty_body(k, r) { \
 	/** increment pdp, and shift direction cache */ \
-	vec_store(pdp, zv); pdp += vec_size(); \
-	dir_empty(r, k, pdp, p); \
+	vec_store(cdp, zv); cdp += vec_size(); \
+	dir_empty(r, k, cdp, p); \
 	/*naive_linear_fill_empty_body(k, r, pdp);*/ \
 }
 
 /**
  * @macro trunk_linear_fill_end
  */
-#define trunk_linear_fill_end(k, r, pdp) { \
+#define trunk_linear_fill_end(k, r) { \
 	/** store (i, j) to the end of pdp */ \
-	*((int64_t *)pdp) = i; pdp += sizeof(int64_t); \
-	*((int64_t *)pdp) = j; pdp += sizeof(int64_t); \
-	vec_acc_store(pdp, accv); pdp += vec_acc_size(); \
-	vec_acc_store(pdp, maxv); pdp += vec_acc_size(); \
+	*((int64_t *)cdp) = i; cdp += sizeof(int64_t); \
+	*((int64_t *)cdp) = j; cdp += sizeof(int64_t); \
+	vec_acc_store(cdp, accv); cdp += vec_acc_size(); \
+	vec_acc_store(cdp, maxv); cdp += vec_acc_size(); \
 	/** store direction vector */ \
-	dir_end_block(r, k, pdp, p); \
+	dir_end_block(r, k, cdp, p); \
 }
 
 /**
  * @macro trunk_linear_fill_test_xdrop
  */
-#define trunk_linear_fill_test_xdrop(k, r, pdp) ( \
+#define trunk_linear_fill_test_xdrop(k, r) ( \
 	  ((int64_t)XSEA - k->alg - 1) \
 	& ((int64_t)vec_acc_scc(accv) + k->tx - vec_acc_scc(maxv)) \
 )
-#define trunk_linear_fill_test_xdrop_cap(k, r, pdp) ( \
-	trunk_linear_fill_test_xdrop(k, r, pdp) \
+#define trunk_linear_fill_test_xdrop_cap(k, r) ( \
+	trunk_linear_fill_test_xdrop(k, r) \
 )
 
 /**
  * @macro trunk_linear_fill_test_bound
  */
-#define trunk_linear_fill_test_bound(k, r, pdp) ( \
-	naive_linear_fill_test_bound(k, r, pdp) \
+#define trunk_linear_fill_test_bound(k, r) ( \
+	naive_linear_fill_test_bound(k, r) \
 )
-#define trunk_linear_fill_test_bound_cap(k, r, pdp) ( \
-	naive_linear_fill_test_bound_cap(k, r, pdp) \
+#define trunk_linear_fill_test_bound_cap(k, r) ( \
+	naive_linear_fill_test_bound_cap(k, r) \
 )
 
 /**
  * @macro trunk_linear_fill_test_mem
  */
-#define trunk_linear_fill_test_mem(k, r, pdp) ( \
-	(int64_t)(k->tdp - pdp \
+#define trunk_linear_fill_test_mem(k, r) ( \
+	(int64_t)(k->tdp - cdp \
 		- (3*trunk_linear_bpb() \
 		+ sizeof(struct sea_joint_tail) \
 		+ sizeof(struct sea_joint_head) \
-		+ 2 * trunk_linear_bpl()))		/** v + accv */ \
+		+ 2 * vec_size()))		/** v + accv */ \
 )
-#define trunk_linear_fill_test_mem_cap(k, r, pdp) ( \
-	(int64_t)(k->tdp - pdp \
+#define trunk_linear_fill_test_mem_cap(k, r) ( \
+	(int64_t)(k->tdp - cdp \
 		- (trunk_linear_bpb() \
 		+ sizeof(struct sea_joint_tail) \
 		+ sizeof(struct sea_joint_head) \
-		+ 2 * trunk_linear_bpl()))		/** v + accv */ \
+		+ 2 * vec_size()))		/** v + accv */ \
 )
 
 /**
  * @macro trunk_linear_fill_test_chain
  */
-#define trunk_linear_fill_test_chain(k, r, pdp)		( 0 )	/** never chain */
-#define trunk_linear_fill_test_chain_cap(k, r, pdp)	( 0 )
+#define trunk_linear_fill_test_chain(k, r)		( 0 )	/** never chain */
+#define trunk_linear_fill_test_chain_cap(k, r)	( 0 )
 
 /**
  * @macro trunk_linear_fill_check_term
  */
-#define trunk_linear_fill_check_term(k, r, pdp) ( \
-	( trunk_linear_fill_test_xdrop(k, r, pdp) \
-	| trunk_linear_fill_test_bound(k, r, pdp) \
-	| trunk_linear_fill_test_mem(k, r, pdp) \
-	| trunk_linear_fill_test_chain(k, r, pdp)) < 0 \
+#define trunk_linear_fill_check_term(k, r) ( \
+	( trunk_linear_fill_test_xdrop(k, r) \
+	| trunk_linear_fill_test_bound(k, r) \
+	| trunk_linear_fill_test_mem(k, r) \
+	| trunk_linear_fill_test_chain(k, r)) < 0 \
 )
-#define trunk_linear_fill_check_term_cap(k, r, pdp) ( \
-	( trunk_linear_fill_test_xdrop_cap(k, r, pdp) \
-	| trunk_linear_fill_test_bound_cap(k, r, pdp) \
-	| trunk_linear_fill_test_mem_cap(k, r, pdp) \
-	| trunk_linear_fill_test_chain_cap(k, r, pdp)) < 0 \
+#define trunk_linear_fill_check_term_cap(k, r) ( \
+	( trunk_linear_fill_test_xdrop_cap(k, r) \
+	| trunk_linear_fill_test_bound_cap(k, r) \
+	| trunk_linear_fill_test_mem_cap(k, r) \
+	| trunk_linear_fill_test_chain_cap(k, r)) < 0 \
 )
 
 /**
  * @macro trunk_linear_fill_search_advance_ptr
  */
-#define trunk_linear_fill_search_advance_ptr(k, r, pdp) { \
+#define trunk_linear_fill_search_advance_ptr(k, r) { \
 }
 
 #if 0
@@ -409,14 +410,14 @@ struct trunk_linear_block {
 
 #endif
 
-#define trunk_linear_fill_search_blk(k, r, pdp, b, bn) { \
+#define trunk_linear_fill_search_blk(k, r, b, bn) { \
 	uint32_t m;							/** mask */ \
 	_vec_cell_const(gv, k->gi); \
 	/** here pmx points to the head of the max block */ \
 	/*p = MAX2(sp, bp - BLK) - 1;*/			/** the last vector of the previous block */ \
 	/*uint8_t *pbs = MAX2(k->pdp + head_size(), (pmx) - bpb()) - (jam_size() + bpl());*/ \
 	/*uint8_t *pbe = MIN2(pdp - tail_size(), (pmx) + 2*bpb()) - (jam_size() + bpl());*/ \
-	uint32_t *pmk = (uint32_t *)pdp;	/** tail of the section, as mask temporary */ \
+	uint32_t *pmk = (uint32_t *)cdp;	/** tail of the section, as mask temporary */ \
 	/*debug("pbs(%p), pbe(%p), pmk(%p), k->pdp(%p), pdp(%p)", pbs, pbe, pmk, k->pdp, pdp);*/ \
 	int64_t sb = MAX2(b - 1, 0); \
 	int64_t eb = MIN2(b + 2, bn + 1); \
@@ -444,7 +445,7 @@ struct trunk_linear_block {
 			vec_print(t2); \
 			*pmk++ = m; 	/** save mask */ \
 			/** load the next direction */ \
-			dir_load_forward(r, k, pdp, p, sp); \
+			dir_load_forward(r, k, p, sp); \
 		} \
 	} \
 	/** detect the lane */ \
@@ -462,17 +463,18 @@ struct trunk_linear_block {
 		/*uint8_t *pco = pbe + bpl();*/ \
 		for(b = (eb-sb)*BLK-1; b >= 0; b--) { \
 			debug("b(%lld), p(%lld), m(%u)", b, p, *(pmk-1) & mask); \
-			dir_go_backward(r, k, pdp, p, sp); \
+			dir_go_backward(r, k, p, sp); \
 			if((*--pmk & mask) != 0) { break; } \
 		} \
 		debug("p(%lld), m(%u), b(%lld)", p, m & mask, b); \
 		k->mp = p; \
 		k->mq = pos - BW/2; \
-		debug("i(%lld), di(%lld)", (pbs + b/BLK)->i, dir_sum_i_blk(r, k, pdp, p, sp)); \
-		k->mi = (pbs + b/BLK)->i + dir_sum_i_blk(r, k, pdp, p, sp) - (pos - BW/2); \
+		debug("i(%lld), di(%lld)", (pbs + b/BLK)->i, dir_sum_i_blk(r, k, p, sp)); \
+		k->mi = (pbs + b/BLK)->i + dir_sum_i_blk(r, k, p, sp) - (pos - BW/2); \
 		/*k->mi = (pbs + b/BLK + 1)->i - dir_sum_i_blk(r, k, pdp, p, sp) - (pos - BW/2);*/ \
 		/*k->mi = *((int64_t *)pco) - dir_sum_i_blk(r, k, pdp, p, sp);*/ \
 		k->max = max; \
+		k->mpdp = pdp; \
 	} \
 	debug("p(%lld), q(%lld), i(%lld)", k->mp, k->mq, k->mi); \
 }
@@ -480,14 +482,14 @@ struct trunk_linear_block {
 /**
  * @macro trunk_linear_fill_search_max
  */
-#define trunk_linear_fill_search_max(k, r, pdp) { \
+#define trunk_linear_fill_search_max(k, r) { \
 	/** here pdp and p points to the tail of the section */ \
 	/*int64_t ofs = dp_size() + co_size() - 3*sizeof(int32_t);*/ \
 	/*uint8_t *pmx = pdp - tail_size() - bpb() + ofs;*/	/** max of the last block */ \
 	/** load corresponding coordinates */ \
 	/** load p-coordinate */ \
 	debug("size(%lu), size(%lu)", bpb(), sizeof(linear_block_t)); \
-	int64_t sp = _tail(k->pdp, p); \
+	/*int64_t sp = _tail(pdp, p);*/ \
 	/** calculate block number and base address */ \
 	int64_t bn = blk_num((p-1) - sp, 0); \
 	linear_block_t *pbk = (linear_block_t *)(k->pdp + head_size()) + bn; \
@@ -505,33 +507,34 @@ struct trunk_linear_block {
 	} \
 	debug("block determined b(%lld), bp(%lld)", b, b*BLK+sp); \
 	/** determine search area */ \
-	trunk_linear_fill_search_blk(k, r, pdp, b, bn); \
+	trunk_linear_fill_search_blk(k, r, b, bn); \
 }
 
 /**
  * @macro trunk_linear_fill_finish
  */
-#define trunk_linear_fill_finish(k, r, pdp) { \
+#define trunk_linear_fill_finish(k, r) { \
 	/** save vectors */ \
-	uint8_t *v = pdp; \
-	vec_store_dvdh(pdp, dv, dh); pdp += vec_size(); \
- 	vec_acc_store(pdp, accv); pdp += vec_acc_size(); \
+	uint8_t *v = cdp; \
+	vec_store_dvdh(cdp, dv, dh); cdp += vec_size(); \
+ 	vec_acc_store(cdp, accv); cdp += vec_acc_size(); \
 	/** create ivec at the end */ \
-	pdp += sizeof(struct sea_joint_tail); \
+	cdp += sizeof(struct sea_joint_tail); \
 	/** save terminal coordinates */ \
 	debug("p(%lld), i(%lld), max(%d)", p, i, vec_acc_scc(maxv)); \
-	_tail(pdp, p) = p; \
-	_tail(pdp, i) = i + DEF_VEC_LEN/2; \
-	_tail(pdp, v) = v; \
-	_tail(pdp, bpc) = 4; \
-	_tail(pdp, d2) = dir_raw(r); \
+	_tail(cdp, p) = p; \
+	_tail(cdp, i) = i + DEF_VEC_LEN/2; \
+	_tail(cdp, v) = v; \
+	_tail(cdp, size) = cdp - k->pdp; \
+	_tail(cdp, bpc) = BASE; \
+	_tail(cdp, d2) = dir_raw(r); \
 	/** load max of the section on center */ \
 	int32_t max = vec_acc_scc(maxv); \
 	debug("max(%d)", max); \
 	/** search max */ \
 	if(k->alg != NW && (max + 16*k->m) > k->max) { \
 		/** search */ \
-		trunk_linear_fill_search_max(k, r, pdp); \
+		trunk_linear_fill_search_max(k, r); \
 	} \
 	/** save p-coordinate at the beginning of the block */ \
 	/*_head(k->pdp, max) = vec_acc_scc(max);*/ \

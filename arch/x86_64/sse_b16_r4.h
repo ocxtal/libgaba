@@ -224,13 +224,6 @@
 	(a##4) = _mm_srli_si128((a##4), 8); \
 	(a##4) = _mm_cvtepi8_epi16((a##4)); \
 }
-
-#define vec_select(a, b, c, d) { \
-	(a##1) = _mm_blendv_epi8((b##1), (c##1), (d##1)); \
-	(a##2) = _mm_blendv_epi8((b##2), (c##2), (d##2)); \
-	(a##3) = _mm_blendv_epi8((b##3), (c##3), (d##3)); \
-	(a##4) = _mm_blendv_epi8((b##4), (c##4), (d##4)); \
-}
 #endif
 
 /**
@@ -243,6 +236,19 @@
 	t2 = _mm_cmpeq_epi8((q1##2), (q2##2)); \
 	(a##1) = _mm_blendv_epi8((x), (m), t1); \
 	(a##3) = _mm_blendv_epi8((x), (m), t2); \
+	(a##2) = _mm_cvtepi8_epi16(_mm_srli_si128((a##1), 8)); \
+	(a##4) = _mm_cvtepi8_epi16(_mm_srli_si128((a##3), 8)); \
+	(a##1) = _mm_cvtepi8_epi16((a##1)); \
+	(a##3) = _mm_cvtepi8_epi16((a##3)); \
+}
+
+/**
+ * @macro vec_sel
+ * @brief blend m and x with given packed 8bit vector mask
+ */ 
+#define vec_sel(a, mask, m, x) { \
+	(a##1) = _mm_blendv_epi8((x), (m), (mask##1)); \
+	(a##3) = _mm_blendv_epi8((x), (m), (mask##2)); \
 	(a##2) = _mm_cvtepi8_epi16(_mm_srli_si128((a##1), 8)); \
 	(a##4) = _mm_cvtepi8_epi16(_mm_srli_si128((a##3), 8)); \
 	(a##1) = _mm_cvtepi8_epi16((a##1)); \
@@ -340,13 +346,13 @@
 /**
  * load vector from 16bytes int8_t array
  */
-#define vec_load8(p, v) { \
+#define vec_load_b8c16(p, v) { \
 	__m128i l = _mm_load_si128((__m128i *)(p)); \
 	__m128i u = _mm_srli_si128(l, 8); \
-	(v##1) = _mm_set1_epi16(CELL_MIN); \
+	(v##1) = _mm_set1_epi16(DPCELL_MIN); \
 	(v##2) = _mm_cvtepi8_epi16(l); \
 	(v##3) = _mm_cvtepi8_epi16(u); \
-	(v##4) = _mm_set1_epi16(CELL_MIN); \
+	(v##4) = _mm_set1_epi16(DPCELL_MIN); \
 }
 
 #if 0

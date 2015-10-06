@@ -28,57 +28,42 @@ extern bench_t fill, search, trace;
  * @brief fill-in the matrix until the detection of termination
  */
 static inline
-int32_t
+struct sea_chain_status
 func2(VARIANT_LABEL, _fill)(
 	struct sea_local_context *this,
-	uint8_t *pdp)
+	uint8_t *pdp,					/** tail of the previous section */
+	struct sea_fill_section *sec)
 {
-	int64_t a;								/** iteration counter */
+	int64_t i;
 	struct sea_local_context register *k = this;
 	int32_t stat = CONT;
  
 	debug("enter fill (%p), pdp(%p)", func2(VARIANT_LABEL, _fill), pdp);
 
 	bench_start(fill);
-	fill_decl(k, r, pdp);					/** declare variables */
-	fill_init(k, r, pdp);					/** load vectors and coordinates to registers */
+	fill_decl(k);					/** declare variables */
+	fill_init(k, pdp, sec);			/** load vectors and coordinates to registers */
 
 	debug("start loop");
 	/** bulk fill */
-	while(!fill_check_term(k, r, pdp)) {
-		fill_start(k, r, pdp);
-		for(a = 0; a < BLK/2; a++) {
-			/** unroll loop: 1 */
-			fill_former_body(k, r, pdp);	/** former calculations */
-			if(dir(r) == TOP) {
-				fill_go_down(k, r, pdp);	/** shift right the vectors */
-			} else {
-				fill_go_right(k, r, pdp);	/** shift left */
-			}
-			fill_latter_body(k, r, pdp);	/** latter calculations */
-
-			/** unroll loop: 2 */
-			fill_former_body(k, r, pdp);	/** former calculations */
-			if(dir(r) == TOP) {
-				fill_go_down(k, r, pdp);	/** shift right the vectors */
-			} else {
-				fill_go_right(k, r, pdp);	/** shift left */
-			}
-			fill_latter_body(k, r, pdp);	/** latter calculations */
-
+	while(!fill_check_term(k)) {
+		fill_start(k);				/** prefetch */
+		for(i = 0; i < BLK/2; i++) {
+			fill_body(k);			/** unroll loop: 1 */
+			fill_body(k);			/** unroll loop: 2 */
 		}
-		fill_end(k, r, pdp);
+		fill_end(k);				/** save vectors */
 	}
 
 	/** check flags */
 	debug("check flags");
-	if(fill_test_xdrop(k, r, pdp) < 0) {
+	if(fill_test_xdrop(k) < 0) {
 		debug("term");
 		stat = TERM;  goto label2(VARIANT_LABEL, _fill_finish_label);
-	} else if(fill_test_chain(k, r, pdp) < 0) {
+	} else if(fill_test_chain(k) < 0) {
 		debug("chain");
 		stat = CHAIN; goto label2(VARIANT_LABEL, _fill_finish_label);
-	} else if(fill_test_mem(k, r, pdp) < 0) {
+	} else if(fill_test_mem(k) < 0) {
 		debug("mem");
 		stat = MEM;   goto label2(VARIANT_LABEL, _fill_finish_label);
 	}
@@ -86,36 +71,124 @@ func2(VARIANT_LABEL, _fill)(
 	/** cap fill */
 	debug("cap fill");
 	stat = TERM;
-	int64_t t = 0;							/** termination flag */
+	int64_t t = 0;					/** termination flag */
 	while(t == 0) {
-		fill_start(k, r, pdp);
-		for(a = 0; a < BLK; a++) {
-			if(fill_check_term_cap(k, r, pdp)) {
-				break;
-			}
-			fill_former_body_cap(k, r, pdp);
-			if(dir(r) == TOP) {
-				fill_go_down_cap(k, r, pdp);
-			} else {
-				fill_go_right_cap(k, r, pdp);
-			}
-			fill_latter_body_cap(k, r, pdp);
+		fill_start_cap(k);
+		for(i = 0; i < BLK; i++) {
+			if(fill_check_term_cap(k)) { break; }
+			fill_body_cap(k);
 		}
-		for(; a < BLK; t++, a++) {			/** increment termination flag */
-			fill_empty_body(k, r, pdp);
+		for(; i < BLK; t++, i++) {	/** increment termination flag */
+			fill_empty_body(k);
 		}
-		fill_end(k, r, pdp);
+		fill_end_cap(k);
 	}
 
 	/** finish */
 label2(VARIANT_LABEL, _fill_finish_label):
-	fill_finish(k, r, pdp);					/** store vectors and coordinates to memory */
-
-	/** write back pdp */
-	k->pdp = pdp;
-
+	fill_finish(k, pdp, sec);		/** store vectors and coordinates to memory */
+	
 	bench_end(fill);
-	return(stat);
+
+	struct sea_chain_status s = {k->stack_top, stat};
+	return(s);
+}
+
+/**
+ * @fn trace
+ * @brief traceback until the given start position
+ */
+static inline
+struct sea_chain_status
+func2(VARIANT_LABEL, _trace)(
+	struct sea_local_context *this,
+	uint8_t *pdp)
+{
+	struct sea_local_context register *k = this;
+	uint8_t *tdp = _head(pdp, p_tail); \
+	uint8_t *hdp = tdp - _tail(tdp, size); \
+
+	bench_start(trace);
+
+	trace_decl(k);
+	trace_init(k, hdp, tdp, pdp);
+	while(1) {
+		if(trace_check_term(k)) { break; }
+		trace_body(k);
+		if(trace_check_term(k)) { break; }
+		trace_body(k);
+	}
+	trace_finish(k, hdp);
+
+	bench_end(trace);
+
+	struct sea_chain_status s = {hdp, SEA_SUCCESS};
+	return(s);
+}
+
+#if 0
+
+#if 0
+static inline
+int32_t
+func2(VARIANT_LABEL, _set_term)(
+	struct sea_local_context *this,
+	uint8_t *pdp,
+	int32_t stat)
+{
+	/** turn and go back (band reached the corner of the matrix) */
+	if(k->alg == NW) {
+		/** load terminal coordinate to (mi, mj) and (mp, mq) */
+		set_terminal(k, pdp);
+	}
+	debug("set terminal p(%lld), q(%lld), i(%lld)", k->mp, k->mq, k->mi);
+	_head(k->pdp, p) = k->mp;
+	_head(k->pdp, q) = k->mq;
+	_head(k->pdp, i) = k->mi;
+	_head(k->pdp, score) = k->max;
+	wr_alloc(k->l, _head(k->pdp, p));
+	return(ret);
+}
+#endif
+
+/**
+ * @fn (base)
+ * @brief base function of the dp
+ */
+struct sea_chain_status
+func(VARIANT_LABEL)(
+	struct sea_local_context *this,
+	uint8_t *pdp)
+{
+	debug("entry point: (%p)", func(VARIANT_LABEL));
+	struct sea_local_context register *k = this;
+	struct sea_chain_status s;
+
+	/** fill_in */
+	s = func2(VARIANT_LABEL, _fill)(k, pdp);
+
+	/** chain */
+	int32_t (*cfn)(struct sea_local_context *) = func_next(r.stat);
+	uint8_t *ndp = NULL;
+	if(stat == MEM || (k->tdp - k->pdp) < 32*1024) {
+		k->pdp = ndp = malloc(k->size = 2 * k->size);
+	}
+	s = cfn(k, r.pdp);
+
+	/** trace */
+	debug("pdp(%p), k->pdp(%p)", pdp, k->pdp);
+	int64_t sp = _tail(pdp, p);
+	int64_t ep = _tail(r.pdp, p);
+	int64_t p  = _head(k->pdp, p);
+	debug("trace sp(%lld), ep(%lld), p(%lld), i(%lld)", sp, ep, p, _head(k->pdp, i));
+	if((uint64_t)(p - sp) < (ep - sp)) {
+		s = func2(VARIANT_LABEL, _trace)(k, r.pdp);
+	} else {
+		_aligned_block_memcpy(pdp, r.pdp, sizeof(struct sea_joint_head));
+	}
+
+	if(ndp != NULL) { free(ndp); }
+	return(s);
 }
 
 /**
@@ -154,7 +227,7 @@ func2(VARIANT_LABEL, _clean_next_mem)(
 }
 
 /**
- * @fn chain
+ * @fn chain_impl
  * @brief chain to the next fill-in function
  */
 static inline
@@ -185,95 +258,10 @@ func2(VARIANT_LABEL, _chain)(
 		} else {
 			ret = cfn(k);	/** chain without malloc */
 		}
-	} else {
-		/** turn and go back (band reached the corner of the matrix) */
-		if(k->alg == NW) {
-			/** load terminal coordinate to (mi, mj) and (mp, mq) */
-			set_terminal(k, pdp);
-		}
-		debug("set terminal p(%lld), q(%lld), i(%lld)", k->mp, k->mq, k->mi);
-		_head(k->pdp, p) = k->mp;
-		_head(k->pdp, q) = k->mq;
-		_head(k->pdp, i) = k->mi;
-		_head(k->pdp, score) = k->max;
-		wr_alloc(k->l, _head(k->pdp, p));
 	}
 	return(ret);
 }
-
-/**
- * @fn trace
- * @brief traceback until the given start position
- */
-static inline
-int32_t
-func2(VARIANT_LABEL, _trace)(
-	struct sea_local_context *this,
-	uint8_t *pdp)
-{
-	struct sea_local_context register *k = this;
-
-	bench_start(trace);
-
-	trace_decl(k, r, pdp);
-	trace_init(k, r, pdp);
-	while(1) {
-		if(trace_check_term(k, r, pdp)) { break; }
-		trace_body(k, r, pdp);
-		if(trace_check_term(k, r, pdp)) { break; }
-		trace_body(k, r, pdp);
-	}
-	debug("switch to cap p(%lld), q(%lld), i(%lld), j(%lld)", p, q, i, j);
-	while(!trace_check_term_cap(k, r, pdp)) {
-		trace_body(k, r, pdp);
-	}
-	debug("end cap p(%lld), q(%lld), i(%lld), j(%lld)", p, q, i, j);
-	if(trace_test_bound(k, r, pdp) < 0) {
-		trace_add_cap(k, r, pdp);
-	}
-	trace_finish(k, r, pdp);
-
-	bench_end(trace);
-	return(SEA_SUCCESS);
-}
-
-/**
- * @fn (base)
- * @brief base function of the dp
- */
-int32_t
-func(VARIANT_LABEL)(
-	struct sea_local_context *this)
-{
-	debug("entry point: (%p)", func(VARIANT_LABEL));
-	struct sea_local_context register *k = this;
-
-	/** save dp matrix pointer, direction array pointer, and p-coordinate */
-	uint8_t *pdp = k->pdp;
-
-	/** fill_in */
-	int32_t stat = func2(VARIANT_LABEL, _fill)(k, pdp);
-
-	/** chain */
-	stat = func2(VARIANT_LABEL, _chain)(k, pdp, stat);
-	if(stat != SEA_SUCCESS) {
-		return(stat);
-	}
-
-	/** trace */
-	debug("pdp(%p), k->pdp(%p)", pdp, k->pdp);
-	int64_t sp = _tail(pdp, p);
-	int64_t ep = _tail(k->pdp, p);
-	int64_t p  = _head(k->pdp, p);
-	debug("trace sp(%lld), ep(%lld), p(%lld), i(%lld)", sp, ep, p, _head(k->pdp, i));
-	if((uint64_t)(p - sp) < (ep - sp)) {
-		stat = func2(VARIANT_LABEL, _trace)(k, pdp);
-	} else {
-		_aligned_block_memcpy(pdp, k->pdp, sizeof(struct sea_joint_head));
-	}
-	k->pdp = pdp;
-	return(stat);
-}
+#endif
 
 /**
  * end of dp.c

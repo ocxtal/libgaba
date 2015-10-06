@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 # encoding: utf-8
 
-variants = ['naive', 'twig', 'branch', 'trunk'] #, 'balloon', 'cap']
+variants = ['twig', 'branch'] #, 'trunk'] #, 'naive', 'balloon', 'cap']
 costs = ['linear'] #, 'affine']
 dps = ['dynamic', 'guided']
 

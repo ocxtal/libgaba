@@ -7,219 +7,10 @@
 #ifndef _ARCH_UTIL_H_INCLUDED
 #define _ARCH_UTIL_H_INCLUDED
 
+#include "../sea.h"
 #include <smmintrin.h>
 #include <immintrin.h>
 #include <stdint.h>
-
-
-/**
- * seqreaders
- */
-
-/**
- * @macro rd_init
- * @brief initialize a sequence reader instance.
- */
-#define rd_init(r, fp, base) { \
-	(r).p = (uint8_t *)base; \
-	(r).b = 0; \
-	(r).pop = fp; \
-}
-
-/**
- * @macro rd_fetch, rd_fetch_fast, rd_fetch_safe
- * @brief fetch a decoded base into r.b.
- */
-#define rd_fetch(r, pos) { \
-	uint8_t register b; \
-	uint64_t register unused; \
-	__asm__ ( \
-		"call *%[fp]" \
-		: "=a"(b),				/** output list */ \
-		  "=S"(unused) \
-		: [fp]"r"((r).pop),		/** input list */ \
-		  "D"((r).p), \
-		  "S"(pos) \
-		: /*rsi", */"rcx"); \
-	(r).b = b; \
-	/*(r).b = (r).pop((r).p, pos);*/ \
-}
-#define rd_fetch_fast(r, pos, sp, ep, dummy) { \
-	rd_fetch(r, pos); \
-}
-#define rd_fetch_safe(r, pos, sp, ep, dummy) { \
-	if((uint64_t)((pos) - (sp)) < (uint64_t)((ep) - (sp))) { \
-		rd_fetch(r, pos); \
-	} else { \
-		(r).b = (dummy); \
-	} \
-}
-
-/**
- * @macro rd_cmp
- * @brief compare two fetched bases.
- * @return true if two bases are the same, false otherwise.
- */
-#define rd_cmp(r1, r2)	( (r1).b == (r2).b )
-
-/**
- * @macro rd_decode
- * @brief get a cached char
- */
-#define rd_decode(r)	( (r).b )
-/**
- * @macro rd_close
- * @brief fill the instance with zero.
- */
-#define rd_close(r) { \
-	(r).p = NULL; \
-	(r).spos = 0; \
-	(r).b = 0; \
-	(r).pop = NULL; \
-}
-
-
-/**
- * alnwriters
- */
-
-/**
- * @macro SEA_CLIP_LEN
- * @brief length of the reserved buffer for clip sequence
- */
-#define SEA_CLIP_LEN 		( 8 )
-
-/**
- * @enum _ALN_CHAR
- * @brief alignment character, used in ascii output format.
- */
-enum _ALN_CHAR {
-	MCHAR = 'M',
-	XCHAR = 'X',
-	ICHAR = 'I',
-	DCHAR = 'D'
-};
-
-/**
- * @enum _ALN_DIR
- * @brief the direction of alignment string.
- */
-enum _ALN_DIR {
-	ALN_FW = 0,
-	ALN_RV = 1
-};
-
-/**
- * @macro wr_init
- * @brief initialize an alignment writer instance.
- */
-#define wr_init(w, f) { \
-	(w).p = NULL; \
-	(w).init = (f).init; \
-	(w).push = (f).push; \
-	(w).pushm = (f).pushm; \
-	(w).pushx = (f).pushx; \
-	(w).pushi = (f).pushi; \
-	(w).pushd = (f).pushd; \
-	(w).finish = (f).finish; \
-}
-
-/**
- * @macro wr_alloc
- * @brief allocate a memory for the alignment string.
- */
-#define wr_alloc_size(s) ( \
-	  sizeof(struct sea_result) \
-	+ sizeof(uint8_t) * ( \
-	    (s) \
-	  + 16 - SEA_CLIP_LEN /* margin for xmm bulk write, sizeof(__m128i) == 16. (see pushm_cigar_r in io.s) */ \
-	  + SEA_CLIP_LEN /* margin for clip seqs at the head */ \
-	  + SEA_CLIP_LEN /* margin for clip seqs at the tail */ ) \
-)
-#define wr_alloc(w, s) { \
-	debug("wr_alloc called"); \
-	if((w).p == NULL || (w).size < wr_alloc_size(s)) { \
-		if((w).p == NULL) { \
-			free((w).p); (w).p = NULL; \
-		} \
-		(w).size = wr_alloc_size(s); \
-		(w).p = malloc((w).size); \
-	} \
-	/*(w).pos = (w).init((w).p,*/ \
-		/*(w).size - SEA_CLIP_LEN,*/ /** margin: must be consistent to wr_finish */ \
-		/*sizeof(struct sea_result) + SEA_CLIP_LEN);*/ /** margin: must be consistent to wr_finish */ \
-	uint64_t register unused1, unused2; \
-	__asm__ ( \
-		"call *%[fp]" \
-		: "=a"((w).pos),		/** output list */ \
-		  "=S"(unused1), \
-		  "=d"(unused2) \
-		: [fp]"r"((w).init),	/** input list */ \
-		  "D"((w).p), \
-		  "S"((w).size - SEA_CLIP_LEN), \
-		  "d"(sizeof(struct sea_result) + SEA_CLIP_LEN) \
-		: /*"rsi", "rdx"*/); \
-	(w).len = 0; \
-}
-
-/**
- * @macro wr_pushm, wr_pushx, wr_pushi, wr_pushd
- * @brief push an alignment character
- */
-#define wr_push(w, c) { \
-	uint64_t register unused1, unused2; \
-	__asm__ ( \
-		"call *%[fp]" \
-		: "=a"((w).pos),		/** output list */ \
-		  "=S"(unused1), \
-		  "=d"(unused2) \
-		: [fp]"r"((w).push),	/** input list */ \
-		  "D"((w).p), \
-		  "S"((w).pos), \
-		  "d"(c) \
-		: /*"rsi", "rdx", */"rcx", "r8", "xmm0"); \
-	(w).len++; \
-	/*debug("pushm: %c, pos(%lld)", (w).p[(w).pos], (w).pos);*/ \
-}
-
-/**
- * @macro wr_finish
- * @brief finish the instance
- */
-#define wr_finish(w) { \
-	/*int64_t p = (w).finish((w).p, (w).pos);*/ \
-	uint64_t register unused; \
-	int64_t p; \
-	__asm__ ( \
-		"call *%[fp]" \
-		: "=a"(p),				/** output list */ \
-		  "=S"(unused) \
-		: [fp]"r"((w).finish),	/** input list */ \
-		  "D"((w).p), \
-		  "S"((w).pos) \
-		: /*"rsi", "rdx", */"rdx", "rcx", "r8", "xmm0"); \
-	if(p <= (w).pos) { \
-		(w).size = ((w).size - SEA_CLIP_LEN) - p - 1; \
-		(w).pos = p; \
-	} else { \
-		(w).size = p - (sizeof(struct sea_result) + SEA_CLIP_LEN) - 1; \
-		(w).pos = sizeof(struct sea_result) + SEA_CLIP_LEN; \
-	} \
-}
-
-/**
- * @macro wr_clean
- * @brief free malloc'd memory and fill the instance with zero.
- */
-#define wr_clean(w) { \
-	if((w).p != NULL) { \
-		free((w).p); (w).p = NULL; \
-	} \
-	(w).size = 0; \
-	(w).pos = 0; \
-	(w).len = 0; \
-	(w).pushm = (w).pushx = (w).pushi = (w).pushd = NULL; \
-}
 
 /**
  * misc bit operations (popcnt, tzcnt, and lzcnt)
@@ -348,6 +139,673 @@ enum _ALN_DIR {
 				     _dst += _nreg * sizeof(__m128i); \
 				     _jmp = 0; \
 			    } while(--_lcnt > 0); \
+	} \
+}
+
+/**
+ * seqreader prototype implementation
+ *
+ * @memo
+ * buf_len = BLK + BW = 64
+ * sizeof(vector) = 16 (xmm)
+ */
+
+/**
+ * reader function declarations (see io.s)
+ */
+uint8_t _pop_ascii(uint8_t const *p, int64_t pos);
+uint8_t _pop_4bit(uint8_t const *p, int64_t pos);
+uint8_t _pop_2bit(uint8_t const *p, int64_t pos);
+uint8_t _pop_4bit8packed(uint8_t const *p, int64_t pos);
+uint8_t _pop_2bit8packed(uint8_t const *p, int64_t pos);
+
+/**
+ * @macro _rd_vec_char_reg
+ */
+#define _rd_vec_char_reg_16(v)		__m128i v##1;
+#define _rd_vec_char_reg_32(v)		__m128i v##1, v##2;
+
+/**
+ * @macro rd_set_base_ptr
+ * @brief set base pointers
+ */
+#define rd_set_base_ptr(r, rr, ptra, lena, ptrb, lenb) { \
+	(rr).pa = (ptra); \
+	(rr).pb = (ptrb); \
+	(rr).alen = (lena); \
+	(rr).blen = (lenb); \
+}
+
+/**
+ * @macro rd_set_section
+ */
+#define rd_set_section(r, rr, ptr_sec) { \
+	_aligned_block_memcpy(&(rr).s, ptr_sec, sizeof(struct sea_fill_section)); \
+}
+
+/**
+ * @macro rd_load_32_32
+ * @brief load 32cell-wide vector to 32cell-wide vector
+ */
+#define rd_load_32_32(r, rr, ptra, ptrb) { \
+	__m128i a1, a2, b1, b2; \
+	/** load vectors */ \
+	a1 = _mm_load_si128((__m128i *)(ptra)); \
+	a2 = _mm_load_si128((__m128i *)(ptra) + 1); \
+	b1 = _mm_load_si128((__m128i *)(ptrb) + 2); \
+	b2 = _mm_load_si128((__m128i *)(ptrb) + 3); \
+	_mm_store_si128((__m128i *)((rr).bufa + BLK), a1); \
+	_mm_store_si128((__m128i *)((rr).bufa + BLK + sizeof(__m128i)), a2); \
+	_mm_store_si128((__m128i *)(rr).bufb, b1); \
+	_mm_store_si128((__m128i *)((rr).bufb + sizeof(__m128i)), b2); \
+
+
+/**
+ * @macro rd_load_16_32
+ * @brief load 16cell-wide vector to 32cell-wide vector
+ */
+#define rd_load_16_32(r, rr, ptra, ptrb) { \
+	__m128i a1, b1; \
+	/** load vector a */ \
+	(r).loada((rr).bufa + BLK, (rr).pa, (rr).s.posa1, (rr).alen, 8); \
+	(rr).s.posa1 += 8; \
+	a1 = _mm_load_si128((__m128i *)(ptra)); \
+	_mm_store_si128((__m128i *)((rr).bufa + BLK + 8), a1); \
+	*((uint64_t *)((rr).bufa + BLK + 24)) = 0x8080808080808080; \
+	/** load vector b */ \
+	*((uint64_t *)((rr).bufb)) = 0xffffffffffffffff; \
+	b1 = _mm_load_si128((__m128i *)(ptrb) + 1); \
+	_mm_store_si128((__m128i *)((rr).bufb + 8), b1); \
+	(r).loadb((rr).bufb + 24, (rr).pb, (rr).s.posb1, (rr).blen, 8); \
+	(rr).s.posb1 += 8; \
+}
+
+/**
+ * @macro rd_load_16_16
+ * @brief load 16cell-wide vector to 16cell-wide vector
+ */
+#define rd_load_16_16(r, rr, ptra, ptrb) { \
+	__m128i a1, b1; \
+	/** load vectors */ \
+	a1 = _mm_load_si128((__m128i *)(ptra)); \
+	b1 = _mm_load_si128((__m128i *)(ptrb) + 1); \
+	_mm_store_si128((__m128i *)(rr).bufa + 1, a1); \
+	_mm_store_si128((__m128i *)(rr).bufb + 2, b1); \
+}
+
+/**
+ * @macro rd_load_init_16
+ * @brief initialize 16cell-wide vector
+ */
+#define rd_load_init_16(r, rr) { \
+	/** load seq a */ \
+	(r).loada((rr).bufa + BLK, (rr).pa, (rr).s.posa1, (rr).alen, 8); \
+	(rr).s.posa1 += 8; \
+	*((uint64_t *)((rr).bufa + BLK + 8)) = 0x8080808080808080; \
+	/** load seq b */ \
+	*((uint64_t *)((rr).bufb)) = 0xffffffffffffffff; \
+	(r).loadb((rr).bufb + 8, (rr).pb, (rr).s.posb1, (rr).blen, 8); \
+	(rr).s.posb1 += 8; \
+}
+
+/**
+ * prefetch internals
+ */
+#define _lo64(x)	 _mm_cvtsi128_si64(x)
+#define rd_prefetch_load_vec_32(ptr, t) { \
+	(t##1) = _mm_loadu_si128((__m128i *)(ptr)); \
+	(t##2) = _mm_loadu_si128((__m128i *)(ptr) + 1); \
+}
+#define rd_prefetch_store_vec_32(ptr, t) { \
+	_mm_store_si128((__m128i *)(ptr), (t##1)); \
+	_mm_store_si128((__m128i *)(ptr) + 1, (t##2)); \
+}
+#define rd_prefetch_load_vec_16(ptr, t) { \
+	(t##1) = _mm_loadu_si128((__m128i *)(ptr)); \
+}
+#define rd_prefetch_store_vec_16(ptr, t) { \
+	_mm_store_si128((__m128i *)(ptr), (t##1)); \
+}
+
+/**
+ * @macro rd_prefetch
+ * int _load(uint8_t *dst, uint8_t *src, uint64_t idx, uint64_t src_len, uint64_t copy_len);
+ */
+#define rd_prefetch_impl(r, rr, t, load_vec, store_vec) { \
+	/** load pos */ \
+	__m128i pos = _mm_load_si128((__m128i *)&(rr).s.posa1); \
+	__m128i cnt = _mm_load_si128((__m128i *)&(rr).cnta); \
+	pos = _mm_add_epi64(pos, cnt); \
+	/** write back pos */ \
+	_mm_store_si128((__m128i *)&(rr).s.posa1, pos); \
+	/** seq a */ \
+	load_vec((rr).bufa + BLK - _lo64(cnt), t); \
+	(r).loada((rr).bufa, (rr).pa, _lo64(pos), (rr).alen, BLK); \
+	store_vec((rr).bufa + BLK, t); \
+	/** extract upper 64bit */ \
+	pos = _mm_srli_si128(pos, sizeof(uint64_t)); \
+	cnt = _mm_srli_si128(cnt, sizeof(uint64_t)); \
+	/** seq b */ \
+	load_vec((rr).bufb + _lo64(cnt), t); \
+	store_vec((rr).bufb, t); \
+	(r).loadb((rr).bufb + BW, (rr).pb, _lo64(pos), (rr).blen, BLK); \
+	/** clear counter */ \
+	_mm_store_si128(&(rr).cnta, _mm_setzero_si128()); \
+}
+#define rd_prefetch_32(r, rr) { \
+	__m128i t1, t2; \
+	rd_prefetch_impl(r, rr, t, \
+		rd_prefetch_load_vec_32, rd_prefetch_store_vec_32); \
+}
+#define rd_prefetch_16(r, rr) { \
+	__m128i t1; \
+	rd_prefetch_impl(r, rr, t, \
+		rd_prefetch_load_vec_16, rd_prefetch_store_vec_16); \
+}
+
+/**
+ * @macro rd_prefetch_cap
+ */
+#define rd_prefetch_cap_impl(r, rr, t, load_vec, store_vec) { \
+	/** constants */ \
+	__m128i const tot = _mm_set1_epi64x(BLK); \
+	__m128i const zv = _mm_setzero_si128(); \
+	/** load previous (posa1, posb1) and (posa2, posb2) */ \
+	__m128i pos1 = _mm_load_si128((__m128i *)&(rr).s.posa1); \
+	__m128i pos2 = _mm_load_si128((__m128i *)&(rr).s.posa2); \
+	/** load lim */ \
+	__m128i lim1 = _mm_load_si128((__m128i *)&(rr).s.lima1); \
+	__m128i lim2 = _mm_load_si128((__m128i *)&(rr).s.lima2); \
+	/** calc (lena1, lenb1) and (lena1, lenb2) */ \
+	__m128i len1 = _mm_sub_epi64(lim1, pos1); \
+	__m128i len2 = _mm_sub_epi64(lim2, pos2); \
+	/** load cnt */ \
+	__m128i cnt = _mm_load_si128((__m128i *)&(rr).cnta); \
+	__m128i cnt2 = _mm_max_epi32(_mm_sub_epi32(cnt, len1), zv); \
+	__m128i cnt1 = _mm_sub_epi32(cnt, cnt2); \
+	/** update section 1 */ \
+	len1 = _mm_sub_epi32(len1, cnt1);	/** 0 <= len1 */ \
+	pos1 = _mm_add_epi64(pos1, cnt1);	/** pos1 <= lim1 */ \
+	len1 = _mm_min_epi32(len1, tot);	/** 0 <= len1 <= BW */ \
+	/** update section 2 */ \
+	len2 = _mm_sub_epi32(len2, cnt2); \
+	pos2 = _mm_add_epi64(pos2, cnt2); \
+	len2 = _mm_min_epi32(len2, _mm_sub_epi32(tot, len1)); \
+	/** write back pos */ \
+	_mm_store_si128((__m128i *)&(rr).s.posa1, pos1); \
+	_mm_store_si128((__m128i *)&(rr).s.posa2, pos2); \
+	/** seq a */ \
+	load_vec((rr).bufa + BLK - _lo64(cnt), t); \
+	__m128i t1 = _mm_loadu_si128((__m128i *)((rr).bufa + BLK - _lo64(cnt))); \
+	__m128i t2 = _mm_loadu_si128((__m128i *)((rr).bufa + BLK + sizeof(__m128i) - _lo64(cnt))); \
+	(r).loada((rr).bufa + BLK - (_lo64(len1) + _lo64(len2)), \
+		(rr).pa, _lo64(pos2), \
+		(rr).alen, _lo64(len2)); \
+	(r).loada((rr).bufa + BLK - _lo64(len1), \
+		(rr).pa, _lo64(pos1), \
+		(rr).alen, _lo64(len1)); \
+	store_vec((rr).bufa + BLK, t); \
+	/** extract upper 64bit */ \
+	cnt = _mm_srli_si128(cnt, sizeof(uint64_t)); \
+	pos1 = _mm_srli_si128(pos1, sizeof(uint64_t)); \
+	len1 = _mm_srli_si128(len1, sizeof(uint64_t)); \
+	pos2 = _mm_srli_si128(pos2, sizeof(uint64_t)); \
+	len2 = _mm_srli_si128(len2, sizeof(uint64_t)); \
+	/** seq b */ \
+	load_vec((rr).bufb + _lo64(cnt), t); \
+	store_vec((rr).bufb, t); \
+	(r).loadb((rr).bufb + BW, \
+		(rr).pb, _lo64(pos1), \
+		(rr).blen, _lo64(len1)); \
+	(r).loadb((rr).bufb + BW + _lo64(len1), \
+		(rr).pb, _lo64(pos2), \
+		(rr).blen, _lo64(len2)); \
+	/** clear counter */ \
+	_mm_store_si128(&(rr).cnta, zv); \
+}
+#define rd_prefetch_cap_32(r, rr) { \
+	__m128i t1, t2; \
+	rd_prefetch_cap_impl(r, rr, t, \
+		rd_prefetch_load_vec_32, rd_prefetch_store_vec_32); \
+}
+#define rd_prefetch_cap_16(r, rr) { \
+	__m128i t1; \
+	rd_prefetch_cap_impl(r, rr, t, \
+		rd_prefetch_load_vec_16, rd_prefetch_store_vec_16); \
+}
+
+/**
+ * @macro rd_go_right, rd_go_down
+ */
+#define rd_go_right(r, rr) { \
+	(rr).cnta++; \
+}
+#define rd_go_down(r, rr) { \
+	(rr).cntb++; \
+}
+
+/**
+ * @macro rd_cmp
+ */
+#define rd_cmp(r, rr, offseta, offsetb) ( \
+	(rr).bufa[BLK + (offseta)] == (rr).bufb[(offsetb)] \
+)
+
+/**
+ * @macro rd_cmp_vec
+ */
+#define rd_cmp_vec_32(r, rr, vec32) { \
+	(vec32##1) = _mm_cmpeq_epi8( \
+		_mm_loadu_si128((__m128i *)((rr).bufa + BLK - (rr).cnta)), \
+		_mm_loadu_si128((__m128i *)((rr).bufb + (rr).cntb))); \
+	(vec32##2) = _mm_cmpeq_epi8( \
+		_mm_loadu_si128((__m128i *)((rr).bufa + BLK + sizeof(__m128i) - (rr).cnta)), \
+		_mm_loadu_si128((__m128i *)((rr).bufb + sizeof(__m128i) + (rr).cntb))); \
+}
+#define rd_cmp_vec_16(r1, r2, vec16) { \
+	(vec16##1) = _mm_cmpeq_epi8( \
+		_mm_loadu_si128((__m128i *)((rr).bufa + BLK - (rr).cnta)), \
+		_mm_loadu_si128((__m128i *)((rr).bufb + (rr).cntb))); \
+}
+
+/**
+ * @macro rd_test_fast_prefetch
+ */
+#define rd_test_fast_prefetch(r, rr, p) ( \
+	  ((int64_t)(rr).s.lima1 - BW - (rr).s.posa1 - (rr).cnta) \
+	| ((int64_t)(rr).s.limb1 - BW - (rr).s.posb1 - (rr).cntb) \
+)
+
+/**
+ * @macro rd_test_break
+ */
+#define rd_test_break(r, rr, p) ( \
+	  ((int64_t)(rr).s.lima2 - BW - (rr).s.posa2) \
+	| ((int64_t)(rr).s.limb2 - BW - (rr).s.posb2) \
+	| ((int64_t)(rr).s.limp - p) \
+)
+
+/**
+ * @macro rd_store
+ */
+#define rd_store_impl(r, rr, ptra, ptrb, t, load_vec, store_vec) { \
+	load_vec((rr).bufa + BLK - (rr).cnta, t); \
+	store_vec(ptra, t); \
+	load_vec((rr).bufb + (rr).cntb, t); \
+	store_vec(ptrb, t); \
+}
+#define rd_store_32(r, rr, ptra, ptrb) { \
+	__m128i t1, t2; \
+	rd_store_impl(r, rr, ptra, ptrb, t, \
+		rd_prefetch_load_vec_32, rd_prefetch_store_vec_32); \
+}
+#define rd_store_16(r, rr, ptra, ptrb) { \
+	__m128i t1; \
+	rd_store_impl(r, rr, ptra, ptrb, t, \
+		rd_prefetch_load_vec_16, rd_prefetch_store_vec_16); \
+}
+
+/**
+ * @macro rd_get_section
+ */
+#define rd_get_section(r, rr, ptr_sec) { \
+	_aligned_block_memcpy(ptr_sec, &(rr).s, sizeof(struct sea_fill_section)); \
+}
+
+#if 0
+/**
+ * seqreaders
+ */
+
+/**
+ * @macro rd_init
+ * @brief initialize a sequence reader instance.
+ */
+#define rd_init(r, fp, base) { \
+	(r).p = (uint8_t *)base; \
+	(r).b = 0; \
+	(r).pop = fp; \
+}
+
+/**
+ * @macro rd_fetch, rd_fetch_fast, rd_fetch_safe
+ * @brief fetch a decoded base into r.b.
+ */
+#define rd_fetch(r, pos) { \
+	uint8_t register b; \
+	uint64_t register unused; \
+	__asm__ ( \
+		"call *%[fp]" \
+		: "=a"(b),				/** output list */ \
+		  "=S"(unused) \
+		: [fp]"r"((r).pop),		/** input list */ \
+		  "D"((r).p), \
+		  "S"(pos) \
+		: /*rsi", */"rcx"); \
+	(r).b = b; \
+	/*(r).b = (r).pop((r).p, pos);*/ \
+}
+#define rd_fetch_fast(r, pos, sp, ep, dummy) { \
+	rd_fetch(r, pos); \
+}
+#define rd_fetch_safe(r, pos, sp, ep, dummy) { \
+	if((uint64_t)((pos) - (sp)) < (uint64_t)((ep) - (sp))) { \
+		rd_fetch(r, pos); \
+	} else { \
+		(r).b = (dummy); \
+	} \
+}
+
+/**
+ * @macro rd_cmp
+ * @brief compare two fetched bases.
+ * @return true if two bases are the same, false otherwise.
+ */
+#define rd_cmp(r1, r2)	( (r1).b == (r2).b )
+
+/**
+ * @macro rd_decode
+ * @brief get a cached char
+ */
+#define rd_decode(r)	( (r).b )
+/**
+ * @macro rd_close
+ * @brief fill the instance with zero.
+ */
+#define rd_close(r) { \
+	(r).p = NULL; \
+	(r).spos = 0; \
+	(r).b = 0; \
+	(r).pop = NULL; \
+}
+#endif
+
+/**
+ * alnwriters
+ */
+#if 0
+/**
+ * @macro SEA_CLIP_LEN
+ * @brief length of the reserved buffer for clip sequence
+ */
+#define SEA_CLIP_LEN 		( 8 )
+
+/**
+ * @enum _ALN_CHAR
+ * @brief alignment character, used in ascii output format.
+ */
+enum _ALN_CHAR {
+	MCHAR = 'M',
+	XCHAR = 'X',
+	ICHAR = 'I',
+	DCHAR = 'D'
+};
+
+/**
+ * @enum _ALN_DIR
+ * @brief the direction of alignment string.
+ */
+enum _ALN_DIR {
+	ALN_FW = 0,
+	ALN_RV = 1
+};
+
+/**
+ * @macro wr_init
+ * @brief initialize an alignment writer instance.
+ */
+#define wr_init(w, ww, f) { \
+	(w).p = NULL; \
+	(w).init = (f).init; \
+	(w).push = (f).push; \
+	(w).pushm = (f).pushm; \
+	(w).pushx = (f).pushx; \
+	(w).pushi = (f).pushi; \
+	(w).pushd = (f).pushd; \
+	(w).finish = (f).finish; \
+}
+
+/**
+ * @macro wr_alloc
+ * @brief allocate a memory for the alignment string.
+ */
+#define wr_alloc_size(s) ( \
+	  sizeof(struct sea_result) \
+	+ sizeof(uint8_t) * ( \
+	    (s) \
+	  + 16 - SEA_CLIP_LEN /* margin for xmm bulk write, sizeof(__m128i) == 16. (see pushm_cigar_r in io.s) */ \
+	  + SEA_CLIP_LEN /* margin for clip seqs at the head */ \
+	  + SEA_CLIP_LEN /* margin for clip seqs at the tail */ ) \
+)
+#define wr_alloc(w, ww, s) { \
+	debug("wr_alloc called"); \
+	if((w).p == NULL || (w).size < wr_alloc_size(s)) { \
+		if((w).p == NULL) { \
+			free((w).p); (w).p = NULL; \
+		} \
+		(w).size = wr_alloc_size(s); \
+		(w).p = malloc((w).size); \
+	} \
+	/*(w).pos = (w).init((w).p,*/ \
+		/*(w).size - SEA_CLIP_LEN,*/ /** margin: must be consistent to wr_finish */ \
+		/*sizeof(struct sea_result) + SEA_CLIP_LEN);*/ /** margin: must be consistent to wr_finish */ \
+	(w).len = 0; \
+}
+
+/**
+ * @macro wr_finish
+ * @brief finish the instance
+ */
+#define wr_finish(w, ww) { \
+	/*int64_t p = (w).finish((w).p, (w).pos);*/ \
+	uint64_t register unused; \
+	int64_t p; \
+	__asm__ ( \
+		"call *%[fp]" \
+		: "=a"(p),				/** output list */ \
+		  "=S"(unused) \
+		: [fp]"r"((w).finish),	/** input list */ \
+		  "D"((w).p), \
+		  "S"((w).pos) \
+		: /*"rsi", "rdx", */"rdx", "rcx", "r8", "xmm0"); \
+	if(p <= (w).pos) { \
+		(w).size = ((w).size - SEA_CLIP_LEN) - p - 1; \
+		(w).pos = p; \
+	} else { \
+		(w).size = p - (sizeof(struct sea_result) + SEA_CLIP_LEN) - 1; \
+		(w).pos = sizeof(struct sea_result) + SEA_CLIP_LEN; \
+	} \
+}
+
+/**
+ * @macro wr_clean
+ * @brief free malloc'd memory and fill the instance with zero.
+ */
+#define wr_clean(w) { \
+	if((w).p != NULL) { \
+		free((w).p); (w).p = NULL; \
+	} \
+	(w).size = 0; \
+	(w).pos = 0; \
+	(w).len = 0; \
+	(w).pushm = (w).pushx = (w).pushi = (w).pushd = NULL; \
+}
+#endif
+
+/**
+ * @macro WR_TAIL_MARGIN, WR_HEAD_MARGIN
+ * @brief length of the reserved buffer for clip sequence
+ */
+#define WR_TAIL_MARGIN 		( 8 )
+#define WR_HEAD_MARGIN		( 8 + 4 + sizeof(struct sea_result) )
+
+/**
+ * @enum _wr_tag, _wr_dir
+ * @brief writer tag, writer direction
+ */
+enum _wr_tag {
+	WR_ASCII	= 1,
+	WR_CIGAR	= 2,
+	WR_DIR		= 3
+};
+enum _wr_dir {
+	WR_FW		= 1,
+	WR_RV		= 2
+}
+
+/**
+ * @enum _wr_char
+ * @brief alignment character, used in ascii output format.
+ */
+enum _wr_char {
+	M_CHAR = 0,
+	X_CHAR = 1,
+	I_CHAR = 2,
+	D_CHAR = 3
+};
+
+/**
+ * writer function declarations (see io.s)
+ */
+uint32_t _push_ascii_r(uint8_t *p, uint32_t dst, uint32_t src, uint8_t c);
+uint32_t _push_ascii_f(uint8_t *p, uint32_t dst, uint32_t src, uint8_t c);
+uint32_t _push_cigar_r(uint8_t *p, uint32_t dst, uint32_t src, uint8_t c);
+uint32_t _push_cigar_f(uint8_t *p, uint32_t dst, uint32_t src, uint8_t c);
+uint32_t _push_dir_r(uint8_t *p, uint32_t dst, uint32_t src, uint8_t c);
+uint32_t _push_dir_f(uint8_t *p, uint32_t dst, uint32_t src, uint8_t c);
+
+/**
+ * @struct wr_cigar_pair
+ */
+struct wr_cigar_pair {
+	uint32_t len 	: 29;
+	uint32_t c 		: 3;
+};
+#define _cig(ptr, member)		((struct wr_cigar_pair *)(ptr) - 1)->member
+#define _cig_all(ptr)			*((uint32_t *)(ptr) - 1)
+
+/**
+ * @macro wr_init
+ * @brief initialize alnwriter context
+ */
+#define wr_init_intl_ascii(w, ww) { \
+	/** nothing to do */ \
+}
+#define wr_init_intl_cigar(w, ww) { \
+	/** forward writer */ \
+	_cig_all((ww).p + WR_HEAD_MARGIN) = 0; \
+	/** reverse writer */ \
+	_cig_all((ww).p + (ww).rpos) = 0; \
+}
+#define wr_init_intl_dir(w, ww) { \
+	/** nothing to do */ \
+}
+#define wr_init(w, ww, psum) { \
+	debug("wr_init"); \
+	(ww).size = wr_alloc_size(psum); \
+	(ww).p = malloc((ww).size); \
+	(ww).rpos = (ww).size - WR_TAIL_MARGIN; \
+	(ww).pos = (ww).rpos; \
+	(ww).len = 0; \
+	(ww).p[(ww).rpos] = '\0'; \
+	/** reverse writer must be set */ \
+	if((w).tag == WR_ASCII) { \
+		wr_init_intl_ascii(w, ww); \
+	} else if((w).tag == WR_CIGAR) { \
+		wr_init_intl_cigar(w, ww); \
+	} else if((w).tag == WR_DIR) { \
+		wr_init_intl_dir(w, ww); \
+	} else { \
+		/** error */ \
+		log_error("invalid writer tag"); \
+	} \
+}
+
+/**
+ * @macro wr_start
+ * @brief initialize pos
+ */
+#define wr_start(w, ww) { \
+	(ww).pos = ((ww).dir == WR_RV) ? (ww).rpos : WR_HEAD_MARGIN; \
+}
+
+/**
+ * @macro wr_push_intl, wr_push
+ * @brief push an alignment character
+ */
+#define wr_push_intl(w, ww, ret, dst, src, c) { \
+	uint64_t register unused1, unused2, unused3; \
+	__asm__ ( \
+		"call *%[fp]" \
+		: "=a"(ret),			/** output list */ \
+		  "=S"(unused1), \
+		  "=d"(unused2), \
+		  "=c"(unused3) \
+		: [fp]"r"((w).push),	/** input list */ \
+		  "D"((ww).p), \
+		  "S"(dst),				/** dst pointer */ \
+		  "d"(src),				/** src (unused) pointer */ \
+		  "c"(c) \
+		: "r8");				/** clobber */ \
+}
+#define wr_push(w, ww, c) { \
+	wr_push_intl(w, ww, (ww).pos, (ww).pos, (ww).pos, c); \
+	(ww).len++; \
+	/*debug("pushm: %c, pos(%lld)", (w).p[(w).pos], (w).pos);*/ \
+}
+
+/**
+ * @macro wr_end
+ * @brief update rpos
+ */
+#define wr_end(w, ww) { \
+	(ww).pos = ((ww).dir == WR_RV) ? (ww).pos : (ww).rpos; \
+}
+
+/**
+ * @macro wr_finish
+ */
+#define wr_finish_reverse_memcpy(dst, src, len) { \
+	uint8_t _src = (src), _dst = (dst); \
+	int64_t _len = (len); \
+	while(_len--) { *--_dst = *--_src; } \
+}
+#define wr_finish_intl_ascii(w, ww) { \
+	/** copy forward string from pos to rpos */ \
+	wr_finish_reverse_memcpy( \
+		(ww).p + (ww).rpos, \
+		(ww).p + (ww).pos, \
+		(ww).pos - WR_HEAD_MARGIN); \
+}
+#define wr_finish_intl_cigar(w, ww) { \
+	/** copy forward string from pos to rpos, converting to cigar string */ \
+	if(_cig((ww).p + (ww).rpos, c) == _cig((ww).p + (ww).pos, c)) { \
+		_cig((ww).p + (ww).pos, len) += _cig((ww).p + (ww).rpos, len); \
+	} else { \
+		(ww).pos += sizeof(uint32_t); \
+		_cig_all((ww).p + (ww).pos) = _cig_all((ww).p + (ww).rpos); \
+	} \
+	while((ww).pos >= WR_HEAD_MARGIN) { \
+		wr_push_intl(w, ww, (ww).rpos, (ww).rpos, (ww).pos, 0); \
+		(ww).pos -= sizeof(uint32_t); \
+	} \
+}
+#define wr_finish_intl_dir(w, ww) { \
+	/** copy forward string from pos to rpos */ \
+	wr_finish_reverse_memcpy( \
+		(ww).p + (ww).rpos, \
+		(ww).p + (ww).pos, \
+		(ww).pos - WR_HEAD_MARGIN); \
+}
+#define wr_finish(w, ww) { \
+	if((ww).tag == WR_ASCII) { \
+		wr_finish_intl_ascii(w, ww); \
+	} else if((ww).tag == WR_CIGAR) { \
+		wr_finish_intl_cigar(w, ww); \
+	} else if((ww).tag == WR_DIR) { \
+		wr_finish_intl_dir(w, ww); \
+	} else { \
+		log_error("invalid writer tag"); \
 	} \
 }
 

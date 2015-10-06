@@ -6,444 +6,306 @@
 #ifndef _BRANCH_H_INCLUDED
 #define _BRANCH_H_INCLUDED
 
-#include "../arch/b16c32.h"
+#include "branch_types.h"
 #include "../sea.h"
 #include "../util/util.h"
+#include "../arch/arch_util.h"
 #include <stdint.h>
-#include "naive_impl.h"
-
-/**
- * @typedef cell_t
- * @brief cell type in the branch algorithms
- */
-#ifdef cell_t
-	/** undefine types (previously defined in naive_impl.h) */
-	#undef cell_t
-	#undef CELL_MIN
-	#undef CELL_MAX
-#endif
-
-/** new defines */
-#define cell_t 		int16_t
-#define CELL_MIN	( INT16_MIN )
-#define CELL_MAX	( INT16_MAX )
-
-/**
- * @macro BW
- * @brief bandwidth in the branch algorithm (= 32).
- */
-#ifdef BW
-#undef BW
-#endif
-
-#define BW 			( 32 )
-
-/**
- * @struct branch_linear_block
- */
-struct branch_linear_block {
-	cell_t dp[BLK][BW];
-	int64_t i, j;
-	_vec_cell(maxv);
-#if DP == DYNAMIC
-	_dir_vec(dr);
-#endif
-};
-
-/**
- * @macro linear_block_t
- */
-#ifdef linear_block_t
-	#undef linear_block_t
-#endif
-
-#define linear_block_t	struct branch_linear_block
-
-/**
- * @macro bpl, bpb
- * @brief bytes per line, bytes per block
- */
-#define branch_linear_bpl()					( vec_size() )
-#define branch_linear_dp_size()				( BLK * branch_linear_bpl() )
-#define branch_linear_co_size()				( 2 * sizeof(int64_t) + vec_size() )
-#define branch_linear_jam_size()			( branch_linear_co_size() + dr_size() )
-#define branch_linear_head_size()			( 2 * branch_linear_bpl() + branch_linear_jam_size() + sizeof(struct sea_joint_head) )
-#define branch_linear_tail_size()			( sizeof(struct sea_joint_tail) )
-#define branch_linear_bpb()					( branch_linear_dp_size() + branch_linear_jam_size() )
-
-#define branch_affine_bpl()					( 3 * vec_size() )
-#define branch_affine_dp_size()				( BLK * branch_affine_bpl() )
-#define branch_affine_co_size()				( 2 * sizeof(int64_t) + vec_size() )
-#define branch_affine_jam_size()			( branch_affine_co_size() + dr_size() )
-#define branch_affine_head_size()			( 2 * branch_affine_bpl() + branch_affine_jam_size() + sizeof(struct sea_joint_head) )
-#define branch_affine_tail_size()			( sizeof(struct sea_joint_tail) )
-#define branch_affine_bpb()					( branch_affine_dp_size() + branch_affine_jam_size() )
-
-/**
- * @macro (internal) branch_linear_topq, ...
- * @brief coordinate calculation helper macros
- */
-#define branch_linear_topq(r, k)			naive_linear_topq(r, k)
-#define branch_linear_leftq(r, k)			naive_linear_leftq(r, k)
-#define branch_linear_topleftq(r, k)		naive_linear_topleftq(r, k)
-#define branch_linear_top(r, k) 			naive_linear_top(r, k)
-#define branch_linear_left(r, k) 			naive_linear_left(r, k)
-#define branch_linear_topleft(r, k) 		naive_linear_topleft(r, k)
-
-#define branch_affine_topq(r, k)			naive_affine_topq(r, k)
-#define branch_affine_leftq(r, k)			naive_affine_leftq(r, k)
-#define branch_affine_topleftq(r, k)		naive_affine_topleftq(r, k)
-#define branch_affine_top(r, k) 			naive_affine_top(r, k)
-#define branch_affine_left(r, k) 			naive_affine_left(r, k)
-#define branch_affine_topleft(r, k) 		naive_affine_topleft(r, k
+#include "twig_types.h"			/** for struct twig_*_joint_vec */
+// #include "naive_impl.h"
 
 /**
  * @macro branch_linear_dir_exp
  * @brief determines the next direction of the lane in the dynamic algorithm.
  */
-#define branch_linear_dir_exp_top(r, k, pdp) ( \
+#define branch_linear_dir_exp_top(r, k) ( \
 	(vec_msb(cv) > vec_lsb(cv)) ? SEA_TOP : SEA_LEFT \
 )
-#define branch_linear_dir_exp_bottom(r, k, pdp) ( 0 )
-#define branch_affine_dir_exp_top(r, k, pdp)	branch_linear_dir_exp_top(r, k, pdp)
-#define branch_affine_dir_exp_bottom(r, k, pdp) branch_linear_dir_exp_bottom(r, k, pdp)
+#define branch_linear_dir_exp_bottom(r, k) ( 0 )
+#define branch_affine_dir_exp_top(r, k)		branch_linear_dir_exp_top(r, k)
+#define branch_affine_dir_exp_bottom(r, k)	branch_linear_dir_exp_bottom(r, k)
 
 /**
  * @macro branch_linear_fill_decl
  */
-#define branch_linear_fill_decl(k, r, pdp) \
-	dir_t r; \
-	int64_t i, j, p, q; \
+#define branch_linear_fill_decl(k) \
+	dir_t dr; \
+	int64_t p = 0; \
+	uint8_t *cdp; \
 	_vec_single_const(mv, k->m);	/** (m, m, m, ..., m) */ \
 	_vec_single_const(xv, k->x);	/** (x, x, x, ..., x) */ \
 	_vec_cell_const(gv, k->gi);		/** (g, g, g, ..., g) */ \
-	_vec_char_reg(wq);				/** a buffer for seq.a */ \
-	_vec_char_reg(wt);				/** a buffer for seq.b */ \
+	_vec_cell_const(zv, 0);			/** (0, 0, 0, ..., 0) */ \
+	_rd_vec_char_reg(match); \
 	_vec_cell_reg(cv);				/** score vector */ \
 	_vec_cell_reg(pv);				/** previous score vector */ \
 	_vec_cell_reg(tmp1);			/** temporary */ \
 	_vec_cell_reg(tmp2);			/** temporary */ \
 	_vec_cell_reg(maxv);			/** a vector which holds maximum scores */ \
- 	_vec_cell_reg(zv);				/** zero vector for the SW algorithm */
 
-#define branch_affine_fill_decl(k, r, pdp) \
-	branch_linear_fill_decl(k, r, pdp); \
+#define branch_affine_fill_decl(k, pdp) \
+	branch_linear_fill_decl(k, pdp); \
 	_vec_cell_reg(f); \
 	_vec_cell_reg(h);
 
 /**
  * @macro (internal) branch_linear_fill_init_intl
  */
-#define branch_linear_fill_init_intl(k, r, pdp) { \
+#define branch_linear_fill_init_intl(k, pdp, sec) { \
 	/** initialize vectors */ \
-	vec_set(zv, k->alg == SW ? 0 : CELL_MIN); \
-	vec_assign(maxv, zv);	/** init maxv with CELL_MIN */ \
-	/** load coordinates onto local stack */ \
-	p = _tail(k->pdp, p); \
-	i = _tail(k->pdp, i) - DEF_VEC_LEN/2; \
-	j = (p - 1) - (i - k->asp) + k->bsp; \
-	debug("p(%lld), i(%lld), j(%lld)", _tail(k->pdp, p), i, j); \
+	vec_assign(maxv, zv);	/** init maxv with DPCELL_MIN */ \
 	/** initialize direction array */ \
 	debug("dir_init"); \
-	dir_init(r, k, k->pdp, p); \
+	dir_init(dr, k, pdp, _tail(pdp, psum)); \
+	/** initialize sequence reader */ \
+	rd_set_section(k->r, k->rr, sec); \
 	/** make room for struct sea_joint_head */ \
-	pdp += sizeof(struct sea_joint_head); \
-	/** load vectors */ \
-	debug("load vectors BW(%d)", BW); \
-	uint8_t *s = _tail(k->pdp, v); \
-	vec_load8(s, pv); \
-	vec_load8(s + 16, cv); \
-	vec_store(pdp, pv); pdp += vec_size(); \
-	vec_store(pdp, cv); pdp += vec_size(); \
-	/** store the first (i, j) */ \
-	*((int64_t *)pdp) = i; pdp += sizeof(int64_t); \
-	*((int64_t *)pdp) = j; pdp += sizeof(int64_t); \
-	vec_store(pdp, maxv); pdp += vec_size(); \
-	/** store the first dr vector */ \
-	dir_end_block(r, k, pdp, p); \
+	_head(k->stack_top, p_tail) = pdp; \
+	cdp = k->stack_top + sizeof(struct sea_joint_head); \
 }
 
 /**
  * @macro branch_linear_fill_init
  */
-#define branch_linear_fill_init(k, r, pdp) { \
+#define branch_linear_fill_init(k, pdp, sec) { \
 	/** load coordinates and vectors, initialize misc variables */ \
-	branch_linear_fill_init_intl(k, r, pdp); \
-	/** initialize char vectors */ \
-	debug("init char vectors"); \
-	vec_char_setzero(wq);	/** vector on the top */ \
-	for(q = -BW/2; q < BW/2; q++) { \
-		/*rd_fetch(k->a, i+q);*/ \
-		rd_fetch_safe(k->a, i+q, k->asp, k->aep, 128); \
-		pushq(rd_decode(k->a), wq); \
+	branch_linear_fill_init_intl(k, pdp, sec); \
+	/** load vectors */ \
+	debug("load vectors BW(%d)", BW); \
+	if(_tail(pdp, var) == TWIG) { \
+		struct twig_linear_joint_vec *s = \
+			(struct twig_linear_joint_vec *)_tail(pdp, v); \
+		rd_load_16_32(k->r, k->rr, &s->wa, &s->wb); \
+		vec_load_b8c16(&s->pv, pv); \
+		vec_load_b8c16(&s->cv, cv); \
+	} else if(_tail(pdp, var) == BASE) { \
+		joint_vec_t *s = \
+			(joint_vec_t *)_tail(pdp, v); \
+		rd_load_32_32(k->r, k->rr, &s->wa, &s->wb); \
+		vec_load(&s->pv, pv); \
+		vec_load(&s->cv, cv); \
+	} else { \
+		vec_setzero(pv); \
+		vec_setzero(cv); \
 	} \
-	vec_char_setzero(wt);	/** vector on the left */ \
-	for(q = -BW/2; q < BW/2-1; q++) { \
-		/*rd_fetch(k->b, 255);*/ \
-		rd_fetch_safe(k->b, j+q, k->bsp, k->bep, 255); \
-		pusht(rd_decode(k->b), wt); \
-	} \
+	vec_store(cdp, pv); cdp += bpl(); \
+	vec_store(cdp, cv); cdp += bpl(); \
+	/** store max vector */ \
+	vec_store(cdp, maxv); cdp += bpl(); \
+	/** store the first dr vector */ \
+	dir_end_block(dr, cdp); \
 }
 
 /**
  * @macro branch_linear_fill_start
  */
-#define branch_linear_fill_start(k, r, pdp) { \
-	/** nothing to do */ \
-	dir_start_block(r, k, pdp, p); \
+#define branch_linear_fill_start(k) { \
+	dir_start_block(dr); \
+	rd_prefetch(k->r, k->rr); \
+}
+#define branch_linear_fill_start_cap(k) { \
+	dir_start_block(dr); \
+	rd_prefetch_cap(k->r, k->rr); \
 }
 
 /**
- * @macro branch_linear_fill_former_body
+ * @macro branch_linear_fill_body
  */
-#define branch_linear_fill_former_body(k, r, pdp) { \
-	/*debug("%d, %d, %d", vec_msb(cv), vec_center(cv), vec_lsb(cv));*/ \
-}
-#define branch_linear_fill_former_body_cap(k, r, pdp) { \
-}
-
-/**
- * @macro branch_linear_fill_go_down
- */
-#define branch_linear_fill_go_down_intl(k, r, pdp, fetch) { \
-	if(dir2(r) == TT) { \
-		vec_shift_r(pv, pv); \
-		vec_insert_msb(pv, CELL_MIN); \
+#define branch_linear_fill_body(k) { \
+	if(dir(dr) == TOP) { \
+		rd_go_down(k->r, k->rr); /** go down */ \
+		if(dir2(dr) == TT) { \
+			vec_shift_r(pv, pv); vec_insert_msb(pv, DPCELL_MIN); \
+		} \
+		vec_shift_r(tmp2, cv); vec_insert_msb(tmp2, DPCELL_MIN); \
+	} else { \
+		rd_go_right(k->r, k->rr); /** go right */ \
+		if(dir2(dr) == LL) { \
+			vec_shift_l(pv, pv); vec_insert_lsb(pv, DPCELL_MIN); \
+		} \
+		vec_shift_l(tmp2, cv); vec_insert_lsb(tmp2, DPCELL_MIN); \
 	} \
-	vec_shift_r(tmp2, cv); \
-	vec_insert_msb(tmp2, CELL_MIN); \
-	fetch(k->b, j+BW/2-1, k->bsp, k->bep, 255); \
-	j++; \
-	pusht(rd_decode(k->b), wt); \
-}
-#define branch_linear_fill_go_down(k, r, pdp) { \
-	branch_linear_fill_go_down_intl(k, r, pdp, rd_fetch_fast); \
-}
-#define branch_linear_fill_go_down_cap(k, r, pdp) { \
-	branch_linear_fill_go_down_intl(k, r, pdp, rd_fetch_safe); \
-}
-
-/**
- * @macro branch_linear_fill_go_right
- */
-#define branch_linear_fill_go_right_intl(k, r, pdp, fetch) { \
-	if(dir2(r) == LL) { \
-		vec_shift_l(pv, pv); \
-		vec_insert_lsb(pv, CELL_MIN); \
-	} \
-	vec_shift_l(tmp2, cv); \
-	vec_insert_lsb(tmp2, CELL_MIN); \
-	fetch(k->a, i+BW/2, k->asp, k->aep, 128); \
-	i++; \
-	pushq(rd_decode(k->a), wq); \
-}
-#define branch_linear_fill_go_right(k, r, pdp) { \
-	branch_linear_fill_go_right_intl(k, r, pdp, rd_fetch_fast); \
-}
-#define branch_linear_fill_go_right_cap(k, r, pdp) { \
-	branch_linear_fill_go_right_intl(k, r, pdp, rd_fetch_safe); \
-}
-
-/**
- * @macro branch_linear_fill_latter_body
- */
-#define branch_linear_fill_latter_body(k, r, pdp) { \
 	vec_add(tmp1, cv, gv); \
 	vec_add(tmp2, tmp2, gv); \
 	vec_max(tmp1, tmp1, tmp2); \
-	vec_comp_sel(tmp2, wq, wt, mv, xv); \
+	rd_cmp_vec(k->r, k->rr, match); \
+	vec_sel(tmp2, match, mv, xv); \
 	vec_add(tmp2, pv, tmp2); \
-	vec_max(tmp1, zv, tmp1); \
 	vec_max(tmp1, tmp1, tmp2); \
 	vec_assign(pv, cv); \
 	vec_assign(cv, tmp1); \
 	vec_max(maxv, maxv, cv); \
 	/*debug("p(%lld), i(%lld), j(%lld)", p, i, j);*/ \
-	vec_store(pdp, cv); pdp += vec_size(); \
+	vec_store(cdp, cv); cdp += bpl(); \
 	/** calculate the next advancing direction */ \
-	dir_det_next(r, k, pdp, p); \
+	dir_det_next(dr, p); \
 }
-#define branch_linear_fill_latter_body_cap(k, r, pdp) { \
-	branch_linear_fill_latter_body(k, r, pdp); \
+#define branch_linear_fill_body_cap(k) { \
+	branch_linear_fill_body(k); \
 }
 
 /**
  * @macro branch_linear_fill_empty_body
  */
-#define branch_linear_fill_empty_body(k, r, pdp) { \
-	vec_store(pdp, zv); pdp += vec_size(); \
-	dir_empty(r, k, pdp, p); \
-	/*naive_linear_fill_empty_body(k, r, pdp);*/ \
+#define branch_linear_fill_empty_body(k) { \
+	vec_store(cdp, zv); cdp += bpl(); \
+	dir_empty(dr); \
 }
 
 /**
  * @macro branch_linear_fill_end
  */
-#define branch_linear_fill_end(k, r, pdp) { \
-	/** store (i, j) to the end of pdp */ \
-	*((int64_t *)pdp) = i; pdp += sizeof(int64_t); \
-	*((int64_t *)pdp) = j; pdp += sizeof(int64_t); \
-	vec_store(pdp, maxv); pdp += vec_size(); \
+#define branch_linear_fill_end(k) { \
+	/** store max vector */ \
+	vec_store(pdp, maxv); pdp += bpl(); \
 	/** store direction vector */ \
-	dir_end_block(r, k, pdp, p); \
+	dir_end_block(dr, cdp); \
+}
+#define branch_linear_fill_end_cap(k) { \
+	branch_linear_fill_end(k); \
 }
 
 /**
  * @macro branch_linear_fill_test_xdrop
  */
-#define branch_linear_fill_test_xdrop(k, r, pdp) ( \
-	  ((int64_t)XSEA - k->alg - 1) \
-	& ((int64_t)vec_center(cv) + k->tx - vec_center(maxv)) \
+#define branch_linear_fill_test_xdrop(k) ( \
+	((int64_t)vec_center(cv) + k->tx - vec_center(maxv)) \
 )
-#define branch_linear_fill_test_xdrop_cap(k, r, pdp) ( \
-	branch_linear_fill_test_xdrop(k, r, pdp) \
+#define branch_linear_fill_test_xdrop_cap(k) ( \
+	branch_linear_fill_test_xdrop(k) \
 )
 
 /**
  * @macro branch_linear_fill_test_bound
  */
-#define branch_linear_fill_test_bound(k, r, pdp) ( \
-	naive_linear_fill_test_bound(k, r, pdp) \
+#define branch_linear_fill_test_bound(k) ( \
+	rd_test_fast_prefetch(k->r, k->rr, p) | dir_test_bound(dr, k, p) \
 )
-#define branch_linear_fill_test_bound_cap(k, r, pdp) ( \
-	naive_linear_fill_test_bound_cap(k, r, pdp) \
+#define branch_linear_fill_test_bound_cap(k) ( \
+	rd_test_break(k->r, k->rr, p) | dir_test_bound_cap(dr, k, p) \
 )
 
 /**
  * @macro branch_linear_fill_test_mem
  */
-#define branch_linear_fill_test_mem(k, r, pdp) ( \
-	(int64_t)(k->tdp - pdp \
-		- (3*branch_linear_bpb() \
-		+ sizeof(struct sea_joint_tail) \
-		+ sizeof(struct sea_joint_head) \
-		+ branch_linear_bpl()))		/* max vector */ \
+#define branch_linear_fill_test_mem(k) ( \
+	(int64_t)(k->stack_end - cdp \
+		- (3*bpb() \
+		+ sizeof(tail_t) \
+		+ bpl()))		/* max vector */ \
 )
-#define branch_linear_fill_test_mem_cap(k, r, pdp) ( \
-	(int64_t)(k->tdp - pdp \
-		- (branch_linear_bpb() \
-		+ sizeof(struct sea_joint_tail) \
-		+ sizeof(struct sea_joint_head) \
-		+ branch_linear_bpl()))		/* max vector */ \
+#define branch_linear_fill_test_mem_cap(k) ( \
+	(int64_t)(k->stack_end - cdp \
+		- (bpb() \
+		+ sizeof(tail_t) \
+		+ bpl()))		/* max vector */ \
 )
 
 /**
  * @macro branch_linear_fill_test_chain
  */
-#define branch_linear_fill_test_chain(k, r, pdp) ( \
-	(CELL_MAX / k->m)/*64*/ - p \
+#define branch_linear_fill_test_chain(k) ( \
+	(int64_t)DPCELL_MAX - (2*BLK/k->m) - vec_center(cv) \
 )
-#define branch_linear_fill_test_chain_cap(k, r, pdp) ( \
-	branch_linear_fill_test_chain(k, r, pdp) \
+#define branch_linear_fill_test_chain_cap(k) ( \
+	branch_linear_fill_test_chain(k) \
 )
 
 /**
  * @macro branch_linear_fill_check_term
  */
-#define branch_linear_fill_check_term(k, r, pdp) ( \
-	( fill_test_xdrop(k, r, pdp) \
-	| fill_test_bound(k, r, pdp) \
-	| fill_test_mem(k, r, pdp) \
-	| fill_test_chain(k, r, pdp)) < 0 \
+#define branch_linear_fill_check_term(k) ( \
+	( fill_test_xdrop(k) \
+	| fill_test_bound(k) \
+	| fill_test_mem(k) \
+	| fill_test_chain(k)) < 0 \
 )
-#define branch_linear_fill_check_term_cap(k, r, pdp) ( \
-	( fill_test_xdrop_cap(k, r, pdp) \
-	| fill_test_bound_cap(k, r, pdp) \
-	| fill_test_mem_cap(k, r, pdp) \
-	| fill_test_chain_cap(k, r, pdp)) < 0 \
+#define branch_linear_fill_check_term_cap(k) ( \
+	( fill_test_xdrop_cap(k) \
+	| fill_test_bound_cap(k) \
+	| fill_test_mem_cap(k) \
+	| fill_test_chain_cap(k)) < 0 \
 )
 
 /**
  * @macro branch_linear_fill_finish
  */
-#define branch_linear_fill_finish(k, r, pdp) { \
+#define branch_linear_fill_finish(k, pdp, sec) { \
 	/** retrieve chain vector pointers */ \
 	/*uint8_t *v = pdp - jam_size() - 2*bpl();*/ \
-	uint8_t *v = (uint8_t *)(((linear_block_t *)pdp - 1)->dp[BLK-2]); \
+	joint_vec_t *s = (joint_vec_t *)cdp; \
+	/*vec_cell_store(&s->wa, wa);*/ \
+	/*vec_cell_store(&s->wb, wb);*/ \
+	rd_store(k->r, k->rr, &s->wa, &s->wb); \
+	vec_store(&s->pv, pv); \
+	vec_store(&s->cv, cv); \
+	cdp += sizeof(joint_vec_t); \
+	/** create ivec at the end */ \
+	cdp += sizeof(struct sea_joint_tail); \
+	/** save terminal coordinates */ \
+	debug("p(%lld), i(%lld), max(%d)", p, i, max); \
+	_tail(cdp, psum) = _tail(pdp, psum) + p; \
+	_tail(cdp, p) = p; \
+	_tail(cdp, mp) = -1; \
+	_tail(cdp, v) = s; \
+	_tail(cdp, size) = cdp - k->stack_top; \
+	_tail(cdp, var) = BASE; \
+	_tail(cdp, d2) = dir_raw(dr); \
 	/** aggregate max */ \
 	int32_t max; \
 	vec_hmax(max, maxv); \
-	/*vec_store(pdp, maxv); pdp += vec_size();*/ \
-	/** create ivec at the end */ \
-	pdp += sizeof(struct sea_joint_tail); \
-	/** save terminal coordinates */ \
-	debug("p(%lld), i(%lld), max(%d)", p, i, max); \
-	_tail(pdp, p) = p; \
-	_tail(pdp, i) = i + DEF_VEC_LEN/2; \
-	_tail(pdp, v) = v; \
-	_tail(pdp, bpc) = 8*sizeof(cell_t); \
-	_tail(pdp, d2) = dir_raw(r); \
-	/** save max */ \
-	/*_head(k->pdp, max) = max;*/ \
 	/** search max if updated */ \
-	if(k->alg != NW && max >= k->max) { \
-		k->max = max; \
-		k->mi = -1; k->mp = p-1;	/** need_search */ \
+	if(max >= k->max) { \
+		k->max = max; k->m_tail = cdp; \
 	} \
+	/** write back cdp */ \
+	k->stack_top = cdp; \
+	/** write back sec */ \
+	rd_get_section(k->r, k->rr, sec); \
 }
 
+#if 0
 /**
  * @macro branch_linear_set_terminal
  */
 #define branch_linear_set_terminal(k, pdp)		 	naive_linear_set_terminal(k, pdp)
+#endif
 
 /**
  * @macro branch_linear_trace_decl
  */
-#define branch_linear_trace_decl(k, r, pdp)			naive_linear_trace_decl(k, r, pdp)
+#define branch_linear_trace_decl(k) \
+	dir_t dr; \
+	dpcell_t *pvh; \
+	dpcell_t cc;		/** current cell */ \
+	int64_t p, q;
 
-#if 0
-/**
-	dir_load_term(r, k, pdp, p); \
-		dir_load_backward(r, k, pdp, bp); \
-		if(dir(r) == TOP) { bj--; } else { bi--; } \
-*/
-/**
- * @macro (internal) branch_linear_fill_search_max
- */
-#define branch_linear_fill_search_max(k, r, pdp, i, j, p, maxv) { \
-	/** search max */ \
-	int64_t bq, sp = _tail(k->pdp, p); \
-	cell_t *pl = (cell_t *)(k->pdp + addr_linear( \
-		p-sp, -BW/2, BLK, BW)); \
-	cell_t *pt; \
-	for(bq = -BW/2; bq < BW/2; bq++, pl++) { \
-		if(vec_lsb(maxv) == max) { \
-			for(pt = pl, bp = p; *pt != max && bp > sp; pt -= BW, bp--) { \
-				if((p - sp) & (BLK-1) == 0) { \
-					pt -= (2*sizeof(int64_t) + BLK)/sizeof(cell_t); \
-				} \
-			} \
-			if(bp > k->mp) { \
-				k->max = max; k->mp = sp = bp; k->mq = bq; \
-			} \
-		} \
-		vec_shift_r(maxv, maxv); \
-	} \
-}
-#endif
-
-#define branch_linear_trace_search_max(k, r, pdp) { \
+#define branch_linear_trace_search_max(k, hdp, tdp, pdp) { \
+	/*uint8_t *hdp = tdp - _tail(tdp, size);*/ \
 	/** vectors */ \
-	_vec_cell_const(mv, _head(k->pdp, score)); \
 	_vec_cell_reg(tv); \
 	/** p-coordinate */ \
-	sp = _tail(pdp, p); \
+	uint64_t ep = _tail(tdp, p); \
 	/** masks */ \
 	uint64_t cm = 0, pm = 0; \
 	/** load address of the last max vector */ \
-	int64_t bn = blk_num((_tail(k->pdp, p)-1) - sp, 0);			/** num of the last block */ \
-	linear_block_t *pbk = (linear_block_t *)(pdp + head_size()) + bn; \
+	int64_t bn = blk_num(ep - 1, 0);	/** num of the last block */ \
+	block_t *pbk = (block_t *)(tdp - sizeof(tail_t)) - 1; \
+	/*block_t *pbk = (block_t *)(hdp + sizeof(head_t)) + bn;*/ \
 	/** load the first vector */ \
-	vec_load(&pbk->maxv1, tv);				/** load max of bn */ \
-	vec_comp_mask(cm, tv, mv); \
+	vec_load(&pbk->t.maxv, tv);			/** load max of bn */ \
+	/** aggregate max */ \
+	int32_t max; \
+	vec_hmax(max, tv); \
+	_vec_cell_const(mv, max); \
+	vec_comp_mask(cm, tv, mv);			/** first mask */ \
 	/*vec_print(tv);*/ \
 	/** search a breakpoint */ \
-	debug("%lu, %lu", sizeof(linear_block_t), bpb()); \
+	debug("%lu, %lu", sizeof(block_t), bpb()); \
 	debug("bn(%lld), p(%lld)", bn, _tail(k->pdp, p)); \
 	int64_t b;							/** head p-coord of the last block */ \
 	for(b = bn; b > 0; b--, pbk--) { \
-		vec_load(&(pbk - 1)->maxv1, tv); \
+		vec_load(&(pbk - 1)->t.maxv, tv); \
 		vec_comp_mask(pm, tv, mv); \
 		/*vec_print(tv);*/ \
 		debug("pm(%llx), cm(%llx)", pm, cm); \
@@ -452,7 +314,7 @@ struct branch_linear_block {
 	debug("pbk(%p), %lld", pbk, (int64_t)((uint8_t *)pbk - pdp)); \
 	/** determine the vector (and p-coordinate) */ \
 	for(p = BLK-1; p >= 0; p--) { \
-		vec_load(&pbk->dp[p], tv); \
+		vec_load(&pbk->v.dp[p], tv); \
 		vec_comp_mask(pm, tv, mv); \
 		/*vec_print(tv);*/ \
 		/*vec_print(mv);*/ \
@@ -461,90 +323,101 @@ struct branch_linear_block {
 	} \
 	debug("b(%lld), p(%lld)", b, p); \
 	/** calculate coordinates */ \
-	p += (b*BLK + sp); \
+	p += b*BLK; \
 	q = (int64_t)tzcnt(pm) - BW/2; \
-	/** initialize direction pointer with p, before calculating i */ \
-	dir_set_pdr(r, k, pdp, p, sp); \
-	i = (pbk-1)->i + dir_sum_i_blk(r, k, pdp, p, sp) - q; \
-	j = p - (i - k->asp) + k->bsp; \
-	debug("i(%lld), pbk->i(%lld), di(%lld)", i, (pbk-1)->i, dir_sum_i_blk(r, k, pdp, p, sp)); \
 	/** write back coordinates */ \
-	_head(k->pdp, p) = k->mp = p; \
-	_head(k->pdp, q) = k->mq = q; \
-	_head(k->pdp, i) = k->mi = i; \
+	_tail(tdp, mp) = p; \
+	_tail(tdp, mq) = q; \
+	_head(pdp, p) = p - ep; \
+	_head(pdp, q) = q; \
+}
+
+/**
+ * @macro branch_linear_trace_windback_ptr
+ */
+#define branch_linear_trace_windback_ptr(k) { \
+	/** load the next direction pointer */ \
+	dir_load_backward(dr, p); \
+	/** update pdg, pvh, and ptb (dpcell_t *) */ \
+	if((p & (BLK-1)) == 0) { \
+		pvh -= sizeof(block_trailer_t) / sizeof(dpcell_t); \
+	} \
+	pvh -= bpl() / sizeof(dpcell_t); \
 }
 
 /**
  * @macro branch_linear_trace_init
  */
-#define branch_linear_trace_init(k, r, pdp) { \
-	if(_head(k->pdp, i) == -1) { \
+#define branch_linear_trace_init(k, hdp, tdp, pdp) { \
+	if(_head(pdp, p) >= 0 && _tail(tdp, mp) == -1) { \
 		/** max found in this block but pos is not determined yet */ \
 		debug("search max"); \
-		branch_linear_trace_search_max(k, r, pdp);	/** search and load coordinates */ \
+		branch_linear_trace_search_max(k, hdp, tdp, pdp);	/** search and load coordinates */ \
 	} else { \
 		/** load coordinates */ \
-		p = _head(k->pdp, p); \
-		q = _head(k->pdp, q); \
-		i = _head(k->pdp, i); \
-		j = p - (i - k->asp) + k->bsp; \
-		sp = _tail(pdp, p); \
-		debug("(%lld, %lld), (%lld, %lld), sp(%lld)", p, q, i, j, sp); \
-		/** initialize pointers */ \
-		debug("num(%lld), addr(%lld)", blk_num(p-sp, 0), blk_addr(p-sp, 0)); \
-		dir_set_pdr(r, k, pdp, p, sp); \
+		p = _tail(tdp, p) + _head(pdp, p); \
+		q = _head(pdp, q); \
+		/*debug("(%lld, %lld), (%lld, %lld), sp(%lld)", p, q, i, j, sp);*/ \
 	} \
-	debug("size(%lu), size(%lu)", bpb(), sizeof(linear_block_t)); \
-	debug("(%lld, %lld), (%lld, %lld), sp(%lld)", p, q, i, j, sp); \
-	/** initialize pointers */ \
-	debug("num(%lld), addr(%lld)", blk_num(p-sp, 0), blk_addr(p-sp, 0)); \
+	dir_set_pdr(dr, k, hdp, p, _tail(tdp, psum)); \
+	debug("size(%lu), size(%lu)", bpb(), sizeof(block_t)); \
+	debug("(%lld, %lld)", p, q); \
+	debug("num(%lld), addr(%lld)", blk_num(p, 0), blk_addr(p, 0)); \
+	/** init writer */ \
+	wr_start(k->io, k->wk); \
 	/** load score and pointers */ \
-	cc = *((cell_t *)(pdp + addr(p - sp, q))); \
-	pvh = (cell_t *)(pdp + addr((p - 1) - sp, 0)); \
-	pdg = (cell_t *)(pdp + addr((p - 2) - sp, 0)); \
-	/** fetch characters */ \
-	rd_fetch(k->a, i-1); \
-	rd_fetch(k->b, j-1); \
+	cc = *((dpcell_t *)(hdp + addr(p, q))); \
+	pvh = (dpcell_t *)(hdp + addr(p - 1, q)); \
 }
 
 /**
  * @macro branch_linear_trace_body
  */
-#define branch_linear_trace_body(k, r, pdp)				naive_linear_trace_body(k, r, pdp)
+#define branch_linear_trace_body(k) { \
+	/** load diagonal cell and score */ \
+	debug("p(%lld), q(%lld)", p, q); \
+	dpcell_t t; \
+	if(cc == ((t = pvh[dir_topq(dr)]) + k->gi)) { \
+		pvh += dir_topq(dr); wr_push(k->l, k->ll, I_CHAR); \
+	} else if(cc == ((t = pvh[dir_leftq(dr)]) + k->gi)) { \
+		pvh += dir_leftq(dr); wr_push(k->l, k->ll, D_CHAR); \
+	} else { \
+		pvh += dir_topq(dr); \
+		branch_linear_trace_windback_ptr(k); \
+		pvh += dir_leftq(dr); \
+		wr_push(k->l, k->ll, (cc == (t = *pvh) + k->x) ? X_CHAR : M_CHAR); \
+	} \
+	cc = t; \
+	/** windback to p-1 */ \
+	branch_linear_trace_windback_ptr(k); \
+}
+
 
 /**
  * @macro branch_linear_trace_test_bound
  */
-#define branch_linear_trace_test_bound(k, r, pdp)		( 0 )
-#define branch_linear_trace_test_bound_cap(k, r, pdp)	( 0 )
-
-/**
- * @macro branch_linear_trace_test_joint
- */
-#define branch_linear_trace_test_joint(k, r, pdp)		naive_linear_trace_test_joint(k, r, pdp)
-#define branch_linear_trace_test_joint_cap(k, r, pdp)	naive_linear_trace_test_joint_cap(k, r, pdp)
-
-/**
- * @macro branch_linear_trace_test_sw
- */
-#define branch_linear_trace_test_sw(k, r, pdp)			naive_linear_trace_test_sw(k, r, pdp)
-#define branch_linear_trace_test_sw_cap(k, r, pdp)		naive_linear_trace_test_sw_cap(k, r, pdp)
+#define branch_linear_trace_test_bound(k) ( \
+	p \
+)
 
 /**
  * @macro branch_linear_trace_check_term
  */
-#define branch_linear_trace_check_term(k, r, pdp)		naive_linear_trace_check_term(k, r, pdp)
-#define branch_linear_trace_check_term_cap(k, r, pdp)	naive_linear_trace_check_term_cap(k, r, pdp)
-
-/**
- * @macro branch_linear_trace_add_cap
- */
-#define branch_linear_trace_add_cap(k, r, pdp)			naive_linear_trace_add_cap(k, r, pdp)
+#define branch_linear_trace_check_term(k) ( \
+	trace_test_bound(k) < 0 \
+)
 
 /**
  * @macro branch_linear_trace_finish
  */
-#define branch_linear_trace_finish(k, r, pdp)			naive_linear_trace_finish(k, r, pdp)
+#define branch_linear_trace_finish(k, hdp) { \
+	/** finish writer */ \
+	wr_end(k->io, k->wk); \
+	/** update header */ \
+	_head(hdp, p) = p; \
+	_head(hdp, q) = (int64_t)(pvh - addr(p - 1, 0)) / sizeof(dpcell_t); \
+	/*_head(hdp, q) = ((int64_t)pvh & (bpl()-1)) / sizeof(dpcell_t) - BW/2;*/ \
+}
 
 #endif /* #ifndef _BRANCH_H_INCLUDED */
 /**

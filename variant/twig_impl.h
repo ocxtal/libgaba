@@ -6,121 +6,52 @@
 #ifndef _TWIG_H_INCLUDED
 #define _TWIG_H_INCLUDED
 
-#include "../arch/b8c16.h"
+#include "twig_types.h"
 #include "../sea.h"
 #include "../util/util.h"
+#include "../arch/arch_util.h"
 #include <stdint.h>
-#include "naive_impl.h"
 #include "branch_impl.h"
-
-/**
- * @typedef cell_t
- * @brief cell type in the twig algorithms
- */
-#ifdef cell_t
-	#undef cell_t
-	#undef CELL_MIN
-	#undef CELL_MAX
-#endif
-
-#define cell_t 		int8_t
-#define CELL_MIN	( INT8_MIN )
-#define CELL_MAX	( INT8_MAX )
-
-/**
- * @macro BW
- * @brief bandwidth in the twig algorithm (= 16).
- */
-#ifdef BW
-#undef BW
-#endif
-
-#define BW 			( 16 )
-
-/**
- * @struct twig_linear_block
- */
-struct twig_linear_block {
-	cell_t dp[BLK][BW];
-	int64_t i, j;
-	_vec_cell(maxv);
-#if DP == DYNAMIC
-	_dir_vec(dr);
-#endif
-};
-
-/**
- * @macro linear_block_t
- */
-#ifdef linear_block_t
-	#undef linear_block_t
-#endif
-
-#define linear_block_t	struct twig_linear_block
-
-/**
- * @macro bpl, bpb
- * @brief bytes per line, bytes per block
- */
-typedef struct twig_linear_block _linear_block;
-#define twig_linear_bpl()					branch_linear_bpl()
-#define twig_linear_dp_size()				branch_linear_dp_size()
-#define twig_linear_co_size()				branch_linear_co_size()
-#define twig_linear_jam_size()				branch_linear_jam_size()
-#define twig_linear_head_size()				branch_linear_head_size()
-#define twig_linear_tail_size()				branch_linear_tail_size()
-#define twig_linear_bpb()					branch_linear_bpb()
-
-/* typedef struct twig_affine_block _affine_block; */
-#define twig_affine_bpl()					branch_affine_bpl()
-#define twig_affine_dp_size()				branch_affine_dp_size()
-#define twig_affine_co_size()				branch_affine_co_size()
-#define twig_affine_jam_size()				branch_affine_jam_size()
-#define twig_affine_head_size()				branch_affine_head_size()
-#define twig_affine_tail_size()				branch_affine_tail_size()
-#define twig_affine_bpb()					branch_affine_bpb()
-
-/**
- * @macro (internal) twig_linear_topq, ...
- * @brief coordinate calculation helper macros
- */
-#define twig_linear_topq(r, k)				branch_linear_topq(r, k)
-#define twig_linear_leftq(r, k)				branch_linear_leftq(r, k)
-#define twig_linear_topleftq(r, k)			branch_linear_topleftq(r, k)
-#define twig_linear_top(r, k) 				branch_linear_top(r, k)
-#define twig_linear_left(r, k) 				branch_linear_left(r, k)
-#define twig_linear_topleft(r, k) 			branch_linear_topleft(r, k)
-
-#define twig_affine_topq(r, k)				branch_affine_topq(r, k)
-#define twig_affine_leftq(r, k)				branch_affine_leftq(r, k)
-#define twig_affine_topleftq(r, k)			branch_affine_topleftq(r, k)
-#define twig_affine_top(r, k) 				branch_affine_top(r, k)
-#define twig_affine_left(r, k) 				branch_affine_left(r, k)
-#define twig_affine_topleft(r, k) 			branch_affine_topleft(r, k)
 
 /**
  * @macro twig_linear_dir_exp
  * @brief determines the next direction of the lane in the dynamic algorithm.
- *
- * sseレジスタにアクセスできないといけない。
  */
-#define twig_linear_dir_exp_top(r, k, pdp)			branch_linear_dir_exp_top(r, k, pdp)
-#define twig_linear_dir_exp_bottom(r, k, pdp)		branch_linear_dir_exp_bottom(r, k, pdp)
-#define twig_affine_dir_exp_top(r, k, pdp)			branch_affine_dir_exp_top(r, k, pdp)
-#define twig_affine_dir_exp_bottom(r, k, pdp)		branch_affine_dir_exp_bottom(r, k, pdp)
+#define twig_linear_dir_exp_top(r, k)		branch_linear_dir_exp_top(r, k)
+#define twig_linear_dir_exp_bottom(r, k)	branch_linear_dir_exp_bottom(r, k)
+#define twig_affine_dir_exp_top(r, k)		branch_affine_dir_exp_top(r, k)
+#define twig_affine_dir_exp_bottom(r, k)	branch_affine_dir_exp_bottom(r, k)
 
 /**
  * @macro twig_linear_fill_decl
  */
-#define twig_linear_fill_decl(k, r, pdp)			branch_linear_fill_decl(k, r, pdp)
-#define twig_affine_fill_decl(k, r, pdp)			branch_affine_fill_decl(k, r, pdp)
+#define twig_linear_fill_decl(k)			branch_linear_fill_decl(k)
+#define twig_affine_fill_decl(k)			branch_affine_fill_decl(k)
 
 /**
  * @macro twig_linear_fill_init
  */
-#define twig_linear_fill_init(k, r, pdp) { \
+#define twig_linear_fill_init(k, pdp, sec) { \
 	/** delegate to branch implementation */ \
-	branch_linear_fill_init_intl(k, r, pdp); \
+	branch_linear_fill_init_intl(k, pdp, sec); \
+	/** load vectors */ \
+	debug("load vectors BW(%d)", BW); \
+	joint_vec_t *s = (joint_vec_t *)_tail(pdp, v); \
+	if(_tail(pdp, var) == 0) { \
+		rd_load_init_16(k->r, k->rr); \
+	} else if(_tail(pdp, var) == TWIG) { \
+		rd_load_16_16(k->r, k->rr, &s->wa, &s->wb); \
+	}
+	vec_load(&s->pv, pv); \
+	vec_load(&s->cv, cv); \
+	vec_store(cdp, pv); cdp += bpl(); \
+	vec_store(cdp, cv); cdp += bpl(); \
+	vec_store(cdp, maxv); cdp += bpl(); \
+	/** store the first dr vector */ \
+	dir_end_block(dr, cdp); \
+}
+
+#if 0
 	/** initialize char vectors */ \
 	vec_char_setzero(wq);	/** vector on the top */ \
 	for(q = 0; q < BW/2; q++) { \
@@ -134,147 +65,111 @@ typedef struct twig_linear_block _linear_block;
 		debug("b: %d", rd_decode(k->b)); \
 		pusht(rd_decode(k->b), wt); \
 	} \
-}
+
+#endif
 
 /**
  * @macro twig_linear_fill_start
  */
-#define twig_linear_fill_start(k, r, pdp) 			branch_linear_fill_start(k, r, pdp)
+#define twig_linear_fill_start(k) 			branch_linear_fill_start(k)
+#define twig_linear_fill_start_cap(k)		branch_linear_fill_start_cap(k)
 
 /**
- * @macro twig_linear_fill_former_body
+ * @macro twig_linear_fill_body
  */
-#define twig_linear_fill_former_body(k, r, pdp)		branch_linear_fill_former_body(k, r, pdp)
-#define twig_linear_fill_former_body_cap(k, r, pdp)	branch_linear_fill_former_body_cap(k, r, pdp)
-
-/**
- * @macro twig_linear_fill_go_down
- */
-#define twig_linear_fill_go_down(k, r, pdp)			branch_linear_fill_go_down(k, r, pdp)
-#define twig_linear_fill_go_down_cap(k, r, pdp)		branch_linear_fill_go_down_cap(k, r, pdp)
-
-/**
- * @macro twig_linear_fill_go_right
- */
-#define twig_linear_fill_go_right(k, r, pdp)		branch_linear_fill_go_right(k, r, pdp)
-#define twig_linear_fill_go_right_cap(k, r, pdp)	branch_linear_fill_go_right_cap(k, r, pdp)
-
-/**
- * @macro twig_linear_fill_latter_body
- */
-#define twig_linear_fill_latter_body(k, r, pdp)		branch_linear_fill_latter_body(k, r, pdp)
-#define twig_linear_fill_latter_body_cap(k, r, pdp)	branch_linear_fill_latter_body_cap(k, r, pdp)
+#define twig_linear_fill_body(k)			branch_linear_fill_body(k)
+#define twig_linear_fill_body_cap(k)		branch_linear_fill_body_cap(k)
 
 /**
  * @macro twig_linear_fill_empty_body
  */
-#define twig_linear_fill_empty_body(k, r, pdp)		branch_linear_fill_empty_body(k, r, pdp)
+#define twig_linear_fill_empty_body(k)		branch_linear_fill_empty_body(k)
 
 /**
  * @macro twig_linear_fill_end
  */
-#define twig_linear_fill_end(k, r, pdp)				branch_linear_fill_end(k, r, pdp)
+#define twig_linear_fill_end(k)				branch_linear_fill_end(k)
+#define twig_linear_fill_end_cap(k)			branch_linear_fill_end_cap(k)
 
 /**
  * @macro twig_linear_fill_test_xdrop
  */
-#define twig_linear_fill_test_xdrop(k, r, pdp)		branch_linear_fill_test_xdrop(k, r, pdp)
-#define twig_linear_fill_test_xdrop_cap(k, r, pdp)	branch_linear_fill_test_xdrop_cap(k, r, pdp)
+#define twig_linear_fill_test_xdrop(k)		branch_linear_fill_test_xdrop(k)
+#define twig_linear_fill_test_xdrop_cap(k)	branch_linear_fill_test_xdrop_cap(k)
 
 /**
  * @macro twig_linear_fill_test_bound
  */
-#define twig_linear_fill_test_bound(k, r, pdp) 		branch_linear_fill_test_bound(k, r, pdp)
-#define twig_linear_fill_test_bound_cap(k, r, pdp)	branch_linear_fill_test_bound_cap(k, r, pdp)
+#define twig_linear_fill_test_bound(k) 		branch_linear_fill_test_bound(k)
+#define twig_linear_fill_test_bound_cap(k)	branch_linear_fill_test_bound_cap(k)
 
 /**
  * @macro twig_linear_fill_test_mem
  */
-#define twig_linear_fill_test_mem(k, r, pdp) 		branch_linear_fill_test_mem(k, r, pdp)
-#define twig_linear_fill_test_mem_cap(k, r, pdp)	branch_linear_fill_test_mem_cap(k, r, pdp)
+#define twig_linear_fill_test_mem(k) 		branch_linear_fill_test_mem(k)
+#define twig_linear_fill_test_mem_cap(k)	branch_linear_fill_test_mem_cap(k)
 
+/**
+ * @macro twig_linear_fill_test_chain
+ */
+#define twig_linear_fill_test_chain(k)		branch_linear_fill_test_chain(k)
+#define twig_linear_fill_test_chain_cap(k)	branch_linear_fill_test_chain_cap(k)
 #if 0
-/**
- * @macro twig_linear_fill_test_chain
- */
-#define twig_linear_fill_test_chain(k, r, pdp) 		branch_linear_fill_test_chain(k, r, pdp)
-#define twig_linear_fill_test_chain_cap(k, r, pdp)	branch_linear_fill_test_chain_cap(k, r, pdp)
-#endif
-
-/**
- * @macro twig_linear_fill_test_chain
- */
-#define twig_linear_fill_test_chain(k, r, pdp) ( \
+#define twig_linear_fill_test_chain(k) ( \
 	(CELL_MAX / k->m)/*32*/ - p \
 )
-#define twig_linear_fill_test_chain_cap(k, r, pdp) ( \
-	twig_linear_fill_test_chain(k, r, pdp) \
+#define twig_linear_fill_test_chain_cap(k) ( \
+	twig_linear_fill_test_chain(k) \
 )
+#endif
 
 /**
  * @macro twig_linear_fill_check_term
  */
-#define twig_linear_fill_check_term(k, r, pdp)		branch_linear_fill_check_term(k, r, pdp)
-#define twig_linear_fill_check_term_cap(k, r, pdp)	branch_linear_fill_check_term_cap(k, r, pdp)
+#define twig_linear_fill_check_term(k)		branch_linear_fill_check_term(k)
+#define twig_linear_fill_check_term_cap(k)	branch_linear_fill_check_term_cap(k)
 
 /**
  * @macro twig_linear_fill_finish
  */
-#define twig_linear_fill_finish(k, r, pdp)			branch_linear_fill_finish(k, r, pdp)
+#define twig_linear_fill_finish(k, pdp, sec)	branch_linear_fill_finish(k, pdp, sec)
 
+#if 0
 /**
  * @macro twig_linear_set_terminal
  */
-#define twig_linear_set_terminal(k, pdp) 			branch_linear_set_terminal(k, pdp)
+#define twig_linear_set_terminal(k, pdp) 		branch_linear_set_terminal(k, pdp)
+#endif
 
 /**
  * @macro twig_linear_trace_decl
  */
-#define twig_linear_trace_decl(k, r, pdp)			branch_linear_trace_decl(k, r, pdp)
+#define twig_linear_trace_decl(k)			branch_linear_trace_decl(k)
 
 /**
  * @macro twig_linear_trace_init
  */
-#define twig_linear_trace_init(k, r, pdp)			branch_linear_trace_init(k, r, pdp)
+#define twig_linear_trace_init(k, hdp, tdp, pdp)	branch_linear_trace_init(k, hdp, tdp, pdp)
 
 /**
  * @macro twig_linear_trace_body
  */
-#define twig_linear_trace_body(k, r, pdp)			branch_linear_trace_body(k, r, pdp)
+#define twig_linear_trace_body(k)			branch_linear_trace_body(k)
 
 /**
  * @macro twig_linear_trace_test_bound
  */
-#define twig_linear_trace_test_bound(k, r, pdp)		naive_linear_trace_test_bound(k, r, pdp)
-#define twig_linear_trace_test_bound_cap(k, r, pdp)	naive_linear_trace_test_bound_cap(k, r, pdp)
-
-/**
- * @macro twig_linear_trace_test_joint
- */
-#define twig_linear_trace_test_joint(k, r, pdp)		branch_linear_trace_test_joint(k, r, pdp)
-#define twig_linear_trace_test_joint_cap(k, r, pdp)	branch_linear_trace_test_joint_cap(k, r, pdp)
-
-/**
- * @macro twig_linear_trace_test_sw
- */
-#define twig_linear_trace_test_sw(k, r, pdp)		branch_linear_trace_test_sw(k, r, pdp)
-#define twig_linear_trace_test_sw_cap(k, r, pdp)	branch_linear_trace_test_sw_cap(k, r, pdp)
+#define twig_linear_trace_test_bound(k)		branch_linear_trace_test_bound(k)
 
 /**
  * @macro twig_linear_trace_check_term
  */
-#define twig_linear_trace_check_term(k, r, pdp)		branch_linear_trace_check_term(k, r, pdp)
-#define twig_linear_trace_check_term_cap(k, r, pdp)	branch_linear_trace_check_term_cap(k, r, pdp)
-
-/**
- * @macro twig_linear_trace_add_cap
- */
-#define twig_linear_trace_add_cap(k, r, pdp)		branch_linear_trace_add_cap(k, r, pdp)
+#define twig_linear_trace_check_term(k)		branch_linear_trace_check_term(k)
 
 /**
  * @macro twig_linear_trace_finish
  */
-#define twig_linear_trace_finish(k, r, pdp)			branch_linear_trace_finish(k, r, pdp)
+#define twig_linear_trace_finish(k, hdp)	branch_linear_trace_finish(k, hdp)
 
 #endif /* #ifndef _TWIG_H_INCLUDED */
 /**

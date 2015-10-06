@@ -98,372 +98,350 @@ __pop_2bit8packed:
 	andq $3, %rax
 	ret
 
-# push functions
+# bulk read functions
 
-	# ascii forward
-	# input:  %rdi (pointer)
-	#         %rsi (index)    (modified)
+	# ascii
+	# input:  %rdi (dst pointer (8bit array))
+	#         %rsi (src pointer (ascii array))
 	#         %rdx (index)
+	#         %rcx (len)
 	# output: %rax
-	# work:   None
-	.globl _init_ascii_f
-	.globl __init_ascii_f
-_init_ascii_f:
-__init_ascii_f:
-	addq $-1, %rsi
-	movb $0, (%rdi, %rsi)
-	movq %rsi, %rax
+	# work:   %r8, %xmm0, %xmm1, %xmm2
+	.globl _load_ascii
+	.globl __load_ascii
+_load_ascii:
+__load_ascii:
+	movl $0x03030303, %eax
+	movq %rax, %xmm2
+	pshufd $0, %xmm2, %xmm2
+_load_ascii_bulk_loop:
+	cmpq $0, %rcx
+	jle _load_ascii_ret
+	movdqu (%rsi, %rdx), %xmm0
+	movdqa %xmm0, %xmm1
+	psrlq $2, %xmm0
+	psrlq $1, %xmm1
+	pxor %xmm1, %xmm0
+	pand %xmm2, %xmm0
+	movdqu %xmm0, (%rdi)
+	addq $16, %rdi
+	addq $16, %rdx
+	subq $16, %rcx
+	jmp _load_ascii_bulk_loop
+_load_ascii_ret:
 	ret
 
-	# input:  %rdi (pointer)
-	#         %rsi (index)    (modified)
-	#         %rdx (char)
+	# 4bit
+	# input:  %rdi (dst pointer (8bit array))
+	#         %rsi (src pointer (4bit unpacked array))
+	#         %rdx (index)
+	#         %rcx (len)
 	# output: %rax
-	# work:   None
-	.globl _push_ascii_f
-	.globl __push_ascii_f
-_push_ascii_f:
-__push_ascii_f:
-	addq $-1, %rsi
-	movb %dl, (%rdi, %rsi)
-	movq %rsi, %rax
+	# work:   %r8, %xmm0, %xmm1, %xmm2
+	.globl _load_4bit
+	.globl __load_4bit
+_load_4bit:
+__load_4bit:
+	movl $0x03030303, %eax
+	movq %rax, %xmm2
+	pshufd $0, %xmm2, %xmm2
+_load_4bit_bulk_loop:
+	cmpq $0, %rcx
+	jle _load_4bit_ret
+	movdqu (%rsi, %rdx), %xmm0
+	movdqa %xmm0, %xmm1
+	psrlq $3, %xmm0
+	psrlq $1, %xmm1
+	pand %xmm2, %xmm0
+	psubb %xmm0, %xmm1
+	pand %xmm2, %xmm1
+	movdqu %xmm1, (%rdi)
+	addq $16, %rdi
+	addq $16, %rdx
+	subq $16, %rcx
+	jmp _load_4bit_bulk_loop
+_load_4bit_ret:
 	ret
 
-	# input:  %rdi (pointer)
-	#         %rsi (index)
+	# 2bit
+	# input:  %rdi (dst pointer (8bit array))
+	#         %rsi (src pointer (2bit unpacked array))
+	#         %rdx (index)
+	#         %rcx (len)
 	# output: %rax
-	# work:   None
-	.globl _finish_ascii_f
-	.globl __finish_ascii_f
-_finish_ascii_f:
-__finish_ascii_f:
-	movq %rsi, %rax
+	# work:   %r8, %xmm0, %xmm1, %xmm2
+	.globl _load_2bit
+	.globl __load_2bit
+_load_2bit:
+__load_2bit:
+	movl $0x03030303, %eax
+	movq %rax, %xmm2
+	pshufd $0, %xmm2, %xmm2
+_load_2bit_bulk_loop:
+	cmpq $0, %rcx
+	jle _load_2bit_end
+	movdqu (%rsi, %rdx), %xmm0
+	pand %xmm2, %xmm0
+	movdqu %xmm0, (%rdi)
+	addq $16, %rdi
+	addq $16, %rdx
+	subq $16, %rcx
+	jmp _load_2bit_bulk_loop
+_load_2bit_end:
 	ret
+
+	# 4bit8packed
+	# input:  %rdi (dst pointer (8bit array))
+	#         %rsi (src pointer (4bit8packed unpacked array))
+	#         %rdx (index)
+	#         %rcx (len)
+	# output: %rax
+	# work:   %r8, %xmm0, %xmm1, %xmm2
+	.globl _load_4bit8packed
+	.globl __load_4bit8packed
+_load_4bit8packed:
+__load_4bit8packed:
+	movq %rcx, %rax
+	movl $0x03030303, %r8d
+	movq %r8, %xmm2
+	pshufd $0, %xmm2, %xmm2
+	movq %rdx, %rcx
+	shrq $1, %rdx
+	shlq $2, %rcx
+	andq $4, %rcx
+_load_4bit8packed_bulk_loop:
+	cmpq $0, %rax
+	jle _load_4bit8packed_ret
+	# xorq %r8, %r8
+	pxor %xmm0, %xmm0
+	movq %rdi, %xmm1
+	movq (%rsi, %rdx), %r8
+	movq 8(%rsi, %rdx), %rdi
+	shrdq %cl, %rdi, %r8
+	# shrq %cl, %r8
+	movq %r8, %xmm0
+	movq %xmm1, %rdi
+	pmovzxbw %xmm0, %xmm1
+	psrlq $4, %xmm0
+	pmovzxbw %xmm0, %xmm0
+	pslldq $1, %xmm0
+	por %xmm0, %xmm1
+	movdqa %xmm1, %xmm0
+	psrlq $2, %xmm1
+	pand %xmm2, %xmm1
+	psrlq $1, %xmm0
+	psrlq $1, %xmm1
+	psubb %xmm1, %xmm0
+	pand %xmm2, %xmm0
+	movdqu %xmm0, (%rdi)
+	# shrq $2, %rcx
+	addq $16, %rdi
+	# subq %rcx, %rdi
+	addq $8, %rdx
+	subq $16, %rax
+	# addq %rcx, %rax
+	# xorq %rcx, %rcx
+	jmp _load_4bit8packed_bulk_loop
+_load_4bit8packed_ret:
+	ret
+
+	# 2bit8packed
+	# input:  %rdi (dst pointer (8bit array))
+	#         %rsi (src pointer (2bit8packed unpacked array))
+	#         %rdx (index)
+	#         %rcx (len)
+	# output: %rax
+	# work:   %r8, %xmm0, %xmm1, %xmm2
+	.globl _load_2bit8packed
+	.globl __load_2bit8packed
+_load_2bit8packed:
+__load_2bit8packed:
+	movq %rcx, %rax
+	movl $0x03030303, %r8d
+	movq %r8, %xmm2
+	pshufd $0, %xmm2, %xmm2
+	movq %rdx, %rcx
+	shrq $2, %rdx
+	shlq $1, %rcx
+	andq $6, %rcx
+_load_2bit8packed_bulk_loop:
+	cmpq $0, %rax
+	jle _load_2bit8packed_ret
+	# xorq %r8, %r8
+	pxor %xmm0, %xmm0
+	movq (%rsi, %rdx), %r8
+	shrq %cl, %r8
+	movq %r8, %xmm0
+	pmovzxbd %xmm0, %xmm0
+	movdqa %xmm0, %xmm1
+	pslldq $1, %xmm0
+	psrlq $2, %xmm0
+	por %xmm0, %xmm1
+	movdqa %xmm1, %xmm0
+	pslldq $2, %xmm1
+	psrlq $4, %xmm1
+	por %xmm1, %xmm0
+	pand %xmm2, %xmm0
+	movdqu %xmm0, (%rdi)
+	# shrq $1, %rcx
+	addq $16, %rdi
+	# subq %rcx, %rdi
+	addq $4, %rdx
+	subq $16, %rax
+	# addq %rcx, %rax
+	# xorq %rcx, %rcx
+	jmp _load_2bit8packed_bulk_loop
+_load_2bit8packed_ret:
+	ret
+
+
+# push functions
 
 	# ascii reverse
 	# input:  %rdi (pointer)
-	#         %rsi (index)
-	#         %rdx (index)
-	# output: %rax
-	# work:   None
-	.globl _init_ascii_r
-	.globl __init_ascii_r
-_init_ascii_r:
-__init_ascii_r:
-	movq %rdx, %rax
-	ret
-
-	# input:  %rdi (pointer)
-	#         %rsi (index)
-	#         %rdx (char)
+	#         %rsi (dst index)
+	#         %rdx (src index)
+	#         %rcx (char)
 	# output: %rax
 	# work:   None
 	.globl _push_ascii_r
 	.globl __push_ascii_r
 _push_ascii_r:
 __push_ascii_r:
+	movl $0x4449584d, %edx	# 'D', 'I', 'X', 'M'
+	shlq $3, %rcx
+	shrq %cl, %rdx
+	movb %dl, -1(%rdi, %rsi)
+	movq %rsi, %rax
+	addq $-1, %rax
+	ret
+
+	# ascii forward
+	# input:  %rdi (pointer)
+	#         %rsi (dst index)
+	#         %rdx (src index)
+	#         %rcx (char)
+	# output: %rax
+	# work:   None
+	.globl _push_ascii_f
+	.globl __push_ascii_f
+_push_ascii_f:
+__push_ascii_f:
+	movl $0x4449584d, %edx	# 'D', 'I', 'X', 'M'
+	shlq $3, %rcx
+	shrq %cl, %rdx
 	movb %dl, (%rdi, %rsi)
 	movq %rsi, %rax
 	addq $1, %rax
-	ret
-
-	# input:  %rdi (pointer)
-	#         %rsi (index)
-	# output: %rax
-	# work:   None
-	.globl _finish_ascii_r
-	.globl __finish_ascii_r
-_finish_ascii_r:
-__finish_ascii_r:
-	movb $0, (%rdi, %rsi)
-	movq %rsi, %rax
-	addq $1, %rax
-	ret
-
-	# cigar forward
-	# input:  %rdi (pointer)
-	#         %rsi (index)    (modified)
-	#         %rdx (index)
-	# output: %rax
-	# work:   None
-	.globl _init_cigar_f
-	.globl __init_cigar_f
-_init_cigar_f:
-__init_cigar_f:
-	addq $-1, %rsi
-	movb $0, (%rdi, %rsi)
-	addq $-1, %rsi
-	movb $61, (%rdi, %rsi)
-	movq %rsi, %rax
-	addq $-4, %rsi
-	movl $0, (%rdi, %rsi)
-	ret
-
-	# input:  %rdi (pointer)
-	#         %rsi (index)    (modified)
-	#         %rdx (char)     (modified)
-	# output: %rax
-	# work:   %rcx, %r8, %xmm0
-	.globl _push_cigar_f
-	.globl __push_cigar_f
-_push_cigar_f:
-__push_cigar_f:
-	cmpb $77, %dl
-	jne __push_cigar_f_mov
-	movq $61, %rdx
-__push_cigar_f_mov:
-	cmpb %dl, (%rdi, %rsi)
-	je __push_cigar_f_incr
-	movb %dl, %r8b
-	movq %rsi, %rdx
-	addq $-4, %rdx
-	movl (%rdi, %rdx), %eax
-	movq $10, %rcx
-__push_cigar_f_loop:
-	movq $0, %rdx
-	divq %rcx
-	addq $48, %rdx
-	addq $-1, %rsi
-	movb %dl, (%rdi, %rsi)
-	cmpl $0, %eax
-	jne __push_cigar_f_loop
-	addq $-1, %rsi
-	movb %r8b, (%rdi, %rsi)
-	movq %rsi, %rax
-	addq $-4, %rsi
-	movl $1, (%rdi, %rsi)
-	ret
-__push_cigar_f_incr:
-	movq %rsi, %rax
-	addq $-4, %rsi
-	addl $1, (%rdi, %rsi)
-	ret
-
-	# input:  %rdi (pointer)
-	#         %rsi (index)    (modified)
-	# output: %rax
-	# work:   %rdx
-	.globl _finish_cigar_f
-	.globl __finish_cigar_f
-_finish_cigar_f:
-__finish_cigar_f:
-	movq %rsi, %rdx
-	addq $-4, %rdx
-	movl (%rdi, %rdx), %eax
-	movq $10, %rcx
-__finish_cigar_f_loop:
-	movq $0, %rdx
-	divq %rcx
-	addq $48, %rdx
-	addq $-1, %rsi
-	movb %dl, (%rdi, %rsi)
-	cmpl $0, %eax
-	jne __finish_cigar_f_loop
-	movq %rsi, %rax
 	ret
 
 	# cigar reverse
 	# input:  %rdi (pointer)
-	#         %rsi (index)
-	#         %rdx (index)    (modified)
+	#         %rsi (dst index)    (modified)
+	#         %rdx (src index)    (modified)
+	#         %rcx (char)     (modified)
 	# output: %rax
-	# work:   None
-	.globl _init_cigar_r
-	.globl __init_cigar_r
-_init_cigar_r:
-__init_cigar_r:
-	movb $61, (%rdi, %rdx)
-	movq %rdx, %rax
-	addq $1, %rdx
-	movl $0, (%rdi, %rdx)
-	ret
-
-	# input:  %rdi (pointer)
-	#         %rsi (index)    (modified)
-	#         %rdx (char)     (modified)
-	# output: %rax
-	# work:   %rcx, %r8, %xmm0
+	# work:   %r8
 	.globl _push_cigar_r
 	.globl __push_cigar_r
 _push_cigar_r:
 __push_cigar_r:
-	cmpb $77, %dl
-	jne __push_cigar_r_mov
-	movq $61, %rdx
-__push_cigar_r_mov:
-	movb (%rdi, %rsi), %r8b
-	cmpb %dl, %r8b
-	je __push_cigar_r_incr
-	pxor %xmm0, %xmm0
-	# pxor %xmm1, %xmm1
-	shlq $8, %rdx
-	orq %rdx, %r8
-	movd %r8d, %xmm0
-	movq $1, %r8		# %r8 holds the length of array in %xmm0
-	movq %rsi, %rdx
-	addq $1, %rdx
-	movl (%rdi, %rdx), %eax
+	shrq $2, %rdx		# make 4-byte aligned
+	shlq $2, %rdx
+	movq %rcx, %r8
+	movl -4(%rdi, %rdx), %ecx
+	shrq $29, %rcx
+	cmpb %cl, %r8b
+	jne __push_cigar_r_conv
+	addl $1, -4(%rdi, %rdx)
+	movq %rsi, %rax
+	ret
+__push_cigar_r_conv:
+	movl $0x4449583d, %eax	# 'D', 'I', 'X', '='
+	shlq $3, %rcx
+	shrq %cl, %rax
+	addq $-1, %rsi
+	movb %al, (%rdi, %rsi)
+	movl -4(%rdi, %rdx), %eax
+	andq $0x1fffffff, %rax
 	movq $10, %rcx
 __push_cigar_r_loop:
 	movq $0, %rdx
 	divq %rcx
 	addq $48, %rdx
-	# movd %edx, %xmm1
-	pslldq $1, %xmm0
-	# por %xmm1, %xmm0
-	pinsrb $0, %edx, %xmm0
-	addq $1, %r8
+	addq $-1, %rsi
+	movb %dl, (%rdi, %rsi)
 	cmpl $0, %eax
 	jne __push_cigar_r_loop
-	movdqu %xmm0, (%rdi, %rsi)
-	addq %r8, %rsi
-	# movb $61, (%rdi, %rsi)
-	movq %rsi, %rax
-	addq $1, %rsi
-	movl $1, (%rdi, %rsi)
-	ret
-__push_cigar_r_incr:
-	movq %rsi, %rax
-	addq $1, %rsi
-	addl $1, (%rdi, %rsi)
-	ret
-
-	# input:  %rdi (pointer)
-	#         %rsi (index)    (modified)
-	# output: %rax
-	# work:   %rdx, %rcx, %r8, %xmm0
-	.globl _finish_cigar_r
-	.globl __finish_cigar_r
-_finish_cigar_r:
-__finish_cigar_r:
-	movb (%rdi, %rsi), %r8b
-	pxor %xmm0, %xmm0
-	# pxor %xmm1, %xmm1
-	movd %r8d, %xmm0
-	movq $1, %r8		# %r8 holds the length of array in %xmm0
-	movq %rsi, %rdx
-	addq $1, %rdx
-	movl (%rdi, %rdx), %eax
-	movq $10, %rcx
-__finish_cigar_r_loop:
-	movq $0, %rdx
-	divq %rcx
-	addq $48, %rdx
-	# movd %edx, %xmm1
-	pslldq $1, %xmm0
-	# por %xmm1, %xmm0
-	pinsrb $0, %edx, %xmm0
+	shlq $29, %r8
 	addq $1, %r8
-	cmpl $0, %eax
-	jne __finish_cigar_r_loop
-	movdqu %xmm0, (%rdi, %rsi)
-	addq %r8, %rsi
-	movb $0, (%rdi, %rsi)
 	movq %rsi, %rax
-	addq $1, %rax
+	shrq $2, %rsi
+	shlq $2, %rsi
+	movl %r8, -4(%rdi, %rsi)
 	ret
 
-	# direction string forward
+	# cigar forward
 	# input:  %rdi (pointer)
-	#         %rsi (index)    (modified)
-	#         %rdx (index)
+	#         %rsi (dst index)    (modified)
+	#         %rdx (src index)
+	#         %rcx (char)
 	# output: %rax
-	# work:   None
-	.globl _init_dir_f
-	.globl __init_dir_f
-_init_dir_f:
-__init_dir_f:
-	addq $-1, %rsi
-	movb $0, (%rdi, %rsi)
-	movq %rsi, %rax
-	ret
-
-	# input:  %rdi (pointer)
-	#         %rsi (index)    (modified)
-	#         %rdx (char)
-	# output: %rax
-	# work:   %rcx, %r8
-	.globl _push_dir_f
-	.globl __push_dir_f
-_push_dir_f:
-__push_dir_f:
-	movq %rdx, %r8
-	movq %rdx, %rcx
-	shrq $2, %rcx
-	xorq $1, %r8
-	andq %rcx, %r8
-	andq $1, %r8
-	xorq %rcx, %rdx
-	addq $3, %r8
-	andq $1, %rdx
-	andq $3, %r8
-	addq $-2, %rsi
-	shlq $8, %r8
-	movq %rsi, %rax
-	movw %r8w, (%rdi, %rsi)
-	addq %rdx, %rax
-	ret
-
-	# input:  %rdi (pointer)
-	#         %rsi (index)
-	# output: %rax
-	# work:   None
-	.globl _finish_dir_f
-	.globl __finish_dir_f
-_finish_dir_f:
-__finish_dir_f:
+	.globl _push_cigar_f
+	.globl __push_cigar_f
+_push_cigar_f:
+__push_cigar_f:
+	movl -4(%rdi, %rsi), %r8d
+	movq %r8, %rdx
+	shrq $29, %r8
+	cmpb %r8b, %cl
+	je __push_cigar_f_incr
+	shlq $29, %rcx
+	movq %rcx, %rdx
+	addq $4, %rsi
+__push_cigar_f_incr:
+	addq $1, %rdx
+	movl %edx, -4(%rdi, %rsi)
 	movq %rsi, %rax
 	ret
 
 	# direction string reverse
 	# input:  %rdi (pointer)
-	#         %rsi (index)
-	#         %rdx (index)
+	#         %rsi (dst index)
+	#         %rdx (src index)
+	#         %rcx (char)
 	# output: %rax
-	# work:   None
-	.globl _init_dir_r
-	.globl __init_dir_r
-_init_dir_r:
-__init_dir_r:
-	movq %rdx, %rax
-	ret
-
-	# input:  %rdi (pointer)
-	#         %rsi (index)
-	#         %rdx (char)
-	# output: %rax
-	# work:   %rcx, %r8
+	# work:   %r8
 	.globl _push_dir_r
 	.globl __push_dir_r
 _push_dir_r:
 __push_dir_r:
-	movq %rdx, %r8
-	movq %rdx, %rcx
-	shrq $2, %rcx
-	xorq $1, %r8
-	andq %rcx, %r8
-	andq $1, %r8
-	xorq %rcx, %rdx
-	addq $3, %r8
-	andq $1, %rdx
-	andq $3, %r8
-	movw %r8w, (%rdi, %rsi)
-	movq %rsi, %rax
-	addq $2, %rax
-	subq %rdx, %rax
+	movq $0x0000010100010001, %r8
+	shlq $4, %rcx
+	shrq %cl, %r8
+	movw %r8w, -2(%rdi, %rsi)
+	shrq $5, %rcx
+	leaq -2(%rsi, %rcx), %rax
 	ret
 
+	# direction string forward
 	# input:  %rdi (pointer)
-	#         %rsi (index)
+	#         %rsi (dst index)
+	#         %rdx (src index)
+	#         %rcx (char)
 	# output: %rax
-	# work:   None
-	.globl _finish_dir_r
-	.globl __finish_dir_r
-_finish_dir_r:
-__finish_dir_r:
-	movb $0, (%rdi, %rsi)
-	movq %rsi, %rax
-	addq $1, %rax
+	# work:   %r8
+	.globl _push_dir_f
+	.globl __push_dir_f
+_push_dir_f:
+__push_dir_f:
+	movq $0x0000010100010001, %r8
+	shlq $4, %rcx
+	shrq %cl, %r8
+	movw (%rdi, %rsi)
+	shrq $5, %rcx
+	negq %rcx
+	leaq 2(%rsi, %rcx), %rax
 	ret
 
 #
