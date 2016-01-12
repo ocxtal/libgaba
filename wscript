@@ -26,7 +26,7 @@ def configure(conf):
 
 	# debug options
 	if conf.options.debug is True:
-		# conf.env.append_value('CFLAGS', '-fmacro-backtrace-limit=0')
+		conf.env.append_value('CFLAGS', '-fmacro-backtrace-limit=0')
 		conf.env.append_value('CFLAGS', '-g')
 		conf.env.append_value('CFLAGS', '-DDEBUG')
 	else:
@@ -86,9 +86,9 @@ def build(bld):
 		source = 'test.c',
 		target = 'test',
 		use = 'sea')
-
+	"""
 	bld.program(
 		source = 'bench.c',
 		target = 'bench',
 		use = 'sea')
-
+	"""

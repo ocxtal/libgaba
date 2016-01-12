@@ -15,12 +15,21 @@
 #include "sea.h"				/* definitions of public APIs and structures */
 #include "util/util.h"			/* definitions of internal utility functions */
 #include "arch/arch_util.h"		/* architecture-dependent utilities */
-#include "variant/twig_types.h"
 
 #ifdef BENCH
 	bench_t fill, search, trace;	/** global benchmark variables */
 #endif
 
+/**
+ * constants
+ */
+#define SEA_INIT_STACK_SIZE			( 32 * 1024 * 1024 )
+#define SEA_INIT_BW					( 16 )
+
+/**
+ * @val aln_table
+ * @brief fill and trace function table
+ */
 struct sea_aln_funcs const aln_table[2][2] = {
 	{
 		{
@@ -44,17 +53,27 @@ struct sea_aln_funcs const aln_table[2][2] = {
 	}
 };
 
-void (*rd_table)(
+/**
+ * @val rd_table
+ * @brief sequence reader function table
+ */
+void (* const rd_table[4][8])(
 	uint8_t *dst,
 	uint8_t const *src,
 	uint64_t pos,
 	uint64_t src_len,
-	uint64_t copy_len)[4][8] = {
+	uint64_t copy_len) = {
 	{NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL},
-	{NULL, _load_ascii_fw, _load_4bit_fw, _load_2bit_fw, _load_4bit8packed_fw, _load_2bit8packed_fw, NULL, NULL},
-	{NULL, _load_ascii_fr, _load_4bit_fr, _load_2bit_fr, _load_4bit8packed_fr, _load_2bit8packed_fr, NULL, NULL}
+	{NULL, _load_ascii_fw, _load_ascii_fw, _load_ascii_fw, _load_ascii_fw, _load_ascii_fw, NULL, NULL},
+	{NULL, _load_ascii_fr, _load_ascii_fr, _load_ascii_fr, _load_ascii_fr, _load_ascii_fr, NULL, NULL}
+//	{NULL, _load_ascii_fw, _load_4bit_fw, _load_2bit_fw, _load_4bit8packed_fw, _load_2bit8packed_fw, NULL, NULL},
+//	{NULL, _load_ascii_fr, _load_4bit_fr, _load_2bit_fr, _load_4bit8packed_fr, _load_2bit8packed_fr, NULL, NULL}
 };
 
+/**
+ * @val wr_table
+ * @brief alignment writer function table
+ */
 struct sea_writer const wr_table[4][2] = {
 	{
 		{NULL, 0, 0},
@@ -84,7 +103,12 @@ struct sea_writer const wr_table[4][2] = {
  *
  * @return a pointer to the allocated memory.
  */
-void *sea_aligned_malloc(size_t size, size_t align)
+#define SEA_MEM_ALIGN		( 64 )
+static inline
+void *
+sea_aligned_malloc(
+	size_t size,
+	size_t align)
 {
 	void *ptr = NULL;
 	posix_memalign(&ptr, align, size);
@@ -99,7 +123,10 @@ void *sea_aligned_malloc(size_t size, size_t align)
  *
  * @param[in] ptr : a pointer to the memory to be freed.
  */
-void sea_aligned_free(void *ptr)
+static inline
+void
+sea_aligned_free(
+	void *ptr)
 {
 	free(ptr);
 	return;
@@ -114,7 +141,7 @@ int
 sea_is_linear_gap_cost(
 	struct sea_context const *ctx)
 {
-	return(ctx->gi == ctx->ge);
+	return(ctx->e.k.gi == ctx->e.k.ge);
 }
 
 /**
@@ -125,7 +152,7 @@ int
 sea_is_edit_dist_cost(
 	struct sea_context const *ctx)
 {
-	return(ctx->m == 0 && ctx->x == -2 && ctx->gi == -1 && ctx->ge == -1);
+	return(ctx->e.k.m == 0 && ctx->e.k.x == -2 && ctx->e.k.gi == -1 && ctx->e.k.ge == -1);
 }
 
 /**
@@ -136,7 +163,41 @@ int
 sea_is_unit_cost(
 	struct sea_context const *ctx)
 {
-	return(ctx->m == 1 && ctx->x == -1 && ctx->gi == -1 && ctx->ge == -1);
+	return(ctx->e.k.m == 1 && ctx->e.k.x == -1 && ctx->e.k.gi == -1 && ctx->e.k.ge == -1);
+}
+
+/**
+ * @fn sea_init_restore_defaults
+ *
+ * @brief (internal) initialize flags
+ */
+static inline
+int32_t
+sea_init_restore_defaults(
+	struct sea_params *p)
+{
+	/** set defaults */
+	#define default_value(p, field, value) { \
+		if((int64_t)(p->field) == 0) { p->field = value; } \
+	}
+
+	/** input */
+	default_value(p, seq_a_format, SEA_ASCII);
+	default_value(p, seq_a_direction, SEA_FW_ONLY);
+	default_value(p, seq_b_format, SEA_ASCII);
+	default_value(p, seq_b_direction, SEA_FW_ONLY);
+
+	/** output */
+	default_value(p, aln_format, SEA_STR);
+	default_value(p, head_margin, 0);
+	default_value(p, tail_margin, 0);
+
+	/** score */
+	default_value(p, score_matrix, SEA_SCORE_SIMPLE(2, -3, -5, -1));
+	default_value(p, xdrop, 100);
+
+	#undef default_value
+	return SEA_SUCCESS;
 }
 
 /**
@@ -152,34 +213,34 @@ sea_init_flags(
 	debug("initializing flags");
 
 	/** default input sequence format: ASCII */
-	if(ctx->flags.seq_a == 0) {
-		ctx->flags.seq_a = SEA_SEQ_A_ASCII>>SEA_FLAGS_POS_SEQ_A;
+	if(ctx->flags.sep.seq_a == 0) {
+		ctx->flags.sep.seq_a = SEA_SEQ_A_ASCII>>SEA_FLAGS_POS_SEQ_A;
 	}
-	if(ctx->flags.seq_b == 0) {
-		ctx->flags.seq_b = SEA_SEQ_B_ASCII>>SEA_FLAGS_POS_SEQ_B;
+	if(ctx->flags.sep.seq_b == 0) {
+		ctx->flags.sep.seq_b = SEA_SEQ_B_ASCII>>SEA_FLAGS_POS_SEQ_B;
 	}
 	
 	/** default  direction: forward only */
-	if(ctx->flags.seq_a_dir == 0) {
-		ctx->flags.seq_a_dir = SEA_SEQ_A_FW_ONLY>>SEA_FLAGS_POS_SEQ_A_DIR;
+	if(ctx->flags.sep.seq_a_dir == 0) {
+		ctx->flags.sep.seq_a_dir = SEA_SEQ_A_FW_ONLY>>SEA_FLAGS_POS_SEQ_A_DIR;
 	}
-	if(ctx->flags.seq_b_dir == 0) {
-		ctx->flags.seq_b_dir = SEA_SEQ_B_FW_ONLY>>SEA_FLAGS_POS_SEQ_B_DIR;
+	if(ctx->flags.sep.seq_b_dir == 0) {
+		ctx->flags.sep.seq_b_dir = SEA_SEQ_B_FW_ONLY>>SEA_FLAGS_POS_SEQ_B_DIR;
 	}
 
 	/** default output format: direction string.
 	 * (yields RDRDRDRD for the input pair (AAAA and AAAA).
 	 * use SEA_ALN_CIGAR for cigar string.)
 	 */
-	if(ctx->flags.aln == 0) {
-		ctx->flags.aln = SEA_ALN_ASCII>>SEA_FLAGS_POS_ALN;
+	if(ctx->flags.sep.aln == 0) {
+		ctx->flags.sep.aln = SEA_ALN_ASCII>>SEA_FLAGS_POS_ALN;
 	}
 
 	return SEA_SUCCESS;
 }
 
 /**
- * @fn sea_init_local_context
+ * @fn sea_init_dp_context
  *
  * @brief (internal) check arguments and fill proper values (or default values) to sea_context.
  *
@@ -198,7 +259,7 @@ sea_init_flags(
  */
 static inline
 int32_t
-sea_init_local_context(
+sea_init_dp_context(
 	struct sea_context *ctx,
 	int8_t m,
 	int8_t x,
@@ -209,11 +270,6 @@ sea_init_local_context(
 	int32_t loada_idx, loada_dir_idx, loadb_idx, loadb_dir_idx;
 
 	debug("initializing local context");
-
-	/** clear context */
-	memset(&ctx->kf, 0, sizeof(struct sea_local_context));
-	memset(&ctx->kr, 0, sizeof(struct sea_local_context));
-
 	/** check if DP cost values are proper. the cost values must satisfy m >= 0, x < m, 2*gi <= x, ge <= 0. */
 	if(m < 0 || x >= m || 2*gi > x || ge > 0 || tx < 0) {
 		debug("invalid costs");
@@ -221,44 +277,89 @@ sea_init_local_context(
 	}
 	
 	/* push scores to context */
-	ctx->kf.m = m;
-	ctx->kf.x = x;
-	ctx->kf.gi = gi;
-	ctx->kf.ge = ge;
-	ctx->kf.tx = tx;
+	ctx->e.k.m = m;
+	ctx->e.k.x = x;
+	ctx->e.k.gi = gi;
+	ctx->e.k.ge = ge;
+	ctx->e.k.tx = tx;
 
 	/* misc constants */
-	ctx->kf.max = 0;
-	ctx->kf.m_tail = &ctx->jt + sizeof(struct sea_joint_tail);
-	ctx->kf.size = SEA_INIT_STACK_SIZE;
+	ctx->e.k.max = 0;
+	ctx->e.k.m_tail = (uint8_t *)&ctx->jt + sizeof(struct sea_joint_tail);
 
-	/* duplicate */
-	_aligned_block_memcpy(
-		&ctx->kr + SEA_LOCAL_CONTEXT_LOAD_OFFSET,
-		&ctx->kf + SEA_LOCAL_CONTEXT_LOAD_OFFSET,
-		SEA_LOCAL_CONETXT_LOAD_SIZE);
+	/* fill and trace functions */
+	ctx->e.k.fn = &ctx->dynamic;
 
 	/* sequence reader */
-	loada_idx = ctx->flags.seq_a;
-	loadb_idx = ctx->flags.seq_b;
+	loada_idx = ctx->flags.sep.seq_a;
+	loadb_idx = ctx->flags.sep.seq_b;
 	if((uint64_t)loada_idx > 6 || (uint64_t)loadb_idx > 6) {
 		debug("invalid input sequence format flag");
 		return SEA_ERROR_INVALID_ARGS;
 	}
-	loada_dir_idx = ctx->flags.seq_a_dir;
-	loadb_dir_idx = ctx->flags.seq_b_dir;
+	loada_dir_idx = ctx->flags.sep.seq_a_dir;
+	loadb_dir_idx = ctx->flags.sep.seq_b_dir;
 	if((uint64_t)loada_dir_idx > 3 || (uint64_t)loadb_dir_idx > 3) {
 		debug("invalid sequence direction flag");
 		return SEA_ERROR_INVALID_ARGS;
 	}
 
-	ctx->k.r.loada = rd_table[loada_dir_idx][loada_idx];
-	ctx->k.r.loadb = rd_table[loadb_dir_idx][loadb_idx];
+	ctx->e.k.r.loada = rd_table[loada_dir_idx][loada_idx];
+	ctx->e.k.r.loadb = rd_table[loadb_dir_idx][loadb_idx];
 
 	/* sequence writer */
-	ctx->k.l = ctx->rv;		/** reverse writer for forward extension */
+	ctx->e.k.l = ctx->rv;		/** reverse writer for forward extension */
 
 	return SEA_SUCCESS;
+}
+
+/**
+ * @fn sea_init_graph_context
+ */
+static inline
+int32_t
+sea_init_graph_context(
+	struct sea_context *ctx)
+{
+	ctx->e.g.ctx = NULL;
+	ctx->e.g.fn = &ctx->graph;
+	return SEA_SUCCESS;
+}
+
+/**
+ * @fn sea_init_search_context
+ */
+static inline
+int32_t
+sea_init_search_context(
+	struct sea_context *ctx,
+	int8_t m,
+	int8_t x,
+	int8_t gi,
+	int8_t ge,
+	int32_t tx)
+{
+	int32_t error_label = SEA_SUCCESS;
+
+	/** clear context */
+	memset(&ctx->e, 0, sizeof(struct sea_search_context));
+
+	/** init dp context */
+	if((error_label = sea_init_dp_context(ctx, m, x, gi, ge, tx)) != SEA_SUCCESS) {
+		goto _sea_init_pair_error_handler;
+	}
+
+	/** init graph context */
+	if((error_label = sea_init_graph_context(ctx)) != SEA_SUCCESS) {
+		goto _sea_init_pair_error_handler;
+	}
+
+	/** stack related */
+	ctx->e.mem_size = SEA_INIT_STACK_SIZE;
+	ctx->e.mem_cnt = 0;
+
+_sea_init_pair_error_handler:
+	return(error_label);
 }
 
 /**
@@ -287,13 +388,13 @@ sea_init_joint_tail(
 	struct sea_context *ctx)
 {
 	/** initial coordinates */
-	ctx->jt.psum = 1;
-	ctx->jt.p = 1;				/** (p, q) = (1, 0) */
+	ctx->jt.psum = 2;
+	ctx->jt.p = 2;				/** (p, q) = (2, 0) */
 	ctx->jt.mp = 0;
 	ctx->jt.mq = 0;
 	ctx->jt.v = (void *)ctx->root_vec;
 	ctx->jt.var = 0;			/** 8bit */
-	ctx->jt.d2 = SEA_TOP | SEA_LEFT<<2;
+	ctx->jt.d2 = SEA_LEFT | SEA_TOP<<2;
 
 	return SEA_SUCCESS;
 }
@@ -306,27 +407,40 @@ int32_t
 sea_init_root_vec(
 	struct sea_context *ctx)
 {
-	int64_t const init_bw = ctx->k.bw/2;
+	int64_t i;
 	int8_t *pv, *cv;
+
+	/** must be consistent to twig_types.h */
+	struct twig_linear_joint_vec {
+		int8_t pv[16], cv[16];
+		uint8_t wa[16], wb[16];
+	};
+	struct twig_affine_joint_vec {
+		int8_t pv[3*16], cv[3*16];
+		uint8_t wa[16], wb[16];
+	};
 
 	debug("initializing joint_tail");
 
 	memset(ctx->root_vec, INT8_MIN, 512);
 	if(sea_is_linear_gap_cost(ctx)) {
 		struct twig_linear_joint_vec *v = (struct twig_linear_joint_vec *)ctx->root_vec;
-		pv = &v->pv;
-		cv = &v->cv;
+		pv = v->pv;
+		cv = v->cv;
 	} else {
 		struct twig_affine_joint_vec *v = (struct twig_affine_joint_vec *)ctx->root_vec;
-		pv = &v->pv;
-		cv = &v->cv;
+		pv = v->pv;
+		cv = v->cv;
 	}
 
 	/** fill initial vectors */
-	#define _Q(x)		( (x) - init_bw/2 )
-	for(i = 0; i < init_bw; i++) {
-		pv[i] = -ctx->k.gi + (_Q(i) < 0 ? -_Q(i) : _Q(i)+1) * (2 * ctx->k.gi - ctx->k.m);
-		cv[i] =              (_Q(i) < 0 ? -_Q(i) : _Q(i)  ) * (2 * ctx->k.gi - ctx->k.m);
+	#define _Q(x)		( (x) - SEA_INIT_BW/2 )
+	for(i = 0; i < SEA_INIT_BW; i++) {
+//		pv[i] = -ctx->e.k.gi + (_Q(i) < 0 ? -_Q(i) : _Q(i)+1) * (2 * ctx->e.k.gi - ctx->e.k.m);
+//		cv[i] =                (_Q(i) < 0 ? -_Q(i) : _Q(i)  ) * (2 * ctx->e.k.gi - ctx->e.k.m);
+		pv[i] =               (_Q(i) < 0 ? -_Q(i)   : _Q(i)) * (2 * ctx->e.k.gi - ctx->e.k.m);
+		cv[i] = ctx->e.k.gi + (_Q(i) < 0 ? -_Q(i)-1 : _Q(i)) * (2 * ctx->e.k.gi - ctx->e.k.m);
+		debug("pv(%d), cv(%d)", pv[i], cv[i]);
 	}
 	#undef _Q
 
@@ -365,7 +479,7 @@ sea_t *sea_init(
 	debug("initializing context");
 
 	/** malloc sea_context */
-	ctx = (struct sea_context *)sea_aligned_malloc(sizeof(struct sea_context), 64);
+	ctx = (struct sea_context *)sea_aligned_malloc(sizeof(struct sea_context), SEA_MEM_ALIGN);
 	if(ctx == NULL) {
 		debug("failed malloc sea_context");
 		error_label = SEA_ERROR_OUT_OF_MEM;
@@ -380,9 +494,9 @@ sea_t *sea_init(
 		goto _sea_init_error_handler;
 	}
 
-	/** initialize local context */
-	if((error_label = sea_init_local_context(ctx, m, x, gi, ge, xdrop)) != SEA_SUCCESS) {
-		debug("failed to initialize local context template");
+	/** initialize pair context */
+	if((error_label = sea_init_search_context(ctx, m, x, gi, ge, xdrop)) != SEA_SUCCESS) {
+		debug("failed to initialize pair context template");
 		goto _sea_init_error_handler;
 	}
 
@@ -411,148 +525,348 @@ sea_t *sea_init(
 	}
 
 	/** set alignment writer functions */
-	aln_idx = (ctx->flags & SEA_FLAGS_MASK_ALN) >> SEA_FLAGS_POS_ALN;
+	// aln_idx = (ctx->flags & SEA_FLAGS_MASK_ALN) >> SEA_FLAGS_POS_ALN;
+	aln_idx = ctx->flags.sep.aln;
 	if(aln_idx <= 0 || aln_idx >= 4) {
 		debug("invalid alignment string flag");
 		error_label = SEA_ERROR_INVALID_ARGS;
 		goto _sea_init_error_handler;
 	}
-	ctx->fw = wr_table[aln_idx][0];
-	ctx->rv = wr_table[aln_idx][1];
+	ctx->rv = wr_table[aln_idx][0];
+	ctx->fw = wr_table[aln_idx][1];
+
+	/** set graph traverser function */
+	ctx->graph = gr_table[0];
 
 	return((sea_t *)ctx);
 
 _sea_init_error_handler:
 	if(ctx != NULL) {
-		free(ctx);
+		sea_aligned_free(ctx);
 	}
 	return((sea_t *)NULL);
 }
 
 /**
- * @fn sea_align_init_local_context_check_args
+ * @fn sea_search_init
+ *
+ * @brief malloc working memory, load local context to it
+ */
+static inline
+struct sea_search_context *
+sea_search_init(
+	struct sea_context const *ctx,
+	struct sea_seq_pair const *p,
+	uint8_t const *guide,
+	uint64_t glen)
+{
+	/** malloc memory */
+	struct sea_search_context *e;
+	if((e = sea_aligned_malloc(ctx->e.mem_size, SEA_MEM_ALIGN)) == NULL) {
+		return(NULL);
+	}
+
+	/** clear memory pointers */
+	_aligned_block_memset(
+		&e->mem_array,
+		0,
+		SEA_MEM_ARRAY_SIZE * sizeof(uint8_t *));
+
+	/** initialize ref and read pointers */
+	_aligned_block_memcpy(
+		&e->k.rr.p,
+		p,
+		sizeof(struct sea_seq_pair));
+	debug("pa(%p), alen(%llu), pb(%p), blen(%llu)", e->k.rr.p.pa, e->k.rr.p.alen, e->k.rr.p.pb, e->k.rr.p.blen);
+
+	/** initialize constant */
+	_aligned_block_memcpy(
+		(uint8_t *)e + SEA_SEARCH_CONTEXT_LOAD_OFFSET,
+		(uint8_t *)&ctx->e + SEA_SEARCH_CONTEXT_LOAD_OFFSET,
+		SEA_SEARCH_CONTEXT_LOAD_SIZE);
+
+	/** init stack pointers */
+	e->mem_array[e->mem_cnt++] = (uint8_t *)e;
+
+	e->k.stack_top = (uint8_t *)e + sizeof(struct sea_search_context);
+	e->k.stack_end = (uint8_t *)e + e->mem_size;
+	e->k.pdr = guide;
+	e->k.tdr = guide + glen;
+	e->k.fn = (guide == NULL) ? &ctx->dynamic : &ctx->guided;
+
+	return(e);
+}
+
+/**
+ * @fn sea_search_add_mem
+ */
+static inline
+int32_t
+sea_search_add_mem(
+	struct sea_context const *ctx,
+	struct sea_search_context *e)
+{
+	uint8_t *ptr = sea_aligned_malloc((e->mem_size *= 2), SEA_MEM_ALIGN);
+	if(ptr == NULL) {
+		e->mem_size /= 2;
+		return SEA_ERROR_OUT_OF_MEM;
+	}
+	e->mem_array[e->mem_cnt++] = e->k.stack_top = ptr;
+	e->k.stack_end = e->k.stack_top + e->mem_size;
+	return SEA_SUCCESS;
+}
+
+/**
+ * @fn sea_search_malloc
+ * @brief allocate memory from the stack
+ */
+static inline
+void *
+sea_search_malloc(
+	struct sea_context const *ctx,
+	struct sea_search_context *e,
+	uint64_t size)
+{
+	/** make size multiple of 16 */
+	uint64_t const align_size = 16;
+	size += (align_size - 1);
+	size &= ~(align_size - 1);
+
+	/** malloc */
+	if((e->k.stack_end - e->k.stack_top) < size) {
+		if(e->mem_size < size) { e->mem_size = size; }
+		if(sea_search_add_mem(ctx, e) != SEA_SUCCESS) {
+			return(NULL);
+		}
+	}
+	e->k.stack_top += size;
+	return((void *)(e->k.stack_top - size));
+}
+
+/**
+ * @fn sea_search_free
+ */
+static inline
+void
+sea_search_free(
+	struct sea_context const *ctx,
+	struct sea_search_context *e,
+	void *ptr)
+{
+	/** nothing to do */
+	return;
+}
+
+/**
+ * @fn sea_search_clean
+ */
+static inline
+void
+sea_search_clean(
+	struct sea_context const *ctx,
+	struct sea_search_context *e)
+{
+	int64_t i;
+	if(e == NULL) { return; }
+	for(i = 1; i < SEA_MEM_ARRAY_SIZE && e->mem_array[i] != NULL; i++) {
+		sea_aligned_free(e->mem_array[i]);
+	}
+	sea_aligned_free(e->mem_array[0]);
+	return;
+}
+
+/**
+ * @fn sea_graph_init
+ */
+static
+void *
+sea_graph_init(
+	struct sea_section_pair *sec,
+	struct sea_seq_pair const *p,
+	struct sea_checkpoint const *root,
+	int32_t dir)
+{
+	/** reverse extension */
+	if(dir == 0) {
+		set_sec_pair(sec,
+			rev(root->apos, p->alen), rev(0, p->alen),
+			rev(root->bpos, p->blen), rev(0, p->blen),
+			0xffff808080800000, 0xffff80808080ffff,		/** magic */
+			0xffffffffffff0000, 0xffffffffffffffff);	/** magic */
+	} else {
+		set_sec_pair(sec,
+			root->apos, p->alen,
+			root->bpos, p->blen,
+			0xffff808080800000, 0xffff80808080ffff,
+			0xffffffffffff0000, 0xffffffffffffffff);
+	}
+	return(NULL);
+}
+
+/**
+ * @fn sea_graph_next
+ */
+static
+int32_t
+sea_graph_next(
+	void *ctx,
+	struct sea_section_pair *sec,
+	struct sea_seq_pair const *p,
+	struct sea_checkpoint const *term)
+{
+	return SEA_TERMINATED;
+}
+
+/**
+ * @fn sea_graph_clean
+ */
+void
+sea_graph_clean(
+	void *ctx)
+{
+	return;
+}
+
+/**
+ * @fn sea_align_check_args
  *
  * @brief check args
  */
 static inline
 int32_t
-sea_align_init_local_context_check_args(
+sea_align_check_args(
 	struct sea_context const *ctx,
-	void const *a,
-	uint64_t alen,
-	void const *b,
-	uint64_t blen)
+	struct sea_seq_pair const *p)
 {
-	int32_t error_label = SEA_SUCCESS;
 	int64_t acc = 0;		/** accumulator */
 
-	acc |= (int64_t)ctx - 1;
-	acc |= (int64_t)a - 1;
-	acc |= (int64_t)alen;
-	acc |= (int64_t)b - 1;
-	acc |= (int64_t)blen;
+	if(ctx == NULL | p == NULL) {
+		debug("invalid pointers: ctx(%p), p(%p)", ctx, p);
+		return SEA_ERROR_INVALID_ARGS;
+	}
+
+	acc |= (int64_t)p->pa - 1;	/** a > 0 */
+	acc |= (int64_t)p->alen;	/** alen >= 0 */
+	acc |= (int64_t)p->pb - 1;
+	acc |= (int64_t)p->blen;
 
 	if(acc < 0) {
-		debug("invalid args: ctx(%p), a(%p), alen(%llu), b(%p), blen(%llu)", ctx, a, alen, b, blen);
-		error_label = SEA_ERROR_INVALID_ARGS;
+		debug("invalid args: a(%p), alen(%llu), b(%p), blen(%llu)", p->pa, p->alen, p->pb, p->blen);
+		return SEA_ERROR_INVALID_ARGS;
 	}
-	return(error_label);
+	return SEA_SUCCESS;
 }
 
 /**
- * @fn sea_align_init_local_context
- */
-struct sea_local_context const *
-sea_align_init_local_context(
-	struct sea_context const *ctx,
-	void const *a,
-	uint64_t alen,
-	void const *b,
-	uint64_t blen)
-{
-	struct sea_local_context *k = NULL;
-
-	/** check args */
-	if(sea_align_init_local_context_check_args(ctx, a, alen, b, blen) != SEA_SUCCESS) {
-		return(NULL);
-	}
-
-	/** malloc mem */
-	if((k = sea_aligned_malloc(sizeof(struct sea_local_context), 64)) == NULL) {
-		debug("failed malloc sea_align_pair");
-		return(NULL);
-	}
-
-	/** copy local context template */
-	memcpy(k, &ctx->k, sizeof(struct sea_local_context));
-
-	/** set args */
-	k->rr.pa = a;
-	k->rr.pb = b;
-	k->rr.alen = alen;
-	k->rr.blen = blen;
-
-	return((struct sea_local_context const *)k);
-}
-
-/**
- * @fn sea_align_clean_local_context
- */
-void
-sea_align_clean_local_context(
-	struct sea_context const *ctx,
-	struct sea_local_context const *tk)
-{
-	struct sea_local_context *k = (struct sea_local_context *)tk;
-	if(k != NULL) { free(k); }
-	return;
-}
-
-/**
- * @fn sea_align_init_stack
- *
- * @brief malloc working memory, load local context to it
+ * @fn sea_align_generate_root
  */
 static inline
-struct sea_local_context *
-sea_align_init_stack(
+struct sea_chain_status
+sea_align_generate_root(
 	struct sea_context const *ctx,
-	struct sea_local_context const *tk,
+	struct sea_search_context *e)
+{
+	struct sea_chain_status s;
+	s.stat = CHAIN;
+	s.ptr = (uint8_t *)&ctx->jt + sizeof(struct sea_joint_tail);
+	return(s);
+}
+
+/**
+ * @fn sea_align_extend
+ * @brief extend between two checkpoint
+ */
+static inline
+struct sea_chain_status
+sea_align_extend(
+	struct sea_context const *ctx,
+	struct sea_search_context *e,
+	struct sea_checkpoint const *root,
+	struct sea_checkpoint const *term,
+	int32_t dir)
+{
+	int64_t fn_idx = 0;
+	struct sea_chain_status s;
+	struct sea_section_pair sec;
+
+	/** init root */
+	s = sea_align_generate_root(ctx, e);
+	e->g.ctx = e->g.fn->init(&sec, &e->k.rr.p, root, dir);
+	while(1) {
+		s = e->k.fn->fill[fn_idx](&e->k,
+			s.ptr,		/** tail of the previous block */
+			&sec);		/** section to fill */
+		if(s.stat == MEM) {
+			if((s.stat = sea_search_add_mem(ctx, e)) != SEA_SUCCESS) {
+				break;
+			}
+		} else if(s.stat == CHAIN) {
+			fn_idx++;
+		} else if(s.stat == CAP) {
+			if((s.stat = e->g.fn->next(e->g.ctx, &sec, &e->k.rr.p, term)) != SEA_SUCCESS) {
+				break;
+			}
+		} else if(s.stat == TERM) {
+			break;
+		}
+	}
+	e->g.fn->clean(e->g.ctx);
+	return(s);
+}
+
+/**
+ * @fn sea_align_semi_global
+ */
+struct sea_result *
+sea_align_semi_global(
+	struct sea_context const *ctx,
+	struct sea_seq_pair const *p,
+	struct sea_checkpoint const *cp,
+	uint64_t cplen,
 	uint8_t const *guide,
 	uint64_t glen)
 {
-	/** malloc memory */
-	struct sea_local_context *k = NULL;
-	if((k = sea_aligned_malloc(tk->size, 64)) == NULL) { return(NULL); }
+	int64_t i;
+	int32_t error_label = SEA_SUCCESS;
+	struct sea_search_context *e = NULL;
 
-	/** init stack pointers */
-	k->stack_top = k + sizeof(struct sea_local_context);
-	k->stack_end = k + tk->size;
-	k->pdr = guide;
-	k->tdr = guide + glen;
-	k->fn = (guide == NULL) ? ctx->dynamic : ctx->guided;
+	/** check arguments */
+	if((error_label = sea_align_check_args(ctx, p)) != SEA_SUCCESS) {
+		goto _sea_align_semi_global_error_handler;
+	}
 
-	/** initialize constant */
-	debug("sizeof(struct sea_local_context) (%lu)", sizeof(struct sea_local_context));
-	_aligned_block_memcpy(
-		k + SEA_LOCAL_CONTEXT_LOAD_OFFSET,
-		tk + SEA_LOCAL_CONTEXT_LOAD_OFFSET,
-		SEA_LOCAL_CONETXT_LOAD_SIZE);
+	/** extend reverse */
+	if(cp == NULL) {
+		return NULL;
+	}
 
-	return(k);
+	/** init stack and extension root */
+	e = sea_search_init(ctx, p, guide, glen);
+//	sea_align_extend(ctx, e, cp, NULL, 0);
+	for(i = 0; i < cplen; i++) {
+		sea_align_extend(ctx, e, &cp[i], &cp[i+1], 1);
+	}
+
+	/** traceback */
+
+_sea_align_semi_global_error_handler:
+	sea_search_clean(ctx, e);
+	return(NULL);
 }
 
 /**
- * @fn sea_align_clean_stack
+ * @fn sea_align_global
  */
-static inline
-void
-sea_align_clean_stack(
+struct sea_result *
+sea_align_global(
 	struct sea_context const *ctx,
-	struct sea_local_context *k)
+	struct sea_seq_pair const *p,
+	struct sea_checkpoint const *cp,
+	uint64_t cplen,
+	uint8_t const *guide,
+	uint64_t glen)
 {
-	if(k != NULL) { free(k); }
-	return;
+	return(NULL);
 }
 
 /**
@@ -565,101 +879,10 @@ sea_align_finish_result(
 	struct sea_writer const *w,
 	struct sea_writer_work *ww)
 {
-	return(res);
+	return(NULL);
 }
 
-/**
- * @fn sea_align_generate_root
- */
-static inline
-struct sea_chain_status
-sea_align_generate_root(
-	struct sea_context const *ctx,
-	struct sea_local_context *k)
-{
-	struct sea_chain_status s;
-	s.stat = CHAIN;
-	s.pdp = k->m_tail;
-	// s.pdp = &ctx->jt + sizeof(struct sea_joint_tail);
-	return(s);
-}
-
-/**
- * @fn sea_align_fill_chain
- */
-static inline
-struct sea_chain_status
-sea_align_fill_chain(
-	struct sea_context const *ctx,
-	struct sea_local_context *k,
-	struct sea_aln_funcs *fn)
-{
-	struct sea_chain_status s;
-	int64_t fn_idx = 0;
-
-	/** generate extension root */
-	s = sea_align_generate_root(ctx, k);
-
-	/** chain */
-	fn_idx = 0;
-	while(s.stat != TERM) {
-		s = fn->fill[fn_idx];
-		if(s.stat == CHAIN) {
-			fn_idx++;
-		} else if(s.stat == MEM) {
-
-		}
-	}
-
-	return(s);
-}
-/**
- * @fn sea_align_semi_global
- */
-struct sea_result *
-sea_align_semi_global(
-	struct sea_context const *ctx,
-	struct sea_local_context const *tk,
-	struct sea_checkpoint const *cp,
-	uint8_t const *guide,
-	uint64_t glen)
-{
-	int32_t error_label = SEA_SUCCESS;
-	struct sea_local_context *k = NULL;
-	struct sea_chain_status s;
-
-	/** check arguments */
-	if((error_label = sea_align_check_args(ctx, a, b)) != SEA_SUCCESS) {
-		goto _sea_align_semi_global_error_handler;
-	}
-
-	/** init stack and extension root */
-	k = sea_align_init_stack(ctx, tk, guide, glen);
-	s = sea_align_generate_root(ctx, k);
-
-	/** extend reverse */
-	while(cp != NULL) {
-		if(cp
-	}
-
-_sea_align_semi_global_error_handler:
-	return;
-}
-
-/**
- * @fn sea_align_global
- */
-struct sea_result *
-sea_align_global(
-	struct sea_context const *ctx,
-	struct sea_local_context const *tk,
-	uint8_t const *guide,
-	uint64_t glen,
-	struct sea_section const *section)
-{
-	return;
-}
-
+#if 0
 /**
  * @fn sea_align_intl
  *
@@ -679,7 +902,7 @@ sea_align_intl(
 	int64_t glen,
 	int32_t dir)
 {
-	struct sea_local_context *k = NULL;
+	struct sea_dp_context *k = NULL;
 	struct sea_result *r = NULL;
 	struct sea_chain_status s;
 	int32_t error_label = SEA_ERROR;
@@ -698,7 +921,7 @@ sea_align_intl(
 		goto _sea_align_error_handler;
 	}
 	s = sea_align_generate_root(ctx, k);
-	s = k->f->twig(k, s.pdp);
+	s = k->f->twig(k, s.ptr);
 
 	/* do alignment */
 	if((error_label = k->f->twig(k, k->pdp)) != SEA_SUCCESS) {
@@ -848,6 +1071,7 @@ sea_res_t *sea_align_finish(
 {
 	return NULL;
 }
+#endif
 
 /**
  * @fn isclip
@@ -968,9 +1192,9 @@ void sea_close(
 {
 	if((struct sea_context *)ctx != NULL) {
 /*		if(ctx->v != NULL) {
-			free(ctx->v);
+			sea_aligned_free(ctx->v);
 		}*/
-		free((struct sea_context *)ctx);
+		sea_aligned_free((struct sea_context *)ctx);
 		return;
 	}
 	return;

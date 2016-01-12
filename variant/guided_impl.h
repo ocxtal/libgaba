@@ -39,7 +39,7 @@
  * direction determiner variants
  */
 struct _dir {
-	uint8_t *pdr;
+	uint8_t const *pdr;
 	uint8_t d2;
 };
 typedef struct _dir dir_t;

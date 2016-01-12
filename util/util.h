@@ -11,78 +11,183 @@
 #include "../sea.h"
 #include "log.h"
 #include "bench.h"
+#include "sassert.h"
 #include <stdio.h>
-#include <stdint.h>
-#include <string.h>
+#include <stdint.h>				/** uint32_t, uint64_t, ... */
+#include <stddef.h>				/** offsetof */
+#include <string.h>				/** memset, memcpy */
+
+/** assume 64bit little-endian system */
+_static_assert(sizeof(void *) == 8);
+
+/** check size of structs declared in sea.h */
+_static_assert(sizeof(struct sea_seq_pair_s) == 32);
+_static_assert(sizeof(struct sea_checkpoint_s) == 16);
+_static_assert(sizeof(struct sea_section_s) == 32);
+_static_assert(sizeof(struct sea_score_s) == 20);
+
+/**
+ * constants
+ */
+#define MAX_BW			( 32 )
+#define MAX_BLK			( 32 )
+#define mask_t			uint32_t
 
 /**
  * structs
  */
+
+/** forward declarations */
+struct sea_chain_status_s;
+struct sea_dp_context_s;
+struct sea_graph_context_s;
+
 /**
- * @struct sea_joint_head
+ * @union sea_dir_u
+ */
+union sea_dir_u {
+	struct sea_dir_dynamic {
+		int32_t acc;			/** (4) accumulator (v[0] - v[BW-1]) */
+		uint32_t array;			/** (4) dynamic band */
+	} dynamic;
+	struct sea_dir_guided {
+		uint8_t *ptr;			/** (8) guided band */
+	} guided;
+};
+_static_assert(sizeof(union sea_dir_u) == 8);
+
+/**
+ * @struct sea_small_delta_s
+ */
+struct sea_small_delta_s {
+	int8_t delta[MAX_BW];		/** (32) small delta */
+	int8_t max[MAX_BW];			/** (32) max */
+};
+_static_assert(sizeof(struct sea_small_delta_s) == 64);
+
+/**
+ * @struct sea_middle_delta_s
+ */
+struct sea_middle_delta_s {
+	int16_t delta[MAX_BW];		/** (64) middle delta */
+};
+_static_assert(sizeof(struct sea_middle_delta_s) == 64);
+
+/**
+ * @struct sea_mask_pair_s
+ */
+struct sea_mask_pair_s {
+	mask_t h;					/** (4) horizontal mask vector */
+	mask_t v;					/** (4) vertical mask vector */
+};
+_static_assert(sizeof(struct sea_mask_pair_s) == 8);
+
+/**
+ * @struct sea_diff_vec_s
+ */
+struct sea_diff_vec_s {
+	int8_t dh[MAX_BW];			/** (32) */
+	int8_t dv[MAX_BW];			/** (32) */
+	int8_t de[MAX_BW];			/** (32) */
+	int8_t df[MAX_BW];			/** (32) */
+};
+_static_assert(sizeof(struct sea_diff_vec_s) == 128);
+
+/**
+ * @struct sea_block_s
+ */
+struct sea_block_s {
+	struct sea_mask_pair_s mask[MAX_BLK];	/** (256) mask vectors */
+	union sea_dir_u dir;				/** (8) direction array */
+	int64_t offset;						/** (8) large offset */
+	struct sea_diff_vec_s diff;			/** (128) diff vectors */
+	struct sea_small_delta_s sd;		/** (64) small delta */
+};
+_static_assert(sizeof(struct sea_block_s) == 464);
+#define SEA_BLOCK_PHANTOM_OFFSET	( offsetof(struct sea_block_s, mask[30]) )
+#define SEA_BLOCK_PHANTOM_SIZE		( sizeof(struct sea_block_s) - SEA_BLOCK_PHANTOM_OFFSET )
+#define _phantom_block(x)			( (struct sea_block_s *)((uint8_t *)(x) - SEA_BLOCK_PHANTOM_OFFSET) )
+#define _last_block(x)				( (struct sea_block_s *)(x) - 1 )
+_static_assert(SEA_BLOCK_PHANTOM_OFFSET == 240);
+
+/**
+ * @struct sea_joint_head_s
  *
  * @brief (internal) traceback start coordinate (coordinate at the beginning of the band) container
- * sizeof(struct sea_joint_head) == 16
+ * sizeof(struct sea_joint_head_s) == 16
  */
-struct sea_joint_head {
+struct sea_joint_head_s {
 	uint32_t p;					/** (4) trace start p-coordinate */
 	uint32_t q;					/** (4) trace start q-coordinate */
-	uint8_t *p_tail;			/** (8) tail of the previous section */
+	struct sea_joint_tail_s *tail;/** (8) tail of the previous section */
 };
-
-#define _head(pdp, member)		((struct sea_joint_head *)pdp)->member
+_static_assert(sizeof(struct sea_joint_head_s) == 16);
+#define _head(pdp, member)		((struct sea_joint_head_s *)pdp)->member
 
 /**
- * @struct sea_joint_tail
+ * @struct sea_joint_tail_s
  *
  * @brief (internal) init vector container.
- * sizeof(struct sea_joint_tail) == 32
+ * sizeof(struct sea_joint_tail_s) == 96
  */
-struct sea_joint_tail {
-	uint32_t psum;				/** (4) global p-coordinate of the tail */
-	uint32_t p; 				/** (4) local p-coordinate of the tail */
-	uint32_t mp, mq;			/** (8) max (p, q) */
-	void *v;					/** (8) pointer to the initial vector (pv) */
-	uint32_t size;				/** (4) size of section in bytes */
-	uint8_t var;				/** (1) variant id */
-	uint8_t d2;					/** (1) previous direction (copy of the last r.d2) */
-	uint8_t _pad[2];			/** (2) */
-};
+struct sea_joint_tail_s {
+	/* 64byte aligned */
+	/* middle deltas */
+	struct sea_middle_delta_s *v;	/** (8) pointer to the middle delta vectors */
 
-#define _tail(pdp, member) 		((struct sea_joint_tail *)(pdp) - 1)->member
-#define DEF_VEC_LEN				( 32 )		/** default vector length */
+	/* misc */
+	// uint64_t size;				/** (8) size of section in bytes */
+	uint32_t _pad;				/** (4) unused */
+	uint32_t p; 				/** (4) local p-coordinate of the tail */
+	uint32_t mp, mq;			/** (8) max local-(p, q) */
+	uint64_t psum;				/** (8) global p-coordinate of the tail */
+
+	/* 64byte aligned */
+	/* prefetched sequence buffer */
+	uint8_t wa[MAX_BW];			/** (32) prefetched sequence */
+	uint8_t wb[MAX_BW];			/** (32) prefetched sequence */
+
+	/* 64byte aligned */
+};
+_static_assert(sizeof(struct sea_joint_tail_s) == 96);
+#define _tail(pdp, member) 		((struct sea_joint_tail_s *)pdp)->member
 
 /**
- * @struct sea_chain_status
+ * @struct sea_chain_status_s
  * @brief pair of status and pdp
  */
-struct sea_chain_status {
-	uint8_t *pdp;
+struct sea_chain_status_s {
+	void *ptr;
 	int32_t stat;
 };
 
 /**
- * @struct sea_fill_section
+ * @struct sea_section_pair_s
  * @brief concatenated two section: [posa1, lima1) ~ [posa2, lima2) and [posb1, limb1) ~ [posb2, limb2)
- * sizeof(struct sea_fill_section) == 80
+ * sizeof(struct sea_section_pair_s) == 80
  */
-struct sea_fill_section {
+struct sea_section_pair_s {
+	struct sea_section_s body;	/** (32) */
+	struct sea_section_s tail;	/** (32) */
 	uint64_t limp;				/** (8) */
 	uint64_t _pad;				/** (8) */
-	uint64_t posa1, posb1;		/** (16) */
-	uint64_t posa2, posb2;		/** (16) */
-	uint64_t lima1, limb1;		/** (16) */
-	uint64_t lima2, limb2;		/** (16) */
 };
+_static_assert(sizeof(struct sea_section_pair_s) == 80);
+#define set_sec_pair(sec, pa1, la1, pb1, lb1, pa2, la2, pb2, lb2) { \
+	(sec)->body.asp = (pa1); (sec)->body.bsp = (pb1); \
+	(sec)->body.aep = (la1); (sec)->body.bep = (lb1); \
+	(sec)->tail.asp = (pa2); (sec)->tail.bsp = (pb2); \
+	(sec)->tail.aep = (la2); (sec)->tail.bep = (lb2); \
+}
 
 /**
- * @struct sea_reader
+ * @struct sea_reader_s
  *
  * @brief (internal) abstract sequence reader
- * sizeof(struct sea_reader) == 16
- * sizeof(struct sea_reader_work) == 296
+ * sizeof(struct sea_reader_s) == 16
+ * sizeof(struct sea_reader_work_s) == 384
  */
-struct sea_reader {
+struct sea_reader_s {
 	void (*loada)(				/** (8) */
 		uint8_t *dst,
 		uint8_t const *src,
@@ -96,162 +201,187 @@ struct sea_reader {
 		uint64_t src_len,
 		uint64_t copy_len);
 };
-struct sea_reader_work {
-	/** 64byte aligned */
-	uint8_t bufa[64];			/** (64) */
-	uint8_t _pad1[32];			/** (32) */
-	uint64_t cnta, cntb;		/** (16) */
-	struct sea_fill_section s;	/** (80) */
-	/** 192, 192 */
+_static_assert(sizeof(struct sea_reader_s) == 16);
+struct sea_reader_work_s {
+	/** 64byte alidned */
+	uint64_t acnt, bcnt;				/** (16) */
+	struct sea_section_pair_s s;		/** (80) */
+	uint8_t _pad1[MAX_BLK];				/** (32) */
+	/** 128, 128 */
 
 	/** 64byte aligned */
-	uint8_t bufb[64];			/** (64) */
-	uint8_t _pad2[32];			/** (32) */
-//	struct sea_align_pair p;	/** (32) */
-	uint8_t *pa, *pb;			/** (16) */
-	uint64_t alen, blen;		/** (16) */
-	/** 128, 320 */
+	uint8_t bufa[MAX_BW + MAX_BLK];		/** (64) */
+	uint8_t _pad2[2 * MAX_BLK];			/** (64) */
+	/** 128, 256 */
+
+	/** 64byte aligned */
+	uint8_t bufb[MAX_BW + MAX_BLK];		/** (64) */
+	uint8_t _pad3[MAX_BLK];				/** (32) */
+	struct sea_seq_pair_s p;			/** (32) */
+	/** 128, 384 */
 };
+_static_assert(sizeof(struct sea_reader_work_s) == 384);
 
 /**
- * @struct sea_writer
+ * @struct sea_writer_s
  *
  * @brief (internal) abstract sequence writer
- * sizeof(struct sea_writer) == 16
- * sizeof(struct sea_writer_work) == 24
+ * sizeof(struct sea_writer_s) == 12
+ * sizeof(struct sea_writer_work_s) == 24
  */
-struct sea_writer {
-	int32_t (*push)(			/** (8) */
+struct sea_writer_s {
+	uint64_t (*push)(			/** (8) */
 		uint8_t *p,
-		uint32_t pos,
+		uint64_t dst,
+		uint64_t src,
 		uint8_t c);
-	uint8_t tag;				/** (1) */
-	uint8_t dir;				/** (1) */
+	uint8_t type;				/** (1) */
+	uint8_t fr;					/** (1) */
 	uint8_t _pad[6];			/** (6) */
 };
-struct sea_writer_work {
+_static_assert(sizeof(struct sea_writer_s) == 16);
+struct sea_writer_work_s {
 	uint8_t *p;					/** (8) */
 	uint32_t size;				/** (4) malloc size */
 	uint32_t rpos;				/** (4) previous reverse head */
 	uint32_t pos;				/** (4) current head */
 	uint32_t len;				/** (4) length of the string */
 };
+_static_assert(sizeof(struct sea_writer_work_s) == 24);
 
 /**
- * @struct sea_local_context
- *
- * @brief (internal) local constant container.
- * sizeof(struct sea_local_context) == 448
+ * @struct sea_dp_work_s
  */
-struct sea_local_context {
+struct sea_dp_work_s {
+	uint8_t _pad[64];
+};
+_static_assert(sizeof(struct sea_dp_work_s) == 64);
+
+/**
+ * @struct sea_aln_funcs_s
+ */
+struct sea_aln_funcs_s {
+	/** twig, branch, trunk, naive */
+	struct sea_chain_status_s (*fill[4])(
+		struct sea_dp_context_s *this,
+		uint8_t *pdp,
+		struct sea_section_pair_s *sec);
+	struct sea_chain_status_s (*trace[4])(
+		struct sea_dp_context_s *this,
+		uint8_t *pdp);
+};
+_static_assert(sizeof(struct sea_aln_funcs_s) == 64);
+
+/**
+ * @struct sea_score_vec_s
+ */
+struct sea_score_vec_s {
+	int8_t sbv[16];				/** (16) substitution matrix */
+	int8_t geav[16];			/** (16) gap penalty offset on seq a */
+	int8_t gebv[16];			/** (16) gap penalty offset on seq b */
+	int8_t giav[16];			/** (16) gap penalty offset on seq a */
+	int8_t gibv[16];			/** (16) gap penalty offset on seq b */
+};
+_static_assert(sizeof(struct sea_score_vec_s) == 80);
+_static_assert_offset(struct sea_score_s, score_sub, struct sea_score_vec_s, sbv, 0);
+_static_assert_offset(struct sea_score_s, score_gi_a, struct sea_score_vec_s, geav, 0);
+
+/**
+ * @struct sea_dp_context_s
+ *
+ * @brief (internal) container for dp implementations
+ * sizeof(struct sea_dp_context_s) == 512
+ */
+struct sea_dp_context_s {
 	/** individually stored on init */
+
 	/** 64byte aligned */
 	uint8_t *stack_top;			/** (8) dynamic programming matrix */
 	uint8_t *stack_end;			/** (8) the end of dp matrix */
-	uint8_t *pdr;				/** (8) direction array */
-	uint8_t *tdr;				/** (8) the end of direction array */
-	struct sea_aln_funcs *fn;	/** (8) */
-	struct sea_writer_work ll;	/** (24) */
+	uint8_t const *pdr;			/** (8) direction array */
+	uint8_t const *tdr;			/** (8) the end of direction array */
+	struct sea_aln_funcs_s const *fn;	/** (8) */
+	struct sea_writer_work_s ll;	/** (24) */
 	/** 64, 64 */
+
+	/** 64byte aligned */
+	struct sea_reader_work_s rr;	/** (384) */
+	/** 384, 448 */
+
+	/** 64byte aligned */
+	struct sea_dp_work_s work;	/** (64) */
+	/** 64, 512 */
 
 	/** loaded on init */
 	/** 64byte aligned */
-	struct sea_reader_work rr;	/** (320) */
-	/** 320, 384 */
+	struct sea_reader_s r;		/** (16) sequence readers */
+	struct sea_writer_s l;		/** (16) alignment writer */
+	/** 32, 544 */
 
-	/** 64byte aligned */
-	int8_t m;					/** (1) match */
-	int8_t x;					/** (1) mismatch */
-	int8_t gi;					/** (1) gap open (in the affine-gap cost) or gap cost per base (in the linear-gap cost) */
-	int8_t ge;					/** (1) gap extension */
+	struct sea_score_vec_s scv;	/** (80) substitution matrix and gaps */
+	/** 80, 624 */
+
+	int32_t max;				/** (4) current maximum score */
 	int32_t tx;					/** (4) xdrop threshold */
-	/** 8, 392 */
-
-	uint8_t _pad2[4];			/** (4) */
-	int32_t max;				/** (4) (inout) current maximum score */
 	uint8_t *m_tail;			/** (8) */
-	/** 16, 408 */
-
-	uint64_t size;				/** (8) malloc size */
-	/** 8, 416 */
-
-	struct sea_reader r;		/** (16) (in) sequence readers */
-	struct sea_writer l;		/** (16) (inout) alignment writer */
-	/** 32, 448 */
+	/** 16, 640 */
 
 	/** 64byte aligned */
 };
-#define SEA_LOCAL_CONTEXT_LOAD_OFFSET	( offsetof(struct sea_local_context, rr.pa) )
-#define SEA_LOCAL_CONTEXT_LOAD_SIZE		( sizeof(struct sea_local_context) - SEA_LOCAL_CONTEXT_LOAD_OFFSET )
+_static_assert(sizeof(struct sea_dp_context_s) == 640);
+#define SEA_DP_CONTEXT_LOAD_OFFSET	( offsetof(struct sea_dp_context_s, r) )
+#define SEA_DP_CONTEXT_LOAD_SIZE	( sizeof(struct sea_dp_context_s) - SEA_DP_CONTEXT_LOAD_OFFSET )
+_static_assert(SEA_DP_CONTEXT_LOAD_OFFSET == 512);
+_static_assert(SEA_DP_CONTEXT_LOAD_SIZE == 128);
 
 /**
- * @struct sea_aln_func_fill, sea_aln_func_trace
+ * @struct sea_graph_context_s
  */
-struct sea_aln_func_fill {
-	struct sea_chain_status (*twig)(			/*!< diag 8bit */
-		struct sea_local_context *this,
-		uint8_t *pdp,
-		struct sea_fill_section *sec);
-	struct sea_chain_status (*branch)(			/*!< diag 16bit */
-		struct sea_local_context *this,
-		uint8_t *pdp,
-		struct sea_fill_section *sec);
-	struct sea_chain_status (*trunk)(			/*!< diag 32bit */
-		struct sea_local_context *this,
-		uint8_t *pdp,
-		struct sea_fill_section *sec);
-	struct sea_chain_status (*naive)(
-		struct sea_local_context *this,
-		uint8_t *pdp,
-		struct sea_fill_section *sec);
+struct sea_graph_context_s {
+	uint64_t _pad[2];
 };
-struct sea_aln_func_trace {
-	struct sea_chain_status (*twig)(			/*!< diag 8bit */
-		struct sea_local_context *this,
-		uint8_t *pdp);
-	struct sea_chain_status (*branch)(			/*!< diag 16bit */
-		struct sea_local_context *this,
-		uint8_t *pdp);
-	struct sea_chain_status (*trunk)(			/*!< diag 32bit */
-		struct sea_local_context *this,
-		uint8_t *pdp);
-	struct sea_chain_status (*naive)(
-		struct sea_local_context *this,
-		uint8_t *pdp);
-};
+_static_assert(sizeof(struct sea_graph_context_s) == 16);
 
 /**
- * @struct sea_aln_funcs
+ * @struct sea_graph_funcs_s
  */
-struct sea_aln_funcs {
-//	struct sea_aln_func_fill fill;		/** (32) */
-//	struct sea_aln_func_trace trace;	/** (32) */
-	struct sea_chain_status (*fill)(
-		struct sea_local_context *this,
-		uint8_t *pdp,
-		struct sea_fill_section *sec)[4];
-	struct sea_chain_status (*trace)(
-		struct sea_local_context *this,
-		uint8_t *pdp)[4];
+struct sea_graph_funcs_s {
+	uint64_t _pad[2];
 };
+_static_assert(sizeof(struct sea_graph_funcs_s) == 16);
 
-#if 0
 /**
- * @struct sea_pair_context
- * @brief forward / reverse template
- * sizeof(struct sea_pair_context) = 896
+ * @struct sea_search_context_s
+ * sizeof(sea_search_context) = 768
  */
-struct sea_pair_context {
-	struct sea_local_context kf;	/** (448) */
-	struct sea_local_context kr;	/** (448) */
+#define SEA_MEM_ARRAY_SIZE			( 16 )
+struct sea_search_context_s {
+	/** 64byte aligned */
+	uint8_t *mem_array[SEA_MEM_ARRAY_SIZE];	/** (128) */
+	/** 128, 128 */
+
+	/** 64byte aligned */
+	struct sea_dp_context_s k;		/** (640) */
+	/** 640, 768 */
+
+	/** 64byte aligned */
+	struct sea_graph_context_s g;	/** (16) */
+	uint8_t _pad2[32];				/** (32) */
+	uint64_t mem_size;				/** (8) malloc size */
+	int32_t mem_cnt;				/** (4) */
+	uint8_t _pad1[4];				/** (4) */
+	/** 64, 832 */
 };
-#endif
+_static_assert(sizeof(struct sea_search_context_s) == 832);
+#define SEA_SEARCH_CONTEXT_LOAD_OFFSET	( SEA_DP_CONTEXT_LOAD_OFFSET + SEA_MEM_ARRAY_SIZE * sizeof(uint8_t *) )
+#define SEA_SEARCH_CONTEXT_LOAD_SIZE	( sizeof(struct sea_search_context_s) - SEA_SEARCH_CONTEXT_LOAD_OFFSET )
 
 /**
  * @struct sea_flags
+ * sizeof(sea_flags) = 4
  */
-union sea_flags {
-	struct _sea_flags_st {
+union sea_flags_u {
+	struct _sea_flags_st_s {
 		uint32_t seq_a 			: 3;
 		uint32_t seq_a_dir		: 2;
 		uint32_t seq_b 			: 3;
@@ -261,6 +391,7 @@ union sea_flags {
 	} sep;
 	uint32_t all;
 };
+_static_assert(sizeof(union sea_flags_u) == 4);
 
 /**
  * @struct sea_context
@@ -268,88 +399,85 @@ union sea_flags {
  * @brief (API) an algorithmic context.
  *
  * @sa sea_init, sea_close
+ * sizeof(struct sea_context) = 1472
  */
 struct sea_context {
-	/** templates */
 	/** 64byte aligned */
-	struct sea_local_context k;		/** (448) */
-	/** 448, 448 */
+	/** templates */
+	struct sea_search_context_s e;	/** (832) */
+	/** 832, 832 */
 	
 	/** 64byte aligned */
-	struct sea_joint_tail jt;		/** (32) */
-	struct sea_joint_head jh;		/** (16) */
-	/** flags */
-	union sea_flags flags;			/** (4) a bitfield of option flags */
-	uint8_t _pad1[12];				/** (12) */
-	/** 64, 512 */
+	struct sea_middle_delta_s md;	/** (64) */
+	/** 64, 896 */
 
-	/** joint vectors */
 	/** 64byte aligned */
-	uint8_t root_vec[512];			/** (512) */
-	/** 512, 1024 */
+	/** phantom vectors */
+	struct sea_joint_head_s jh;		/** (16) */
+	struct sea_mask_pair_s mask[2];	/** (16) */
+	struct sea_joint_tail_s jt;		/** (96) */
+	/** 128, 1024 */
 
 	/** constants */
 	/** 64byte aligned */
-	struct sea_aln_funcs dynamic;	/** (64) */
-	struct sea_aln_funcs guided;	/** (64) */
+	struct sea_aln_funcs_s dynamic;	/** (64) */
+	struct sea_aln_funcs_s guided;	/** (64) */
 	/** 128, 1152 */
 
 	/** 64byte aligned */
-	struct sea_writer fw;			/** (24) */
-	struct sea_writer rv;			/** (24) */
-	uint8_t _pad2[16];				/** (16) */
+	struct sea_writer_s rv;			/** (16) reverse writer */
+	struct sea_writer_s fw;			/** (16) forward writer */
+
+	struct sea_graph_funcs_s graph;	/** (16) */
+
+	/** flags */
+	union sea_flags_u flags;		/** (4) a bitfield of option flags */
+	uint8_t _pad1[12];				/** (12) */
 	/** 64, 1216 */
 
 	/** 64byte aligned */
 };
+_static_assert(sizeof(struct sea_context) == 1216);
 
 /**
  * function declarations
  * naive, twig, branch, trunk
  */
-struct sea_chain_status twig_linear_dynamic_fill(struct sea_local_context *this, uint8_t *pdp, struct sea_fill_section *sec);
-struct sea_chain_status twig_affine_dynamic_fill(struct sea_local_context *this, uint8_t *pdp, struct sea_fill_section *sec);
-struct sea_chain_status twig_linear_guided_fill(struct sea_local_context *this, uint8_t *pdp, struct sea_fill_section *sec);
-struct sea_chain_status twig_affine_guided_fill(struct sea_local_context *this, uint8_t *pdp, struct sea_fill_section *sec);
-struct sea_chain_status twig_linear_dynamic_trace(struct sea_local_context *this, uint8_t *pdp);
-struct sea_chain_status twig_affine_dynamic_trace(struct sea_local_context *this, uint8_t *pdp);
-struct sea_chain_status twig_linear_guided_trace(struct sea_local_context *this, uint8_t *pdp);
-struct sea_chain_status twig_affine_guided_trace(struct sea_local_context *this, uint8_t *pdp);
+struct sea_chain_status_s twig_linear_dynamic_fill(struct sea_dp_context_s *this, uint8_t *pdp, struct sea_section_pair_s *sec);
+struct sea_chain_status_s twig_affine_dynamic_fill(struct sea_dp_context_s *this, uint8_t *pdp, struct sea_section_pair_s *sec);
+struct sea_chain_status_s twig_linear_guided_fill(struct sea_dp_context_s *this, uint8_t *pdp, struct sea_section_pair_s *sec);
+struct sea_chain_status_s twig_affine_guided_fill(struct sea_dp_context_s *this, uint8_t *pdp, struct sea_section_pair_s *sec);
+struct sea_chain_status_s twig_linear_dynamic_trace(struct sea_dp_context_s *this, uint8_t *pdp);
+struct sea_chain_status_s twig_affine_dynamic_trace(struct sea_dp_context_s *this, uint8_t *pdp);
+struct sea_chain_status_s twig_linear_guided_trace(struct sea_dp_context_s *this, uint8_t *pdp);
+struct sea_chain_status_s twig_affine_guided_trace(struct sea_dp_context_s *this, uint8_t *pdp);
 
-struct sea_chain_status branch_linear_dynamic_fill(struct sea_local_context *this, uint8_t *pdp, struct sea_fill_section *sec);
-struct sea_chain_status branch_affine_dynamic_fill(struct sea_local_context *this, uint8_t *pdp, struct sea_fill_section *sec);
-struct sea_chain_status branch_linear_guided_fill(struct sea_local_context *this, uint8_t *pdp, struct sea_fill_section *sec);
-struct sea_chain_status branch_affine_guided_fill(struct sea_local_context *this, uint8_t *pdp, struct sea_fill_section *sec);
-struct sea_chain_status branch_linear_dynamic_trace(struct sea_local_context *this, uint8_t *pdp);
-struct sea_chain_status branch_affine_dynamic_trace(struct sea_local_context *this, uint8_t *pdp);
-struct sea_chain_status branch_linear_guided_trace(struct sea_local_context *this, uint8_t *pdp);
-struct sea_chain_status branch_affine_guided_trace(struct sea_local_context *this, uint8_t *pdp);
+struct sea_chain_status_s branch_linear_dynamic_fill(struct sea_dp_context_s *this, uint8_t *pdp, struct sea_section_pair_s *sec);
+struct sea_chain_status_s branch_affine_dynamic_fill(struct sea_dp_context_s *this, uint8_t *pdp, struct sea_section_pair_s *sec);
+struct sea_chain_status_s branch_linear_guided_fill(struct sea_dp_context_s *this, uint8_t *pdp, struct sea_section_pair_s *sec);
+struct sea_chain_status_s branch_affine_guided_fill(struct sea_dp_context_s *this, uint8_t *pdp, struct sea_section_pair_s *sec);
+struct sea_chain_status_s branch_linear_dynamic_trace(struct sea_dp_context_s *this, uint8_t *pdp);
+struct sea_chain_status_s branch_affine_dynamic_trace(struct sea_dp_context_s *this, uint8_t *pdp);
+struct sea_chain_status_s branch_linear_guided_trace(struct sea_dp_context_s *this, uint8_t *pdp);
+struct sea_chain_status_s branch_affine_guided_trace(struct sea_dp_context_s *this, uint8_t *pdp);
 
-struct sea_chain_status trunk_linear_dynamic_fill(struct sea_local_context *this, uint8_t *pdp, struct sea_fill_section *sec);
-struct sea_chain_status trunk_affine_dynamic_fill(struct sea_local_context *this, uint8_t *pdp, struct sea_fill_section *sec);
-struct sea_chain_status trunk_linear_guided_fill(struct sea_local_context *this, uint8_t *pdp, struct sea_fill_section *sec);
-struct sea_chain_status trunk_affine_guided_fill(struct sea_local_context *this, uint8_t *pdp, struct sea_fill_section *sec);
-struct sea_chain_status trunk_linear_dynamic_trace(struct sea_local_context *this, uint8_t *pdp);
-struct sea_chain_status trunk_affine_dynamic_trace(struct sea_local_context *this, uint8_t *pdp);
-struct sea_chain_status trunk_linear_guided_trace(struct sea_local_context *this, uint8_t *pdp);
-struct sea_chain_status trunk_affine_guided_trace(struct sea_local_context *this, uint8_t *pdp);
+struct sea_chain_status_s trunk_linear_dynamic_fill(struct sea_dp_context_s *this, uint8_t *pdp, struct sea_section_pair_s *sec);
+struct sea_chain_status_s trunk_affine_dynamic_fill(struct sea_dp_context_s *this, uint8_t *pdp, struct sea_section_pair_s *sec);
+struct sea_chain_status_s trunk_linear_guided_fill(struct sea_dp_context_s *this, uint8_t *pdp, struct sea_section_pair_s *sec);
+struct sea_chain_status_s trunk_affine_guided_fill(struct sea_dp_context_s *this, uint8_t *pdp, struct sea_section_pair_s *sec);
+struct sea_chain_status_s trunk_linear_dynamic_trace(struct sea_dp_context_s *this, uint8_t *pdp);
+struct sea_chain_status_s trunk_affine_dynamic_trace(struct sea_dp_context_s *this, uint8_t *pdp);
+struct sea_chain_status_s trunk_linear_guided_trace(struct sea_dp_context_s *this, uint8_t *pdp);
+struct sea_chain_status_s trunk_affine_guided_trace(struct sea_dp_context_s *this, uint8_t *pdp);
 
-struct sea_chain_status naive_linear_dynamic_fill(struct sea_local_context *this, uint8_t *pdp, struct sea_fill_section *sec);
-struct sea_chain_status naive_affine_dynamic_fill(struct sea_local_context *this, uint8_t *pdp, struct sea_fill_section *sec);
-struct sea_chain_status naive_linear_guided_fill(struct sea_local_context *this, uint8_t *pdp, struct sea_fill_section *sec);
-struct sea_chain_status naive_affine_guided_fill(struct sea_local_context *this, uint8_t *pdp, struct sea_fill_section *sec);
-struct sea_chain_status naive_linear_dynamic_trace(struct sea_local_context *this, uint8_t *pdp);
-struct sea_chain_status naive_affine_dynamic_trace(struct sea_local_context *this, uint8_t *pdp);
-struct sea_chain_status naive_linear_guided_trace(struct sea_local_context *this, uint8_t *pdp);
-struct sea_chain_status naive_affine_guided_trace(struct sea_local_context *this, uint8_t *pdp);
-
-/**
- * flags
- */
-// #define SW 								( SEA_SW )
-// #define NW 								( SEA_NW )
-// #define SEA 							( SEA_SEA )
-// #define XSEA 							( SEA_XSEA )
+struct sea_chain_status_s naive_linear_dynamic_fill(struct sea_dp_context_s *this, uint8_t *pdp, struct sea_section_pair_s *sec);
+struct sea_chain_status_s naive_affine_dynamic_fill(struct sea_dp_context_s *this, uint8_t *pdp, struct sea_section_pair_s *sec);
+struct sea_chain_status_s naive_linear_guided_fill(struct sea_dp_context_s *this, uint8_t *pdp, struct sea_section_pair_s *sec);
+struct sea_chain_status_s naive_affine_guided_fill(struct sea_dp_context_s *this, uint8_t *pdp, struct sea_section_pair_s *sec);
+struct sea_chain_status_s naive_linear_dynamic_trace(struct sea_dp_context_s *this, uint8_t *pdp);
+struct sea_chain_status_s naive_affine_dynamic_trace(struct sea_dp_context_s *this, uint8_t *pdp);
+struct sea_chain_status_s naive_linear_guided_trace(struct sea_dp_context_s *this, uint8_t *pdp);
+struct sea_chain_status_s naive_affine_guided_trace(struct sea_dp_context_s *this, uint8_t *pdp);
 
 /**
  * coordinate conversion macros
@@ -358,7 +486,7 @@ struct sea_chain_status naive_affine_guided_trace(struct sea_local_context *this
 #define coy(p, q, band)				( (((p)+1)>>1) + (q) )
 #define cop(x, y, band)				( (x) + (y) )
 #define coq(x, y, band) 			( ((y)-(x))>>1 )
-// #define INSIDE(x, y, p, q, band)	( (COX(p, q, band) < (x)) && (COY(p, q, band) < (y)) )
+#define rev(pos, len)				( 2 * (len) - (pos) )
 
 /**
  * @enum _STATE
@@ -367,33 +495,14 @@ enum _STATE {
 	CONT 	= 0,
 	MEM 	= 1,
 	CHAIN 	= 2,
-	TERM 	= 3
+	CAP 	= 3,
+	TERM 	= 4
 };
 
 
 /**
  * direction determiner constants
  */
-/**
- * @enum _DIR
- * @brief constants for direction flags.
- */
-#if 0
-enum _DIR {
-	LEFT 	= SEA_UE_LEFT<<2,
-	TOP 	= SEA_UE_TOP<<2
-};
-
-/**
- * @enum _DIR2
- */
-enum _DIR2 {
-	LL = (SEA_UE_LEFT<<0) | (SEA_UE_LEFT<<2),
-	LT = (SEA_UE_LEFT<<0) | (SEA_UE_TOP<<2),
-	TL = (SEA_UE_TOP<<0) | (SEA_UE_LEFT<<2),
-	TT = (SEA_UE_TOP<<0) | (SEA_UE_TOP<<2)
-};
-#endif
 enum _DIR {
 	LEFT 	= SEA_UE_LEFT,
 	TOP 	= SEA_UE_TOP
@@ -404,21 +513,6 @@ enum _DIR2 {
 	TL = (SEA_UE_TOP<<2) | (SEA_UE_LEFT<<0),
 	TT = (SEA_UE_TOP<<2) | (SEA_UE_TOP<<0)
 };
-
-#if 0
-/**
- * char vector shift operations
- */
-#define pushq(x, y) { \
-	vec_char_shift_l(y, y); \
-	vec_char_insert_lsb(y, x); \
-}
-
-#define pusht(x, y) { \
-	vec_char_shift_r(y, y); \
-	vec_char_insert_msb(y, x); \
-}
-#endif
 
 /**
  * string concatenation macros
@@ -457,29 +551,6 @@ enum _DIR2 {
 #define label2(a,b)						JOIN2(a,b)
 #define label3(a,b,c)					JOIN3(a,b,c)
 
-#if 0
-/**
- * @macro func_next
- */
-#define func_next(k, ptr) ( \
-	(k->f->twig == ptr) ? k->f->branch : k->f->trunk \
-)
-
-/**
- * @macro func_alt
- */
-#define func_alt(k, ptr) ( \
-	(k->f->balloon == ptr) ? k->f->trunk : k->f->balloon \
-)
-
-/* foreach */
-#define _for(iter, cnt)		for(iter = 0; iter < cnt; iter++)
-
-/* boolean */
-#define TRUE 			( 1 )
-#define FALSE 			( 0 )
-#endif
-
 /**
  * max and min
  */
@@ -490,14 +561,6 @@ enum _DIR2 {
 #define MIN2(x,y) 		( (x) < (y) ? (x) : (y) )
 #define MIN3(x,y,z) 	( MIN2(x, MIN2(y, z)) )
 #define MIN4(w,x,y,z) 	( MIN2(MIN2(w, x), MIN2(y, z)) )
-
-#if 0
-/**
- * @macro XCUT
- * @brief an macro for xdrop termination.
- */
-#define XCUT(d,m,x) 	( ((d) + (x) > (m) ? (d) : SEA_CELL_MIN )
-#endif
 
 #endif /* #ifndef _UTIL_H_INCLUDED */
 

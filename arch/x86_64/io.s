@@ -131,6 +131,135 @@ _load_ascii_bulk_loop:
 _load_ascii_ret:
 	ret
 
+	.align 16
+_load_ascii_rev:
+	.long 0x0c0d0e0f
+	.long 0x08090a0b
+	.long 0x04050607
+	.long 0x00010203
+
+	.text
+	.align 4
+	# ascii
+	# input:  %rdi (dst pointer (8bit array))
+	#         %rsi (src pointer (ascii array))
+	#         %rdx (index)
+	#         %rcx (src length)
+	#         %r8  (copy length)
+	# output: %rax
+	# work:   %xmm0, %xmm1, %xmm2
+	.globl _load_ascii_fw
+	.globl __load_ascii_fw
+_load_ascii_fw:
+__load_ascii_fw:
+	cmpq $0, %rdx
+	jl _load_ascii_fw_inv
+	movl $0x03030303, %eax
+	movq %rax, %xmm4
+	pshufd $0, %xmm4, %xmm4
+	cmpq %rcx, %rdx
+	jge _load_ascii_fw_r
+_load_ascii_fw_f:
+	movdqu (%rsi, %rdx), %xmm0
+	movdqu 16(%rsi, %rdx), %xmm1
+	movdqa %xmm0, %xmm2
+	movdqa %xmm1, %xmm3
+	psrlq $1, %xmm0
+	psrlq $1, %xmm1
+	psrlq $2, %xmm2
+	psrlq $2, %xmm3
+	pxor %xmm0, %xmm2
+	pxor %xmm1, %xmm3
+	pand %xmm4, %xmm2
+	pand %xmm4, %xmm3
+	movdqu %xmm2, (%rdi)
+	movdqu %xmm3, 16(%rdi)
+	ret
+_load_ascii_fw_r:
+	addq %rcx, %rcx
+	subq %rdx, %rcx
+	movdqa _load_ascii_rev(%rip), %xmm5
+	movdqu (%rsi, %rcx), %xmm0
+	movdqu 16(%rsi, %rcx), %xmm1
+	movdqa %xmm0, %xmm2
+	movdqa %xmm1, %xmm3
+	psrlq $1, %xmm0
+	psrlq $1, %xmm1
+	psrlq $2, %xmm2
+	psrlq $2, %xmm3
+	pxor %xmm0, %xmm2
+	pxor %xmm1, %xmm3
+	pand %xmm4, %xmm2
+	pand %xmm4, %xmm3
+	pshufb %xmm5, %xmm2
+	pshufb %xmm5, %xmm3
+	movdqu %xmm2, 16(%rdi)
+	movdqu %xmm3, (%rdi)
+	ret
+_load_ascii_fw_inv:
+	shrq $16, %rdx
+	movq %rdx, %xmm0
+	pshufd $0, %xmm0, %xmm0
+	movdqu %xmm0, (%rdi)
+	movdqu %xmm0, 16(%rdi)
+	ret
+
+	.globl _load_ascii_fr
+	.globl __load_ascii_fr
+_load_ascii_fr:
+__load_ascii_fr:
+	cmpq $0, %rdx
+	jl _load_ascii_fr_inv
+	movl $0x03030303, %eax
+	movq %rax, %xmm4
+	pshufd $0, %xmm4, %xmm4
+	cmpq %rcx, %rdx
+	jge _load_ascii_fr_r
+_load_ascii_fr_f:
+	movdqu (%rdx, %rsi), %xmm0
+	movdqu 16(%rdx, %rsi), %xmm1
+	movdqa %xmm0, %xmm2
+	movdqa %xmm1, %xmm3
+	psrlq $1, %xmm0
+	psrlq $1, %xmm1
+	psrlq $2, %xmm2
+	psrlq $2, %xmm3
+	pxor %xmm0, %xmm2
+	pxor %xmm1, %xmm3
+	pand %xmm4, %xmm2
+	pand %xmm4, %xmm3
+	movdqu %xmm2, (%rdi)
+	movdqu %xmm3, 16(%rdi)
+	ret
+_load_ascii_fr_r:
+	movdqa _load_ascii_rev(%rip), %xmm5
+	movdqu (%rdx, %rsi), %xmm0
+	movdqu 16(%rdx, %rsi), %xmm1
+	movdqa %xmm0, %xmm2
+	movdqa %xmm1, %xmm3
+	psrlq $1, %xmm0
+	psrlq $1, %xmm1
+	psrlq $2, %xmm2
+	psrlq $2, %xmm3
+	pxor %xmm0, %xmm2
+	pxor %xmm1, %xmm3
+	pand %xmm4, %xmm2
+	pand %xmm4, %xmm3
+	pxor %xmm4, %xmm2
+	pxor %xmm4, %xmm3
+	pshufb %xmm5, %xmm2
+	pshufb %xmm5, %xmm3
+	movdqu %xmm3, (%rdi)
+	movdqu %xmm2, 16(%rdi)
+	ret
+_load_ascii_fr_inv:
+	shrq $16, %rdx
+	movq %rdx, %xmm0
+	pshufd $0, %xmm0, %xmm0
+	movdqu %xmm0, (%rdi)
+	movdqu %xmm0, 16(%rdi)
+	ret
+
 	# 4bit
 	# input:  %rdi (dst pointer (8bit array))
 	#         %rsi (src pointer (4bit unpacked array))
@@ -378,7 +507,7 @@ __push_cigar_r_loop:
 	movq %rsi, %rax
 	shrq $2, %rsi
 	shlq $2, %rsi
-	movl %r8, -4(%rdi, %rsi)
+	movl %r8d, -4(%rdi, %rsi)
 	ret
 
 	# cigar forward
@@ -392,15 +521,17 @@ __push_cigar_r_loop:
 _push_cigar_f:
 __push_cigar_f:
 	movl -4(%rdi, %rsi), %r8d
-	movq %r8, %rdx
+#	movq %r8, %rdx
 	shrq $29, %r8
 	cmpb %r8b, %cl
-	je __push_cigar_f_incr
+	jne __push_cigar_f_next
+	addq $1, -4(%rdi, %rsi)
+	movq %rsi, %rax
+	ret
+__push_cigar_f_next:
 	shlq $29, %rcx
 	movq %rcx, %rdx
 	addq $4, %rsi
-__push_cigar_f_incr:
-	addq $1, %rdx
 	movl %edx, -4(%rdi, %rsi)
 	movq %rsi, %rax
 	ret
@@ -438,7 +569,7 @@ __push_dir_f:
 	movq $0x0000010100010001, %r8
 	shlq $4, %rcx
 	shrq %cl, %r8
-	movw (%rdi, %rsi)
+	movw %r8w, (%rdi, %rsi)
 	shrq $5, %rcx
 	negq %rcx
 	leaq 2(%rsi, %rcx), %rax

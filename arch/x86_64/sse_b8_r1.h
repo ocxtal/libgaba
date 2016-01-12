@@ -341,8 +341,8 @@
 	vec_insert_lsb(x, y); \
 }
 
-#define vec_char_print(s, v) { \
-	vec_print(s, v); \
+#define vec_char_print(v) { \
+	vec_print(v); \
 }
 
 #endif /* #ifndef _SIMD_INCLUDED */

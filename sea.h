@@ -25,96 +25,40 @@
 #ifndef _SEA_H_INCLUDED
 #define _SEA_H_INCLUDED
 
-/**
- * If this file is included from C++ source code, wrap content of this
- * file with namespace sea.
- */
-#ifdef __cplusplus
-namespace sea {
-#endif
-
 #include <stdlib.h>		/** NULL and size_t */
 #include <stdint.h>		/** uint8_t, int32_t, int64_t */
 
 /**
- * @enum sea_flags_pos
- *
- * @brief (internal) positions of option flag bit field.
- */
-enum sea_flags_pos {
-	SEA_FLAGS_POS_SEQ_A 	= 0,
-	SEA_FLAGS_POS_SEQ_A_DIR = 3,
-	SEA_FLAGS_POS_SEQ_B		= 5,
-	SEA_FLAGS_POS_SEQ_B_DIR = 8,
-	SEA_FLAGS_POS_ALN 		= 10
-};
-
-/**
- * @enum sea_flags_mask
- *
- * @brief (internal) bit-field masks
- */
-enum sea_flags_mask {
-	SEA_FLAGS_MASK_SEQ_A		= 0x07<<SEA_FLAGS_POS_SEQ_A,
-	SEA_FLAGS_MASK_SEQ_A_DIR 	= 0x03<<SEA_FLAGS_POS_SEQ_A_DIR,
-	SEA_FLAGS_MASK_SEQ_B		= 0x07<<SEA_FLAGS_POS_SEQ_B,
-	SEA_FLAGS_MASK_SEQ_B_DIR 	= 0x03<<SEA_FLAGS_POS_SEQ_B_DIR,
-	SEA_FLAGS_MASK_ALN			= 0x03<<SEA_FLAGS_POS_ALN
-};
-
-/**
- * @enum sea_flags_seq_a
+ * @enum sea_flags_format
  *
  * @brief (API) constants of the sequence format option.
  */
-enum sea_flags_seq_a {
-	SEA_SEQ_A_ASCII 		= 1<<SEA_FLAGS_POS_SEQ_A,
-	SEA_SEQ_A_4BIT 			= 2<<SEA_FLAGS_POS_SEQ_A,
-	SEA_SEQ_A_2BIT 			= 3<<SEA_FLAGS_POS_SEQ_A,
-	SEA_SEQ_A_4BIT8PACKED 	= 4<<SEA_FLAGS_POS_SEQ_A,
-	SEA_SEQ_A_2BIT8PACKED 	= 5<<SEA_FLAGS_POS_SEQ_A,
-	SEA_SEQ_A_1BIT64PACKED 	= 6<<SEA_FLAGS_POS_SEQ_A
+enum sea_flags_format {
+	SEA_ASCII 			= 1,
+	SEA_4BIT 			= 2,
+	SEA_2BIT 			= 3,
+	SEA_4BIT8PACKED 	= 4,
+	SEA_2BIT8PACKED 	= 5,
+	SEA_1BIT64PACKED 	= 6
 };
 
 /**
- * @enum sea_flags_seq_a_dir
+ * @enum sea_flags_dir
  */
-enum sea_flags_seq_a {
-	SEA_SEQ_A_FW_ONLY		= 1<<SEA_FLAGS_POS_SEQ_A_DIR,
-	SEA_SEQ_A_FW_RV		 	= 2<<SEA_FLAGS_POS_SEQ_A_DIR
+enum sea_flags_dir {
+	SEA_FW_ONLY			= 1,
+	SEA_FW_RV		 	= 2
 };
 
 /**
- * @enum sea_flags_seq_b
- *
- * @brief (API) constants of the sequence format option.
- */
-enum sea_flags_seq_b {
-	SEA_SEQ_B_ASCII 		= 1<<SEA_FLAGS_POS_SEQ_B,
-	SEA_SEQ_B_4BIT 			= 2<<SEA_FLAGS_POS_SEQ_B,
-	SEA_SEQ_B_2BIT 			= 3<<SEA_FLAGS_POS_SEQ_B,
-	SEA_SEQ_B_4BIT8PACKED 	= 4<<SEA_FLAGS_POS_SEQ_B,
-	SEA_SEQ_B_2BIT8PACKED 	= 5<<SEA_FLAGS_POS_SEQ_B,
-	SEA_SEQ_B_1BIT64PACKED 	= 6<<SEA_FLAGS_POS_SEQ_B
-};
-
-/**
- * @enum sea_flags_seq_b_dir
- */
-enum sea_flags_seq_b {
-	SEA_SEQ_B_FW_ONLY 		= 1<<SEA_FLAGS_POS_SEQ_B_DIR,
-	SEA_SEQ_B_FW_RV		 	= 2<<SEA_FLAGS_POS_SEQ_B_DIR
-};
-
-/**
- * @enum sea_flags_aln
+ * @enum sea_flags_aln_format
  *
  * @brief (API) constants of the alignment format option.
  */
-enum sea_flags_aln {
-	SEA_ALN_ASCII 			= 1<<SEA_FLAGS_POS_ALN,
-	SEA_ALN_CIGAR			= 2<<SEA_FLAGS_POS_ALN,
-	SEA_ALN_DIR 			= 3<<SEA_FLAGS_POS_ALN
+enum sea_flags_aln_format {
+	SEA_STR 			= 1,
+	SEA_CIGAR			= 2,
+	SEA_DIR 			= 3
 };
 
 /**
@@ -168,45 +112,43 @@ enum sea_checkpoint_type {
  */
 enum sea_clip_type {
 	SEA_CLIP_SOFT = 'S',
-	SEA_CLIP_HARD = 'H',
-	SEA_CLIP_NULL = 0
+	SEA_CLIP_HARD = 'H'
 };
 
 /**
- * @struct sea_align_pair
+ * @struct sea_seq_pair_s
+ * @brief ref-read pair
  */
-struct sea_align_pair {
-	void const *pa;
-	void const *pb;
-	uint64_t alen;
-	uint64_t blen;
+struct sea_seq_pair_s {
+	void const *pa, *pb;		/** (16) */
+	uint64_t alen, blen;		/** (16) */
 };
+typedef struct sea_seq_pair_s sea_seq_pair_t;
 
 /**
- * @struct sea_align_checkpoint
+ * @struct sea_checkpoint_s
  *
  * @brief input point container for checkpoint alignment function.
  */
-struct sea_align_checkpoint {
+struct sea_checkpoint_s {
 	uint64_t apos;			/** (apos, bpos) makes a checkpoint on seq a and seq b */
 	uint64_t bpos;
-//	int32_t type;			/** checkpoint type; see `enum sea_align_checkpoint_type'. */
-//	uint8_t _pad[4];
-//	struct sea_align_checkpoint *next;	/** linked list */
 };
+typedef struct sea_checkpoint_s sea_checkpoint_t;
 
 /**
- * @struct sea_align_section
+ * @struct sea_section_s
  *
  * @brief section container
  */
-struct sea_align_section {
-	uint64_t aspos, bepos;
-	uint64_t aepos, bepos;
+struct sea_section_s {
+	uint64_t apos, bpos;
+	uint64_t alen, blen;
 };
+typedef struct sea_section_s sea_section_t;
 
 /**
- * @struct sea_result
+ * @struct sea_result_s
  *
  * @brief (API) a structure containing an alignment result.
  *
@@ -221,174 +163,148 @@ struct sea_align_section {
  *
  * @sa sea_sea, sea_aln_free
  */
-struct sea_result {
-	void const *a; 			/*!< a pointer to the sequence a. */
-	void const *b;			/*!< a pointer to the sequence b. */
+struct sea_result_s {
+	/** alignment positions */
+	uint64_t apos;			/*!< alignment start position on a. */
+	uint64_t bpos;			/*!< alignment start position on b. */
+	uint64_t alen;			/*!< alignment length on a. the alignment interval is a[apos]..a[apos+alen-1] */
+	uint64_t blen;			/*!< alignment length on b. the alignment interval is b[bpos]..b[bpos+blen-1] */
+
+	/** alignment score */
+	int32_t score;			/*!< the alignment score. */
+	int32_t flags;			/*!< unused for now */
+
+	/** alignment string and its lengths */
 	uint8_t *aln;			/*!< a pointer to the alignment result. */
 	uint64_t slen;			/*!< the length of the alignment string (slen == strlen(aln)) */
 	uint64_t plen;			/*!< the length of the path of the alignment (slen == tlen if ASCII) */
-	uint64_t apos;			/*!< alignment start position on a. */
-	uint64_t alen;			/*!< alignment length on a. the alignment interval is a[apos]..a[apos+alen-1] */
-	uint64_t bpos;			/*!< alignment start position on b. */
-	uint64_t blen;			/*!< alignment length on b. the alignment interval is b[bpos]..b[bpos+blen-1] */
-	int32_t score;			/*!< the alignment score. */
+	
+	/** copy of input information */
+	void const *a; 			/*!< a pointer to the sequence a. */
+	void const *b;			/*!< a pointer to the sequence b. */
 };
-
-/**
- * @type sea_res_t
- */
-typedef struct sea_result sea_res_t;
+typedef struct sea_result_s sea_res_t;
 
 /**
  * @type sea_t
  *
- * @brief (API) an alias to `struct sea_context'.
+ * @brief (API) an alias to `struct sea_context_s'.
  */
-typedef struct sea_context sea_t;
+typedef struct sea_context_s sea_t;
 
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* #ifdef __cplusplus */
+/**
+ * @struct sea_score_s
+ * @brief score container
+ */
+struct sea_score_s {
+	int8_t score_sub[4][4];
+	int8_t score_gi_a, score_ge_a;
+	int8_t score_gi_b, score_ge_b;
+};
+typedef struct sea_score_s sea_score_t;
+
+/**
+ * @struct sea_params_s
+ * @brief input parameters of sea_init
+ */
+struct sea_params_s {
+	/** input options */
+	int32_t seq_a_format;
+	int32_t seq_a_direction;
+	int32_t seq_b_format;
+	int32_t seq_b_direction;
+	
+	/** output options */
+	int32_t aln_format;
+	int16_t head_margin;		/** margin at the head of sea_res_t */
+	int16_t tail_margin;		/** margin at the tail of sea_res_t */
+
+	/** score parameters */
+	sea_score_t const *score_matrix;
+	int32_t xdrop;
+};
+typedef struct sea_params_s sea_params_t;
+
+/**
+ * @macro SEA_PARAMS
+ * @brief utility macro for sea_init, see example on header.
+ */
+#define SEA_PARAMS(...)			( &((struct sea_params_s) { __VA_ARGS__ }) )
+
+/**
+ * @macro SEA_SCORE_SIMPLE
+ * @brief utility macro for constructing score parameters.
+ */
+#define SEA_SCORE_SIMPLE(m, x, gi, ge) ( \
+	&((map_score_t const) { \
+		.score_sub = { \
+			{m, x, x, x}, \
+			{x, m, x, x}, \
+			{x, x, m, x}, \
+			{x, x, x, m} \
+		}, \
+		.score_gi_a = gi, \
+		.score_ge_a = ge, \
+		.score_gi_b = gi, \
+		.score_ge_b = ge \
+	}) \
+)
 
 /**
  * @fn sea_init
- *
- * @brief (API) constructs and initializes an alignment context.
- *
- * @param[in] flags : option flags. see flags.h for more details.
- * @param[in] len : maximal alignment length. len must hold len > 0.
- * @param[in] m : match award in the Dynamic Programming. (m >= 0)
- * @param[in] x :  mismatch cost. (x < m)
- * @param[in] gi : gap open cost. (or just gap cost in the linear-gap cost) (2gi <= x)
- * @param[in] ge : gap extension cost. (ge <= 0) valid only in the affine-gap cost. the total penalty of the gap with length L is gi + (L - 1)*ge.
- * @param[in] tx : xdrop threshold. (xdrop > 0) valid only in the seed-and-extend alignment. the extension is terminated when the score S meets S < max - xdrop.
- * @param[in] tc : balloon switch threshold.
- * @param[in] tb : balloon termination threshold.
- *
- * @return a pointer to sea_context structure.
- *
- * @sa sea_free, sea_sea
+ * @brief sea_init new API
  */
-sea_t *sea_init(
-	int32_t flags,
-	int8_t m,
-	int8_t x,
-	int8_t gi,
-	int8_t ge,
-	int32_t tx);
+sea_t *sea_init(sea_params_t const *params);
 
 /**
  * @fn sea_align_semi_global
  */
 sea_res_t *sea_align_semi_global(
 	sea_t const *ctx,
-	void const *a,
-	uint64_t alen,
-	void const *b,
-	uint64_t blen,
+	sea_seq_pair_t const *p,
+	sea_checkpoint_t const *cp,
+	uint64_t cplen,
 	uint8_t const *guide,
-	uint64_t glen,
-	sea_section_t *section);
+	uint64_t glen);
 
 /**
  * @fn sea_align_global
  */
 sea_res_t *sea_align_global(
 	sea_t const *ctx,
-	void const *a,
-	uint64_t alen,
-	void const *b,
-	uint64_t blen,
+	sea_seq_pair_t const *p,
+	sea_checkpoint_t const *cp,
+	uint64_t cplen,
 	uint8_t const *guide,
-	uint64_t glen,
-	sea_section_t *section);
+	uint64_t glen);
 
 /**
- * @fn sea_align_checkpoint
+ * @struct sea_clip_params
  */
-sea_res_t *sea_align_checkpoint(
-	sea_t const *ctx,
-	void const *a,
-	uint64_t alen,
-	void const *b,
-	uint64_t blen,
-	uint8_t const *guide,
-	uint64_t glen,
-	sea_section_t *section);
+struct sea_clip_params {
+	int64_t head_length;
+	int64_t tail_length;
+	char type;
+};
+typedef struct sea_clip_params sea_clip_params_t;
 
 /**
- * old apis
+ * @macro SEA_CLIP_PARAMS
  */
-/**
- * @fn sea_align
- *
- * @brief (API) alignment function. 
- *
- * @param[ref] ctx : a pointer to an alignment context structure. must be initialized with sea_init function.
- * @param[in] a : a pointer to the query sequence a. see seqreader.h for more details of query sequence formatting.
- * @param[in] apos : the alignment start position in a. (0 <= apos < length(sequence a)) (or search start position in the Smith-Waterman algorithm). the alignment includes the position apos.
- * @param[in] alen : the extension length in a. (0 < alen) (to be exact, alen is search area length in the Smith-Waterman algorithm. the maximum extension length in the seed-and-extend alignment algorithm. the length of the query a to be aligned in the Needleman-Wunsch algorithm.)
- * @param[in] b : a pointer to the query sequence b.
- * @param[in] bpos : the alignment start position in b. (0 <= bpos < length(sequence b))
- * @param[in] blen : the extension length in b. (0 < blen)
- *
- * @return a pointer to the sea_result structure.
- *
- * @sa sea_init
- */
-sea_res_t *sea_align(
-	sea_t const *ctx,
-	void const *a,
-	int64_t asp,
-	int64_t aep,
-	void const *b,
-	int64_t bsp,
-	int64_t bep,
-	uint8_t const *guide,
-	int64_t glen);
+#define SEA_CLIP_PARAMS(...)		( &((struct sea_clip_params) { __VA_ARGS__ }) )
+#define SEA_CLIP_NULL				( NULL )
 
 /**
- * @fn sea_align_f
- * @brief the same as sea_align.
- */
-sea_res_t *sea_align_f(
-	sea_t const *ctx,
-	void const *a,
-	int64_t asp,
-	int64_t aep,
-	void const *b,
-	int64_t bsp,
-	int64_t bep,
-	uint8_t const *guide,
-	int64_t glen);
-
-/**
- * @fn sea_align_r
- * @brief the reverse variant of sea_align.
- */
-sea_res_t *sea_align_r(
-	sea_t const *ctx,
-	void const *a,
-	int64_t asp,
-	int64_t aep,
-	void const *b,
-	int64_t bsp,
-	int64_t bep,
-	uint8_t const *guide,
-	int64_t glen);
-
-/**
- * @fn sea_add_clips
+ * @fn sea_generate_string
  *
- * @brief add soft / hard clip to the ends of the cigar string.
+ * @brief generate alignment result string
  */
-void sea_add_clips(
+sea_res_t *sea_generate_string(
 	sea_t const *ctx,
+	sea_seq_pair_t const *p,
 	sea_res_t *aln,
-	int64_t hlen,
-	int64_t tlen,
-	char type);
+	sea_clip_params_t const *clip);
 
 /**
  * @fn sea_get_error_num
@@ -432,193 +348,6 @@ void sea_aln_free(
  */
 void sea_close(
 	sea_t *ctx);
-
-#ifdef __cplusplus
-}		/* end of extern "C" */
-#endif  /* #ifdef __cplusplus */
-
-/**
- * this __cplusplus section corresponds to the __cplusplus section at
- * the top of this file. the former section contains a declaration of
- * the beginning of namespace sea, and this section contains the end of
- * the namespace and the additional C++ classes which wrap C APIs.
- */
-#ifdef __cplusplus
-
-#include <string>
-
-/**
- * @class AlignmentResult
- *
- * @brief (API) an wrapper class of struct sea_aln.
- */
-class AlignmentResult {
-private:
-	sea_res_t *_aln;
-public:
-	/**
-	 * constructor and destructor
-	 */
-	AlignmentResult(
-		sea_res_t *aln) {
-		_aln = aln;
-		if(_aln == NULL) {
-			throw (int)SEA_ERROR;
-		}
-		if(_aln->len < 0) {
-			throw (int)(_aln->len);
-		}
-	}
-	~AlignmentResult(void) {
-		sea_aln_free(_aln);			
-	}
-	/**
-	 * setters and getters
-	 *
-	 * sequence a
-	 */
-	void const *a(void) const {
-		return(_aln->a);
-	}
-	void const *a(void const *n) {
-		_aln->a = n;
-		return(_aln->a);
-	}
-
-	sea_int_t &apos(void) const {
-		return(_aln->apos);
-	}
-	sea_int_t &apos(sea_int_t const &n) {
-		_aln->apos = n;
-		return(_aln->apos);
-	}
-
-	sea_int_t &alen(void) const {
-		return(_aln->alen);
-	}
-	sea_int_t &alen(sea_int_t const &n) {
-		_aln->alen = n;
-		return(_aln->alen);
-	}
-
-	/**
-	 * sequence b
-	 */
-	void const *b(void) const {
-		return(_aln->b);
-	}
-	void const *b(void const *n) {
-		_aln->b = n;
-		return(_aln->b);
-	}
-
-	sea_int_t &bpos(void) const {
-		return(_aln->bpos);
-	}
-	sea_int_t &bpos(sea_int_t const &n) {
-		_aln->bpos = n;
-		return(_aln->bpos);
-	}
-
-	sea_int_t &blen(void) const {
-		return(_aln->blen);
-	}
-	sea_int_t &blen(sea_int_t const &n) {
-		_aln->blen = n;
-		return(_aln->blen);
-	}
-
-	/**
-	 * alignment string, score, and length
-	 */
-	void *aln(void) const {
-		return(_aln->aln);
-	}
-	void *aln(void *n) {
-		_aln->aln = n;
-		return(_aln->aln);
-	}
-	sea_int_t &score(void) const {
-		return(_aln->score);
-	}
-	sea_int_t &score(sea_int_t const &n) {
-		_aln->score = n;
-		return(_aln->score);
-	}
-	sea_int_t &len(void) const {
-		return(_aln->len);
-	}
-	sea_int_t &len(sea_int_t const &n) {
-		_aln->len = n;
-		return(_aln->len);
-	}
-};
-
-/**
- * @class AlignmentContext
- *
- * @brief (API) an wrapper class of sea_init function and sea_t
- */
-class AlignmentContext {
-private:
-	sea_t *_ctx;
-
-public:
-	/**
-	 * constructor. see sea.h for details of parameters.
-	 */
-	AlignmentContext(
-		sea_int_t flags,
-		sea_int_t len,
-		sea_int_t m,
-		sea_int_t x,
-		sea_int_t gi,
-		sea_int_t ge,
-		sea_int_t xdrop) {
-		_ctx = sea_init(flags, len, m, x, gi, ge, xdrop);
-		if(_ctx == NULL) {
-			throw (int)SEA_ERROR_OUT_OF_MEM;
-		}
-		if(_ctx->error_label != SEA_SUCCESS) {
-			throw (int)(_ctx->error_label);
-		}
-	}
-	/**
-	 * destructor, calls sea_aln_free
-	 */
-	~AlignmentContext(void) {
-		if(_ctx != NULL) {
-			sea_close(_ctx);
-			_ctx = NULL;
-		}
-	}
-	/**
-	 * alignment functions. see sea.h
-	 */
-	AlignmentResult align(
-		void const *a, sea_int_t apos, sea_int_t alen,
-		void const *b, sea_int_t bpos, sea_int_t blen) {
-		return(AlignmentResult(
-			sea_align(_ctx, a, apos, alen, b, bpos, blen)));
-	}
-
-	AlignmentResult align(
-		std::string a, sea_int_t apos, sea_int_t alen,
-		std::string b, sea_int_t bpos, sea_int_t blen) {
-		return(AlignmentResult(
-			sea_align(_ctx, a.c_str(), apos, alen, b.c_str(), bpos, blen)));
-	}
-
-	AlignmentResult align(
-		std::string a,
-		std::string b) {
-		return(AlignmentResult(
-			sea_align(_ctx, a.c_str(), 0, a.length(), b.c_str(), 0, b.length())));
-	}
-};
-
-}		/* end of namespace sea */
-#endif
 
 #endif  /* #ifndef _SEA_H_INCLUDED */
 

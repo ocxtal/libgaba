@@ -44,8 +44,8 @@ struct twig_linear_block {
 
 struct twig_linear_head {
 	struct sea_joint_head head;
-	twig_dpcell_t pv[BRANCH_BW];
-	twig_dpcell_t cv[BRANCH_BW];
+	twig_dpcell_t pv[TWIG_BW];
+	twig_dpcell_t cv[TWIG_BW];
 	struct twig_linear_block_trailer t;
 };
 

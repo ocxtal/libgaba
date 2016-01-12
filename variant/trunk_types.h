@@ -12,23 +12,64 @@
 #define TRUNK_DPCELL_MIN		( UINT8_MIN )
 #define TRUNK_DPCELL_MAX		( UINT8_MAX )
 #define TRUNK_BW 				( 32 )
+#define trunk_linear_bpl()		( sizeof(trunk_dpcell_t) * TRUNK_BW )
+#define trunk_linear_bpb()		( sizeof(struct trunk_linear_block) )
 
-#include "../arch/b8c32.h"
+#include "../arch/b8c32.h"		/** 8bit 32cell */
 
-struct trunk_linear_block {
-	trunk_dpchar_t dp[BLK][TRUNK_BW];
+/**
+ * @struct trunk_linear_block_dp
+ */
+struct trunk_linear_block_dp {
+	trunk_dpcell_t dp[BLK][TRUNK_BW];
+};
+
+/**
+ * @struct trunk_linear_block_trailer
+ */
+struct trunk_linear_block_trailer {
 	int64_t i, j;
 	trunk_dpcell_t maxv[TRUNK_BW];
 #if DP == DYNAMIC
-	_dir_vec(dr);
+	uint8_t dr[dir_size()];
 #endif
 };
 
+/**
+ * @struct trunk_linear_joint_vec
+ */
 struct trunk_linear_joint_vec {
-	trunk_dpchar_t wt[TRUNK_BW];
-	trunk_dpchar_t wq[TRUNK_BW];
+	trunk_dpcell_t dv[TRUNK_BW];
+	trunk_dpcell_t dh[TRUNK_BW];
+	trunk_dpcell_t acc[TRUNK_BW];
+	trunk_dpchar_t wa[TRUNK_BW];
+	trunk_dpchar_t wb[TRUNK_BW];
+};
+
+/**
+ * @struct trunk_linear_block
+ */
+struct trunk_linear_block {
+	struct trunk_linear_block_dp v;
+	struct trunk_linear_block_trailer t;
+};
+
+/**
+ * @struct trunk_linear_head
+ */
+struct trunk_linear_head {
+	struct sea_joint_head head;
 	trunk_dpcell_t pv[TRUNK_BW];
 	trunk_dpcell_t cv[TRUNK_BW];
+	struct trunk_linear_block_trailer t;
+};
+
+/**
+ * @struct trunk_linear_tail
+ */
+struct trunk_linear_tail {
+	struct trunk_linear_joint_vec v;
+	struct sea_joint_tail tail;
 };
 
 #ifndef _TYPES_INCLUDED

@@ -141,6 +141,14 @@
 			    } while(--_lcnt > 0); \
 	} \
 }
+#define _aligned_block_memset(dst, a, size) { \
+	void *_dst = (void *)(dst); \
+	__m128i const xmm0 = _mm_set1_epi8((int8_t)a); \
+	int64_t i; \
+	for(i = 0; i < size / sizeof(__m128i); i++) { \
+		_xmm_wr(_dst, 0); _dst += sizeof(__m128i); \
+	} \
+}
 
 /**
  * seqreader prototype implementation
@@ -153,12 +161,49 @@
 /**
  * reader function declarations (see io.s)
  */
+#if 0
 uint8_t _pop_ascii(uint8_t const *p, int64_t pos);
 uint8_t _pop_4bit(uint8_t const *p, int64_t pos);
 uint8_t _pop_2bit(uint8_t const *p, int64_t pos);
 uint8_t _pop_4bit8packed(uint8_t const *p, int64_t pos);
 uint8_t _pop_2bit8packed(uint8_t const *p, int64_t pos);
+#endif
 
+void _load_ascii_fw(uint8_t *dst, uint8_t const *src, uint64_t idx, uint64_t src_len, uint64_t copy_len);
+void _load_ascii_fr(uint8_t *dst, uint8_t const *src, uint64_t idx, uint64_t src_len, uint64_t copy_len);
+void _load_4bit_fw(uint8_t *dst, uint8_t const *src, uint64_t idx, uint64_t src_len, uint64_t copy_len);
+void _load_4bit_fr(uint8_t *dst, uint8_t const *src, uint64_t idx, uint64_t src_len, uint64_t copy_len);
+void _load_2bit_fw(uint8_t *dst, uint8_t const *src, uint64_t idx, uint64_t src_len, uint64_t copy_len);
+void _load_2bit_fr(uint8_t *dst, uint8_t const *src, uint64_t idx, uint64_t src_len, uint64_t copy_len);
+void _load_4bit8packed_fw(uint8_t *dst, uint8_t const *src, uint64_t idx, uint64_t src_len, uint64_t copy_len);
+void _load_4bit8packed_fr(uint8_t *dst, uint8_t const *src, uint64_t idx, uint64_t src_len, uint64_t copy_len);
+void _load_2bit8packed_fw(uint8_t *dst, uint8_t const *src, uint64_t idx, uint64_t src_len, uint64_t copy_len);
+void _load_2bit8packed_fr(uint8_t *dst, uint8_t const *src, uint64_t idx, uint64_t src_len, uint64_t copy_len);
+
+/**
+ * @fn rd_load, rd_loada, rd_loadb
+ * @brief wrapper of loada function
+ */
+#define _rd_load(func, dst, src, pos, lim, len) { \
+	uint64_t register u0, u1, u2, u3, u4; \
+	__asm__ __volatile__ ( \
+		"movq %%rbx, %%r8\n\t" \
+		"call *%%rax\n\t" \
+		: "=a"(u0), \
+		  "=D"(u1), \
+		  "=S"(u2), \
+		  "=d"(u3), \
+		  "=c"(u4) \
+		: "a"(func), \
+		  "D"(dst), \
+		  "S"(src), \
+		  "d"(pos), \
+		  "c"(lim), \
+		  "b"(len) \
+		: "%r8", "%xmm0", "%xmm1", "%xmm2", "%xmm3", "%xmm4", "%xmm5"); \
+}
+
+#if 0
 /**
  * @macro _rd_vec_char_reg
  */
@@ -170,17 +215,17 @@ uint8_t _pop_2bit8packed(uint8_t const *p, int64_t pos);
  * @brief set base pointers
  */
 #define rd_set_base_ptr(r, rr, ptra, lena, ptrb, lenb) { \
-	(rr).pa = (ptra); \
-	(rr).pb = (ptrb); \
-	(rr).alen = (lena); \
-	(rr).blen = (lenb); \
+	(rr).p.pa = (ptra); \
+	(rr).p.pb = (ptrb); \
+	(rr).p.alen = (lena); \
+	(rr).p.blen = (lenb); \
 }
 
 /**
  * @macro rd_set_section
  */
 #define rd_set_section(r, rr, ptr_sec) { \
-	_aligned_block_memcpy(&(rr).s, ptr_sec, sizeof(struct sea_fill_section)); \
+	_aligned_block_memcpy(&(rr).s, ptr_sec, sizeof(struct sea_section_pair)); \
 }
 
 /**
@@ -198,7 +243,10 @@ uint8_t _pop_2bit8packed(uint8_t const *p, int64_t pos);
 	_mm_store_si128((__m128i *)((rr).bufa + BLK + sizeof(__m128i)), a2); \
 	_mm_store_si128((__m128i *)(rr).bufb, b1); \
 	_mm_store_si128((__m128i *)((rr).bufb + sizeof(__m128i)), b2); \
-
+	/** clear cnt */ \
+	debug("cnta(%llu), cntb(%llu)", (rr).cnta, (rr).cntb); \
+	_mm_store_si128((__m128i *)&(rr).cnta, _mm_setzero_si128()); \
+}
 
 /**
  * @macro rd_load_16_32
@@ -206,18 +254,25 @@ uint8_t _pop_2bit8packed(uint8_t const *p, int64_t pos);
  */
 #define rd_load_16_32(r, rr, ptra, ptrb) { \
 	__m128i a1, b1; \
+	debug("wa(%p), wb(%p)", ptra, ptrb); \
 	/** load vector a */ \
-	(r).loada((rr).bufa + BLK, (rr).pa, (rr).s.posa1, (rr).alen, 8); \
-	(rr).s.posa1 += 8; \
+	(r).loada((rr).bufa + BLK, (rr).p.pa, (rr).s.body.asp, (rr).p.alen, 8); \
+	(rr).s.body.asp += 8; \
+	debug("load"); \
 	a1 = _mm_load_si128((__m128i *)(ptra)); \
-	_mm_store_si128((__m128i *)((rr).bufa + BLK + 8), a1); \
+	debug("store"); \
+	_mm_storeu_si128((__m128i *)((rr).bufa + BLK + 8), a1); \
+	debug("pad"); \
 	*((uint64_t *)((rr).bufa + BLK + 24)) = 0x8080808080808080; \
 	/** load vector b */ \
 	*((uint64_t *)((rr).bufb)) = 0xffffffffffffffff; \
-	b1 = _mm_load_si128((__m128i *)(ptrb) + 1); \
-	_mm_store_si128((__m128i *)((rr).bufb + 8), b1); \
-	(r).loadb((rr).bufb + 24, (rr).pb, (rr).s.posb1, (rr).blen, 8); \
-	(rr).s.posb1 += 8; \
+	b1 = _mm_load_si128((__m128i *)(ptrb)); \
+	_mm_storeu_si128((__m128i *)((rr).bufb + 8), b1); \
+	(r).loadb((rr).bufb + 24, (rr).p.pb, (rr).s.body.bsp, (rr).p.blen, 8); \
+	(rr).s.body.bsp += 8; \
+	/** clear cnt */ \
+	debug("cnta(%llu), cntb(%llu)", (rr).cnta, (rr).cntb); \
+	_mm_store_si128((__m128i *)&(rr).cnta, _mm_setzero_si128()); \
 }
 
 /**
@@ -231,6 +286,9 @@ uint8_t _pop_2bit8packed(uint8_t const *p, int64_t pos);
 	b1 = _mm_load_si128((__m128i *)(ptrb) + 1); \
 	_mm_store_si128((__m128i *)(rr).bufa + 1, a1); \
 	_mm_store_si128((__m128i *)(rr).bufb + 2, b1); \
+	/** clear cnt */ \
+	debug("cnta(%llu), cntb(%llu)", (rr).cnta, (rr).cntb); \
+	_mm_store_si128((__m128i *)&(rr).cnta, _mm_setzero_si128()); \
 }
 
 /**
@@ -238,14 +296,36 @@ uint8_t _pop_2bit8packed(uint8_t const *p, int64_t pos);
  * @brief initialize 16cell-wide vector
  */
 #define rd_load_init_16(r, rr) { \
+	/** calc len */ \
+	__m128i const zv = _mm_setzero_si128(); \
+	__m128i const lv = _mm_set1_epi64x(8); \
+	__m128i pos = _mm_load_si128((__m128i *)&(rr).s.body.asp); \
+	__m128i lim = _mm_load_si128((__m128i *)&(rr).s.body.aep); \
+	__m128i len = _mm_sub_epi64(lim, pos); \
+	len = _mm_min_epi32(lv, len); \
+	len = _mm_max_epi32(zv, len); \
+	pos = _mm_add_epi64(pos, len); \
 	/** load seq a */ \
-	(r).loada((rr).bufa + BLK, (rr).pa, (rr).s.posa1, (rr).alen, 8); \
-	(rr).s.posa1 += 8; \
+	(r).loada((rr).bufa + 8, \
+		(rr).p.pa, \
+		rev((rr).s.body.asp, (rr).p.alen), \
+		(rr).p.alen, 32); \
 	*((uint64_t *)((rr).bufa + BLK + 8)) = 0x8080808080808080; \
 	/** load seq b */ \
 	*((uint64_t *)((rr).bufb)) = 0xffffffffffffffff; \
-	(r).loadb((rr).bufb + 8, (rr).pb, (rr).s.posb1, (rr).blen, 8); \
-	(rr).s.posb1 += 8; \
+	(r).loadb((rr).bufb + 8, \
+		(rr).p.pb, \
+		(rr).s.body.bsp, \
+		(rr).p.blen, 32); \
+	/** update pos */ \
+	_mm_store_si128((__m128i *)&(rr).s.body.asp, pos); \
+	debug("pos1(%llx)", _lo64(pos)); \
+	debug("lim1(%llx)", _lo64(lim)); \
+	debug("len1(%llx)", _lo64(len)); \
+	/*for(int a = 0; a < 64; a++) { printf("%01x", (rr).bufa[a] & 0x0f); }*/ \
+	/*printf("\n");*/ \
+	/*for(int a = 0; a < 64; a++) { printf("%01x", (rr).bufb[a] & 0x0f); }*/ \
+	/*printf("\n");*/ \
 }
 
 /**
@@ -273,14 +353,17 @@ uint8_t _pop_2bit8packed(uint8_t const *p, int64_t pos);
  */
 #define rd_prefetch_impl(r, rr, t, load_vec, store_vec) { \
 	/** load pos */ \
-	__m128i pos = _mm_load_si128((__m128i *)&(rr).s.posa1); \
+	__m128i pos = _mm_load_si128((__m128i *)&(rr).s.body.asp); \
 	__m128i cnt = _mm_load_si128((__m128i *)&(rr).cnta); \
 	pos = _mm_add_epi64(pos, cnt); \
 	/** write back pos */ \
-	_mm_store_si128((__m128i *)&(rr).s.posa1, pos); \
+	_mm_store_si128((__m128i *)&(rr).s.body.asp, pos); \
 	/** seq a */ \
 	load_vec((rr).bufa + BLK - _lo64(cnt), t); \
-	(r).loada((rr).bufa, (rr).pa, _lo64(pos), (rr).alen, BLK); \
+	(r).loada((rr).bufa, \
+		(rr).p.pa, \
+		rev(_lo64(pos), (rr).p.alen), \
+		(rr).p.alen, BLK); \
 	store_vec((rr).bufa + BLK, t); \
 	/** extract upper 64bit */ \
 	pos = _mm_srli_si128(pos, sizeof(uint64_t)); \
@@ -288,9 +371,16 @@ uint8_t _pop_2bit8packed(uint8_t const *p, int64_t pos);
 	/** seq b */ \
 	load_vec((rr).bufb + _lo64(cnt), t); \
 	store_vec((rr).bufb, t); \
-	(r).loadb((rr).bufb + BW, (rr).pb, _lo64(pos), (rr).blen, BLK); \
+	(r).loadb((rr).bufb + BW, \
+		(rr).p.pb, \
+		_lo64(pos), \
+		(rr).p.blen, BLK); \
 	/** clear counter */ \
-	_mm_store_si128(&(rr).cnta, _mm_setzero_si128()); \
+	_mm_store_si128((__m128i *)&(rr).cnta, _mm_setzero_si128()); \
+	/*for(int a = 0; a < 64; a++) { printf("%01x", (rr).bufa[a] & 0x0f); }*/ \
+	/*printf("\n");*/ \
+	/*for(int a = 0; a < 64; a++) { printf("%01x", (rr).bufb[a] & 0x0f); }*/ \
+	/*printf("\n");*/ \
 }
 #define rd_prefetch_32(r, rr) { \
 	__m128i t1, t2; \
@@ -310,40 +400,47 @@ uint8_t _pop_2bit8packed(uint8_t const *p, int64_t pos);
 	/** constants */ \
 	__m128i const tot = _mm_set1_epi64x(BLK); \
 	__m128i const zv = _mm_setzero_si128(); \
+	/*__m128i const mask32 = _mm_set1_epi32(0, 0xffffffff, 0, 0xffffffff); */ \
 	/** load previous (posa1, posb1) and (posa2, posb2) */ \
-	__m128i pos1 = _mm_load_si128((__m128i *)&(rr).s.posa1); \
-	__m128i pos2 = _mm_load_si128((__m128i *)&(rr).s.posa2); \
+	__m128i pos1 = _mm_load_si128((__m128i *)&(rr).s.body.asp); \
+	__m128i pos2 = _mm_load_si128((__m128i *)&(rr).s.tail.asp); \
 	/** load lim */ \
-	__m128i lim1 = _mm_load_si128((__m128i *)&(rr).s.lima1); \
-	__m128i lim2 = _mm_load_si128((__m128i *)&(rr).s.lima2); \
+	__m128i lim1 = _mm_load_si128((__m128i *)&(rr).s.body.aep); \
+	__m128i lim2 = _mm_load_si128((__m128i *)&(rr).s.tail.aep); \
 	/** calc (lena1, lenb1) and (lena1, lenb2) */ \
 	__m128i len1 = _mm_sub_epi64(lim1, pos1); \
 	__m128i len2 = _mm_sub_epi64(lim2, pos2); \
 	/** load cnt */ \
 	__m128i cnt = _mm_load_si128((__m128i *)&(rr).cnta); \
-	__m128i cnt2 = _mm_max_epi32(_mm_sub_epi32(cnt, len1), zv); \
-	__m128i cnt1 = _mm_sub_epi32(cnt, cnt2); \
+	__m128i cnt2 = _mm_max_epi32(_mm_sub_epi64(cnt, len1), zv); \
+	__m128i cnt1 = _mm_sub_epi64(cnt, cnt2); \
 	/** update section 1 */ \
-	len1 = _mm_sub_epi32(len1, cnt1);	/** 0 <= len1 */ \
+	len1 = _mm_sub_epi64(len1, cnt1);	/** 0 <= len1 */ \
 	pos1 = _mm_add_epi64(pos1, cnt1);	/** pos1 <= lim1 */ \
 	len1 = _mm_min_epi32(len1, tot);	/** 0 <= len1 <= BW */ \
 	/** update section 2 */ \
 	len2 = _mm_sub_epi32(len2, cnt2); \
 	pos2 = _mm_add_epi64(pos2, cnt2); \
 	len2 = _mm_min_epi32(len2, _mm_sub_epi32(tot, len1)); \
+	debug("pos1(%llx), pos2(%llx)", _lo64(pos1), _lo64(pos2)); \
+	debug("lim1(%llx), lim2(%llx)", _lo64(lim1), _lo64(lim2)); \
+	debug("len1(%llx), len2(%llx)", _lo64(len1), _lo64(len2)); \
+	debug("cnt(%llx), cnt1(%llx), cnt2(%llx)", _lo64(cnt), _lo64(cnt1), _lo64(cnt2)); \
 	/** write back pos */ \
-	_mm_store_si128((__m128i *)&(rr).s.posa1, pos1); \
-	_mm_store_si128((__m128i *)&(rr).s.posa2, pos2); \
+	_mm_store_si128((__m128i *)&(rr).s.body.asp, pos1); \
+	_mm_store_si128((__m128i *)&(rr).s.tail.asp, pos2); \
 	/** seq a */ \
 	load_vec((rr).bufa + BLK - _lo64(cnt), t); \
 	__m128i t1 = _mm_loadu_si128((__m128i *)((rr).bufa + BLK - _lo64(cnt))); \
 	__m128i t2 = _mm_loadu_si128((__m128i *)((rr).bufa + BLK + sizeof(__m128i) - _lo64(cnt))); \
 	(r).loada((rr).bufa + BLK - (_lo64(len1) + _lo64(len2)), \
-		(rr).pa, _lo64(pos2), \
-		(rr).alen, _lo64(len2)); \
+		(rr).p.pa, \
+		rev(_lo64(pos2), (rr).p.alen), \
+		(rr).p.alen, _lo64(len2)); \
 	(r).loada((rr).bufa + BLK - _lo64(len1), \
-		(rr).pa, _lo64(pos1), \
-		(rr).alen, _lo64(len1)); \
+		(rr).p.pa, \
+		rev(_lo64(pos1), (rr).p.alen), \
+		(rr).p.alen, _lo64(len1)); \
 	store_vec((rr).bufa + BLK, t); \
 	/** extract upper 64bit */ \
 	cnt = _mm_srli_si128(cnt, sizeof(uint64_t)); \
@@ -355,13 +452,19 @@ uint8_t _pop_2bit8packed(uint8_t const *p, int64_t pos);
 	load_vec((rr).bufb + _lo64(cnt), t); \
 	store_vec((rr).bufb, t); \
 	(r).loadb((rr).bufb + BW, \
-		(rr).pb, _lo64(pos1), \
-		(rr).blen, _lo64(len1)); \
+		(rr).p.pb, \
+		_lo64(pos1), \
+		(rr).p.blen, _lo64(len1)); \
 	(r).loadb((rr).bufb + BW + _lo64(len1), \
-		(rr).pb, _lo64(pos2), \
-		(rr).blen, _lo64(len2)); \
+		(rr).p.pb, \
+		_lo64(pos2), \
+		(rr).p.blen, _lo64(len2)); \
 	/** clear counter */ \
-	_mm_store_si128(&(rr).cnta, zv); \
+	_mm_store_si128((__m128i *)&(rr).cnta, zv); \
+	/*for(int a = 0; a < 64; a++) { printf("%01x", (rr).bufa[a] & 0x0f); }*/ \
+	/*printf("\n");*/ \
+	/*for(int a = 0; a < 64; a++) { printf("%01x", (rr).bufb[a] & 0x0f); }*/ \
+	/*printf("\n");*/ \
 }
 #define rd_prefetch_cap_32(r, rr) { \
 	__m128i t1, t2; \
@@ -402,7 +505,7 @@ uint8_t _pop_2bit8packed(uint8_t const *p, int64_t pos);
 		_mm_loadu_si128((__m128i *)((rr).bufa + BLK + sizeof(__m128i) - (rr).cnta)), \
 		_mm_loadu_si128((__m128i *)((rr).bufb + sizeof(__m128i) + (rr).cntb))); \
 }
-#define rd_cmp_vec_16(r1, r2, vec16) { \
+#define rd_cmp_vec_16(r, rr, vec16) { \
 	(vec16##1) = _mm_cmpeq_epi8( \
 		_mm_loadu_si128((__m128i *)((rr).bufa + BLK - (rr).cnta)), \
 		_mm_loadu_si128((__m128i *)((rr).bufb + (rr).cntb))); \
@@ -412,16 +515,16 @@ uint8_t _pop_2bit8packed(uint8_t const *p, int64_t pos);
  * @macro rd_test_fast_prefetch
  */
 #define rd_test_fast_prefetch(r, rr, p) ( \
-	  ((int64_t)(rr).s.lima1 - BW - (rr).s.posa1 - (rr).cnta) \
-	| ((int64_t)(rr).s.limb1 - BW - (rr).s.posb1 - (rr).cntb) \
+	  ((int64_t)(rr).s.body.aep - BW - (rr).s.body.asp - (rr).cnta) \
+	| ((int64_t)(rr).s.body.bep - BW - (rr).s.body.bsp - (rr).cntb) \
 )
 
 /**
  * @macro rd_test_break
  */
 #define rd_test_break(r, rr, p) ( \
-	  ((int64_t)(rr).s.lima2 - BW - (rr).s.posa2) \
-	| ((int64_t)(rr).s.limb2 - BW - (rr).s.posb2) \
+	  ((int64_t)(rr).s.tail.aep - BW - (rr).s.tail.asp) \
+	| ((int64_t)(rr).s.tail.bep - BW - (rr).s.tail.bsp) \
 	| ((int64_t)(rr).s.limp - p) \
 )
 
@@ -449,7 +552,7 @@ uint8_t _pop_2bit8packed(uint8_t const *p, int64_t pos);
  * @macro rd_get_section
  */
 #define rd_get_section(r, rr, ptr_sec) { \
-	_aligned_block_memcpy(ptr_sec, &(rr).s, sizeof(struct sea_fill_section)); \
+	_aligned_block_memcpy(ptr_sec, &(rr).s, sizeof(struct sea_section_pair)); \
 }
 
 #if 0
@@ -518,6 +621,7 @@ uint8_t _pop_2bit8packed(uint8_t const *p, int64_t pos);
 	(r).b = 0; \
 	(r).pop = NULL; \
 }
+#endif
 #endif
 
 /**
@@ -640,18 +744,18 @@ enum _ALN_DIR {
 #define WR_HEAD_MARGIN		( 8 + 4 + sizeof(struct sea_result) )
 
 /**
- * @enum _wr_tag, _wr_dir
+ * @enum _wr_type, _wr_fr
  * @brief writer tag, writer direction
  */
-enum _wr_tag {
+enum _wr_type {
 	WR_ASCII	= 1,
 	WR_CIGAR	= 2,
 	WR_DIR		= 3
 };
-enum _wr_dir {
+enum _wr_fr {
 	WR_FW		= 1,
 	WR_RV		= 2
-}
+};
 
 /**
  * @enum _wr_char
@@ -667,12 +771,12 @@ enum _wr_char {
 /**
  * writer function declarations (see io.s)
  */
-uint32_t _push_ascii_r(uint8_t *p, uint32_t dst, uint32_t src, uint8_t c);
-uint32_t _push_ascii_f(uint8_t *p, uint32_t dst, uint32_t src, uint8_t c);
-uint32_t _push_cigar_r(uint8_t *p, uint32_t dst, uint32_t src, uint8_t c);
-uint32_t _push_cigar_f(uint8_t *p, uint32_t dst, uint32_t src, uint8_t c);
-uint32_t _push_dir_r(uint8_t *p, uint32_t dst, uint32_t src, uint8_t c);
-uint32_t _push_dir_f(uint8_t *p, uint32_t dst, uint32_t src, uint8_t c);
+uint64_t _push_ascii_r(uint8_t *p, uint64_t dst, uint64_t src, uint8_t c);
+uint64_t _push_ascii_f(uint8_t *p, uint64_t dst, uint64_t src, uint8_t c);
+uint64_t _push_cigar_r(uint8_t *p, uint64_t dst, uint64_t src, uint8_t c);
+uint64_t _push_cigar_f(uint8_t *p, uint64_t dst, uint64_t src, uint8_t c);
+uint64_t _push_dir_r(uint8_t *p, uint64_t dst, uint64_t src, uint8_t c);
+uint64_t _push_dir_f(uint8_t *p, uint64_t dst, uint64_t src, uint8_t c);
 
 /**
  * @struct wr_cigar_pair
@@ -709,11 +813,11 @@ struct wr_cigar_pair {
 	(ww).len = 0; \
 	(ww).p[(ww).rpos] = '\0'; \
 	/** reverse writer must be set */ \
-	if((w).tag == WR_ASCII) { \
+	if((w).type == WR_ASCII) { \
 		wr_init_intl_ascii(w, ww); \
-	} else if((w).tag == WR_CIGAR) { \
+	} else if((w).type == WR_CIGAR) { \
 		wr_init_intl_cigar(w, ww); \
-	} else if((w).tag == WR_DIR) { \
+	} else if((w).type == WR_DIR) { \
 		wr_init_intl_dir(w, ww); \
 	} else { \
 		/** error */ \
@@ -726,7 +830,7 @@ struct wr_cigar_pair {
  * @brief initialize pos
  */
 #define wr_start(w, ww) { \
-	(ww).pos = ((ww).dir == WR_RV) ? (ww).rpos : WR_HEAD_MARGIN; \
+	(ww).pos = ((w).fr == WR_RV) ? (ww).rpos : WR_HEAD_MARGIN; \
 }
 
 /**
@@ -743,8 +847,8 @@ struct wr_cigar_pair {
 		  "=c"(unused3) \
 		: [fp]"r"((w).push),	/** input list */ \
 		  "D"((ww).p), \
-		  "S"(dst),				/** dst pointer */ \
-		  "d"(src),				/** src (unused) pointer */ \
+		  "S"((uint64_t)dst),	/** dst pointer */ \
+		  "d"((uint64_t)src),	/** src (unused) pointer */ \
 		  "c"(c) \
 		: "r8");				/** clobber */ \
 }
@@ -759,7 +863,7 @@ struct wr_cigar_pair {
  * @brief update rpos
  */
 #define wr_end(w, ww) { \
-	(ww).pos = ((ww).dir == WR_RV) ? (ww).pos : (ww).rpos; \
+	(ww).pos = ((w).fr == WR_RV) ? (ww).pos : (ww).rpos; \
 }
 
 /**

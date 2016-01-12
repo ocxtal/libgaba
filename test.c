@@ -55,7 +55,9 @@ char *mseq(char const *seq, int x, int ins, int del)
 
 int main(int argc, char *argv[])
 {
-	sea_t *d = NULL, *c = NULL, *r;
+	sea_t *d = NULL, *c = NULL, *r = NULL;
+	sea_seq_pair_t p __attribute__ (( aligned (16) ));
+	sea_checkpoint_t cp __attribute__ (( aligned (16) ));
 	sea_res_t *dres = NULL, *cres = NULL, *rres = NULL, *res = NULL;
 	char *a, *b, *at, *bt;
 	struct timeval tv;
@@ -63,17 +65,9 @@ int main(int argc, char *argv[])
 	// char const *b = "1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890";
 	int len = 300;
 
-	d = sea_init(
-		SEA_LINEAR_GAP_COST | SEA_XSEA | SEA_ALN_DIR,
-		2, -3, -5, -1, 100);
-
-	c = sea_init(
-		SEA_LINEAR_GAP_COST | SEA_XSEA | SEA_ALN_CIGAR,
-		2, -3, -5, -1, 100);
-
-	r = sea_init(
-		SEA_LINEAR_GAP_COST | SEA_XSEA | SEA_ALN_ASCII,
-		2, -3, -5, -1, 100);
+//	d = sea_init(SEA_ALN_DIR, 2, -3, -5, -1, 100);
+	c = sea_init(SEA_ALN_CIGAR, 2, -3, -5, -5, 100);
+//	r = sea_init(SEA_ALN_ASCII, 2, -3, -5, -1, 100);
 
 
 //	printf("%x\n", ctx->flags);
@@ -92,44 +86,25 @@ int main(int argc, char *argv[])
 
 	printf("%s\n%s\n", a, b);
 
+	p.pa = a; p.alen = strlen(a);
+	p.pb = b; p.blen = strlen(b);
+
+	cp.apos = 5;
+	cp.bpos = 5;
+
 	int lm = 5, rm = 5;
 
-	dres = sea_align(d,
-		a, lm, strlen(a)-rm,
-		b, lm, strlen(b)-rm,
-		NULL, 0);
-
-	rres = sea_align(r,
-		a, lm, strlen(a)-rm,
-		b, lm, strlen(b)-rm,
-		dres->aln, dres->slen);
-
-	cres = sea_align(c,
-		a, lm, strlen(a)-rm,
-		b, lm, strlen(b)-rm,
-		dres->aln, dres->slen);
-
-	res = sea_align(r,
-		a, lm, strlen(a)-rm,
-		b, lm, strlen(b)-rm,
-		NULL, 0);
+	res = sea_align_semi_global(c, &p, &cp, 1, NULL, 0);
 
 //	sea_add_clips(c, res, lm, rm, SEA_CLIP_HARD);
-
-	printf("%d, %lld\n", dres->score, dres->plen);
-	printf("%d, %lld, %s\n", cres->score, cres->plen, cres->aln);
-	printf("%d, %lld, %s\n", rres->score, rres->plen, rres->aln);
 	printf("%d, %lld, %s\n", res->score, res->plen, res->aln);
 
 	free(a);
 	free(b);
 
-	sea_aln_free(d, dres);
-	sea_aln_free(c, cres);
-	sea_aln_free(r, rres);
 	sea_aln_free(c, res);
 
-	sea_close(d);
+//	sea_close(d);
 	sea_close(c);
 	return 0;
 }

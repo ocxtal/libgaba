@@ -10,10 +10,6 @@
 *.class
 *.pyc
 *~
-alnbench
-alntest
-alnctest
-pbchk/pbsim-1.0.3
 *stuff*
 .waf*
 *lock-*
@@ -21,4 +17,4 @@ pbchk/pbsim-1.0.3
 *sublime*
 *oprofile*
 Makefile
-.gitignore~
+.ackrc

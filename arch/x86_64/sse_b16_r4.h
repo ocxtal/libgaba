@@ -442,11 +442,11 @@
 	_mm_store_si128((__m128i *)(p), v##2); \
 }
 
-#define vec_char_print(s, v) { \
+#define vec_char_print(v) { \
 	int8_t b[32]; \
 	void *p = (void *)b; \
 	vec_char_store(p, v); \
-	fprintf(s, \
+	fprintf(stderr, \
 		"[%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d," \
 		"%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d]\n", \
 		b[31], b[30], b[29], b[28], b[27], b[26], b[25], b[24], \

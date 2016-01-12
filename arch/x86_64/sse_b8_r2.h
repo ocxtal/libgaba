@@ -710,12 +710,15 @@
 	} \
 }
 
+#define _dh(ptr)		( *((uint8_t *)(ptr))>>4 )
+#define _dv(ptr)		( *((uint8_t *)(ptr)) & 0x0f )
+
+/*
 #define DH(c, g)					( (*((pack_t *)(c))>>4) + g )
 #define DV(c, g)					( (*((pack_t *)(c)) & 0x0f) + g )
 #define DE(c, g)					( (*(((pack_t *)(c) + BW))>>4) + g )
 #define DF(c, g)					( (*(((pack_t *)(c) + BW)) & 0x0f) + g )
 
-/*
 #define vec_store_dvdh(p, dv, dh) { \
 	vec_store(p, dv); \
 	vec_store(p, dh); \

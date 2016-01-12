@@ -27,15 +27,14 @@ extern bench_t fill, search, trace;
  * @fn fill
  * @brief fill-in the matrix until the detection of termination
  */
-static inline
 struct sea_chain_status
 func2(VARIANT_LABEL, _fill)(
-	struct sea_local_context *this,
+	struct sea_dp_context *this,
 	uint8_t *pdp,					/** tail of the previous section */
-	struct sea_fill_section *sec)
+	struct sea_section_pair *sec)
 {
 	int64_t i;
-	struct sea_local_context register *k = this;
+	struct sea_dp_context register *k = this;
 	int32_t stat = CONT;
  
 	debug("enter fill (%p), pdp(%p)", func2(VARIANT_LABEL, _fill), pdp);
@@ -47,6 +46,7 @@ func2(VARIANT_LABEL, _fill)(
 	debug("start loop");
 	/** bulk fill */
 	while(!fill_check_term(k)) {
+		debug("p(%lld)", p);
 		fill_start(k);				/** prefetch */
 		for(i = 0; i < BLK/2; i++) {
 			fill_body(k);			/** unroll loop: 1 */
@@ -73,11 +73,13 @@ func2(VARIANT_LABEL, _fill)(
 	stat = TERM;
 	int64_t t = 0;					/** termination flag */
 	while(t == 0) {
+		debug("p(%lld)", p);
 		fill_start_cap(k);
 		for(i = 0; i < BLK; i++) {
 			if(fill_check_term_cap(k)) { break; }
 			fill_body_cap(k);
 		}
+		debug("term cap");
 		for(; i < BLK; t++, i++) {	/** increment termination flag */
 			fill_empty_body(k);
 		}
@@ -98,13 +100,12 @@ label2(VARIANT_LABEL, _fill_finish_label):
  * @fn trace
  * @brief traceback until the given start position
  */
-static inline
 struct sea_chain_status
 func2(VARIANT_LABEL, _trace)(
-	struct sea_local_context *this,
+	struct sea_dp_context *this,
 	uint8_t *pdp)
 {
-	struct sea_local_context register *k = this;
+	struct sea_dp_context register *k = this;
 	uint8_t *tdp = _head(pdp, p_tail); \
 	uint8_t *hdp = tdp - _tail(tdp, size); \
 
@@ -132,7 +133,7 @@ func2(VARIANT_LABEL, _trace)(
 static inline
 int32_t
 func2(VARIANT_LABEL, _set_term)(
-	struct sea_local_context *this,
+	struct sea_dp_context *this,
 	uint8_t *pdp,
 	int32_t stat)
 {
@@ -157,18 +158,18 @@ func2(VARIANT_LABEL, _set_term)(
  */
 struct sea_chain_status
 func(VARIANT_LABEL)(
-	struct sea_local_context *this,
+	struct sea_dp_context *this,
 	uint8_t *pdp)
 {
 	debug("entry point: (%p)", func(VARIANT_LABEL));
-	struct sea_local_context register *k = this;
+	struct sea_dp_context register *k = this;
 	struct sea_chain_status s;
 
 	/** fill_in */
 	s = func2(VARIANT_LABEL, _fill)(k, pdp);
 
 	/** chain */
-	int32_t (*cfn)(struct sea_local_context *) = func_next(r.stat);
+	int32_t (*cfn)(struct sea_dp_context *) = func_next(r.stat);
 	uint8_t *ndp = NULL;
 	if(stat == MEM || (k->tdp - k->pdp) < 32*1024) {
 		k->pdp = ndp = malloc(k->size = 2 * k->size);
@@ -198,7 +199,7 @@ func(VARIANT_LABEL)(
 static inline
 uint8_t *
 func2(VARIANT_LABEL, _prep_next_mem)(
-	struct sea_local_context *this)
+	struct sea_dp_context *this)
 {
 	uint8_t *p;
 	/** malloc the next dp, dr memory */
@@ -216,7 +217,7 @@ func2(VARIANT_LABEL, _prep_next_mem)(
 static inline
 int32_t
 func2(VARIANT_LABEL, _clean_next_mem)(
-	struct sea_local_context *this,
+	struct sea_dp_context *this,
 	uint8_t *pdp,
 	uint8_t *p)
 {
@@ -233,15 +234,15 @@ func2(VARIANT_LABEL, _clean_next_mem)(
 static inline
 int32_t
 func2(VARIANT_LABEL, _chain)(
-	struct sea_local_context *this,
+	struct sea_dp_context *this,
 	uint8_t *pdp,
 	int32_t stat)
 {
 	int32_t ret = SEA_SUCCESS;
-	struct sea_local_context register *k = this;
+	struct sea_dp_context register *k = this;
 
 	/** retrieve the next function */
-	int32_t (*cfn)(struct sea_local_context *) = NULL;
+	int32_t (*cfn)(struct sea_dp_context *) = NULL;
 	switch(stat) {
 		case MEM:   cfn = func(VARIANT_LABEL); break;
 		case CHAIN: cfn = func_next(k, func(VARIANT_LABEL)); break;

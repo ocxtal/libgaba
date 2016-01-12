@@ -1,7 +1,7 @@
 
 /**
- * @file branch.h
- * @brief macros for branch (16bit 32cell) algorithms
+ * @file branch2.h
+ * @brief 8bit-diff-32bit-abs 32cell implementation
  */
 #ifndef _BRANCH_H_INCLUDED
 #define _BRANCH_H_INCLUDED
@@ -31,74 +31,63 @@
 	dir_t dr; \
 	int64_t p = 0; \
 	uint8_t *cdp; \
-	_vec_single_const(mv, k->m);	/** (m, m, m, ..., m) */ \
-	_vec_single_const(xv, k->x);	/** (x, x, x, ..., x) */ \
-	_vec_cell_const(gv, k->gi);		/** (g, g, g, ..., g) */ \
-	_vec_cell_const(zv, 0);			/** (0, 0, 0, ..., 0) */ \
-	_rd_vec_char_reg(match); \
-	_vec_cell_reg(cv);				/** score vector */ \
-	_vec_cell_reg(pv);				/** previous score vector */ \
-	_vec_cell_reg(tmp1);			/** temporary */ \
-	_vec_cell_reg(tmp2);			/** temporary */ \
-	_vec_cell_reg(maxv);			/** a vector which holds maximum scores */ \
+	_vec_single_const(sbv, k->sc.score_sub); \
+	_vec_single_const(gav, k->sc.score_gi_a); \
+	_vec_single_const(gbv, k->sc.score_gi_b); \
+	_vec_cell(dv); \
+	_vec_cell(dh); \
+	_vec_cell(accv); \
+	_vec_cell(maxv);
 
 #define branch_affine_fill_decl(k, pdp) \
-	branch_linear_fill_decl(k, pdp); \
-	_vec_cell_reg(f); \
-	_vec_cell_reg(h);
+	dir_t dr; \
+	int64_t p = 0; \
+	uint8_t *cdp; \
+	_vec_single_const(sbv, k->sc.score_sub); \
+	_vec_single_const(gav, k->sc.score_gi_a); \
+	_vec_single_const(gbv, k->sc.score_gi_b); \
+	_vec_cell(dv); \
+	_vec_cell(dh); \
+	_vec_cell(df); \
+	_vec_cell(de); \
+	_vec_cell(accv); \
+	_vec_cell(maxv);
 
 /**
  * @macro (internal) branch_linear_fill_init_intl
  */
 #define branch_linear_fill_init_intl(k, pdp, sec) { \
-	/** initialize vectors */ \
-	vec_assign(maxv, zv);	/** init maxv with DPCELL_MIN */ \
-	/** initialize direction array */ \
-	debug("dir_init"); \
-	debug("pdp(%p)", pdp); \
-	dir_init(dr, k, pdp, _tail(pdp, psum)); \
-	/** initialize sequence reader */ \
-	debug("pdp(%p)", pdp); \
-	rd_set_section(k->r, k->rr, sec); \
-	/** make room for struct sea_joint_head */ \
-	debug("pdp(%p)", pdp); \
-	_head(k->stack_top, p_tail) = pdp; \
-	cdp = k->stack_top + sizeof(struct sea_joint_head); \
 }
 
 /**
  * @macro branch_linear_fill_init
  */
 #define branch_linear_fill_init(k, pdp, sec) { \
-	/** load coordinates and vectors, initialize misc variables */ \
-	branch_linear_fill_init_intl(k, pdp, sec); \
-	/** load vectors */ \
-	debug("load vectors BW(%d)", BW); \
-	debug("pdp(%p)", pdp); \
-	if(_tail(pdp, var) == TWIG) { \
-		struct twig_linear_joint_vec *s = \
-			(struct twig_linear_joint_vec *)_tail(pdp, v); \
-		debug("pdp(%p), s(%p)", pdp, s); \
-		rd_load_16_32(k->r, k->rr, s->wa, s->wb); \
-		debug("pdp(%p)", pdp); \
-		vec_load_b8c16(s->pv, pv); \
-		vec_load_b8c16(s->cv, cv); \
-	} else if(_tail(pdp, var) == BASE) { \
-		joint_vec_t *s = (joint_vec_t *)_tail(pdp, v); \
-		rd_load_32_32(k->r, k->rr, s->wa, s->wb); \
-		vec_load(s->pv, pv); \
-		vec_load(s->cv, cv); \
-	} else { \
-		vec_setzero(pv); \
-		vec_setzero(cv); \
-	} \
-	vec_store(cdp, pv); cdp += bpl(); \
-	vec_store(cdp, cv); cdp += bpl(); \
+	/* load pointer */ \
+	linear_joint_vec_t *s = (linear_joint_vec_t *)_tail(pdp, v); \
+	\
+	/* make room for struct sea_joint_head */ \
+	_head(k->stack_top, p_tail) = pdp; \
+	cdp = k->stack_top + sizeof(struct sea_joint_head); \
+	\
+	/* initialize sequence reader */ \
+	rd_set_section(k->r, k->rr, sec); \
+	rd_load(k->r, k->rr, s->wa, s->wb); \
+	/** initialize direction array */ \
+	dir_init(dr, k, pdp, _tail(pdp, psum)); \
+	\
+	/* load vectors */ \
+	vec_load(s->dv, dv); \
+	vec_load(s->dh, dh); \
+	/** initialize vectors */ \
+	vec_assign(maxv, zv); \
+	\
+	/* store initial vector */ \
+	vec_store(cdp, vec_pack(dv, dh)); cdp += bpl(); \
 	/** store max vector */ \
 	vec_store(cdp, maxv); cdp += bpl(); \
 	/** store the first dr vector */ \
 	dir_end_block(dr, cdp); \
-	/*vec_print(cv);*/ \
 }
 
 /**
@@ -442,4 +431,9 @@
 #endif /* #ifndef _BRANCH_H_INCLUDED */
 /**
  * end of branch.h
+ */
+
+
+/**
+ * end of branch2.h
  */

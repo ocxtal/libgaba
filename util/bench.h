@@ -53,10 +53,10 @@ typedef struct _bench bench_t;
  * @macro bench_end
  */
 #define bench_end(b) { \
-	struct timeval e; \
-	gettimeofday(&e, NULL); \
-	(b).a += ( (e.tv_sec  - (b).s.tv_sec ) * 1000000000 \
-	         + (e.tv_usec - (b).s.tv_usec) * 1000); \
+	struct timeval _e; \
+	gettimeofday(&_e, NULL); \
+	(b).a += ( (_e.tv_sec  - (b).s.tv_sec ) * 1000000000 \
+	         + (_e.tv_usec - (b).s.tv_usec) * 1000); \
 }
 
 /**

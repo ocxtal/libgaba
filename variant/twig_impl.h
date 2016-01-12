@@ -41,7 +41,7 @@
 		rd_load_init_16(k->r, k->rr); \
 	} else if(_tail(pdp, var) == TWIG) { \
 		rd_load_16_16(k->r, k->rr, &s->wa, &s->wb); \
-	}
+	} \
 	vec_load(&s->pv, pv); \
 	vec_load(&s->cv, cv); \
 	vec_store(cdp, pv); cdp += bpl(); \
@@ -49,6 +49,7 @@
 	vec_store(cdp, maxv); cdp += bpl(); \
 	/** store the first dr vector */ \
 	dir_end_block(dr, cdp); \
+	vec_print(cv); \
 }
 
 #if 0
