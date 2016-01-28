@@ -1,0 +1,422 @@
+
+/**
+ * @file sea.c
+ *
+ * @brief libsea3 API implementations
+ *
+ * @author Hajime Suzuki
+ * @date 2016/1/11
+ * @license Apache v2
+ */
+
+#include <stdlib.h>
+#include <string.h>
+#include "sea.h"
+#include "util/util.h"
+#include "arch/arch_util.h"
+
+
+/* benchmark accumulators */
+#ifdef BENCH
+static
+bench_t fill, search, trace;
+#endif
+
+/* constants */
+#define SEA_INIT_STACK_SIZE			( 32 * 1024 * 1024 )
+
+/**
+ * @val dynamic, guided
+ */
+static
+struct sea_aln_funcs_s dynamic[2] = {
+	{narrow_dynamic_fill, narrow_dynamic_merge, narrow_dynamic_trace},
+	{wide_dynamic_fill, wide_dynamic_merge, wide_dynamic_trace}
+};
+static
+struct sea_aln_funcs_s guided[2] = {
+	{narrow_guided_fill, narrow_guided_merge, narrow_guided_trace},
+	{wide_guided_fill, wide_guided_merge, wide_guided_trace}
+};
+
+/**
+ * @macro broadcast
+ */
+#define broadcast(x) ( \
+	(int8_t [16]){ \
+		(x), (x), (x), (x), \
+		(x), (x), (x), (x), \
+		(x), (x), (x), (x), \
+		(x), (x), (x), (x) \
+	} \
+)
+
+static _force_inline
+int8_t extract_max(int8_t *vector)
+{
+	int8_t max = -128;
+	for(int i = 0; i < 16; i++) {
+		max = (vector[i] > max) ? vector[i] : max;
+	}
+	return(max);
+}
+
+static _force_inline
+int8_t extract_min(int8_t *vector)
+{
+	int8_t min = 127;
+	for(int i = 0; i < 16; i++) {
+		min = (vector[i] < min) ? vector[i] : min;
+	}
+	return(min);
+}
+
+/**
+ * @fn sea_init_restore_default_params
+ */
+static _force_inline
+void sea_init_restore_default_params(
+	struct sea_params_s *params)
+{
+	#define restore(_name, _default) { \
+		params->_name = ((uint64_t)(params->_name) == 0) ? (_default) : (params->_name); \
+	}
+	restore(band_width, 		SEA_WIDE);
+	restore(band_type, 			SEA_DYNAMIC);
+	restore(seq_a_format, 		SEA_ASCII);
+	restore(seq_a_direction, 	SEA_FW_ONLY);
+	restore(seq_b_format, 		SEA_ASCII);
+	restore(seq_b_direction, 	SEA_FW_ONLY);
+	restore(aln_format, 		SEA_ASCII);
+	restore(head_margin, 		0);
+	restore(tail_margin, 		0);
+	restore(xdrop, 				100);
+	restore(score_matrix, 		SEA_SCORE_SIMPLE(1, 1, 1, 1));
+	return;
+}
+
+/**
+ * @fn sea_init_create_score_vector
+ */
+static _force_inline
+struct sea_score_vec_s sea_init_create_score_vector(
+	struct sea_score_s *score_matrix)
+{
+	return((struct sea_score_vec_s) {
+		.sbv = score_matrix->score_sub,
+		.geav = broadcast(-score_matrix->score_ge_a),
+		.gebv = broadcast(-score_matrix->score_ge_b),
+		.giav = broadcast(-score_matrix->score_gi_a),
+		.gibv = broadcast(-score_matrix->score_gi_b)
+	});
+}
+
+/**
+ * @fn sea_init_create_dir_dynamic
+ */
+static _force_inline
+union sea_dir_u sea_init_create_dir_dynamic(
+	struct sea_score_s *score_matrix)
+{
+	return((union sea_dir_u) {
+		.dynamic = {
+			0,				/* zero independent of scoreing schemes */
+			0x80000000		/* (0, 0) -> (0, 1) */
+		}
+	});
+}
+
+/**
+ * @fn sea_init_create_small_delta
+ */
+static _force_inline
+struct sea_small_delta_s sea_init_create_small_delta(
+	struct sea_score_s *score_matrix)
+{
+	int8_t max = extract_max(score_matrix);
+	int8_t diff_a = max + score_matrix->score_ge_a;
+	int8_t diff_b = -score_matrix->score_ge_b;
+
+	struct sea_small_delta_s sd;
+	for(int i = 0; i < MAX_BW/2; i++) {
+		sd.delta[i] = diff_a;
+		sd.delta[MAX_BW/2 + i] = diff_b;
+		sd.max[i] = 0;
+		sd.max[MAX_BW/2 + i] = -diff_b;
+	}
+	return(sd);
+}
+
+/**
+ * @fn sea_init_create_middle_delta
+ */
+static _force_inline
+struct sea_middle_delta_s sea_init_create_middle_delta(
+	struct sea_score_s *score_matrix)
+{
+	int8_t max = extract_max(score_matrix->score_sub);
+	int16_t coef_a = -max - 2*score_matrix->score_ge_a;
+	int16_t coef_b = -max - 2*score_matrix->score_ge_b;
+	int16_t ofs_a = -score_matrix->score_gi_a;
+	int16_t ofs_b = -score_matrix->score_gi_b;
+
+	struct sea_middle_delta_s md;
+	for(int i = 0; i < MAX_BW/2; i++) {
+		md.delta[i] = ofs_a + coef_a * (MAX_BW/2 - i);
+		md.delta[MAX_BW/2 + i] = ofs_b + coef_b * i;
+	}
+	md.delta[MAX_BW/2] = 0;
+	return(md);
+}
+
+/**
+ * @fn sea_init_create_diff_vectors
+ */
+static _force_inline
+struct sea_diff_vec_s sea_init_create_diff_vectors(
+	struct sea_score_s *score_matrix)
+{
+	int8_t max = extract_max(score_matrix->score_sub);
+	int8_t drop_dh = 0;
+	int8_t raise_dh = max + 2*score_matrix->score_ge_b;
+	int8_t drop_dv = 0;
+	int8_t raise_dv = max + 2*score_matrix->score_ge_a;
+	int8_t drop_de = -score_matrix->score_gi_a + score_matrix->score_ge_a;
+	int8_t drop_df = -score_matrix->score_gi_b + score_matrix->score_ge_b;
+
+	struct sea_diff_vec_s diff;
+	for(int i = 0; i < MAX_BW/2; i++) {
+		diff.dh[i] = drop_dh;
+		diff.dh[MAX_BW/2 + i] = raise_dh;
+		diff.dv[i] = raise_dv;
+		diff.dv[MAX_BW/2 + i] = drop_dv;
+		diff.de[i] = drop_de;
+		diff.df[i] = drop_df;
+	}
+	return(diff);
+}
+
+/**
+ * @fn sea_init
+ */
+sea_t *sea_init(
+	struct sea_params_s const *params)
+{
+
+	if(params == NULL) {
+		debug("params must not be NULL");
+		return(NULL);
+	}
+
+	/* copy params to local stack */
+	struct sea_params_s params_intl = *params;
+
+	/* restore defaults */
+	sea_init_restore_default_params(&params_intl);
+
+	/* malloc sea_context */
+	struct sea_context_s *ctx = (struct sea_context_s *)sea_aligned_malloc(
+		sizeof(struct sea_context_s),
+		SEA_MEM_ALIGN_SIZE);
+	if(ctx == NULL) {
+		return(NULL);
+	}
+
+	/* fill context */
+	*ctx = (struct sea_context_s) {
+		/* template */
+		.k = (struct sea_dp_context_s) {
+			.stack_top = NULL,						/* filled on dp init */
+			.stack_end = NULL,						/* filled on dp init */
+			.pdr = NULL,							/* filled on dp init */
+			.tdr = NULL,							/* filled on dp init */
+
+			.ll = (struct sea_writer_work_s) { 0 },	/* work: no need to init */
+			.rr = (struct sea_reader_work_s) { 0 },	/* work: no need to init */
+			.l = &ctx->rv,							/* reverse writer (default on init) */
+			.r = (struct sea_reader_s) {
+				rd_table[params_intl.seq_a_format],	/* seq a reader */
+				rd_table[params_intl.seq_b_format]	/* seq b reader */
+			},
+
+			.scv = sea_init_create_score_vector(params_intl.score_matrix),
+			.tx = params_intl.xdrop,
+			// .max = 0,								/* at (0, 0) */
+			// .m_tail = &ctx->tail,					/* at (0, 0) */
+
+			.mem_cnt = 0
+			.mem_size = SEA_INIT_STACK_SIZE,
+			.mem_array = { 0 },		/* NULL */
+
+			.fn = ((params_intl.band_type == SEA_GUIDED) ? guided : dynamic)[,
+		},
+		.md = sea_init_create_middle_delta(params_intl.score_matrix),
+		.blk = (struct sea_phantom_block_s) {
+			.mask = {
+				{ 0x00000000, 0x00000000 },
+				{ 0x0000ffff, 0xffff0000 }
+			},
+			.dir = sea_init_create_dir_dynamic(params_intl.score_matrix),
+			.offset = 0,
+			.diff = sea_init_create_diff_vectors(params_intl.score_matrix),
+			.sd = sea_init_create_small_delta(params_intl.score_matrix)
+		},
+		.tail = (struct sea_joint_tail_s) {
+			.v = &ctx->md,
+			.p = 2,
+			.mp = 0,
+			.mq = 0,
+			.psum = 2,
+			.wa = { 0 },
+			.wb = { 0 }
+		},
+		.rv = wr_rv_table[wr_idx],
+		.fw = wr_fw_table[wr_idx],
+		.params = params_intl
+	};
+
+	return((sea_t *)ctx);
+}
+
+/**
+ * @fn sea_dp_init
+ */
+static _force_inline
+struct sea_dp_context_s *sea_dp_init(
+	struct sea_context_s const *ctx,
+	struct sea_seq_pair_s const *p,
+	uint8_t const *guide,
+	uint64_t glen)
+{
+	/* malloc stack memory */
+	struct sea_dp_context_s *this = (struct sea_dp_context_s *)sea_aligned_malloc(
+		ctx->k.mem_size,
+		SEA_MEM_ALIGN_SIZE);
+	if(this == NULL) {
+		debug("failed to malloc memory");
+		return(NULL);
+	}
+
+	/* init seq pointers */
+	_aligned_block_memcpy(
+		&k->k.rr.p,
+		p,
+		sizeof(struct sea_seq_pair_s));
+
+	/* load template */
+	_aligned_block_memcpy(
+		(uint8_t *)k + SEA_DP_CONTEXT_LOAD_OFFSET,
+		(uint8_t *)&ctx->k + SEA_DP_CONTEXT_LOAD_OFFSET,
+		SEA_DP_CONTEXT_LOAD_SIZE);
+
+	/* init stack pointers */
+	k->stack_top = (uint8_t *)k + sizeof(struct sea_dp_context_s);
+	k->stack_end = (uint8_t *)k + k->mem_size;
+	k->pdr = guide;
+	k->tdr = guide + glen;
+
+	return(k);
+}
+
+/**
+ * @fn sea_dp_add_stack
+ */
+static _force_inline
+int32_t sea_dp_add_stack(
+	struct sea_dp_context_s *this)
+{
+	uint8_t *ptr = (uint8_t *)sea_aligned_malloc(
+		(this->mem_size *= 2),
+		SEA_MEM_ALIGN_SIZE);
+	if(ptr == NULL) {
+		this->mem_size /= 2;
+		return(SEA_ERROR_OUT_OF_MEM);
+	}
+	this->mem_array[this->mem_cnt++] = this->stack_top = ptr;
+	this->stack_end = this->stack_top + this->mem_size;
+	return(SEA_SUCCESS);
+}
+
+/**
+ * @fn sea_dp_malloc
+ */
+static _force_inline
+void *sea_dp_malloc(
+	struct sea_dp_context_s *this,
+	uint64_t size)
+{
+	/* roundup */
+	uint64_t const align_size = 16;
+	size += (align_size - 1);
+	size &= ~(align_size - 1);
+
+	/* malloc */
+	if((this->stack_end - this->stack_top) < size) {
+		if(this->mem_size < size) { this->mem_size = size; }
+		if(sea_dp_add_stack(this) != SEA_SUCCESS) {
+			return(NULL);
+		}
+	}
+	this->stack_top += size;
+	return((void *)(this->stack_top - size));
+}
+
+/**
+ * @fn sea_dp_free
+ */
+static _force_inline
+void sea_dp_free(
+	struct sea_dp_context_s *this,
+	void *ptr)
+{
+	/* nothing to do */
+	return;
+}
+
+/**
+ * @fn sea_dp_clean
+ */
+static _force_inline
+void sea_dp_clean(
+	struct sea_dp_context_s *this)
+{
+	if(this == NULL) {
+		return;
+	}
+
+	for(uint64_t i = 0; i < SEA_MEM_ARRAY_SIZE; i++) {
+		sea_aligned_free(this->mem_array[i]);
+	}
+	sea_aligned_free(this);
+	return;
+}
+
+/**
+ * @fn sea_align_dynamic
+ */
+struct sea_result *sea_align_dynamic(
+	struct sea_context_s const *ctx,
+	struct sea_seq_pair_s const *seq,
+	struct sea_checkpoint_s const *cp,
+	uint64_t cplen)
+{
+	;
+}
+
+/**
+ * @fn sea_align_guided
+ */
+struct sea_result *sea_align_guided(
+	struct sea_context_s const *ctx,
+	struct sea_seq_pair_s const *seq,
+	struct sea_checkpoint_s const *cp,
+	uint64_t cplen,
+	uint8_t const *guide,
+	uint64_t glen)
+{
+
+}
+
+/**
+ * end of sea.c
+ */

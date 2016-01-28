@@ -24,34 +24,6 @@
  * constants
  */
 #define SEA_INIT_STACK_SIZE			( 32 * 1024 * 1024 )
-#define SEA_INIT_BW					( 16 )
-
-/**
- * @val aln_table
- * @brief fill and trace function table
- */
-struct sea_aln_funcs const aln_table[2][2] = {
-	{
-		{
-			{twig_linear_dynamic_fill, branch_linear_dynamic_fill, NULL, NULL},
-			{twig_linear_dynamic_trace, branch_linear_dynamic_trace, NULL, NULL}
-		},
-		{
-			{twig_linear_guided_fill, branch_linear_guided_fill, NULL, NULL},
-			{twig_linear_guided_trace, branch_linear_guided_trace, NULL, NULL}
-		}
-	},
-	{
-		{
-			{NULL, NULL, NULL, NULL},
-			{NULL, NULL, NULL, NULL}
-		},
-		{
-			{NULL, NULL, NULL, NULL},
-			{NULL, NULL, NULL, NULL}
-		}
-	}
-};
 
 /**
  * @val rd_table
@@ -105,8 +77,7 @@ struct sea_writer const wr_table[4][2] = {
  */
 #define SEA_MEM_ALIGN		( 64 )
 static inline
-void *
-sea_aligned_malloc(
+void *sea_aligned_malloc(
 	size_t size,
 	size_t align)
 {
@@ -124,47 +95,55 @@ sea_aligned_malloc(
  * @param[in] ptr : a pointer to the memory to be freed.
  */
 static inline
-void
-sea_aligned_free(
+void sea_aligned_free(
 	void *ptr)
 {
 	free(ptr);
 	return;
 }
 
+#if 0
 /**
  * @fn sea_is_linear_gap_cost
  * @brief (internal)
  */
 static inline
-int
-sea_is_linear_gap_cost(
+int sea_is_linear_gap_cost(
 	struct sea_context const *ctx)
 {
-	return(ctx->e.k.gi == ctx->e.k.ge);
+	return(ctx->e.k.gi == 0);
 }
 
 /**
  * @fn sea_is_edit_dist_cost
  */
 static inline
-int
-sea_is_edit_dist_cost(
+int sea_is_edit_dist_cost(
 	struct sea_context const *ctx)
 {
-	return(ctx->e.k.m == 0 && ctx->e.k.x == -2 && ctx->e.k.gi == -1 && ctx->e.k.ge == -1);
+	return(ctx->e.k.m == 0 && ctx->e.k.x == -2 && ctx->e.k.gi == 0 && ctx->e.k.ge == -1);
 }
 
 /**
- * @fn sea_is_unit_cost
+ * @fn sea_is_linear_unit_cost
  */
 static inline
-int
-sea_is_unit_cost(
+int sea_is_linear_unit_cost(
+	struct sea_context const *ctx)
+{
+	return(ctx->e.k.m == 1 && ctx->e.k.x == -1 && ctx->e.k.gi == 0 && ctx->e.k.ge == -1);
+}
+
+/**
+ * @fn sea_is_affine_unit_cost
+ */
+static inline
+int sea_is_affine_unit_cost(
 	struct sea_context const *ctx)
 {
 	return(ctx->e.k.m == 1 && ctx->e.k.x == -1 && ctx->e.k.gi == -1 && ctx->e.k.ge == -1);
 }
+#endif
 
 /**
  * @fn sea_init_restore_defaults
@@ -172,8 +151,7 @@ sea_is_unit_cost(
  * @brief (internal) initialize flags
  */
 static inline
-int32_t
-sea_init_restore_defaults(
+int32_t sea_init_restore_defaults(
 	struct sea_params *p)
 {
 	/** set defaults */
@@ -201,45 +179,6 @@ sea_init_restore_defaults(
 }
 
 /**
- * @fn sea_init_flags
- *
- * @brief (internal) initialize flags
- */
-static inline
-int32_t
-sea_init_flags(
-	struct sea_context *ctx)
-{
-	debug("initializing flags");
-
-	/** default input sequence format: ASCII */
-	if(ctx->flags.sep.seq_a == 0) {
-		ctx->flags.sep.seq_a = SEA_SEQ_A_ASCII>>SEA_FLAGS_POS_SEQ_A;
-	}
-	if(ctx->flags.sep.seq_b == 0) {
-		ctx->flags.sep.seq_b = SEA_SEQ_B_ASCII>>SEA_FLAGS_POS_SEQ_B;
-	}
-	
-	/** default  direction: forward only */
-	if(ctx->flags.sep.seq_a_dir == 0) {
-		ctx->flags.sep.seq_a_dir = SEA_SEQ_A_FW_ONLY>>SEA_FLAGS_POS_SEQ_A_DIR;
-	}
-	if(ctx->flags.sep.seq_b_dir == 0) {
-		ctx->flags.sep.seq_b_dir = SEA_SEQ_B_FW_ONLY>>SEA_FLAGS_POS_SEQ_B_DIR;
-	}
-
-	/** default output format: direction string.
-	 * (yields RDRDRDRD for the input pair (AAAA and AAAA).
-	 * use SEA_ALN_CIGAR for cigar string.)
-	 */
-	if(ctx->flags.sep.aln == 0) {
-		ctx->flags.sep.aln = SEA_ALN_ASCII>>SEA_FLAGS_POS_ALN;
-	}
-
-	return SEA_SUCCESS;
-}
-
-/**
  * @fn sea_init_dp_context
  *
  * @brief (internal) check arguments and fill proper values (or default values) to sea_context.
@@ -258,8 +197,7 @@ sea_init_flags(
  * @sa sea_init, sea_init_fp
  */
 static inline
-int32_t
-sea_init_dp_context(
+int32_t sea_init_dp_context(
 	struct sea_context *ctx,
 	int8_t m,
 	int8_t x,
@@ -317,8 +255,7 @@ sea_init_dp_context(
  * @fn sea_init_graph_context
  */
 static inline
-int32_t
-sea_init_graph_context(
+int32_t sea_init_graph_context(
 	struct sea_context *ctx)
 {
 	ctx->e.g.ctx = NULL;
@@ -330,8 +267,7 @@ sea_init_graph_context(
  * @fn sea_init_search_context
  */
 static inline
-int32_t
-sea_init_search_context(
+int32_t sea_init_search_context(
 	struct sea_context *ctx,
 	int8_t m,
 	int8_t x,
@@ -366,8 +302,7 @@ _sea_init_pair_error_handler:
  * @fn sea_init_joint_head
  */
 static inline
-int32_t
-sea_init_joint_head(
+int32_t sea_init_joint_head(
 	struct sea_context *ctx)
 {
 	ctx->jh.p = 0;
@@ -383,8 +318,7 @@ sea_init_joint_head(
  * @brief initialize joint_tail
  */
 static inline
-int32_t
-sea_init_joint_tail(
+int32_t sea_init_joint_tail(
 	struct sea_context *ctx)
 {
 	/** initial coordinates */
@@ -403,8 +337,7 @@ sea_init_joint_tail(
  * @fn sea_init_root_vec
  */
 static inline
-int32_t
-sea_init_root_vec(
+int32_t sea_init_root_vec(
 	struct sea_context *ctx)
 {
 	int64_t i;
@@ -465,6 +398,53 @@ sea_init_root_vec(
  * @sa sea_free, sea_sea
  */
 sea_t *sea_init(
+	struct sea_params_s const *params)
+{
+	struct sea_aln_funcs dynamic = {
+		{narrow_dynamic_fill, wide_dynamic_fill, NULL, NULL},
+		{narrow_dynamic_trace, wide_dynamic_trace, NULL, NULL}
+	};
+	struct sea_aln_funcs guided = {
+		{narrow_guided_fill, wide_guided_fill, NULL, NULL},
+		{narrow_guided_trace, wide_guided_trace, NULL, NULL}
+	};
+
+	/* check parameter sanity */
+	if(params == NULL) {
+		debug("params == NULL");
+		return(NULL);
+	}
+
+	/* copy params to local stack */
+	struct sea_params_s params_intl = *params;
+
+	/* restore defaults */
+	sea_init_restore_defaults(&params_intl);
+
+	/* malloc sea_context */
+	struct sea_context_s *ctx = (struct sea_context_s *)sea_aligned_malloc(
+		sizeof(struct sea_context_s),
+		SEA_MEM_ALIGN);
+	assert(ctx != NULL);
+
+	/* init members */
+	sea_init_search_context(ctx, params_intl);
+	sea_init_middle_delta(ctx);
+	sea_init_joint_head(ctx);
+	sea_init_mask_pair(ctx);
+	sea_init_joint_tail(ctx);
+	ctx->dynamic = dynamic;
+	ctx->guided = guided;
+	ctx->rv = 
+
+	return((sea_t *)ctx);
+
+_sea_init_error_handler:
+	sea_free(ctx);
+
+	return((sea_t*)NULL);
+}
+sea_t *sea_init(
 	int32_t flags,
 	int8_t m,
 	int8_t x,
@@ -489,7 +469,7 @@ sea_t *sea_init(
 
 	/** check flags */
 	ctx->flags.all = flags;
-	if((error_label = sea_init_flags(ctx)) != SEA_SUCCESS) {
+	if((error_label = sea_init_restore_defaults(ctx)) != SEA_SUCCESS) {
 		debug("failed to init flags");
 		goto _sea_init_error_handler;
 	}

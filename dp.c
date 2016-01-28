@@ -2,14 +2,13 @@
 /**
  * @file branch2.c
  */
-#include "../../sea.h"
-#include "../../util/util.h"
-#include "../../arch/arch_util.h"
-#include "vector.h"
+#include "sea.h"
+#include "util/util.h"
+#include "arch/arch.h"
 
 /* aliasing vector macros */
 #define _VECTOR_ALIAS_PREFIX	v32i8
-#include "vector_alias.h"
+#include "arch/vector_alias.h"
 
 #define BW 				( 32 )
 #define BLK 			( 32 )
@@ -39,20 +38,15 @@
 #define _force_inline	inline
 
 /**
- * @macro _int32_t_extract_sign_bit
- * @brief extract sign bit from 32bit signed integer
- */
-#define _int32_t_extract_sign_bit(x)	( ((uint32_t)(x))>>31 )
-
-/**
  * @macro _load_sc
  * @brief load constant vectors from sea_dp_context_s
  */
-#define _load_sc(name)	( _bc_v16i8(_load_v16i8(this->scv.name)) )
+#define _load_sc(this, name)	( _bc_v16i8(_load_v16i8((this)->scv.name)) )
 
 /* direction macros */
 #define DYNAMIC 		( 1 )
 #if DYNAMIC
+#define direction_prefix 		dynamic
 
 /* direction determiners for the dynamic band algorithms */
 /**
@@ -85,6 +79,8 @@
 #define _dir_is_right(_dir)					( !_dir_is_down(_dir) )
 
 #else
+
+#define direction_prefix 		guided
 
 /* direction determiners for the guided band algorithms */
 #define _dir_update(_dir, _vector) { \
@@ -348,7 +344,7 @@ void rd_cap_fetch(
 	vec_t _t = _match( \
 		_loadu(_rd_bufa(this, 0, BW)), \
 		_loadu(_rd_bufb(this, 0, BW))); \
-	_t = _shuf(_t, _load_sc(sbv)); \
+	_t = _shuf(_t, _load_sc(this, sbv)); \
 	_t = _max(_t, de); _t = _max(_t, df); \
 	de = _max(de, dv); df = _max(df, dh); \
 	vec_t _dh = _sub(_t, dv); \
@@ -359,8 +355,8 @@ void rd_cap_fetch(
 		_mask(_eq(_dh, _df)), _mask(_eq(_dv, _de)) \
 	}; \
 	dh = _dh; dv = _dv; \
-	de = _add(_de, _load_sc(geav)); \
-	df = _add(_df, _load_sc(gebv)); \
+	de = _add(_de, _load_sc(this, geav)); \
+	df = _add(_df, _load_sc(this, gebv)); \
 }
 /**
  * @macro _fill_update_delta
@@ -380,13 +376,13 @@ void rd_cap_fetch(
 	rd_go_right(this);	/* increment sequence buffer pointer */ \
 	dh = _shl(dh, 1);	/* shift left dh */ \
 	_fill_body();		/* update vectors */ \
-	_fill_update_delta(dh, _load_sc(giav)); \
+	_fill_update_delta(dh, _load_sc(this, giav)); \
 }
 #define _fill_down() { \
 	rd_go_down(this);	/* increment sequence buffer pointer */ \
 	dv = _shr(dv, 1);	/* shift right dv */ \
 	_fill_body();		/* update vectors */ \
-	_fill_update_delta(dv, _load_sc(gibv)); \
+	_fill_update_delta(dv, _load_sc(this, gibv)); \
 }
 /**
  * @macro _fill_update_offset
@@ -789,7 +785,7 @@ _fill_seq_bounded_finish:;
  * @fn fill
  * @brief fill dp matrix inside section pairs
  */
-struct sea_chain_status_s fill(
+struct sea_chain_status_s label2(fill_, direction_prefix)(
 	struct sea_dp_context_s *this,
 	struct sea_joint_tail_s *prev_tail,
 	struct sea_section_pair_s *sec)
@@ -816,6 +812,7 @@ struct sea_chain_status_s fill(
 		}
 
 		/* malloc the next stack and set pointers */
+		sea_dp_add_stack(this);
 
 		/* stack size has changed */
 		mem_bulk_blocks = calc_max_bulk_blocks_mem(this);
@@ -832,6 +829,12 @@ _fill_finish:;
 	return(stat);
 }
 
+/* unittests */
+#ifdef TEST
+
+
+
+#endif
 
 /**
  * end of branch2.c

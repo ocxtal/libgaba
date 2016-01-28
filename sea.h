@@ -29,6 +29,22 @@
 #include <stdint.h>		/** uint8_t, int32_t, int64_t */
 
 /**
+ * @enum sea_flags_band_width
+ */
+enum sea_flags_band_width {
+	SEA_NARROW 			= 16,
+	SEA_WIDE			= 32
+};
+
+/**
+ * @enum sea_flags_band_type
+ */
+enum sea_flags_band_type {
+	SEA_DYNAMIC 		= 1,
+	SEA_GUIDED			= 2
+};
+
+/**
  * @enum sea_flags_format
  *
  * @brief (API) constants of the sequence format option.
@@ -209,20 +225,29 @@ typedef struct sea_score_s sea_score_t;
  * @brief input parameters of sea_init
  */
 struct sea_params_s {
+
+	/** dp options */
+	uint8_t band_width;			/** wide (32) or narrow (16) */
+	uint8_t band_type;			/** dynamic or guided */
+	uint8_t _pad;
+
 	/** input options */
-	int32_t seq_a_format;
-	int32_t seq_a_direction;
-	int32_t seq_b_format;
-	int32_t seq_b_direction;
-	
+	uint8_t seq_a_format;
+	uint8_t seq_a_direction;
+	uint8_t seq_b_format;
+	uint8_t seq_b_direction;
+
 	/** output options */
-	int32_t aln_format;
+	uint8_t aln_format;
 	int16_t head_margin;		/** margin at the head of sea_res_t */
 	int16_t tail_margin;		/** margin at the tail of sea_res_t */
 
 	/** score parameters */
-	sea_score_t const *score_matrix;
 	int32_t xdrop;
+	sea_score_t const *score_matrix;
+
+	/** reserved */
+	uint8_t _reserved[8];
 };
 typedef struct sea_params_s sea_params_t;
 
@@ -239,10 +264,10 @@ typedef struct sea_params_s sea_params_t;
 #define SEA_SCORE_SIMPLE(m, x, gi, ge) ( \
 	&((map_score_t const) { \
 		.score_sub = { \
-			{m, x, x, x}, \
-			{x, m, x, x}, \
-			{x, x, m, x}, \
-			{x, x, x, m} \
+			{m, -(x), -(x), -(x)}, \
+			{-(x), m, -(x), -(x)}, \
+			{-(x), -(x), m, -(x)}, \
+			{-(x), -(x), -(x), m} \
 		}, \
 		.score_gi_a = gi, \
 		.score_ge_a = ge, \
