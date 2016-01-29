@@ -35,6 +35,28 @@ _static_assert(sizeof(struct sea_params_s) == 32);
 #define mask_t			uint32_t
 
 /**
+ * aligned malloc
+ */
+static inline
+void *sea_aligned_malloc(
+	size_t size,
+	size_t align)
+{
+	void *ptr = NULL;
+	posix_memalign(&ptr, align, size);
+	debug("posix_memalign(%p)", ptr);
+	return(ptr);
+}
+#define SEA_MEM_ALIGN_SIZE		( 16 )
+static inline
+void sea_aligned_free(
+	void *ptr)
+{
+	if(ptr != NULL) { free(ptr); }
+	return;
+}
+
+/**
  * structs
  */
 
@@ -146,7 +168,7 @@ struct sea_joint_tail_s {
 
 	/* misc */
 	// uint64_t size;				/** (8) size of section in bytes */
-	uint32_t max;				/** (4) max */
+	int32_t max;				/** (4) max */
 	uint32_t p; 				/** (4) local p-coordinate of the tail */
 	uint32_t mp, mq;			/** (8) max local-(p, q) */
 	uint64_t psum;				/** (8) global p-coordinate of the tail */
@@ -204,6 +226,13 @@ _static_assert(sizeof(struct sea_section_pair_s) == 80);
 	(sec)->tail.asp = (pa2); (sec)->tail.bsp = (pb2); \
 	(sec)->tail.aep = (la2); (sec)->tail.bep = (lb2); \
 }
+#define sea_build_section_pair(_sec1, _sec2, _p) ( \
+	(struct sea_section_pair_s) { \
+		.body = (_sec1), \
+		.tail = (_sec2), \
+		.limp = (_p) \
+	} \
+)
 
 /**
  * @struct sea_reader_s
@@ -330,7 +359,8 @@ struct sea_dp_context_s {
 	uint8_t *stack_end;			/** (8) the end of dp matrix */
 	uint8_t const *pdr;			/** (8) direction array */
 	uint8_t const *tdr;			/** (8) the end of direction array */
-	uint8_t _pad1[8];			/** (8) */
+	// uint8_t _pad1[8];			/** (8) */
+	struct sea_joint_tail_s *tail;	/** (8) */
 	struct sea_writer_work_s ll;	/** (24) */
 	/** 64, 64 */
 

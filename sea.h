@@ -28,6 +28,7 @@
 #include <stdlib.h>		/** NULL and size_t */
 #include <stdint.h>		/** uint8_t, int32_t, int64_t */
 
+#if 0
 /**
  * @enum sea_flags_band_width
  */
@@ -43,6 +44,7 @@ enum sea_flags_band_type {
 	SEA_DYNAMIC 		= 1,
 	SEA_GUIDED			= 2
 };
+#endif
 
 /**
  * @enum sea_flags_format
@@ -140,6 +142,14 @@ struct sea_seq_pair_s {
 	uint64_t alen, blen;		/** (16) */
 };
 typedef struct sea_seq_pair_s sea_seq_pair_t;
+#define sea_build_seq_pair(_a, _alen, _b, _blen) ( \
+	(struct sea_seq_pair_s) { \
+		.pa = (_a), \
+		.pb = (_b), \
+		.alen = (_alen), \
+		.blen = (_blen) \
+	} \
+)
 
 /**
  * @struct sea_checkpoint_s
@@ -151,6 +161,12 @@ struct sea_checkpoint_s {
 	uint64_t bpos;
 };
 typedef struct sea_checkpoint_s sea_checkpoint_t;
+#define sea_build_checkpoint(_apos, _bpos) ( \
+	(struct sea_checkpoint_s) { \
+		.apos = (_apos), \
+		.bpos = (_bpos) \
+	} \
+)
 
 /**
  * @struct sea_section_s
@@ -162,6 +178,14 @@ struct sea_section_s {
 	uint64_t alen, blen;
 };
 typedef struct sea_section_s sea_section_t;
+#define sea_build_section(_apos, _alen, _bpos, _blen) ( \
+	(struct sea_section_s) { \
+		.apos = (_apos), \
+		.bpos = (_bpos), \
+		.alen = (_alen), \
+		.blen = (_blen) \
+	} \
+)
 
 /**
  * @struct sea_result_s
@@ -208,6 +232,13 @@ typedef struct sea_result_s sea_res_t;
  */
 typedef struct sea_context_s sea_t;
 
+/**
+ * @type sea_dp_t
+ *
+ * @brief an aliast to `struct sea_dp_context_s`.
+ */
+typedef struct sea_dp_context_s sea_dp_t;
+
 
 /**
  * @struct sea_score_s
@@ -227,9 +258,9 @@ typedef struct sea_score_s sea_score_t;
 struct sea_params_s {
 
 	/** dp options */
-	uint8_t band_width;			/** wide (32) or narrow (16) */
-	uint8_t band_type;			/** dynamic or guided */
-	uint8_t _pad;
+	// uint8_t band_width;			/** wide (32) or narrow (16) */
+	// uint8_t band_type;			/** dynamic or guided */
+	uint8_t _pad[3];
 
 	/** input options */
 	uint8_t seq_a_format;
@@ -262,7 +293,7 @@ typedef struct sea_params_s sea_params_t;
  * @brief utility macro for constructing score parameters.
  */
 #define SEA_SCORE_SIMPLE(m, x, gi, ge) ( \
-	&((map_score_t const) { \
+	&((sea_score_t const) { \
 		.score_sub = { \
 			{m, -(x), -(x), -(x)}, \
 			{-(x), m, -(x), -(x)}, \

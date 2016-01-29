@@ -20,7 +20,7 @@
 _pop_ascii:
 __pop_ascii:
 	movb (%rdi, %rsi), %al
-	movq %rax, %rs2i
+	movq %rax, %rsi
 	shrq $2, %rax
 	shrq $1, %rsi
 	xorq %rsi, %rax

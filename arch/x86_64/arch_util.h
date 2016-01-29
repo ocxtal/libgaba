@@ -86,9 +86,11 @@
  * src and dst must be aligned to 16-byte boundary.
  * copy must be multipe of 16.
  */
-#define _xmm_rd(src, n) (xmm##n) = _mm_load_si128((__m128i *)(src) + (n))
-#define _xmm_wr(dst, n) _mm_store_si128((__m128i *)(dst) + (n), (xmm##n))
-#define _aligned_block_memcpy(dst, src, size) { \
+#define _xmm_rd_a(src, n) (xmm##n) = _mm_load_si128((__m128i *)(src) + (n))
+#define _xmm_rd_u(src, n) (xmm##n) = _mm_loadu_si128((__m128i *)(src) + (n))
+#define _xmm_wr_a(dst, n) _mm_store_si128((__m128i *)(dst) + (n), (xmm##n))
+#define _xmm_wr_u(dst, n) _mm_storeu_si128((__m128i *)(dst) + (n), (xmm##n))
+#define _memcpy_blk_intl(dst, src, size, _wr, _rd) { \
 	/** duff's device */ \
 	void *_src = (void *)(src), *_dst = (void *)(dst); \
 	int64_t const _nreg = 16;		/** #xmm registers == 16 */ \
@@ -101,39 +103,39 @@
 	_src += _offset * sizeof(__m128i); \
 	_dst += _offset * sizeof(__m128i); \
 	switch(_jmp) { \
-		case 0: do { _xmm_rd(_src, 0); \
-		case 15:     _xmm_rd(_src, 1); \
-		case 14:     _xmm_rd(_src, 2); \
-		case 13:     _xmm_rd(_src, 3); \
-		case 12:     _xmm_rd(_src, 4); \
-		case 11:     _xmm_rd(_src, 5); \
-		case 10:     _xmm_rd(_src, 6); \
-		case 9:      _xmm_rd(_src, 7); \
-		case 8:      _xmm_rd(_src, 8); \
-		case 7:      _xmm_rd(_src, 9); \
-		case 6:      _xmm_rd(_src, 10); \
-		case 5:      _xmm_rd(_src, 11); \
-		case 4:      _xmm_rd(_src, 12); \
-		case 3:      _xmm_rd(_src, 13); \
-		case 2:      _xmm_rd(_src, 14); \
-		case 1:      _xmm_rd(_src, 15); \
+		case 0: do { _rd(_src, 0); \
+		case 15:     _rd(_src, 1); \
+		case 14:     _rd(_src, 2); \
+		case 13:     _rd(_src, 3); \
+		case 12:     _rd(_src, 4); \
+		case 11:     _rd(_src, 5); \
+		case 10:     _rd(_src, 6); \
+		case 9:      _rd(_src, 7); \
+		case 8:      _rd(_src, 8); \
+		case 7:      _rd(_src, 9); \
+		case 6:      _rd(_src, 10); \
+		case 5:      _rd(_src, 11); \
+		case 4:      _rd(_src, 12); \
+		case 3:      _rd(_src, 13); \
+		case 2:      _rd(_src, 14); \
+		case 1:      _rd(_src, 15); \
 		switch(_jmp) { \
-			case 0:  _xmm_wr(_dst, 0); \
-			case 15: _xmm_wr(_dst, 1); \
-			case 14: _xmm_wr(_dst, 2); \
-			case 13: _xmm_wr(_dst, 3); \
-			case 12: _xmm_wr(_dst, 4); \
-			case 11: _xmm_wr(_dst, 5); \
-			case 10: _xmm_wr(_dst, 6); \
-			case 9:  _xmm_wr(_dst, 7); \
-			case 8:  _xmm_wr(_dst, 8); \
-			case 7:  _xmm_wr(_dst, 9); \
-			case 6:  _xmm_wr(_dst, 10); \
-			case 5:  _xmm_wr(_dst, 11); \
-			case 4:  _xmm_wr(_dst, 12); \
-			case 3:  _xmm_wr(_dst, 13); \
-			case 2:  _xmm_wr(_dst, 14); \
-			case 1:  _xmm_wr(_dst, 15); \
+			case 0:  _wr(_dst, 0); \
+			case 15: _wr(_dst, 1); \
+			case 14: _wr(_dst, 2); \
+			case 13: _wr(_dst, 3); \
+			case 12: _wr(_dst, 4); \
+			case 11: _wr(_dst, 5); \
+			case 10: _wr(_dst, 6); \
+			case 9:  _wr(_dst, 7); \
+			case 8:  _wr(_dst, 8); \
+			case 7:  _wr(_dst, 9); \
+			case 6:  _wr(_dst, 10); \
+			case 5:  _wr(_dst, 11); \
+			case 4:  _wr(_dst, 12); \
+			case 3:  _wr(_dst, 13); \
+			case 2:  _wr(_dst, 14); \
+			case 1:  _wr(_dst, 15); \
 		} \
 				     _src += _nreg * sizeof(__m128i); \
 				     _dst += _nreg * sizeof(__m128i); \
@@ -141,14 +143,20 @@
 			    } while(--_lcnt > 0); \
 	} \
 }
-#define _aligned_block_memset(dst, a, size) { \
+#define _memcpy_blk_aa(dst, src, len)		_memcpy_blk_intl(dst, src, len, _xmm_wr_a, _xmm_rd_a)
+#define _memcpy_blk_au(dst, src, len)		_memcpy_blk_intl(dst, src, len, _xmm_wr_a, _xmm_rd_u)
+#define _memcpy_blk_ua(dst, src, len)		_memcpy_blk_intl(dst, src, len, _xmm_wr_u, _xmm_rd_a)
+#define _memcpy_blk_uu(dst, src, len)		_memcpy_blk_intl(dst, src, len, _xmm_wr_u, _xmm_rd_u)
+#define _memset_blk_intl(dst, a, size, _wr) { \
 	void *_dst = (void *)(dst); \
 	__m128i const xmm0 = _mm_set1_epi8((int8_t)a); \
 	int64_t i; \
 	for(i = 0; i < size / sizeof(__m128i); i++) { \
-		_xmm_wr(_dst, 0); _dst += sizeof(__m128i); \
+		_wr(_dst, 0); _dst += sizeof(__m128i); \
 	} \
 }
+#define _memset_blk_a(dst, a, size)			_memset_blk_intl(dst, a, size, _xmm_wr_a)
+#define _memset_blk_u(dst, a, size)			_memset_blk_intl(dst, a, size, _xmm_wr_u)
 
 /**
  * seqreader prototype implementation

@@ -10,6 +10,7 @@
 #include "v2i64.h"
 #include "v16i8.h"
 #include "v32i8.h"
+#include "v32i16.h"
 
 /* conversion and cast between vector types */
 #define _bc_v16i8_v32i8(x)		(v32i8_t){ (x).v1, (x).v1 }
