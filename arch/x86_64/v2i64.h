@@ -74,6 +74,12 @@ typedef struct v2i64_s {
 // #define _set_v2i64(...)		_a_v2i64(set1, _e_i, __VA_ARGS__)
 #define _set_v2i64(x)		( (v2i64_t) { _mm_set1_epi64x(x) } )
 #define _zero_v2i64()		_a_v2i64x(setzero, _e_x, _unused)
+#define _seta_v2i64(x, y)	( (v2i64_t) { _mm_set_epi64x(x, y) } )
+#define _swap_v2i64(x) ( \
+	(v2i32_t) { \
+		_mm_shuffle_epi32((x).v1, 0x1b) \
+	} \
+)
 
 /* logics */
 #define _not_v2i64(...)		_a_v2i64x(not, _e_v, __VA_ARGS__)
@@ -96,7 +102,11 @@ typedef struct v2i64_s {
 // #define _shuf_v2i64(...)	_a_v2i64(shuffle, _e_vv, __VA_ARGS__)
 
 /* blend */
-// #define _sel_v2i64(...)		_a_v2i64(blendv, _e_vvv, __VA_ARGS__)
+#define _sel_v2i64(a, b, mask) ( \
+	(v2i64_t) { \
+		_mm_blendv_epi8((b).v1, (a).v1, (mask).v1) \
+	} \
+)
 
 /* compare */
 #define _eq_v2i64(...)		_a_v2i64(cmpeq, _e_vv, __VA_ARGS__)
@@ -111,17 +121,16 @@ typedef struct v2i64_s {
 	_i_v2i64(extract)((a).v1, (imm)) \
 )
 
-/* shift */
-#define _shl_v2i64(a, imm) ( \
-	(v2i64_t) {_i_v2i64x(slli)((a).v1, (imm))} \
-)
-#define _shr_v2i64(a, imm) ( \
-	(v2i64_t) {_i_v2i64x(srli)((a).v1, (imm))} \
-)
-
 /* mask */
 #define _mask_v2i64(a) ( \
-	(uint32_t) (_i_v2i64(movemask)((a).v1)) \
+	(uint32_t) (_mm_movemask_epi8((a).v1)) \
+)
+
+/* convert */
+#define _cvt_v2i32_v2i64(a) ( \
+	(v2i64_t) { \
+		_mm_cvtepi32_epi64((a).v1) \
+	} \
 )
 
 #endif /* _V2I64_H_INCLUDED */

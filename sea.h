@@ -174,8 +174,8 @@ typedef struct sea_checkpoint_s sea_checkpoint_t;
  * @brief section container
  */
 struct sea_section_s {
-	uint64_t apos, bpos;
-	uint64_t alen, blen;
+	uint64_t apos, bpos;	/** global position in genome */
+	uint32_t alen, blen;	/** length of a local segment */
 };
 typedef struct sea_section_s sea_section_t;
 #define sea_build_section(_apos, _alen, _bpos, _blen) ( \
@@ -186,6 +186,16 @@ typedef struct sea_section_s sea_section_t;
 		.blen = (_blen) \
 	} \
 )
+
+/**
+ * @struct sea_chain_status_s
+ * @brief tail of the blocks and remaining section.
+ */
+struct sea_chain_status_s {
+	struct sea_joint_tail_s *tail;
+	struct sea_section_s *rem;
+};
+typedef struct sea_chain_status_s sea_chain_status_t;
 
 /**
  * @struct sea_result_s
@@ -207,17 +217,17 @@ struct sea_result_s {
 	/** alignment positions */
 	uint64_t apos;			/*!< alignment start position on a. */
 	uint64_t bpos;			/*!< alignment start position on b. */
-	uint64_t alen;			/*!< alignment length on a. the alignment interval is a[apos]..a[apos+alen-1] */
-	uint64_t blen;			/*!< alignment length on b. the alignment interval is b[bpos]..b[bpos+blen-1] */
+	uint32_t alen;			/*!< alignment length on a. the alignment interval is a[apos]..a[apos+alen-1] */
+	uint32_t blen;			/*!< alignment length on b. the alignment interval is b[bpos]..b[bpos+blen-1] */
 
 	/** alignment score */
-	int32_t score;			/*!< the alignment score. */
-	int32_t flags;			/*!< unused for now */
+	int64_t score;			/*!< the alignment score. */
+	// int32_t flags;			/*!< unused for now */
 
 	/** alignment string and its lengths */
 	uint8_t *aln;			/*!< a pointer to the alignment result. */
-	uint64_t slen;			/*!< the length of the alignment string (slen == strlen(aln)) */
-	uint64_t plen;			/*!< the length of the path of the alignment (slen == tlen if ASCII) */
+	uint32_t slen;			/*!< the length of the alignment string (slen == strlen(aln)) */
+	uint32_t plen;			/*!< the length of the path of the alignment (slen == tlen if ASCII) */
 	
 	/** copy of input information */
 	void const *a; 			/*!< a pointer to the sequence a. */
