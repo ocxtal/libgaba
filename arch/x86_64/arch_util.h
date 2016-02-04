@@ -177,16 +177,10 @@ uint8_t _pop_4bit8packed(uint8_t const *p, int64_t pos);
 uint8_t _pop_2bit8packed(uint8_t const *p, int64_t pos);
 #endif
 
-void _load_ascii_fw(uint8_t *dst, uint8_t const *src, uint64_t idx, uint64_t src_len, uint64_t copy_len);
-void _load_ascii_fr(uint8_t *dst, uint8_t const *src, uint64_t idx, uint64_t src_len, uint64_t copy_len);
-void _load_4bit_fw(uint8_t *dst, uint8_t const *src, uint64_t idx, uint64_t src_len, uint64_t copy_len);
-void _load_4bit_fr(uint8_t *dst, uint8_t const *src, uint64_t idx, uint64_t src_len, uint64_t copy_len);
-void _load_2bit_fw(uint8_t *dst, uint8_t const *src, uint64_t idx, uint64_t src_len, uint64_t copy_len);
-void _load_2bit_fr(uint8_t *dst, uint8_t const *src, uint64_t idx, uint64_t src_len, uint64_t copy_len);
-void _load_4bit8packed_fw(uint8_t *dst, uint8_t const *src, uint64_t idx, uint64_t src_len, uint64_t copy_len);
-void _load_4bit8packed_fr(uint8_t *dst, uint8_t const *src, uint64_t idx, uint64_t src_len, uint64_t copy_len);
-void _load_2bit8packed_fw(uint8_t *dst, uint8_t const *src, uint64_t idx, uint64_t src_len, uint64_t copy_len);
-void _load_2bit8packed_fr(uint8_t *dst, uint8_t const *src, uint64_t idx, uint64_t src_len, uint64_t copy_len);
+void _loada_ascii_2bit_fw(uint8_t *dst, uint8_t const *src, uint64_t idx, uint64_t src_len, uint64_t copy_len);
+void _loada_ascii_2bit_fr(uint8_t *dst, uint8_t const *src, uint64_t idx, uint64_t src_len, uint64_t copy_len);
+void _loadb_ascii_2bit_fw(uint8_t *dst, uint8_t const *src, uint64_t idx, uint64_t src_len, uint64_t copy_len);
+void _loadb_ascii_2bit_fr(uint8_t *dst, uint8_t const *src, uint64_t idx, uint64_t src_len, uint64_t copy_len);
 
 /**
  * @fn rd_load, rd_loada, rd_loadb

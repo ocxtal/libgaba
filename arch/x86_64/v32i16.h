@@ -9,6 +9,7 @@
 
 /* include header for intel / amd sse2 instruction sets */
 #include <smmintrin.h>
+#include "log.h"
 
 /* 8bit 32cell */
 typedef struct v32i16_s {
@@ -121,16 +122,33 @@ typedef struct v32i16_s {
 #define _max_v32i16(...)	_a_v32i16(max, _e_vv, __VA_ARGS__)
 #define _min_v32i16(...)	_a_v32i16(min, _e_vv, __VA_ARGS__)
 
-/* shuffle */
-// #define _shuf_v32i16(...)	_a_v32i16(shuffle, _e_vv, __VA_ARGS__)
-
-/* blend */
-// #define _sel_v32i16(...)	_a_v32i16(blendv, _e_vvv, __VA_ARGS__)
-
 /* compare */
 #define _eq_v32i16(...)		_a_v32i16(cmpeq, _e_vv, __VA_ARGS__)
 #define _lt_v32i16(...)		_a_v32i16(cmplt, _e_vv, __VA_ARGS__)
 #define _gt_v32i16(...)		_a_v32i16(cmpgt, _e_vv, __VA_ARGS__)
+
+/* insert and extract */
+#define _ins_v32i16(a, val, imm) { \
+	if((imm) < sizeof(__m128i)) { \
+		(a).v1 = _i_v32i8(insert)((a).v1, (val), (imm)); \
+	} else if((imm) < 2*sizeof(__m128i)) { \
+		(a).v2 = _i_v32i8(insert)((a).v2, (val), (imm) - sizeof(__m128i)); \
+	} else if((imm) < 3*sizeof(__m128i)) { \
+		(a).v2 = _i_v32i8(insert)((a).v3, (val), (imm) - 2*sizeof(__m128i)); \
+	} else { \
+		(a).v2 = _i_v32i8(insert)((a).v4, (val), (imm) - 3*sizeof(__m128i)); \
+	} \
+}
+#define _ext_v32i16(a, imm) ( \
+	(int8_t)(((imm) < sizeof(__m128i)) \
+		? _i_v32i8(extract)((a).v1, (imm)) \
+		: ((imm) < sizeof(__m128i)) \
+		? _i_v32i8(extract)((a).v2, (imm) - sizeof(__m128i)) \
+		: ((imm) < sizeof(__m128i)) \
+		? _i_v32i8(extract)((a).v3, (imm) - 2*sizeof(__m128i)) \
+		: ((imm) < sizeof(__m128i)) \
+		? _i_v32i8(extract)((a).v4, (imm) - 3*sizeof(__m128i))) \
+)
 
 /* horizontal max (reduction max) */
 #define _hmax_v32i16(a) ({ \
@@ -154,6 +172,45 @@ typedef struct v32i16_s {
 		_mm_cvtepi8_epi16(_mm_srli_si128((a).v2, 8)), \
 	} \
 )
+
+/* debug print */
+#define _print_v32i16(a) { \
+	debug("(v32i16_t) %s(%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, " \
+				  "%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d)", \
+		#a, \
+		_ext_v32i16(a, 31), \
+		_ext_v32i16(a, 30), \
+		_ext_v32i16(a, 29), \
+		_ext_v32i16(a, 28), \
+		_ext_v32i16(a, 27), \
+		_ext_v32i16(a, 26), \
+		_ext_v32i16(a, 25), \
+		_ext_v32i16(a, 24), \
+		_ext_v32i16(a, 23), \
+		_ext_v32i16(a, 22), \
+		_ext_v32i16(a, 21), \
+		_ext_v32i16(a, 20), \
+		_ext_v32i16(a, 19), \
+		_ext_v32i16(a, 18), \
+		_ext_v32i16(a, 17), \
+		_ext_v32i16(a, 16), \
+		_ext_v32i16(a, 15), \
+		_ext_v32i16(a, 14), \
+		_ext_v32i16(a, 13), \
+		_ext_v32i16(a, 12), \
+		_ext_v32i16(a, 11), \
+		_ext_v32i16(a, 10), \
+		_ext_v32i16(a, 9), \
+		_ext_v32i16(a, 8), \
+		_ext_v32i16(a, 7), \
+		_ext_v32i16(a, 6), \
+		_ext_v32i16(a, 5), \
+		_ext_v32i16(a, 4), \
+		_ext_v32i16(a, 3), \
+		_ext_v32i16(a, 2), \
+		_ext_v32i16(a, 1), \
+		_ext_v32i16(a, 0)); \
+}
 
 #endif /* _V32I16_H_INCLUDED */
 /**

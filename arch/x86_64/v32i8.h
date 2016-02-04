@@ -9,6 +9,7 @@
 
 /* include header for intel / amd sse2 instruction sets */
 #include <smmintrin.h>
+#include "log.h"
 
 /* 8bit 32cell */
 typedef struct v32i8_s {
@@ -109,13 +110,13 @@ typedef struct v32i8_s {
 	if((imm) < sizeof(__m128i)) { \
 		(a).v1 = _i_v32i8(insert)((a).v1, (val), (imm)); \
 	} else { \
-		(a).v2 = _i_v32i8(insert)((a).v2, (val), (imm)); \
+		(a).v2 = _i_v32i8(insert)((a).v2, (val), (imm) - sizeof(__m128i)); \
 	} \
 }
 #define _ext_v32i8(a, imm) ( \
-	((imm) < sizeof(__m128i)) \
+	(int8_t)(((imm) < sizeof(__m128i)) \
 		? _i_v32i8(extract)((a).v1, (imm)) \
-		: _i_v32i8(extract)((a).v2, (imm) - sizeof(__m128i)) \
+		: _i_v32i8(extract)((a).v2, (imm) - sizeof(__m128i))) \
 )
 
 /* shift */
@@ -139,6 +140,45 @@ typedef struct v32i8_s {
 		| (_i_v32i8(movemask)((a).v2)<<sizeof(__m128i)) \
 	) \
 )
+
+/* debug print */
+#define _print_v32i8(a) { \
+	debug("(v32i8_t) %s(%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, " \
+				 "%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d)", \
+		#a, \
+		_ext_v32i8(a, 31), \
+		_ext_v32i8(a, 30), \
+		_ext_v32i8(a, 29), \
+		_ext_v32i8(a, 28), \
+		_ext_v32i8(a, 27), \
+		_ext_v32i8(a, 26), \
+		_ext_v32i8(a, 25), \
+		_ext_v32i8(a, 24), \
+		_ext_v32i8(a, 23), \
+		_ext_v32i8(a, 22), \
+		_ext_v32i8(a, 21), \
+		_ext_v32i8(a, 20), \
+		_ext_v32i8(a, 19), \
+		_ext_v32i8(a, 18), \
+		_ext_v32i8(a, 17), \
+		_ext_v32i8(a, 16), \
+		_ext_v32i8(a, 15), \
+		_ext_v32i8(a, 14), \
+		_ext_v32i8(a, 13), \
+		_ext_v32i8(a, 12), \
+		_ext_v32i8(a, 11), \
+		_ext_v32i8(a, 10), \
+		_ext_v32i8(a, 9), \
+		_ext_v32i8(a, 8), \
+		_ext_v32i8(a, 7), \
+		_ext_v32i8(a, 6), \
+		_ext_v32i8(a, 5), \
+		_ext_v32i8(a, 4), \
+		_ext_v32i8(a, 3), \
+		_ext_v32i8(a, 2), \
+		_ext_v32i8(a, 1), \
+		_ext_v32i8(a, 0)); \
+}
 
 #endif /* _V32I8_H_INCLUDED */
 /**

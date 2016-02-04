@@ -287,15 +287,15 @@ _static_assert(sizeof(struct sea_writer_work_s) == 24);
  */
 struct sea_score_vec_s {
 	// int8_t mv[16];				/** (16) match matrix */
-	int8_t sbv[16];				/** (16) substitution matrix (or mismatch matrix) */
-	int8_t geav[16];			/** (16) gap penalty offset on seq a */
-	int8_t gebv[16];			/** (16) gap penalty offset on seq b */
-	int8_t giav[16];			/** (16) gap penalty offset on seq a */
-	int8_t gibv[16];			/** (16) gap penalty offset on seq b */
+	int8_t sb[16];				/** (16) substitution matrix (or mismatch matrix) */
+	int8_t geh[16];				/** (16) gap penalty offset on seq a */
+	int8_t gev[16];				/** (16) gap penalty offset on seq b */
+	int8_t gih[16];				/** (16) gap penalty offset on seq a */
+	int8_t giv[16];				/** (16) gap penalty offset on seq b */
 };
 _static_assert(sizeof(struct sea_score_vec_s) == 80);
-_static_assert_offset(struct sea_score_s, score_sub, struct sea_score_vec_s, sbv, 0);
-_static_assert_offset(struct sea_score_s, score_gi_a, struct sea_score_vec_s, geav, 0);
+_static_assert_offset(struct sea_score_s, score_sub, struct sea_score_vec_s, sb, 0);
+_static_assert_offset(struct sea_score_s, score_gi_a, struct sea_score_vec_s, geh, 0);
 
 /**
  * @struct sea_dp_context_s

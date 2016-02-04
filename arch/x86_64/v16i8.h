@@ -105,7 +105,7 @@ typedef struct v16i8_s {
 	(a).v1 = _i_v16i8(insert)((a).v1, (val), (imm)); \
 }
 #define _ext_v16i8(a, imm) ( \
-	_i_v16i8(extract)((a).v1, (imm)) \
+	(int8_t)_i_v16i8(extract)((a).v1, (imm)) \
 )
 
 /* shift */
@@ -120,6 +120,28 @@ typedef struct v16i8_s {
 #define _mask_v16i8(a) ( \
 	(uint16_t)_i_v16i8(movemask)((a).v1) \
 )
+
+/* debug print */
+#define _print_v16i8(a) { \
+	debug("(v16i8_t) %s(%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d)", \
+		#a, \
+		_ext_v16i8(a, 15), \
+		_ext_v16i8(a, 14), \
+		_ext_v16i8(a, 13), \
+		_ext_v16i8(a, 12), \
+		_ext_v16i8(a, 11), \
+		_ext_v16i8(a, 10), \
+		_ext_v16i8(a, 9), \
+		_ext_v16i8(a, 8), \
+		_ext_v16i8(a, 7), \
+		_ext_v16i8(a, 6), \
+		_ext_v16i8(a, 5), \
+		_ext_v16i8(a, 4), \
+		_ext_v16i8(a, 3), \
+		_ext_v16i8(a, 2), \
+		_ext_v16i8(a, 1), \
+		_ext_v16i8(a, 0)); \
+}
 
 #endif /* _V16I8_H_INCLUDED */
 /**

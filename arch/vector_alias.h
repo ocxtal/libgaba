@@ -68,6 +68,9 @@
 #define _bc_v16i8	vector_alias_join(_bc_v16i8_, vector_prefix)
 #define _bc_v32i8	vector_alias_join(_bc_v32i8_, vector_prefix)
 
+/* print */
+#define _print		vector_alias_join(_print_, vector_prefix)
+
 #endif /* _VECTOR_ALIAS_PREFIX */
 /**
  * end of vector_alias.h

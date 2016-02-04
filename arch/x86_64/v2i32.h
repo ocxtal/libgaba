@@ -9,6 +9,7 @@
 
 /* include header for intel / amd sse2 instruction sets */
 #include <smmintrin.h>
+#include "log.h"
 
 /* 8bit 32cell */
 typedef struct v2i32_s {
@@ -125,7 +126,7 @@ typedef struct v2i32_s {
 	(a).v1 = _i_v2i32((a).v1, (val), (imm)); \
 }
 #define _ext_v2i32(a, imm) ( \
-	_i_v2i32(extract)((a).v1, (imm)) \
+	(int32_t)_i_v2i32(extract)((a).v1, (imm)) \
 )
 
 /* shift */
@@ -146,6 +147,11 @@ typedef struct v2i32_s {
 #define _mask_v2i32(a) ( \
 	(uint32_t) (_mm_movemask_epi8((a).v1)) \
 )
+
+/* debug print */
+#define _print_v2i32(a) { \
+	debug("(v2i32_t) %s(%d, %d)", #a, _ext_v2i32(a, 1), _ext_v2i32(a, 0)); \
+}
 
 #endif /* _V2I32_H_INCLUDED */
 /**
