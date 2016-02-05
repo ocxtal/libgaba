@@ -19,6 +19,13 @@ typedef struct v32i16_s {
 	__m128i v4;
 } v32i16_t;
 
+typedef struct v32i16_mask_s {
+	uint8_t m1;
+	uint8_t m2;
+	uint8_t m3;
+	uint8_t m4;
+} v32i16_mask_t;
+
 /* expanders (without argument) */
 #define _e_x_v32i16_1(u)
 #define _e_x_v32i16_2(u)
@@ -129,25 +136,24 @@ typedef struct v32i16_s {
 
 /* insert and extract */
 #define _ins_v32i16(a, val, imm) { \
-	if((imm) < sizeof(__m128i)) { \
+	if((imm) < sizeof(__m128i)/sizeof(int16_t)) { \
 		(a).v1 = _i_v32i8(insert)((a).v1, (val), (imm)); \
-	} else if((imm) < 2*sizeof(__m128i)) { \
-		(a).v2 = _i_v32i8(insert)((a).v2, (val), (imm) - sizeof(__m128i)); \
-	} else if((imm) < 3*sizeof(__m128i)) { \
-		(a).v2 = _i_v32i8(insert)((a).v3, (val), (imm) - 2*sizeof(__m128i)); \
+	} else if((imm) < 2*sizeof(__m128i)/sizeof(int16_t)) { \
+		(a).v2 = _i_v32i8(insert)((a).v2, (val), (imm) - sizeof(__m128i)/sizeof(int16_t)); \
+	} else if((imm) < 3*sizeof(__m128i)/sizeof(int16_t)) { \
+		(a).v3 = _i_v32i8(insert)((a).v3, (val), (imm) - 2*sizeof(__m128i)/sizeof(int16_t)); \
 	} else { \
-		(a).v2 = _i_v32i8(insert)((a).v4, (val), (imm) - 3*sizeof(__m128i)); \
+		(a).v4 = _i_v32i8(insert)((a).v4, (val), (imm) - 3*sizeof(__m128i)/sizeof(int16_t)); \
 	} \
 }
 #define _ext_v32i16(a, imm) ( \
-	(int8_t)(((imm) < sizeof(__m128i)) \
-		? _i_v32i8(extract)((a).v1, (imm)) \
-		: ((imm) < sizeof(__m128i)) \
-		? _i_v32i8(extract)((a).v2, (imm) - sizeof(__m128i)) \
-		: ((imm) < sizeof(__m128i)) \
-		? _i_v32i8(extract)((a).v3, (imm) - 2*sizeof(__m128i)) \
-		: ((imm) < sizeof(__m128i)) \
-		? _i_v32i8(extract)((a).v4, (imm) - 3*sizeof(__m128i))) \
+	(int16_t)(((imm) < sizeof(__m128i)/sizeof(int16_t)) \
+		? _i_v32i16(extract)((a).v1, (imm)) \
+		: (((imm) < 2*sizeof(__m128i)/sizeof(int16_t)) \
+		? _i_v32i16(extract)((a).v2, (imm) - sizeof(__m128i)/sizeof(int16_t)) \
+		: (((imm) < 3*sizeof(__m128i)/sizeof(int16_t)) \
+		? _i_v32i16(extract)((a).v3, (imm) - 2*sizeof(__m128i)/sizeof(int16_t)) \
+		: _i_v32i16(extract)((a).v4, (imm) - 3*sizeof(__m128i)/sizeof(int16_t))))) \
 )
 
 /* horizontal max (reduction max) */
@@ -169,7 +175,7 @@ typedef struct v32i16_s {
 		_mm_cvtepi8_epi16((a).v1), \
 		_mm_cvtepi8_epi16(_mm_srli_si128((a).v1, 8)), \
 		_mm_cvtepi8_epi16((a).v2), \
-		_mm_cvtepi8_epi16(_mm_srli_si128((a).v2, 8)), \
+		_mm_cvtepi8_epi16(_mm_srli_si128((a).v2, 8)) \
 	} \
 )
 

@@ -15,6 +15,10 @@ typedef struct v16i8_s {
 	__m128i v1;
 } v16i8_t;
 
+typedef struct v16i8_mask_s {
+	uint16_t m1;
+} v16i8_mask_t;
+
 /* expanders (without argument) */
 #define _e_x_v16i8_1(u)
 #define _e_x_v16i8_2(u)
@@ -118,7 +122,9 @@ typedef struct v16i8_s {
 
 /* mask */
 #define _mask_v16i8(a) ( \
-	(uint16_t)_i_v16i8(movemask)((a).v1) \
+	(v16i8_mask_t) { \
+		.m1 = _i_v16i8(movemask)((a).v1) \
+	} \
 )
 
 /* debug print */

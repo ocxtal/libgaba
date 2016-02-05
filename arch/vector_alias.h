@@ -13,7 +13,7 @@
 #define vector_alias_join(a,b)			vector_alias_join_intl(a,b)
 
 #define vec_t 		vector_alias_join(vector_prefix, _t)
-// #define vec_s 		vector_prefix##_s
+#define vec_mask_t	vector_alias_join(vector_prefix, _mask_t)
 
 /* address */
 #define _pv 		vector_alias_join(_pv_, vector_prefix)

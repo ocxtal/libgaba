@@ -10,8 +10,8 @@
  */
 #include <stdint.h>
 #include "sea.h"
-#include "util/util.h"
 #include "arch/arch.h"
+#include "util/util.h"
 
 /* aliasing vector macros */
 #define _VECTOR_ALIAS_PREFIX	v32i8
@@ -69,11 +69,11 @@ static void sea_dp_free(struct sea_dp_context_s *this, void *ptr);
  * @macro _dir_update
  * @brief update direction determiner for the next band
  */
-#define _dir_update(_dir, _vector) { \
-	(_dir).dynamic.acc += (_ext(_vector, 0) - _ext(_vector, BW-1)); \
+#define _dir_update(_dir, _vector, _sign) { \
+	(_dir).dynamic.acc += (_sign) * (_ext(_vector, 0) - _ext(_vector, BW-1)); \
 	debug("acc(%d), (%d, %d)", (_dir).dynamic.acc, _ext(_vector, 0), _ext(_vector, BW-1)); \
 	(_dir).dynamic.array <<= 1; \
-	(_dir).dynamic.array |= ((_dir).dynamic.acc < 0); \
+	(_dir).dynamic.array |= (uint32_t)((_dir).dynamic.acc < 0); \
 }
 /**
  * @macro _dir_adjust_reminder
@@ -544,6 +544,8 @@ void rd_cap_fetch(
 	/* load sequence buffer offset */ \
 	uint8_t *aptr = _rd_bufa(this, 0, BW); \
 	uint8_t *bptr = _rd_bufb(this, 0, BW); \
+	/* load mask pointer */ \
+	struct sea_mask_pair_s *mask_ptr = blk->mask; \
 	/* load vector registers */ \
 	vec_t dh = _load(_pv((_blk)->diff.dh)); \
 	vec_t dv = _load(_pv((_blk)->diff.dv)); \
@@ -556,7 +558,12 @@ void rd_cap_fetch(
 	/* load delta vectors */ \
 	vec_t delta = _load(_pv((_blk)->sd.delta)); \
 	vec_t max = _load(_pv((_blk)->sd.max)); \
-	_print(delta);
+	v32i16_t _md = _load_v32i16(this->tail->v); \
+	_print_v32i16(_md); \
+	_print(delta); \
+	_md = _add_v32i16(_cvt_v32i8_v32i16(delta), _load_v32i16(this->tail->v)); \
+	_print_v32i16(_md);
+
 /**
  * @macro _fill_body
  * @brief update vectors
@@ -565,16 +572,23 @@ void rd_cap_fetch(
 	vec_t _t = _match(_loadu(aptr), _loadu(bptr)); \
 	_print(_t); \
 	_t = _shuf(_load_sc(this, sb), _t); \
-	_t = _max(_t, de); mask_ptr->h = _mask(_eq(_t, de)); \
-	_t = _add(_load_sc(this, gih), _t); \
-	_t = _max(_t, df); mask_ptr->v = _mask(_eq(_t, df)); \
-	_t = _add(_load_sc(this, giv), _t); \
-	de = _max(de, dv); df = _max(df, dh); \
-	vec_t _dh = _sub(_t, dv); \
-	vec_t _dv = _sub(_t, dh); \
-	de = _sub(de, dh); \
+	_print(_load_sc(this, sb)); \
+	_print(_t); \
+	_t = _max(_t, de); mask_ptr->h.vec = _mask(_eq(_t, de)); \
+	_print(_t); \
+	_t = _max(_t, df); mask_ptr->v.vec = _mask(_eq(_t, df)); \
+	_print(_t); \
+	de = _max(_add(de, _load_sc(this, adjh)), _t); \
+	df = _max(_add(df, _load_sc(this, adjv)), _t); \
+	_print(de); \
+	_print(df); \
+	de = _add(de, dh); \
 	df = _sub(df, dv); \
-	dh = _dh; dv = _dv; \
+	_print(de); \
+	_print(df); \
+	vec_t _dh = _sub(dv, _t); \
+	dv = _add(dh, _t); \
+	dh = _dh; \
 	mask_ptr++; \
 	_print(dh); \
 	_print(dv); \
@@ -585,12 +599,13 @@ void rd_cap_fetch(
  * @macro _fill_update_delta
  * @brief update small delta vector and max vector
  */
-#define _fill_update_delta(_vector, _offset) { \
-	delta = _add(delta, _vector); \
-	delta = _add(delta, _offset); \
+#define _fill_update_delta(_op, _vector, _offset, _sign) { \
+	delta = _op(delta, _add(_vector, _offset)); \
 	_print(delta); \
 	max = _max(max, delta); \
-	_dir_update(dir, _vector); \
+	_dir_update(dir, _vector, _sign); \
+	v32i16_t _md = _add_v32i16(_cvt_v32i8_v32i16(delta), _load_v32i16(this->tail->v)); \
+	_print_v32i16(_md); \
 }
 /**
  * @macro _fill_right, _fill_down
@@ -598,17 +613,19 @@ void rd_cap_fetch(
  */
 #define _fill_right() { \
 	debug("go right"); \
-	aptr++;				/* increment sequence buffer pointer */ \
+	aptr--;				/* increment sequence buffer pointer */ \
 	dh = _shl(dh, 1);	/* shift left dh */ \
+	df = _shl(df, 1);	/* shift left df */ \
 	_fill_body();		/* update vectors */ \
-	_fill_update_delta(dh, _load_sc(this, geh)); \
+	_fill_update_delta(_sub, dh, _load_sc(this, ofsh), -1); \
 }
 #define _fill_down() { \
 	debug("go down"); \
 	bptr++;				/* increment sequence buffer pointer */ \
 	dv = _shr(dv, 1);	/* shift right dv */ \
+	de = _shr(de, 1);	/* shift right de */ \
 	_fill_body();		/* update vectors */ \
-	_fill_update_delta(dv, _load_sc(this, gev)); \
+	_fill_update_delta(_add, dv, _load_sc(this, ofsv), 1); \
 }
 /**
  * @macro _fill_update_offset
@@ -630,7 +647,7 @@ void rd_cap_fetch(
 	/* store large offset */ \
 	(_blk)->offset = offset; \
 	/* store sequence buffer offset */ \
-	this->rr.acnt = (uint32_t)(aptr - _rd_bufa(this, 0, BW)); \
+	this->rr.acnt = (uint32_t)(_rd_bufa(this, 0, BW) - aptr); \
 	this->rr.bcnt = (uint32_t)(bptr - _rd_bufb(this, 0, BW)); \
 	/* store diff vectors */ \
 	_store(_pv((_blk)->diff.dh), dh); \
@@ -676,6 +693,13 @@ int64_t fill_bulk_test_ij_bound(
  * @fn fill_cap_test_ij_bound
  * @brief returns negative if ij-bound (for the cap fill) is invaded
  */
+#define _fill_cap_test_ij_bound_init() \
+	uint8_t *alim = _rd_bufa(this, this->rr.body.alen + this->rr.tail.alen, BW); \
+	uint8_t *blim = _rd_bufb(this, this->rr.body.blen + this->rr.tail.blen, BW);
+#define _fill_cap_test_ij_bound() ( \
+	((int64_t)alim - (int64_t)aptr) | ((int64_t)bptr - (int64_t)blim) \
+)
+#if 0
 static _force_inline
 int64_t fill_cap_test_ij_bound(
 	struct sea_dp_context_s const *this,
@@ -689,6 +713,7 @@ int64_t fill_cap_test_ij_bound(
 	return(((int64_t)this->rr.body.alen - this->rr.acnt)
 		 | ((int64_t)this->rr.body.blen - this->rr.bcnt));
 }
+#endif
 
 /**
  * @fn fill_bulk_test_p_bound
@@ -783,7 +808,6 @@ void fill_bulk_block(
 
 	/* update diff vectors */
 	int64_t i = BLK;
-	struct sea_mask_pair_s *mask_ptr = blk->mask;
 	while(1) {					/* 4x unrolled loop */
 		_fill_block(down, d1, r1);
 		_fill_block(right, r1, d2);
@@ -924,13 +948,13 @@ struct sea_fill_status_s fill_cap_seq_bounded(
 		}
 
 		/* vectors on registers inside this block */ {
+			_fill_cap_test_ij_bound_init();
 			_fill_load_contexts(blk - 1);
 
 			/* update diff vectors */
-			struct sea_mask_pair_s *mask_ptr = blk->mask;
 			for(i = 0; i < BLK; i++) {
 				_fill_block_cap();
-				if(fill_cap_test_ij_bound(this, blk) < 0) {
+				if(_fill_cap_test_ij_bound() < 0) {
 					/* adjust reminders */
 					blk->mask[BLK-1] = blk->mask[i];
 					_dir_adjust_reminder(dir, i);
@@ -1165,11 +1189,11 @@ struct sea_score_vec_s sea_init_create_score_vector(
 	int8_t giv = -score_matrix->score_gi_b;
 	struct sea_score_vec_s sc;
 	for(int i = 0; i < 16; i++) {
-		sc.sb[i] = v[i] - (geh + gev) + gih;
-		sc.geh[i] = geh;
-		sc.gev[i] = gev;
-		sc.gih[i] = giv - gih;
-		sc.giv[i] = -giv;
+		sc.sb[i] = v[i] - (geh + gih + gev + giv);
+		sc.adjh[i] = -gih;
+		sc.adjv[i] = -giv;
+		sc.ofsh[i] = -(geh + gih);
+		sc.ofsv[i] = gev + giv;
 	}
 	return(sc);
 }
@@ -1183,8 +1207,8 @@ union sea_dir_u sea_init_create_dir_dynamic(
 {
 	return((union sea_dir_u) {
 		.dynamic = {
-			0,				/* zero independent of scoreing schemes */
-			0x80000000		/* (0, 0) -> (0, 1) */
+			.acc = 0,			/* zero independent of scoreing schemes */
+			.array = 0x80000000	/* (0, 0) -> (0, 1) */
 		}
 	});
 }
@@ -1197,8 +1221,13 @@ struct sea_small_delta_s sea_init_create_small_delta(
 	struct sea_score_s const *score_matrix)
 {
 	int8_t max = extract_max(score_matrix->score_sub);
-	int8_t diff_a = max + score_matrix->score_ge_a;
-	int8_t diff_b = -score_matrix->score_ge_b;
+	int8_t geh = -score_matrix->score_ge_a;
+	int8_t gev = -score_matrix->score_ge_b;
+	// int8_t gih = -score_matrix->score_gi_a;
+	int8_t giv = -score_matrix->score_gi_b;
+
+	int8_t diff_a = max - geh;
+	int8_t diff_b = gev;
 
 	struct sea_small_delta_s sd;
 	for(int i = 0; i < BW/2; i++) {
@@ -1207,6 +1236,7 @@ struct sea_small_delta_s sea_init_create_small_delta(
 		sd.max[i] = 0;
 		sd.max[BW/2 + i] = -diff_b;
 	}
+	sd.delta[BW/2] += giv;
 	return(sd);
 }
 
@@ -1218,10 +1248,15 @@ struct sea_middle_delta_s sea_init_create_middle_delta(
 	struct sea_score_s const *score_matrix)
 {
 	int8_t max = extract_max(score_matrix->score_sub);
-	int16_t coef_a = -max - 2*score_matrix->score_ge_a;
-	int16_t coef_b = -max - 2*score_matrix->score_ge_b;
-	int16_t ofs_a = -score_matrix->score_gi_a;
-	int16_t ofs_b = -score_matrix->score_gi_b;
+	int8_t geh = -score_matrix->score_ge_a;
+	int8_t gev = -score_matrix->score_ge_b;
+	int8_t gih = -score_matrix->score_gi_a;
+	int8_t giv = -score_matrix->score_gi_b;
+
+	int16_t coef_a = -max + 2*geh;
+	int16_t coef_b = -max + 2*gev;
+	int16_t ofs_a = gih;
+	int16_t ofs_b = giv;
 
 	struct sea_middle_delta_s md;
 	for(int i = 0; i < BW/2; i++) {
@@ -1234,29 +1269,61 @@ struct sea_middle_delta_s sea_init_create_middle_delta(
 
 /**
  * @fn sea_init_create_diff_vectors
+ *
+ * @detail
+ * dH[i, j] = S[i, j] - S[i - 1, j]
+ * dV[i, j] = S[i, j] - S[i, j - 1]
+ * dE[i, j] = E[i, j] - S[i, j]
+ * dF[i, j] = F[i, j] - S[i, j]
  */
 static _force_inline
 struct sea_diff_vec_s sea_init_create_diff_vectors(
 	struct sea_score_s const *score_matrix)
 {
 	int8_t max = extract_max(score_matrix->score_sub);
-	int8_t drop_dh = 0;
-	int8_t raise_dh = max + 2*score_matrix->score_ge_b;
-	int8_t drop_dv = 0;
-	int8_t raise_dv = max + 2*score_matrix->score_ge_a;
-	int8_t drop_de = -score_matrix->score_ge_a;
-	int8_t drop_df = -score_matrix->score_ge_b;
+	int8_t geh = -score_matrix->score_ge_a;
+	int8_t gev = -score_matrix->score_ge_b;
+	int8_t gih = -score_matrix->score_gi_a;
+	int8_t giv = -score_matrix->score_gi_b;
+
+	int8_t ofs_a = -(geh + gih);
+	int8_t ofs_b = -(gev + giv);
+	
+	int8_t drop_dh = geh + ofs_a;
+	int8_t raise_dh = max - gev + ofs_a;
+	int8_t drop_dv = gev + ofs_b;
+	int8_t raise_dv = max - geh + ofs_b;
+	int8_t drop_de = giv - giv;
+	int8_t drop_df = gih - gih;
 
 	struct sea_diff_vec_s diff;
+	/**
+	 * dh: dH[i, j] - geh
+	 * dv: dV[i, j] - gev
+	 * de: dE[i, j] + gih + dV[i, j] - gev
+	 * df: dF[i, j] + giv + dH[i, j] - geh
+	 */
+	/* calc dh and dv */
 	for(int i = 0; i < BW/2; i++) {
 		diff.dh[i] = drop_dh;
 		diff.dh[BW/2 + i] = raise_dh;
 		diff.dv[i] = raise_dv;
 		diff.dv[BW/2 + i] = drop_dv;
-		diff.de[i] = raise_dv + drop_de;
-		diff.de[BW/2 + i] = drop_dv + drop_de;
-		diff.df[i] = drop_dh + drop_df;
-		diff.df[BW/2 + i] = raise_dh + drop_df;
+	}
+ 	diff.dh[BW/2-1] += gih;
+ 	diff.dv[BW/2] += giv;
+
+	/* calc de and df */
+	for(int i = 0; i < BW/2; i++) {
+		diff.de[i] = diff.dv[i] + drop_de;
+		diff.de[BW/2 + i] = diff.dv[BW/2 + i] + drop_de;
+		diff.df[i] = diff.dh[i] + drop_df;
+		diff.df[BW/2 + i] = diff.dh[BW/2 + i] + drop_df;
+ 	}
+
+ 	/* negate dh */
+ 	for(int i = 0; i < BW; i++) {
+ 		diff.dh[i] = -diff.dh[i];
  	}
 	return(diff);
 }
@@ -1381,8 +1448,14 @@ sea_t *sea_init(
 		.md = sea_init_create_middle_delta(params_intl.score_matrix),
 		.blk = (struct sea_phantom_block_s) {
 			.mask = {
-				{ 0x00000000, 0x00000000 },
-				{ 0x0000ffff, 0xffff0000 }
+				{
+					.h.all = 0x00000000,
+					.v.all = 0x00000000
+				},
+				{
+					.h.all = 0x0000ffff,
+					.v.all = 0xffff0000
+				}
 			},
 			.dir = sea_init_create_dir_dynamic(params_intl.score_matrix),
 			.offset = 0,

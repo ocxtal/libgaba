@@ -163,27 +163,34 @@
 /**
  * @macro dump
  */
-#define dump(ptr, len) { \
-	void *_p = (void *)(ptr); \
-	int64_t _l = (int64_t)(len); \
-	int64_t _i = 0; \
-	/** header */ \
-	fprintf(stderr, "                "); \
-	for(_i = 0; _i < 16; _i++) { \
-		fprintf(stderr, " %02x", (uint8_t)_i); \
-	} \
-	/** dump */ \
-	_i = 0; \
-	while(_i < _l) { \
-		if((_i % 16) == 0) { \
-			fprintf(stderr, "\n%016llx", (uint64_t)_p + _i); \
-		} \
-		fprintf(stderr, " %02x", ((uint8_t *)_p)[_i]); \
-		_i++; \
-	} \
-	fprintf(stderr, "\n"); \
-}
+#if DEBUG
 
+	#define dump(ptr, len) { \
+		void *_p = (void *)(ptr); \
+		int64_t _l = (int64_t)(len); \
+		int64_t _i = 0; \
+		/** header */ \
+		fprintf(stderr, "                "); \
+		for(_i = 0; _i < 16; _i++) { \
+			fprintf(stderr, " %02x", (uint8_t)_i); \
+		} \
+		/** dump */ \
+		_i = 0; \
+		while(_i < _l) { \
+			if((_i % 16) == 0) { \
+				fprintf(stderr, "\n%016llx", (uint64_t)_p + _i); \
+			} \
+			fprintf(stderr, " %02x", ((uint8_t *)_p)[_i]); \
+			_i++; \
+		} \
+		fprintf(stderr, "\n"); \
+	}
+
+#else
+
+	#define dump(ptr, len) ;
+
+#endif
 
 #endif /* #ifndef _LOG_H_INCLUDED */
 /**

@@ -68,7 +68,8 @@ struct sea_dp_context_s;
  */
 union sea_dir_u {
 	struct sea_dir_dynamic {
-		int32_t acc;			/** (4) accumulator (v[0] - v[BW-1]) */
+		int8_t acc;				/** (1) accumulator (v[0] - v[BW-1]) */
+		int8_t _pad[3];			/** (3) */
 		uint32_t array;			/** (4) dynamic band */
 	} dynamic;
 	struct sea_dir_guided {
@@ -98,8 +99,14 @@ _static_assert(sizeof(struct sea_middle_delta_s) == 64);
  * @struct sea_mask_pair_s
  */
 struct sea_mask_pair_s {
-	mask_t h;					/** (4) horizontal mask vector */
-	mask_t v;					/** (4) vertical mask vector */
+	union _h {
+		mask_t all;
+		v32i8_mask_t vec;
+	} h;						/** (4) horizontal mask vector */
+	union _v {
+		mask_t all;
+		v32i8_mask_t vec;
+	} v;						/** (4) vertical mask vector */
 };
 _static_assert(sizeof(struct sea_mask_pair_s) == 8);
 
@@ -288,14 +295,14 @@ _static_assert(sizeof(struct sea_writer_work_s) == 24);
 struct sea_score_vec_s {
 	// int8_t mv[16];				/** (16) match matrix */
 	int8_t sb[16];				/** (16) substitution matrix (or mismatch matrix) */
-	int8_t geh[16];				/** (16) gap penalty offset on seq a */
-	int8_t gev[16];				/** (16) gap penalty offset on seq b */
-	int8_t gih[16];				/** (16) gap penalty offset on seq a */
-	int8_t giv[16];				/** (16) gap penalty offset on seq b */
+	int8_t adjh[16];			/** (16) */
+	int8_t adjv[16];			/** (16) */
+	int8_t ofsh[16];			/** (16) */
+	int8_t ofsv[16];			/** (16) */
 };
 _static_assert(sizeof(struct sea_score_vec_s) == 80);
 _static_assert_offset(struct sea_score_s, score_sub, struct sea_score_vec_s, sb, 0);
-_static_assert_offset(struct sea_score_s, score_gi_a, struct sea_score_vec_s, geh, 0);
+_static_assert_offset(struct sea_score_s, score_gi_a, struct sea_score_vec_s, adjh, 0);
 
 /**
  * @struct sea_dp_context_s
