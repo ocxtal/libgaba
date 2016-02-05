@@ -192,8 +192,8 @@ typedef struct sea_section_s sea_section_t;
  * @brief tail of the blocks and remaining section.
  */
 struct sea_chain_status_s {
-	struct sea_joint_tail_s *tail;
-	struct sea_section_s *rem;
+	struct sea_joint_tail_s const *tail;
+	struct sea_section_s const *rem;
 };
 typedef struct sea_chain_status_s sea_chain_status_t;
 
@@ -249,6 +249,10 @@ typedef struct sea_context_s sea_t;
  */
 typedef struct sea_dp_context_s sea_dp_t;
 
+/**
+ * @type sea_joint_tail_t
+ */
+typedef struct sea_joint_tail_s sea_joint_tail_t;
 
 /**
  * @struct sea_score_s
@@ -322,6 +326,61 @@ typedef struct sea_params_s sea_params_t;
  * @brief sea_init new API
  */
 sea_t *sea_init(sea_params_t const *params);
+
+/**
+ * @fn sea_clean
+ *
+ * @brief (API) clean up the alignment context structure.
+ *
+ * @param[in] ctx : a pointer to the alignment structure.
+ *
+ * @return none.
+ *
+ * @sa sea_init
+ */
+void sea_clean(
+	sea_t *ctx);
+
+/**
+ * @fn sea_dp_init
+ */
+struct sea_dp_context_s *sea_dp_init(
+	sea_t const *ctx,
+	sea_seq_pair_t const *p,
+	uint8_t const *guide,
+	uint64_t glen);
+
+/**
+ * @fn sea_dp_clean
+ */
+void sea_dp_clean(
+	sea_dp_t *this);
+
+/**
+ * @fn sea_dp_build_root
+ */
+sea_chain_status_t sea_dp_build_root(
+	sea_dp_t *this,
+	sea_section_t const *curr);
+
+/**
+ * @fn sea_dp_fill
+ * @brief fill dp matrix inside section pairs
+ */
+sea_chain_status_t sea_dp_fill(
+	sea_dp_t *this,
+	sea_joint_tail_t const *prev_tail,
+	sea_section_t const *curr,
+	sea_section_t const *next,
+	int64_t plim);
+
+/**
+ * @fn sea_dp_merge
+ */
+sea_chain_status_t sea_dp_merge(
+	sea_dp_t *this,
+	sea_joint_tail_t const *tail_list,
+	uint64_t tail_list_len);
 
 /**
  * @fn sea_align_semi_global
@@ -400,20 +459,6 @@ int32_t sea_get_error_num(
 void sea_aln_free(
 	sea_t const *ctx,
 	sea_res_t *aln);
-
-/**
- * @fn sea_close
- *
- * @brief (API) clean up the alignment context structure.
- *
- * @param[in] ctx : a pointer to the alignment structure.
- *
- * @return none.
- *
- * @sa sea_init
- */
-void sea_close(
-	sea_t *ctx);
 
 #endif  /* #ifndef _SEA_H_INCLUDED */
 

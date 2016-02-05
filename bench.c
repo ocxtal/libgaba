@@ -8,10 +8,8 @@
 #include <stdlib.h>
 #include <getopt.h>
 #include "util/kvec.h"
-#include "util/util.h"
+#include "util/bench.h"
 #include "sea.h"
-
-extern bench_t fill, search, trace;	/** global benchmark variables */
 
 /**
  * @fn print_usage
@@ -28,7 +26,8 @@ void print_usage(void)
  */
 char random_base(void)
 {
-	return(rand() % 4);
+	char const table[4] = {'A', 'C', 'G', 'T'};
+	return(table[rand() % 4]);
 }
 
 /**
@@ -136,10 +135,9 @@ int parse_args(struct params *p, int c, char *arg)
 int main(int argc, char *argv[])
 {
 	int64_t i;
-	kvec_t(char *) pa;
-	kvec_t(char *) pb;
+	char *a;
+	char *b;
 	struct params p;
-	sea_t *d, *g;
 	bench_t total;
 
 	/** set defaults */
@@ -154,64 +152,56 @@ int main(int argc, char *argv[])
 		if(parse_args(&p, i, optarg) != 0) { exit(1); }
 	}
 
+	fprintf(stderr, "len\t%lld\ncnt\t%lld\nx\t%f\nd\t%f\n", p.len, p.cnt, p.x, p.d);
+
 	/** init sequence */
-	kv_init(pa);
-	kv_init(pb);
-	for(i = 0; i < p.cnt; i++) {
-		kv_push(pa, generate_random_sequence(p.len));
-		kv_push(pb, generate_mutated_sequence(kv_at(pa, i), p.len, p.x, p.d, 8));
-	}
-	kv_push(pa, NULL);
-	kv_push(pb, NULL);
+	a = generate_random_sequence(p.len);
+	b = generate_mutated_sequence(a, p.len, p.x, p.d, 8);
 
 	/** init context */
-	d = sea_init(
-		  SEA_SEA | SEA_LINEAR_GAP_COST | SEA_DYNAMIC
-		| SEA_SEQ_A_2BIT | SEA_SEQ_B_2BIT | SEA_ALN_ASCII,
-		2, -3, -5, -1, 60);
-	g = sea_init(
-		  SEA_SEA | SEA_LINEAR_GAP_COST | SEA_GUIDED
-		| SEA_SEQ_A_2BIT | SEA_SEQ_B_2BIT | SEA_ALN_ASCII,
-		2, -3, -5, -1, 60);
-	bench_init(fill);
-	bench_init(search);
-	bench_init(trace);
+	sea_t *ctx = sea_init(SEA_PARAMS(
+		.seq_a_format = SEA_ASCII,
+		.seq_a_direction = SEA_FW_ONLY,
+		.seq_b_format = SEA_ASCII,
+		.seq_b_direction = SEA_FW_ONLY,
+		.aln_format = SEA_ASCII,
+		.xdrop = 100,
+		.score_matrix = SEA_SCORE_SIMPLE(2, 3, 5, 1)));
+	sea_seq_pair_t seq = sea_build_seq_pair(a, strlen(a), b, strlen(b));
+	struct sea_section_s curr = sea_build_section(0, strlen(a), 0, strlen(b));
+	struct sea_section_s next = sea_build_section(0, strlen(a), 0, strlen(b));
+
 	bench_init(total);
 
 	/**
 	 * run benchmark.
 	 */
 	for(i = 0; i < p.cnt; i++) {
+		sea_dp_t *dp = sea_dp_init(ctx, &seq, NULL, 0);
+
 		bench_start(total);
-		sea_res_t *rd = sea_align(d,
-			kv_at(pa, i), 0, p.len,
-			kv_at(pb, i), 0, p.len,
-			NULL, 0);
+		
+		struct sea_chain_status_s stat = sea_dp_build_root(dp, &curr);
+		stat = sea_dp_fill(dp, stat.tail, &curr, &next, 32);
+
+
 		bench_end(total);
-		sea_aln_free(d, rd);
+
+		sea_dp_clean(dp);
 	}
 	
 	/**
 	 * print results.
 	 */
-	printf("%lld, %lld, %lld, %lld, %lld\n",
-		bench_get(fill),
-		bench_get(search),
-		bench_get(trace),
-		bench_get(fill) + bench_get(search) + bench_get(trace),
-		bench_get(total));
+	printf("%lld\n", bench_get(total));
 
 	/**
 	 * clean malloc'd memories
 	 */
-	for(i = 0; i < p.cnt; i++) {
-		free(kv_at(pa, i));
-		free(kv_at(pb, i));
-	}
-	kv_destroy(pa);
-	kv_destroy(pb);
+	free(a);
+	free(b);
 
-	sea_close(d);
+	sea_clean(ctx);
 	return 0;
 }
 
