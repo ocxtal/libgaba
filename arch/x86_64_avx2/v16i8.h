@@ -15,10 +15,6 @@ typedef struct v16i8_s {
 	__m128i v1;
 } v16i8_t;
 
-typedef struct v16i8_mask_s {
-	uint16_t m1;
-} v16i8_mask_t;
-
 /* expanders (without argument) */
 #define _e_x_v16i8_1(u)
 #define _e_x_v16i8_2(u)
@@ -83,7 +79,7 @@ typedef struct v16i8_mask_s {
 #define _and_v16i8(...)		_a_v16i8x(and, _e_vv, __VA_ARGS__)
 #define _or_v16i8(...)		_a_v16i8x(or, _e_vv, __VA_ARGS__)
 #define _xor_v16i8(...)		_a_v16i8x(xor, _e_vv, __VA_ARGS__)
-#define _andn_v16i8(...)	_a_v16i8x(andn, _e_vv, __VA_ARGS__)
+#define _andn_v16i8(...)	_a_v16i8x(andnot, _e_vv, __VA_ARGS__)
 
 /* arithmetics */
 #define _add_v16i8(...)		_a_v16i8(add, _e_vv, __VA_ARGS__)
@@ -112,17 +108,9 @@ typedef struct v16i8_mask_s {
 	(int8_t)_i_v16i8(extract)((a).v1, (imm)) \
 )
 
-/* shift */
-#define _shl_v16i8(a, imm) ( \
-	(v16i8_t) {_i_v16i8x(slli)((a).v1, (imm))} \
-)
-#define _shr_v16i8(a, imm) ( \
-	(v16i8_t) {_i_v16i8x(srli)((a).v1, (imm))} \
-)
-
 /* mask */
 #define _mask_v16i8(a) ( \
-	(v16i8_mask_t) { \
+	(v16_mask_t) { \
 		.m1 = _i_v16i8(movemask)((a).v1) \
 	} \
 )

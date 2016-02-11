@@ -99,7 +99,7 @@ typedef struct v2i32_s {
 #define _and_v2i32(...)		_a_v2i32x(and, _e_vv, __VA_ARGS__)
 #define _or_v2i32(...)		_a_v2i32x(or, _e_vv, __VA_ARGS__)
 #define _xor_v2i32(...)		_a_v2i32x(xor, _e_vv, __VA_ARGS__)
-#define _andn_v2i32(...)	_a_v2i32x(andn, _e_vv, __VA_ARGS__)
+#define _andn_v2i32(...)	_a_v2i32x(andnot, _e_vv, __VA_ARGS__)
 
 /* arithmetics */
 #define _add_v2i32(...)		_a_v2i32(add, _e_vv, __VA_ARGS__)
@@ -130,22 +130,16 @@ typedef struct v2i32_s {
 )
 
 /* shift */
-#define _shl_v2i32(a, imm) ( \
-	(v2i32_t) {_i_v2i32x(slli)((a).v1, (imm))} \
+#define _sal_v2i32(a, imm) ( \
+	(v2i32_t) {_i_v2i32(slai)((a).v1, (imm))} \
 )
-#define _shr_v2i32(a, imm) ( \
-	(v2i32_t) {_i_v2i32x(srli)((a).v1, (imm))} \
-)
-#define _sl_v2i32(a, imm) ( \
-	(v2i32_t) {_i_v2i32(slli)((a).v1, (imm))} \
-)
-#define _sr_v2i32(a, imm) ( \
-	(v2i32_t) {_i_v2i32(srli)((a).v1, (imm))} \
+#define _sar_v2i32(a, imm) ( \
+	(v2i32_t) {_i_v2i32(srai)((a).v1, (imm))} \
 )
 
 /* mask */
 #define _mask_v2i32(a) ( \
-	(uint32_t) (_mm_movemask_epi8((a).v1)) \
+	(uint32_t) (0xff & _mm_movemask_epi8((a).v1)) \
 )
 
 /* debug print */

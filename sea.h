@@ -134,127 +134,6 @@ enum sea_clip_type {
 };
 
 /**
- * @struct sea_seq_pair_s
- * @brief ref-read pair
- */
-struct sea_seq_pair_s {
-	void const *pa, *pb;		/** (16) */
-	uint64_t alen, blen;		/** (16) */
-};
-typedef struct sea_seq_pair_s sea_seq_pair_t;
-#define sea_build_seq_pair(_a, _alen, _b, _blen) ( \
-	(struct sea_seq_pair_s) { \
-		.pa = (_a), \
-		.pb = (_b), \
-		.alen = (_alen), \
-		.blen = (_blen) \
-	} \
-)
-
-/**
- * @struct sea_checkpoint_s
- *
- * @brief input point container for checkpoint alignment function.
- */
-struct sea_checkpoint_s {
-	uint64_t apos;			/** (apos, bpos) makes a checkpoint on seq a and seq b */
-	uint64_t bpos;
-};
-typedef struct sea_checkpoint_s sea_checkpoint_t;
-#define sea_build_checkpoint(_apos, _bpos) ( \
-	(struct sea_checkpoint_s) { \
-		.apos = (_apos), \
-		.bpos = (_bpos) \
-	} \
-)
-
-/**
- * @struct sea_section_s
- *
- * @brief section container
- */
-struct sea_section_s {
-	uint64_t apos, bpos;	/** global position in genome */
-	uint32_t alen, blen;	/** length of a local segment */
-};
-typedef struct sea_section_s sea_section_t;
-#define sea_build_section(_apos, _alen, _bpos, _blen) ( \
-	(struct sea_section_s) { \
-		.apos = (_apos), \
-		.bpos = (_bpos), \
-		.alen = (_alen), \
-		.blen = (_blen) \
-	} \
-)
-
-/**
- * @struct sea_chain_status_s
- * @brief tail of the blocks and remaining section.
- */
-struct sea_chain_status_s {
-	struct sea_joint_tail_s const *tail;
-	struct sea_section_s const *rem;
-};
-typedef struct sea_chain_status_s sea_chain_status_t;
-
-/**
- * @struct sea_result_s
- *
- * @brief (API) a structure containing an alignment result.
- *
- * @detail
- * the triplets (a, apos, alen) and (b, bpos, blen) contains the position
- * and the length of the alignment projected on each sequences.
- * the aln contains the alignment string, which format is specified by the
- * flags given to the `sea_init'. (see `enum sea_flags_aln' for available
- * formats.)
- * the len contains the length of the alignment string, not including
- * clippings at the ends.
- *
- * @sa sea_sea, sea_aln_free
- */
-struct sea_result_s {
-	/** alignment positions */
-	uint64_t apos;			/*!< alignment start position on a. */
-	uint64_t bpos;			/*!< alignment start position on b. */
-	uint32_t alen;			/*!< alignment length on a. the alignment interval is a[apos]..a[apos+alen-1] */
-	uint32_t blen;			/*!< alignment length on b. the alignment interval is b[bpos]..b[bpos+blen-1] */
-
-	/** alignment score */
-	int64_t score;			/*!< the alignment score. */
-	// int32_t flags;			/*!< unused for now */
-
-	/** alignment string and its lengths */
-	uint8_t *aln;			/*!< a pointer to the alignment result. */
-	uint32_t slen;			/*!< the length of the alignment string (slen == strlen(aln)) */
-	uint32_t plen;			/*!< the length of the path of the alignment (slen == tlen if ASCII) */
-	
-	/** copy of input information */
-	void const *a; 			/*!< a pointer to the sequence a. */
-	void const *b;			/*!< a pointer to the sequence b. */
-};
-typedef struct sea_result_s sea_res_t;
-
-/**
- * @type sea_t
- *
- * @brief (API) an alias to `struct sea_context_s'.
- */
-typedef struct sea_context_s sea_t;
-
-/**
- * @type sea_dp_t
- *
- * @brief an aliast to `struct sea_dp_context_s`.
- */
-typedef struct sea_dp_context_s sea_dp_t;
-
-/**
- * @type sea_joint_tail_t
- */
-typedef struct sea_joint_tail_s sea_joint_tail_t;
-
-/**
  * @struct sea_score_s
  * @brief score container
  */
@@ -322,8 +201,114 @@ typedef struct sea_params_s sea_params_t;
 )
 
 /**
+ * @struct sea_seq_pair_s
+ * @brief ref-read pair
+ */
+struct sea_seq_pair_s {
+	void const *pa, *pb;		/** (16) */
+	uint64_t alen, blen;		/** (16) */
+};
+typedef struct sea_seq_pair_s sea_seq_pair_t;
+#define sea_build_seq_pair(_a, _alen, _b, _blen) ( \
+	(struct sea_seq_pair_s) { \
+		.pa = (_a), \
+		.pb = (_b), \
+		.alen = (_alen), \
+		.blen = (_blen) \
+	} \
+)
+
+/**
+ * @type sea_t
+ *
+ * @brief (API) an alias to `struct sea_context_s'.
+ */
+typedef struct sea_context_s sea_t;
+
+/**
+ * @struct sea_section_s
+ *
+ * @brief section container
+ */
+struct sea_section_s {
+	uint64_t apos, bpos;	/** global position in genome */
+	uint32_t alen, blen;	/** length of a local segment */
+};
+typedef struct sea_section_s sea_section_t;
+#define sea_build_section(_apos, _alen, _bpos, _blen) ( \
+	(struct sea_section_s) { \
+		.apos = (_apos), \
+		.bpos = (_bpos), \
+		.alen = (_alen), \
+		.blen = (_blen) \
+	} \
+)
+
+/**
+ * @type sea_dp_t
+ *
+ * @brief an aliast to `struct sea_dp_context_s`.
+ */
+typedef struct sea_dp_context_s sea_dp_t;
+
+/**
+ * @struct sea_chain_status_s
+ * @brief tail of the blocks and remaining section.
+ */
+struct sea_chain_status_s {
+	struct sea_joint_tail_s const *tail;
+	struct sea_section_s const *rem;
+};
+typedef struct sea_chain_status_s sea_chain_status_t;
+
+/**
+ * @type sea_joint_tail_t
+ */
+typedef struct sea_joint_tail_s sea_joint_tail_t;
+
+/**
+ * @type sea_joint_head_t
+ */
+typedef struct sea_joint_head_s sea_joint_head_t;
+
+/**
+ * @struct sea_cigar_s
+ */
+struct sea_cigar_s {
+	uint32_t len;
+	uint8_t c;
+	uint8_t _pad[3];
+};
+
+#if 0
+/**
+ * @struct sea_result_s
+ *
+ * @brief alignment trace container
+ *
+ * @detail
+ * modified for graph-based aligner
+ */
+struct sea_result_s {
+
+	/* results: score and path */
+	int64_t score;
+	struct sea_cigar_s const *cigar;		/** cigar pair array */
+	uint32_t string_length;
+	uint32_t path_length;
+
+	/* input seq information */
+	struct sea_seq_pair_s const *seq_pair;	/** pointer to sequence pair */
+
+	/* section information */
+	struct sea_section_s sections[1];
+};
+typedef struct sea_result_s sea_res_t;
+#endif
+
+/**
  * @fn sea_init
- * @brief sea_init new API
+ * @brief (API) sea_init new API
  */
 sea_t *sea_init(sea_params_t const *params);
 
@@ -346,6 +331,17 @@ void sea_clean(
  */
 struct sea_dp_context_s *sea_dp_init(
 	sea_t const *ctx,
+	sea_seq_pair_t const *p,
+	uint8_t const *guide,
+	uint64_t glen);
+
+/**
+ * @fn sea_dp_flush
+ *
+ * @brief flush stack
+ */
+void sea_dp_flush(
+	sea_dp_t *this,
 	sea_seq_pair_t const *p,
 	uint8_t const *guide,
 	uint64_t glen);
@@ -383,6 +379,68 @@ sea_chain_status_t sea_dp_merge(
 	uint64_t tail_list_len);
 
 /**
+ * @struct sea_clip_params_s
+ */
+struct sea_clip_params_s {
+	int64_t head_length;
+	int64_t tail_length;
+	char type;
+};
+typedef struct sea_clip_params_s sea_clip_params_t;
+
+/**
+ * @macro SEA_CLIP_PARAMS
+ */
+#define SEA_CLIP_PARAMS(...)		( &((struct sea_clip_params) { __VA_ARGS__ }) )
+#define SEA_CLIP_NONE				( NULL )
+
+/**
+ * @type sea_result_writer
+ * @brief pointer to putchar-compatible writer
+ */
+typedef int (*sea_result_writer)(int c);
+
+/**
+ * @fn sea_dp_build_leaf
+ * @brief search max score position.
+ */
+sea_joint_head_t *sea_dp_build_leaf(
+	sea_dp_t *this,
+	sea_joint_tail_t const *tail);
+
+/**
+ * @fn sea_dp_trace
+ *
+ * @brief generate alignment result string
+ */
+sea_joint_head_t *sea_dp_trace(
+	sea_dp_t *this,
+	sea_joint_head_t const *prev_head,
+	sea_clip_params_t const *clip);
+
+/**
+ * @fn sea_dp_joint
+ *
+ * @brief connect a root to a leaf of another tree
+ */
+sea_joint_head_t *sea_dp_joint(
+	sea_dp_t *this,
+	sea_joint_head_t const *prev_head,
+	sea_joint_tail_t const *tail);
+
+/**
+ * @fn sea_dp_dump_trace
+ */
+void sea_dp_dump_trace(
+	sea_dp_t *this,
+	sea_joint_head_t const *fw_head,
+	sea_joint_head_t const *fw_head_term,
+	sea_joint_head_t const *rv_head,
+	sea_joint_head_t const *rv_head_term,
+	sea_result_writer writer);
+
+#if 0
+/**
  * @fn sea_align_semi_global
  */
 sea_res_t *sea_align_semi_global(
@@ -403,33 +461,6 @@ sea_res_t *sea_align_global(
 	uint64_t cplen,
 	uint8_t const *guide,
 	uint64_t glen);
-
-/**
- * @struct sea_clip_params
- */
-struct sea_clip_params {
-	int64_t head_length;
-	int64_t tail_length;
-	char type;
-};
-typedef struct sea_clip_params sea_clip_params_t;
-
-/**
- * @macro SEA_CLIP_PARAMS
- */
-#define SEA_CLIP_PARAMS(...)		( &((struct sea_clip_params) { __VA_ARGS__ }) )
-#define SEA_CLIP_NULL				( NULL )
-
-/**
- * @fn sea_generate_string
- *
- * @brief generate alignment result string
- */
-sea_res_t *sea_generate_string(
-	sea_t const *ctx,
-	sea_seq_pair_t const *p,
-	sea_res_t *aln,
-	sea_clip_params_t const *clip);
 
 /**
  * @fn sea_get_error_num
@@ -459,6 +490,7 @@ int32_t sea_get_error_num(
 void sea_aln_free(
 	sea_t const *ctx,
 	sea_res_t *aln);
+#endif
 
 #endif  /* #ifndef _SEA_H_INCLUDED */
 

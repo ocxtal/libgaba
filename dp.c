@@ -11,11 +11,16 @@
 #include <stdint.h>
 #include "sea.h"
 #include "arch/arch.h"
-#include "util/util.h"
 
 /* aliasing vector macros */
 #define _VECTOR_ALIAS_PREFIX	v32i8
 #include "arch/vector_alias.h"
+
+/* include utils */
+#include "util/util.h"
+
+// #define STRUCT_ON_REG
+
 
 #define BW 							( 32 )
 #define BLK 						( 32 )
@@ -134,22 +139,36 @@ static void sea_dp_free(struct sea_dp_context_s *this, void *ptr);
 #define _lo32(v)		_ext_v2i32(v, 0)
 #define _hi32(v)		_ext_v2i32(v, 1)
 
-
 /**
- * @fn rd_load_seq
- * @brief load previous fetched sequence onto seq buffer on the context
+ * @struct fill_block_context_s
+ *
+ * @brief vectors on registers
+ */
+struct fill_block_context_s {
+	vec_t dh;					/** -(dH - (geh + gih)) */
+	vec_t dv;					/** dV - (gev + giv) */
+	vec_t de;					/** (dE - geh) + (dH - (geh + gih)) */
+	vec_t df;					/** (dF - gev) + (dV - (gev + giv)) */
+	vec_t delta;				/** small delta vector */
+	vec_t max;					/** max vector */
+	union sea_dir_u dir;
+	int64_t offset;
+	uint8_t *aptr;
+	uint8_t *bptr;
+	union sea_mask_pair_u *mask_ptr;
+};
+
+/*
+ * @fn fill_load_section
  */
 static _force_inline
-struct sea_joint_tail_s *rd_load_seq(
+void fill_load_section(
 	struct sea_dp_context_s *this,
-	struct sea_joint_tail_s const *prev_tail,
 	struct sea_section_s const *curr,
 	struct sea_section_s const *next,
-	int64_t plim)
+	uint64_t plim)
 {
-	/* replace next with magic section if NULL */
 	v2i32_t const z = _zero_v2i32();
-	v2i32_t const b1 = _seta_v2i32(1, 0);
 	v2i32_t const bw = _set_v2i32(BW);	
 
 	/* load section lengths */
@@ -175,295 +194,271 @@ struct sea_joint_tail_s *rd_load_seq(
 
 	_print_v2i64(pos2);
 	_print_v2i32(len2);
+	_print_v2i32(rem2);
 
-	/* load sequence buffers */
-	_store(_rd_bufa(this, 0, BW), _load(prev_tail->wa));
-	_store(_rd_bufb(this, 0, BW), _load(prev_tail->wb));
+	/* store section */
+	this->rr.plim = plim;
+	_store_v2i64(_rd_pos1(this), pos1);
+	_store_v2i32(_rd_len1(this), len1);
+	_store_v2i64(_rd_pos2(this), pos2);
+	_store_v2i32(_rd_len2(this), len2);
+	_store_v2i32(_rd_rem2(this), rem2);
 
-	/* load section from previous tail */
-	if(prev_tail->p >= 0) {
-		/* store section */
-		this->rr.plim = plim;
-		_store_v2i64(_rd_pos1(this), pos1);
-		_store_v2i32(_rd_len1(this), len1);
-		_store_v2i64(_rd_pos2(this), pos2);
-		_store_v2i32(_rd_len2(this), len2);
-		_store_v2i32(_rd_rem2(this), rem2);
-		/* no need to fetch init sequence */
-		return(NULL);
-	}
+	return;
+}
 
-	/* calc sum lengths */
-	v2i32_t len = _add_v2i32(len1, len2);
-	v2i32_t tlen = _add_v2i32(_add_v2i32(len, len), b1);
-
-	_print_v2i32(len);
-	_print_v2i32(tlen);
-	
-	/* calc crem and nrem */
-	v2i32_t crem = _set_v2i32(-prev_tail->p);
-	v2i32_t trem = _max_v2i32(_sub_v2i32(crem, tlen), z);
-	v2i32_t nrem = _max_v2i32(_swap_v2i32(trem), trem);
-
-	_print_v2i32(crem);
-	_print_v2i32(trem);
-	_print_v2i32(nrem);
-
-	/* calc len */
-	v2i32_t cnt = _sub_v2i32(
-		_sr_v2i32(_add_v2i32(crem, b1), 1),
-		_sr_v2i32(_add_v2i32(nrem, b1), 1));
-
-	v2i32_t cnt1 = _min_v2i32(cnt, len1);
-	v2i32_t cnt2 = _sub_v2i32(cnt, cnt1);
-
-	_print_v2i32(cnt);
-	_print_v2i32(cnt1);
-	_print_v2i32(cnt2);
-
-	debug("%p, %p", this->rr.p.pa, this->rr.p.pb);
-
-	/* fetch seq a */
-	vec_t t = _loadu(_rd_bufa(this, 0, BW));
-	_rd_load(this->r.loada,
-		_rd_bufa(this, BW - _lo32(cnt2), _lo32(cnt2)),/* dst */
-		this->rr.p.pa,						/* src */
-		rev(_lo64(pos2), this->rr.p.alen),	/* pos */
-		this->rr.p.alen,					/* lim */
-		_lo32(cnt2));						/* len */
-	_rd_load(this->r.loada,
-		_rd_bufa(this, BW - _lo32(cnt), _lo32(cnt1)),/* dst */
-		this->rr.p.pa,						/* src */
-		rev(_lo64(pos1), this->rr.p.alen),	/* pos */
-		this->rr.p.alen,					/* lim */
-		_lo32(cnt1));						/* len */
-	_storeu(_rd_bufa(this, -_lo32(cnt), BW), t);
-
-	/* fetch seq b */
-	_storeu(_rd_bufb(this, -_hi32(cnt), BW), _loadu(_rd_bufb(this, 0, BW)));
-	_rd_load(this->r.loadb,
-		_rd_bufb(this, BW - _hi32(cnt), _hi32(cnt1)),/* dst */
-		this->rr.p.pb,						/* src */
-		_hi64(pos1),						/* pos */
-		this->rr.p.blen,					/* lim */
-		_hi32(cnt1));						/* len */
-	_rd_load(this->r.loadb,
-		_rd_bufb(this, BW - _hi32(cnt2), _hi32(cnt2)),
-		this->rr.p.pb,						/* src */
-		_hi64(pos2),						/* pos */
-		this->rr.p.blen,					/* lim */
-		_hi32(cnt2));						/* len */
-
-	_print(_load(_rd_bufa(this, BW, BLK)));
-	_print(_load(_rd_bufa(this, 0, BW)));
-	_print(_load(_rd_bufb(this, 0, BW)));
-	_print(_load(_rd_bufb(this, BW, BLK)));
-
-	/* update pos and len */
-	pos1 = _add_v2i64(pos1, _cvt_v2i32_v2i64(cnt1));
-	len1 = _sub_v2i32(len1, cnt1);
-	pos2 = _add_v2i64(pos2, _cvt_v2i32_v2i64(cnt2));
-	len2 = _sub_v2i32(len2, cnt2);
-
-	_print_v2i64(pos1);
-	_print_v2i32(len1);
-	_print_v2i64(pos2);
-	_print_v2i32(len2);
-
-	if(_lo32(nrem) == 0) {
-		/* store section */
-		this->rr.plim = plim;
-		_store_v2i64(_rd_pos1(this), pos1);
-		_store_v2i32(_rd_len1(this), len1);
-		_store_v2i64(_rd_pos2(this), pos2);
-		_store_v2i32(_rd_len2(this), len2);
-		_store_v2i32(_rd_rem2(this), rem2);
-		/* no need to fetch init sequence */
-		return(NULL);
-	}
-
-	/* create tail */
-	struct sea_joint_tail_s *tail = sea_dp_smalloc(
-		this,
-		sizeof(struct sea_joint_tail_s));
-	tail->v = prev_tail->v;
-	tail->max = 0;
-	tail->psum = 2;
-	tail->p = -_lo32(nrem);
+/**
+ * @fn fill_store_section
+ */
+static _force_inline
+void fill_store_section(
+	struct sea_dp_context_s *this,
+	struct sea_joint_tail_s *tail)
+{
+	/* load section informations */
+	v2i64_t pos1 = _load_v2i64(_rd_pos1(this));
+	v2i32_t len1 = _load_v2i32(_rd_len1(this));
+	v2i64_t pos2 = _load_v2i64(_rd_pos2(this));
+	v2i32_t len2 = _load_v2i32(_rd_len2(this));
+	v2i32_t rem = _load_v2i32(_rd_rem2(this));
 
 	/* adjust len2 */
-	len2 = _add_v2i32(len2, rem2);
-	_print_v2i32(len2);
+	len2 = _add_v2i32(len2, rem);
 
-	/* calc rem section */
-	v2i32_t mask32 = _eq_v2i32(len1, z);
+	/* make mask */
+	v2i32_t mask32 = _eq_v2i32(len1, _zero_v2i32());
 	v2i64_t mask64 = _cvt_v2i32_v2i64(mask32);
 
-	_print_v2i32(mask32);
-	_print_v2i64(mask64);
-
+	/* store rem section */
 	_store_v2i64(&tail->rem.apos, _sel_v2i64(pos2, pos1, mask64));
 	_store_v2i32(&tail->rem.alen, _sel_v2i32(len2, len1, mask32));
 
 	_print_v2i64(_sel_v2i64(pos2, pos1, mask64));
 	_print_v2i32(_sel_v2i32(len2, len1, mask32));
 
-	/* store seq buffers */
-	_store(tail->wa, _loadu(_rd_bufa(this, 0, BW)));
-	_store(tail->wb, _loadu(_rd_bufb(this, 0, BW)));
+	return;
+}
 
+/**
+ * @fn fill_create_head
+ * @brief create joint_head on the stack to start block extension
+ */
+static _force_inline
+struct sea_block_s *fill_create_head(
+	struct sea_dp_context_s *this,
+	struct sea_joint_tail_s const *prev_tail)
+{
+	/* init working stack */
+	struct sea_joint_head_s *head = (struct sea_joint_head_s *)this->stack_top;
+	head->head = NULL;
+	head->cigar = NULL;
+	head->tail = prev_tail;
+
+	/* copy phantom vectors */
+	struct sea_block_s *blk = _phantom_block(head + 1);
+	_memcpy_blk_aa(
+		(uint8_t *)blk + SEA_BLOCK_PHANTOM_OFFSET,
+		(uint8_t *)_last_block(prev_tail) + SEA_BLOCK_PHANTOM_OFFSET,
+		SEA_BLOCK_PHANTOM_SIZE);
+	debug("blk(%p)", blk);
+	return(blk + 1);
+}
+
+/**
+ * @fn fill_create_tail
+ * @brief create joint_tail at the end of the blocks
+ */
+static _force_inline
+struct sea_joint_tail_s *fill_create_tail(
+	struct sea_dp_context_s *this,
+	struct sea_joint_tail_s const *prev_tail,
+	struct sea_block_s *blk,
+	int64_t p)
+{
+	/* create joint_tail */
+	struct sea_joint_tail_s *tail = (struct sea_joint_tail_s *)blk;
+	this->stack_top = (void *)(tail + 1);	/* write back stack_top */
+	tail->v = prev_tail->v;					/* copy middle deltas */
+
+	/* save misc to joint_tail */
+	tail->psum = p + prev_tail->psum;
+	tail->p = p;
+
+	/* search max section */
+	v32i16_t md = _load_v32i16(prev_tail->v);
+	v32i16_t sd = _cvt_v32i8_v32i16(_load(&(blk - 1)->sd.max));
+	_print_v32i16(md);
+	_print_v32i16(sd);
+
+	/* add middle and small deltas */
+	md = _add_v32i16(md, sd);
+
+	/* extract max */
+	int16_t max = _hmax_v32i16(_add_v32i16(md, sd));
+
+	/* determine q-coordinate */
+	vec_mask_t mask_max = _mask_v32i16(
+		_eq_v32i16(_set_v32i16(max), md));
+
+	/* store */
+	tail->mask_max.mask = mask_max;
+	tail->max = max + (blk - 1)->offset;
+
+	debug("offset(%lld)", (blk - 1)->offset);
+	debug("max(%d)", _hmax_v32i16(_add_v32i16(md, sd)));
+	debug("mask_max(%u)", tail->mask_max.all);
+
+	fill_store_section(this, tail);
 	return(tail);
 }
 
 /**
- * @fn rd_save_seq
- * @brief save current seq buffer to joint_tail
+ * @fn fill_bulk_fetch
+ *
+ * @brief fetch 32bases from current section
  */
 static _force_inline
-struct sea_chain_status_s rd_save_seq(
+v2i32_t fill_bulk_fetch(
 	struct sea_dp_context_s *this,
-	struct sea_joint_tail_s *tail,
-	struct sea_section_s const *curr,
-	struct sea_section_s const *next)
+	struct sea_block_s *blk)
 {
-	v2i32_t const z = _zero_v2i32();
+	/* load sequence from previous block */
+	vec_t const mask = _set(0x0f);
+	vec_t w = _load(&(blk - 1)->ch.w);
+	vec_t a = _and(mask, w);
+	vec_t b = _and(mask, _shr(w, 4));
 
-	v2i32_t len1 = _load_v2i32(_rd_len1(this));
-	v2i32_t len2 = _load_v2i32(_rd_len2(this));
-
-	_print_v2i32(len1);
-	_print_v2i32(len2);
-
-	/* load cnt */
-	v2i32_t cnt = _load_v2i32(_rd_cnt(this));
-	v2i32_t cnt1 = _min_v2i32(cnt, len1);
-	v2i32_t cnt2 = _sub_v2i32(cnt, cnt1);
-
-	_print_v2i32(cnt);
-	_print_v2i32(cnt1);
-	_print_v2i32(cnt2);	
-
-	/* update section 1 */
-	v2i64_t pos1 = _add_v2i64(
-		_load_v2i64(_rd_pos1(this)),
-		_cvt_v2i32_v2i64(cnt1));
-	len1 = _sub_v2i32(len1, cnt1);
-
-	/* update section 2 */
-	v2i64_t pos2 = _add_v2i64(
-		_load_v2i64(_rd_pos2(this)),
-		_cvt_v2i32_v2i64(cnt2));
-	len2 = _sub_v2i32(len2, cnt2);
-
-	/* adjust len2 */
-	len2 = _add_v2i32(len2, _load_v2i32(_rd_rem2(this)));
-
-	/* make mask */
-	v2i32_t mask32 = _eq_v2i32(len1, z);
-	v2i64_t mask64 = _cvt_v2i32_v2i64(mask32);
-
-	/* store rem */
-	_store_v2i64(&tail->rem.apos, _sel_v2i64(pos2, pos1, mask64));
-	_store_v2i32(&tail->rem.alen, _sel_v2i32(len2, len1, mask32));
-
-	_print_v2i64(_sel_v2i64(pos2, pos1, mask64));
-	_print_v2i32(_sel_v2i32(len2, len1, mask32));
-
-	/* save seq buffers */
-	_store(tail->wa, _load(_rd_bufa(this, 0, BW)));
-	_store(tail->wb, _load(_rd_bufb(this, 0, BW)));
-
-	_print(_load(_rd_bufa(this, 0, BW)));
-	_print(_load(_rd_bufb(this, 0, BW)));
-
-	return((struct sea_chain_status_s){
-		.tail = tail,
-		.rem = &tail->rem
-	});
-}
-
-/**
- * @fn rd_go_down, rd_go_right
- * @brief increment counter
- */
-static _force_inline
-void rd_go_right(
-	struct sea_dp_context_s *this)
-{
-	this->rr.acnt++;
-	return;
-}
-static _force_inline
-void rd_go_down(
-	struct sea_dp_context_s *this)
-{
-	this->rr.bcnt++;
-	return;
-}
-
-/**
- * @fn rd_bulk_fetch
- * @brief fetch sequence to seq buffer (fast)
- */
-static _force_inline
-void rd_bulk_fetch(
-	struct sea_dp_context_s *this)
-{
-	/* load pos, len and cnt */
-	v2i64_t pos = _load_v2i64(_rd_pos1(this));
-	v2i32_t len = _load_v2i32(_rd_len1(this));
-	v2i32_t cnt = _load_v2i32(_rd_cnt(this));
-
-	/* update pos and len */
-	pos = _add_v2i64(pos, _cvt_v2i32_v2i64(cnt));
-	len = _add_v2i32(len, cnt);
-	_store_v2i64(_rd_pos1(this), pos);
-	_store_v2i32(_rd_len1(this), len);
-
-	_print_v2i64(pos);
-	_print_v2i32(len);
+	_print(w);
+	_print(a);
+	_print(b);
 
 	/* fetch seq a */
-	vec_t t = _loadu(_rd_bufa(this, _lo32(cnt), BW));
 	_rd_load(this->r.loada,
 		_rd_bufa(this, BW, BLK),			/* dst */
 		this->rr.p.pa,						/* src */
-		rev(_lo64(pos), this->rr.p.alen),	/* pos */
+		rev(this->rr.body.apos, this->rr.p.alen),	/* pos */
 		this->rr.p.alen,					/* lim */
 		BLK);								/* len */
-	_store(_rd_bufa(this, 0, BW), t);
+	_store(_rd_bufa(this, 0, BW), a);
 
 	/* fetch seq b */
-	_store(_rd_bufb(this, 0, BW), _loadu(_rd_bufb(this, _hi32(cnt), BW)));
+	_store(_rd_bufb(this, 0, BW), b);
 	_rd_load(this->r.loadb,
 		_rd_bufb(this, BW, BLK),			/* dst */
 		this->rr.p.pb,						/* src */
-		_hi64(pos),							/* pos */
+		this->rr.body.bpos,					/* pos */
 		this->rr.p.blen,					/* lim */
 		BLK);								/* len */
 
-	_print(_load(_rd_bufa(this, BW, BLK)));
-	_print(_load(_rd_bufa(this, 0, BW)));
-	_print(_load(_rd_bufb(this, 0, BW)));
-	_print(_load(_rd_bufb(this, BW, BLK)));
+	return(_seta_v2i32(BLK, BLK));
+}
 
-	/* clear counter */
-	_store_v2i32(_rd_cnt(this), _zero_v2i32());
+/**
+ * @fn fill_cap_fetch
+ *
+ * @return the length of the sequence fetched.
+ */
+static _force_inline
+v2i32_t fill_cap_fetch(
+	struct sea_dp_context_s *this,
+	struct sea_block_s *blk)
+{
+	/* const */
+	v2i32_t const tot = _set_v2i32(BLK);
+
+	/* load lengths */
+	v2i32_t len1 = _load_v2i32(_rd_len1(this));
+	v2i32_t len2 = _load_v2i32(_rd_len2(this));
+
+	/* clip len1 with max load length */
+	len1 = _min_v2i32(len1, tot);
+
+	/* clip len2 with max - len1 */
+	len2 = _min_v2i32(len2, _sub_v2i32(tot, len1));
+
+	/* load sequence from previous block */
+	vec_t const mask = _set(0x0f);
+	vec_t w = _load(&(blk - 1)->ch.w);
+	vec_t a = _and(mask, w);
+	vec_t b = _and(mask, _shr(w, 4));
+
+	_print(w);
+	_print(a);
+	_print(b);
+
+	/* fetch seq a */
+	_rd_load(this->r.loada,
+		_rd_bufa(this, BW + _lo32(len1), _lo32(len2)),	/* dst */
+		this->rr.p.pa,						/* src */
+		rev(this->rr.tail.apos, this->rr.p.alen),	/* pos */
+		this->rr.p.alen,					/* lim */
+		_lo32(len2));						/* len */
+	_rd_load(this->r.loada,
+		_rd_bufa(this, BW, _lo32(len1)),	/* dst */
+		this->rr.p.pa,						/* src */
+		rev(this->rr.body.apos, this->rr.p.alen),	/* pos */
+		this->rr.p.alen,					/* lim */
+		_lo32(len1));						/* len */
+	_store(_rd_bufa(this, 0, BW), a);
+
+	/* fetch seq b */
+	_store(_rd_bufb(this, 0, BW), b);
+	_rd_load(this->r.loadb,
+		_rd_bufb(this, BW, _hi32(len1)),	/* dst */
+		this->rr.p.pb,						/* src */
+		this->rr.body.bpos,					/* pos */
+		this->rr.p.blen,					/* lim */
+		_hi32(len1));						/* len */
+	_rd_load(this->r.loadb,
+		_rd_bufb(this, BW + _hi32(len1), _hi32(len2)),
+		this->rr.p.pb,						/* src */
+		this->rr.tail.bpos,					/* pos */
+		this->rr.p.blen,					/* lim */
+		_hi32(len2));						/* len */
+
+	return(_add_v2i32(len1, len2));
+}
+
+/**
+ * @macro fill_bulk_update_section
+ */
+static _force_inline
+void fill_bulk_update_section(
+	struct sea_dp_context_s *this,
+	struct sea_block_s *blk,
+	v2i32_t cnt)
+{
+	/* update pos and len */
+	v2i64_t pos1 = _load_v2i64(_rd_pos1(this));
+	v2i32_t len1 = _load_v2i32(_rd_len1(this));
+	pos1 = _add_v2i64(pos1, _cvt_v2i32_v2i64(cnt));
+	len1 = _sub_v2i32(len1, cnt);
+
+	/* store len to block */
+	_store_v2i32(&blk->alen, len1);
+
+	vec_t a = _loadu(_rd_bufa(this, _lo32(cnt), BW));
+	vec_t b = _loadu(_rd_bufb(this, _hi32(cnt), BW));
+	_store(&blk->ch.w, _or(a, _shl(b, 4)));
+
+	_print(a);
+	_print(b);
+
+	/* write back pos and len */
+	_store_v2i64(_rd_pos1(this), pos1);
+	_store_v2i32(_rd_len1(this), len1);
 	return;
 }
 
 /**
- * @fn rd_cap_fetch
- * @brief fetch sequence to seq buffer (for cap fill)
+ * @macro fill_cap_update_section
  */
 static _force_inline
-void rd_cap_fetch(
-	struct sea_dp_context_s *this)
+void fill_cap_update_section(
+	struct sea_dp_context_s *this,
+	struct sea_block_s *blk,
+	v2i32_t cnt)
 {
-	/* constants */
-	v2i32_t const tot = _set_v2i32(BLK);
-	v2i32_t const zero = _zero_v2i32();
-
 	/* load lengths */
 	v2i32_t len1 = _load_v2i32(_rd_len1(this));
 	v2i32_t len2 = _load_v2i32(_rd_len2(this));
@@ -471,12 +466,10 @@ void rd_cap_fetch(
 	_print_v2i32(len1);
 	_print_v2i32(len2);
 
-	/* load cnt */
-	v2i32_t cnt = _load_v2i32(_rd_cnt(this));
+	/* calc cnt1 and cnt2 */
 	v2i32_t cnt1 = _min_v2i32(cnt, len1);
 	v2i32_t cnt2 = _sub_v2i32(cnt, cnt1);
 
-	_print_v2i32(cnt);
 	_print_v2i32(cnt1);
 	_print_v2i32(cnt2);	
 
@@ -485,11 +478,6 @@ void rd_cap_fetch(
 		_load_v2i64(_rd_pos1(this)),
 		_cvt_v2i32_v2i64(cnt1));
 	len1 = _sub_v2i32(len1, cnt1);
-	_store_v2i64(_rd_pos1(this), pos1);
-	_store_v2i32(_rd_len1(this), len1);
-
-	/* clip len1 with max load length */
-	len1 = _min_v2i32(len1, tot);
 
 	_print_v2i64(pos1);
 	_print_v2i32(len1);
@@ -499,63 +487,142 @@ void rd_cap_fetch(
 		_load_v2i64(_rd_pos2(this)),
 		_cvt_v2i32_v2i64(cnt2));
 	len2 = _sub_v2i32(len2, cnt2);
-	_store_v2i64(_rd_pos2(this), pos2);
-	_store_v2i32(_rd_len2(this), len2);
-
-	/* clip len2 with max - len1 */
-	len2 = _min_v2i32(len2, _sub_v2i32(tot, len1));
 
 	_print_v2i64(pos2);
 	_print_v2i32(len2);
 
-	/* fetch seq a */
-	vec_t t = _loadu(_rd_bufa(this, _lo32(cnt), BW));
-	_rd_load(this->r.loada,
-		_rd_bufa(this, BW + _lo32(len1), _lo32(len2)),	/* dst */
-		this->rr.p.pa,						/* src */
-		rev(_lo64(pos2), this->rr.p.alen),	/* pos */
-		this->rr.p.alen,					/* lim */
-		_lo32(len2));						/* len */
-	_rd_load(this->r.loada,
-		_rd_bufa(this, BW, _lo32(len1)),	/* dst */
-		this->rr.p.pa,						/* src */
-		rev(_lo64(pos1), this->rr.p.alen),	/* pos */
-		this->rr.p.alen,					/* lim */
-		_lo32(len1));						/* len */
-	_store(_rd_bufa(this, 0, BW), t);
+	/* store len to block */
+	_store_v2i32(&blk->alen, len1);
+	vec_t a = _loadu(_rd_bufa(this, _lo32(cnt), BW));
+	vec_t b = _loadu(_rd_bufb(this, _hi32(cnt), BW));
+	_store(&blk->ch.w, _or(a, _shl(b, 4)));
 
-	/* fetch seq b */
-	_store(_rd_bufb(this, 0, BW), _loadu(_rd_bufb(this, _hi32(cnt), BW)));
-	_rd_load(this->r.loadb,
-		_rd_bufb(this, BW, _hi32(len1)),	/* dst */
-		this->rr.p.pb,						/* src */
-		_hi64(pos1),						/* pos */
-		this->rr.p.blen,					/* lim */
-		_hi32(len1));						/* len */
-	_rd_load(this->r.loadb,
-		_rd_bufb(this, BW + _hi32(len1), _hi32(len2)),
-		this->rr.p.pb,						/* src */
-		_hi64(pos2),						/* pos */
-		this->rr.p.blen,					/* lim */
-		_hi32(len2));						/* len */
+	_print(a);
+	_print(b);
 
-	_print(_load(_rd_bufa(this, BW, BLK)));
-	_print(_load(_rd_bufa(this, 0, BW)));
-	_print(_load(_rd_bufb(this, 0, BW)));
-	_print(_load(_rd_bufb(this, BW, BLK)));
-
-	/* clear counter */
-	_store_v2i32(_rd_cnt(this), zero);
+	/* write back pos and len */
+	_store_v2i64(_rd_pos1(this), pos1);
+	_store_v2i32(_rd_len1(this), len1);
+	_store_v2i64(_rd_pos2(this), pos2);
+	_store_v2i32(_rd_len2(this), len2);
 	return;
 }
 
 /**
- * fill-in macros
+ * @fn fill_init_seq
  */
+static _force_inline
+struct sea_chain_status_s fill_init_seq(
+	struct sea_dp_context_s *this,
+	struct sea_joint_tail_s const *prev_tail,
+	struct sea_section_s const *curr,
+	struct sea_section_s const *next,
+	uint64_t plim)
+{
+	struct sea_block_s *blk = _block(prev_tail);
+
+	/* load section */
+	fill_load_section(this, curr, next, plim);
+
+	/* load last sequence buffer */
+	vec_t const mask = _set(0x0f);
+	vec_t w = _load(&(blk - 1)->ch.w);
+	vec_t a = _and(mask, w);
+	vec_t b = _and(mask, _shr(w, 4));
+	_store(_rd_bufa(this, 0, BW), a);
+	_store(_rd_bufb(this, 0, BW), b);
+
+	/* check if additional fetch is needed */
+	if(prev_tail->p < 0) {
+		v2i32_t const tot = _set_v2i32(BW/2);
+
+		/* calc fetched sequence length */
+		v2i32_t plen = _load_v2i32(&prev_tail->init_alen);
+		_print_v2i32(plen);
+
+		/* cap fetch */
+		v2i32_t flen = fill_cap_fetch(this, blk);
+		_print_v2i32(flen);
+
+		/* update section */
+		v2i32_t alen = _add_v2i32(flen, plen);
+		v2i32_t blen = _add_v2i32(_swap_v2i32(alen), _seta_v2i32(0, 1));
+		v2i32_t clen = _min_v2i32(_min_v2i32(alen, blen), tot);
+		v2i32_t cnt = _sub_v2i32(clen, plen);
+
+		_print_v2i32(alen);
+		_print_v2i32(blen);
+		_print_v2i32(clen);
+		_print_v2i32(cnt);
+
+		blk = fill_create_head(this, prev_tail);
+		fill_cap_update_section(this, blk - 1, cnt);
+	
+		dump(blk - 1, sizeof(struct sea_block_s));
+
+		prev_tail = fill_create_tail(
+			this, prev_tail, blk, _lo32(cnt) + _hi32(cnt));
+	}
+	return((struct sea_chain_status_s){
+		.tail = prev_tail,
+		.rem = &prev_tail->rem
+	});
+}
+
 /**
  * @macro _fill_load_contexts
  * @brief load vectors onto registers
  */
+#ifdef STRUCT_ON_REG
+static _force_inline
+struct fill_block_context_s fill_load_contexts(
+	struct sea_dp_context_s *this,
+	struct sea_block_s *blk)
+{
+	struct fill_block_context_s register reg;
+
+	debug("blk(%p)", blk);
+	/* load direction determiner */
+	reg.dir = blk->dir;
+
+	/* load large offset */
+	reg.offset = blk->offset;
+	debug("offset(%lld)", reg.offset);
+
+	/* load sequence buffer offset */
+	reg.aptr = _rd_bufa(this, 0, BW);
+	reg.bptr = _rd_bufb(this, 0, BW);
+
+	/* load mask pointer */
+	reg.mask_ptr = blk->mask;
+
+	/* load vector registers */
+	vec_t const mask = _set(0x07);
+	reg.dh = _load(_pv(blk->diff.dh));
+	reg.dv = _load(_pv(blk->diff.dv));
+	reg.de = _and(mask, reg.dh);
+	reg.df = _and(mask, reg.dv);
+	reg.dh = _sar(_or(mask, reg.dh), 3);
+	reg.dv = _shr(_andn(mask, reg.dv), 3);
+	reg.df = _sub(reg.df, reg.dh);
+	reg.de = _add(reg.de, reg.dv);
+
+	_print(reg.dh);
+	_print(reg.dv);
+	_print(reg.de);
+	_print(reg.df);
+
+	/* load delta vectors */
+	reg.delta = _load(_pv(blk->sd.delta));
+	reg.max = _load(_pv(blk->sd.max));
+	_print_v32i16(_load_v32i16(this->tail->v));
+	_print(reg.delta);
+	_print(reg.max);
+	_print_v32i16(_add_v32i16(_cvt_v32i8_v32i16(reg.delta), _load_v32i16(this->tail->v)));
+
+	return(reg);
+}
+#else
 #define _fill_load_contexts(_blk) \
 	debug("blk(%p)", (_blk)); \
 	/* load direction determiner */ \
@@ -567,12 +634,17 @@ void rd_cap_fetch(
 	uint8_t *aptr = _rd_bufa(this, 0, BW); \
 	uint8_t *bptr = _rd_bufb(this, 0, BW); \
 	/* load mask pointer */ \
-	struct sea_mask_pair_s *mask_ptr = blk->mask; \
+	union sea_mask_pair_u *mask_ptr = blk->mask; \
 	/* load vector registers */ \
+	vec_t const mask = _set(0x07); \
 	vec_t register dh = _load(_pv((_blk)->diff.dh)); \
 	vec_t register dv = _load(_pv((_blk)->diff.dv)); \
-	vec_t register de = _load(_pv((_blk)->diff.de)); \
-	vec_t register df = _load(_pv((_blk)->diff.df)); \
+	vec_t register de = _and(mask, dh); \
+	vec_t register df = _and(mask, dv); \
+	dh = _sar(_or(mask, dh), 3); \
+	dv = _shr(_andn(mask, dv), 3); \
+	df = _sub(df, dh); \
+	de = _add(de, dv); \
 	_print(dh); \
 	_print(dv); \
 	_print(de); \
@@ -584,33 +656,82 @@ void rd_cap_fetch(
 	_print(delta); \
 	_print(max); \
 	_print_v32i16(_add_v32i16(_cvt_v32i8_v32i16(delta), _load_v32i16(this->tail->v)));
+#endif
 
 /**
  * @macro _fill_body
  * @brief update vectors
  */
+#ifdef STRUCT_ON_REG
+static _force_inline
+struct fill_block_context_s fill_body(
+	struct sea_dp_context_s *this,
+	struct sea_block_s *blk,
+	struct fill_block_context_s reg)
+{
+	/* load sequence vector and calc match */
+	vec_t register _t = _match(_loadu(reg.aptr), _loadu(reg.bptr));
+	_print(_loadu(reg.aptr));
+	_print(_loadu(reg.bptr));
+	_print(_t);
+
+	/* calc score vector */
+	_t = _shuf(_load_sc(this, sb), _t);
+	_print(_load_sc(this, sb));
+
+	/* calc traceback pointer */
+	_t = _max(reg.df, _t);
+	reg.mask_ptr->pair.h.mask = _mask(_eq(_t, reg.df));
+	_t = _max(reg.de, _t);
+	reg.mask_ptr->pair.v.mask = _mask(_eq(_t, reg.de));
+	reg.mask_ptr++;
+
+	/* update deltas */
+	reg.df = _sub(_max(_add(reg.df, _load_sc(this, adjv)), _t), reg.dv);
+	reg.dv = _sub(reg.dv, _t);
+	reg.de = _add(_max(_add(reg.de, _load_sc(this, adjh)), _t), reg.dh);
+	_t = _add(reg.dh, _t);
+	reg.dh = reg.dv; reg.dv = _t;
+
+	_print(reg.dh);
+	_print(reg.dv);
+	_print(reg.de);
+	_print(reg.df);
+
+	return(reg);
+}
+#else
 #define _fill_body() { \
-	vec_t register _t = _match(_loadu(aptr), _loadu(bptr)); \
-	_print(_t); \
-	_t = _shuf(_load_sc(this, sb), _t); \
+	vec_t register t = _match(_loadu(aptr), _loadu(bptr)); \
+	_print(_loadu(aptr)); \
+	_print(_loadu(bptr)); \
+	_print(t); \
+	t = _shuf(_load_sc(this, sb), t); \
 	_print(_load_sc(this, sb)); \
-	_t = _max(de, _t); mask_ptr->h.vec = _mask(_eq(_t, de)); \
-	_t = _max(df, _t); mask_ptr->v.vec = _mask(_eq(_t, df)); \
-	df = _sub(_max(_add(df, _load_sc(this, adjv)), _t), dv); \
-	dv = _sub(dv, _t); \
-	de = _add(_max(_add(de, _load_sc(this, adjh)), _t), dh); \
-	_t = _add(dh, _t); \
-	dh = dv; dv = _t; \
+	t = _max(df, t); \
+	mask_ptr->pair.h.mask = _mask(_eq(t, df)); \
+	t = _max(de, t); \
+	mask_ptr->pair.v.mask = _mask(_eq(t, de)); \
+	/*store_stream(mask_ptr, _m); mask_ptr++;*/ \
 	mask_ptr++; \
+	df = _sub(_max(_add(df, _load_sc(this, adjv)), t), dv); \
+	dv = _sub(dv, t); \
+	de = _add(_max(_add(de, _load_sc(this, adjh)), t), dh); \
+	t = _add(dh, t); \
+	dh = dv; dv = t; \
 	_print(dh); \
 	_print(dv); \
 	_print(de); \
 	_print(df); \
 }
+#endif
+
 /**
  * @macro _fill_update_delta
  * @brief update small delta vector and max vector
  */
+#ifdef STRUCT_ON_REG
+#else
 #define _fill_update_delta(_op, _vector, _offset, _sign) { \
 	delta = _op(delta, _add(_vector, _offset)); \
 	_print(delta); \
@@ -619,30 +740,123 @@ void rd_cap_fetch(
 	_dir_update(dir, _vector, _sign); \
 	_print_v32i16(_add_v32i16(_cvt_v32i8_v32i16(delta), _load_v32i16(this->tail->v))); \
 }
+#endif
+
 /**
  * @macro _fill_right, _fill_down
  * @brief wrapper of _fill_body and _fill_update_delta
  */
+#ifdef STRUCT_ON_REG
+static _force_inline
+struct fill_block_context_s fill_right(
+	struct sea_dp_context_s *this,
+	struct sea_block_s *blk,
+	struct fill_block_context_s reg)
+{
+	/* go rightward */
+	debug("go right");
+
+	/* fetch sequence a */
+	reg.aptr--;
+
+	/* shift left dh and df */
+	reg.dh = _bsl(reg.dh, 1);
+	reg.df = _bsl(reg.df, 1);
+
+	/* update vectors */
+	reg = fill_body(this, blk, reg);
+
+	/* update deltas */
+	reg.delta = _sub(reg.delta, _add(reg.dh, _load_sc(this, ofsh)));
+	reg.max = _max(reg.max, reg.delta);
+	_print(reg.delta);
+	_print(reg.max);
+
+	/* update direction pointer */
+	_dir_update(reg.dir, reg.dh, -1);
+
+	/* debug print */
+	_print_v32i16(_add_v32i16(_cvt_v32i8_v32i16(reg.delta), _load_v32i16(this->tail->v)));
+
+	return(reg);
+}
+
+static _force_inline
+struct fill_block_context_s fill_down(
+	struct sea_dp_context_s *this,
+	struct sea_block_s *blk,
+	struct fill_block_context_s reg)
+{
+	/* go rightward */
+	debug("go right");
+
+	/* fetch sequence a */
+	reg.bptr++;
+
+	/* shift right dv and de */
+	reg.dv = _bsr(reg.dv, 1);
+	reg.de = _bsr(reg.de, 1);
+
+	/* update vectors */
+	reg = fill_body(this, blk, reg);
+
+	/* update deltas */
+	reg.delta = _add(reg.delta, _add(reg.dv, _load_sc(this, ofsv)));
+	reg.max = _max(reg.max, reg.delta);
+	_print(reg.delta);
+	_print(reg.max);
+
+	/* update direction pointer */
+	_dir_update(reg.dir, reg.dv, 1);
+
+	/* debug print */
+	_print_v32i16(_add_v32i16(_cvt_v32i8_v32i16(reg.delta), _load_v32i16(this->tail->v)));
+
+	return(reg);
+}
+#else
 #define _fill_right() { \
 	debug("go right"); \
 	aptr--;				/* increment sequence buffer pointer */ \
-	dh = _shl(dh, 1);	/* shift left dh */ \
-	df = _shl(df, 1);	/* shift left df */ \
+	dh = _bsl(dh, 1);	/* shift left dh */ \
+	df = _bsl(df, 1);	/* shift left df */ \
 	_fill_body();		/* update vectors */ \
 	_fill_update_delta(_sub, dh, _load_sc(this, ofsh), -1); \
 }
 #define _fill_down() { \
 	debug("go down"); \
 	bptr++;				/* increment sequence buffer pointer */ \
-	dv = _shr(dv, 1);	/* shift right dv */ \
-	de = _shr(de, 1);	/* shift right de */ \
+	dv = _bsr(dv, 1);	/* shift right dv */ \
+	de = _bsr(de, 1);	/* shift right de */ \
 	_fill_body();		/* update vectors */ \
 	_fill_update_delta(_add, dv, _load_sc(this, ofsv), 1); \
 }
+#endif
+
 /**
  * @macro _fill_update_offset
  * @brief update offset and max vector, reset the small delta
  */
+#ifdef STRUCT_ON_REG
+static _force_inline
+struct fill_block_context_s fill_update_offset(
+	struct sea_dp_context_s *this,
+	struct sea_block_s *blk,
+	struct fill_block_context_s reg)
+{
+	/* extract small delta at the center */
+	int8_t cd = _ext(reg.delta, BW/2);
+	vec_t const cdv = _set(cd);
+
+	/* update offset and vectors */
+	reg.offset += cd;
+	reg.delta = _sub(reg.delta, cdv);
+	reg.max = _sub(reg.max, cdv);
+
+	debug("_cd(%d), offset(%lld)", _cd, offset);
+	return(reg);
+}
+#else
 #define _fill_update_offset() { \
 	int8_t _cd = _ext(delta, BW/2); \
 	offset += _cd; \
@@ -650,27 +864,69 @@ void rd_cap_fetch(
 	max = _sub(max, _set(_cd)); \
 	debug("_cd(%d), offset(%lld)", _cd, offset); \
 }
+#endif
+
 /**
  * @macro _fill_store_vectors
  * @brief store vectors at the end of the block
  */
-#define _fill_store_vectors(_blk) { \
+#ifdef STRUCT_ON_REG
+static _force_inline
+v2i32_t fill_store_vectors(
+	struct sea_dp_context_s *this,
+	struct sea_block_s *blk,
+	struct fill_block_context_s reg)
+{
+	/* store direction array */
+	blk->dir = reg.dir;
+
+	/* store large offset */
+	blk->offset = reg.offset;
+	
+	/* pack and store diff vectors */
+	vec_t const mask = _set(0x07);
+	reg.de = _sub(reg.de, reg.dv);
+	reg.df = _add(reg.df, reg.dh);
+	reg.dh = _shl(reg.dh, 3);
+	reg.dv = _shl(reg.dv, 3);
+	_store(_pv(blk->diff.dh), _or(_andn(mask, reg.dh), reg.de));
+	_store(_pv(blk->diff.dv), _or(reg.dv, reg.df));
+
+	/* store delta vectors */
+	_store(_pv(blk->sd.delta), reg.delta);
+	_store(_pv(blk->sd.max), reg.max);
+
+	/* calc cnt */
+	uint64_t acnt = reg.bptr - _rd_bufb(this, 0, BW);
+	uint64_t bcnt = _rd_bufa(this, 0, BW) - reg.aptr;
+	_print_v2i32(_seta_v2i32(bcnt, acnt));
+
+	return(_seta_v2i32(bcnt, acnt));
+}
+#else
+#define _fill_store_vectors(_blk) ({ \
 	/* store direction array */ \
 	(_blk)->dir = dir; \
 	/* store large offset */ \
 	(_blk)->offset = offset; \
-	/* store sequence buffer offset */ \
-	this->rr.acnt = (uint32_t)(_rd_bufa(this, 0, BW) - aptr); \
-	this->rr.bcnt = (uint32_t)(bptr - _rd_bufb(this, 0, BW)); \
 	/* store diff vectors */ \
-	_store(_pv((_blk)->diff.dh), dh); \
-	_store(_pv((_blk)->diff.dv), dv); \
-	_store(_pv((_blk)->diff.de), de); \
-	_store(_pv((_blk)->diff.df), df); \
+	vec_t const mask = _set(0x07); \
+	de = _sub(de, dv); \
+	df = _add(df, dh); \
+	dh = _shl(dh, 3); \
+	dv = _shl(dv, 3); \
+	_store(_pv((_blk)->diff.dh), _or(_andn(mask, dh), de)); \
+	_store(_pv((_blk)->diff.dv), _or(dv, df)); \
 	/* store delta vectors */ \
 	_store(_pv((_blk)->sd.delta), delta); \
 	_store(_pv((_blk)->sd.max), max); \
-}
+	/* calc cnt */ \
+	uint64_t acnt = bptr - _rd_bufb(this, 0, BW); \
+	uint64_t bcnt = _rd_bufa(this, 0, BW) - aptr; \
+	_print_v2i32(_seta_v2i32(bcnt, acnt)); \
+	_seta_v2i32(bcnt, acnt); \
+})
+#endif
 
 /**
  * @fn fill_test_xdrop
@@ -741,72 +997,62 @@ int64_t fill_bulk_test_p_bound(
 }
 
 /**
- * @fn fill_create_head
- * @brief create joint_head on the stack to start block extension
- */
-static _force_inline
-struct sea_block_s *fill_create_head(
-	struct sea_dp_context_s *this,
-	struct sea_joint_tail_s const *prev_tail)
-{
-	/* init working stack */
-	struct sea_joint_head_s *head = (struct sea_joint_head_s *)this->stack_top;
-	head->tail = prev_tail;
-
-	/* copy phantom vectors */
-	struct sea_block_s *blk = _phantom_block(head + 1);
-	_memcpy_blk_aa(
-		(uint8_t *)blk + SEA_BLOCK_PHANTOM_OFFSET,
-		(uint8_t *)_last_block(prev_tail) + SEA_BLOCK_PHANTOM_OFFSET,
-		SEA_BLOCK_PHANTOM_SIZE);
-	debug("blk(%p)", blk);
-	dump(blk, sizeof(struct sea_block_s));
-	dump(_last_block(prev_tail), sizeof(struct sea_block_s));
-	return(blk + 1);
-}
-
-/**
- * @fn fill_create_tail
- * @brief create joint_tail at the end of the blocks
- */
-static _force_inline
-struct sea_joint_tail_s *fill_create_tail(
-	struct sea_dp_context_s *this,
-	struct sea_joint_tail_s const *prev_tail,
-	struct sea_block_s *blk,
-	int64_t p)
-{
-	/* create joint_tail */
-	struct sea_joint_tail_s *tail = (struct sea_joint_tail_s *)blk;
-	this->stack_top = (void *)(tail + 1);	/* write back stack_top */
-	tail->v = prev_tail->v;				/* copy middle deltas */
-
-	/* search max section */
-	v32i16_t md = _load_v32i16(prev_tail->v);
-	v32i16_t sd = _cvt_v32i8_v32i16(_load(&(blk - 1)->sd.max));
-	_print_v32i16(md);
-	_print_v32i16(sd);
-	debug("offset(%lld)", (blk - 1)->offset);
-	int16_t max = _hmax_v32i16(_add_v32i16(md, sd));
-	debug("max(%d)", _hmax_v32i16(_add_v32i16(md, sd)));
-	tail->max = max + (blk - 1)->offset;
-
-	/* save misc to joint_tail */
-	tail->psum = p + prev_tail->psum;
-	tail->p = p;
-
-	return(tail);
-}
-
-/**
  * @fn fill_bulk_block
  * @brief fill a block
  */
+#ifdef STRUCT_ON_REG
 static _force_inline
 void fill_bulk_block(
 	struct sea_dp_context_s *this,
 	struct sea_block_s *blk)
 {
+	/* fetch sequence */
+	fill_bulk_fetch(this, blk);
+
+	/* load vectors onto retisters */
+	debug("blk(%p)", blk);
+	struct fill_block_context_s register reg = fill_load_contexts(this, blk - 1);
+
+	/**
+	 * @macro _fill_block
+	 * @brief an element of unrolled fill-in loop
+	 */
+	#define _fill_block(_direction, _label, _jump_to) { \
+		if(_unlikely(!_dir_is_##_direction(reg.dir))) { \
+			goto _linear_fill_##_jump_to; \
+		} \
+		_linear_fill_##_label: reg = fill_##_direction(this, blk, reg); \
+		if(--i == 0) { break; } \
+	}
+
+	/* update diff vectors */
+	int64_t i = BLK;
+	while(1) {					/* 4x unrolled loop */
+		_fill_block(down, d1, r1);
+		_fill_block(right, r1, d2);
+		_fill_block(down, d2, r2);
+		_fill_block(right, r2, d1);
+	}
+
+	/* update seq offset */
+	reg = fill_update_offset(this, blk, reg);
+
+	/* store vectors */
+	v2i32_t cnt = fill_store_vectors(this, blk, reg);
+
+	/* update section */
+	fill_bulk_update_section(this, blk, cnt);
+	return;
+}
+#else
+static _force_inline
+void fill_bulk_block(
+	struct sea_dp_context_s *this,
+	struct sea_block_s *blk)
+{
+	/* fetch sequence */
+	fill_bulk_fetch(this, blk);
+
 	/* load vectors onto registers */
 	debug("blk(%p)", blk);
 	_fill_load_contexts(blk - 1);
@@ -836,10 +1082,14 @@ void fill_bulk_block(
 	_fill_update_offset();
 
 	/* store vectors */
-	_fill_store_vectors(blk);
+	v2i32_t cnt = _fill_store_vectors(blk);
+
+	/* update section */
+	fill_bulk_update_section(this, blk, cnt);
 
 	return;
 }
+#endif
 
 /**
  * @struct sea_fill_status_s
@@ -869,12 +1119,9 @@ struct sea_fill_status_s fill_bulk_predetd_blocks(
 			stat = TERM; break;
 		}
 
-		/* fetch sequence */
-		rd_bulk_fetch(this);
-
 		/* bulk fill */
 		debug("blk(%p)", blk);
-		fill_bulk_block(this, blk++);
+		fill_bulk_block(this, blk);
 	}
 	return((struct sea_fill_status_s){
 		.blk = blk,
@@ -905,9 +1152,6 @@ struct sea_fill_status_s fill_bulk_seq_bounded(
 		  | fill_bulk_test_p_bound(this, p)) < 0) {
 			break;
 		}
-
-		/* fetch sequence */
-		rd_bulk_fetch(this);
 		
 		/* bulk fill */
 		debug("blk(%p)", blk);
@@ -928,6 +1172,75 @@ struct sea_fill_status_s fill_bulk_seq_bounded(
  * @fn fill_cap_seq_bounded
  * @brief fill blocks with cap test
  */
+#ifdef STRUCT_ON_REG
+static _force_inline
+struct sea_fill_status_s fill_cap_seq_bounded(
+	struct sea_dp_context_s *this,
+	struct sea_block_s *blk)
+{
+	int32_t stat = CONT;
+	uint64_t i = 0;
+	int64_t p = 0;
+
+	do {
+		/* check xdrop termination */
+		if(fill_test_xdrop(this, blk - 1) < 0) {
+			stat = TERM; goto _fill_cap_seq_bounded_finish;
+		}
+		/* fetch sequence */
+		fill_cap_fetch(this, blk);
+
+		/**
+		 * @macro _fill_block_cap
+		 * @brief an element of unrolled fill-in loop
+		 */
+		#define _fill_block_cap() { \
+			if(_dir_is_right(reg.dir)) { \
+				reg = fill_right(this, blk, reg); \
+			} else { \
+				reg = fill_down(this, blk, reg); \
+			} \
+		}
+
+		/* vectors on registers inside this block */ {
+			_fill_cap_test_ij_bound_init();
+			struct fill_block_context_s reg = fill_load_contexts(this, blk - 1);
+
+			/* update diff vectors */
+			for(i = 0; i < BLK; i++) {
+				_fill_block_cap();
+				if(_fill_cap_test_ij_bound() < 0) {
+					/* adjust reminders */
+					blk->mask[BLK-1] = blk->mask[i];
+					_dir_adjust_reminder(reg.dir, i);
+					p -= BLK - i - 1;
+					break;
+				}
+			}
+			
+			/* update seq offset */
+			reg = fill_update_offset(this, blk, reg);
+			
+			/* store mask and vectors */
+			v2i32_t cnt = fill_store_vectors(this, blk, reg);
+
+			/* update section */
+			fill_cap_update_section(this, blk, cnt);
+		}
+		
+		/* update block pointer and p-coordinate */
+		blk++; p += BLK;
+
+	} while(i == BLK);
+
+_fill_cap_seq_bounded_finish:;
+	return((struct sea_fill_status_s){
+		.blk = blk,
+		.p = p,
+		.stat = stat
+	});
+}
+#else
 static _force_inline
 struct sea_fill_status_s fill_cap_seq_bounded(
 	struct sea_dp_context_s *this,
@@ -950,7 +1263,7 @@ struct sea_fill_status_s fill_cap_seq_bounded(
 			stat = TERM; goto _fill_cap_seq_bounded_finish;
 		}
 		/* fetch sequence */
-		rd_cap_fetch(this);
+		fill_cap_fetch(this, blk);
 
 		/**
 		 * @macro _fill_block_cap
@@ -984,7 +1297,10 @@ struct sea_fill_status_s fill_cap_seq_bounded(
 			_fill_update_offset();
 			
 			/* store mask and vectors */
-			_fill_store_vectors(blk);
+			v2i32_t cnt = _fill_store_vectors(blk);
+
+			/* update section */
+			fill_cap_update_section(this, blk, cnt);
 		}
 		
 		/* update block pointer and p-coordinate */
@@ -999,6 +1315,7 @@ _fill_cap_seq_bounded_finish:;
 		.stat = stat
 	});
 }
+#endif
 
 /**
  * @fn calc_max_bulk_blocks_mem
@@ -1104,12 +1421,9 @@ struct sea_chain_status_s sea_dp_fill(
 	int64_t plim)
 {
 	/* init section and restore sequence reader buffer */
-	struct sea_joint_tail_s *tail = rd_load_seq(this, prev_tail, curr, next, plim);
-	if(tail != NULL) {
-		return((struct sea_chain_status_s){
-			.tail = tail,
-			.rem = &tail->rem
-		});
+	struct sea_chain_status_s s = fill_init_seq(this, prev_tail, curr, next, plim);
+	if(s.tail->p < 0) {
+		return(s);
 	}
 
 	/* calculate block sizes */
@@ -1117,11 +1431,10 @@ struct sea_chain_status_s sea_dp_fill(
 	uint64_t seq_bulk_blocks = calc_max_bulk_blocks_seq(this);
 
 	/* extra large bulk fill (with stack allocation) */
-	struct sea_chain_status_s cstat;
 	while(_unlikely(mem_bulk_blocks < seq_bulk_blocks)) {
 		if(mem_bulk_blocks > MIN_BULK_BLOCKS) {
-			if((cstat = fill_mem_bounded(this, prev_tail, mem_bulk_blocks)).rem == NULL) {
-				return(cstat);
+			if((s = fill_mem_bounded(this, s.tail, mem_bulk_blocks)).rem == NULL) {
+				return(s);
 			}
 
 			/* fill-in area has changed */
@@ -1136,21 +1449,97 @@ struct sea_chain_status_s sea_dp_fill(
 	}
 
 	/* bulk fill with seq bound check */
-	if((cstat = fill_seq_bounded(this, prev_tail)).rem == NULL) {
-		return(cstat);
-	}
-	return(rd_save_seq(this, (struct sea_joint_tail_s *)cstat.tail, curr, next));
+	return(fill_seq_bounded(this, s.tail));
 }
 
 /**
- * @fn merge
+ * @fn sea_dp_merge
  */
-struct sea_chain_status_s merge(
+struct sea_chain_status_s sea_dp_merge(
 	struct sea_dp_context_s *this,
 	struct sea_joint_tail_s const *tail_list,
 	uint64_t tail_list_len)
 {
 	return((struct sea_chain_status_s){ 0, 0 });
+}
+
+/**
+ * @fn sea_dp_build_leaf
+ */
+struct sea_joint_head_s *sea_dp_build_leaf(
+	struct sea_dp_context_s *this,
+	struct sea_joint_tail_s const *tail)
+{
+	/* create joint_head */
+	struct sea_joint_head_s *head = sea_dp_smalloc(
+		this,
+		sizeof(struct sea_joint_head_s));
+	head->head = NULL;
+	head->cigar = NULL;
+	head->tail = tail;
+
+	/* search max position */
+	uint32_t mask_max = tail->mask_max.all;
+	struct sea_block_s *blk = _last_block(tail);
+
+#if 0
+	/* iterate towards the head */
+	for(int32_t p = tail->p; p > 0; p -= BLK, blk--) {
+		if((~blk->max & mask_max) != 0) {
+			mask_max = ~blk->max & mask_max; break;
+		}
+	}
+
+	/* calc q-coordinate */
+	head->q = tzcnt(mask_max) - BW/2;
+
+	/* load sequence */
+	rd_cap_fetch(this);
+
+	/* recalculate block */
+	{
+		_fill_load_contexts(blk);
+		int32_t len = MIN2(tail->p - p, BLK);
+		for(int32_t a = 0; a < len; a++) {
+			_fill_block_cap(blk);
+		}
+	}
+#endif
+
+	return(NULL);
+}
+
+/**
+ * @fn sea_dp_trace
+ */
+struct sea_joint_head_s *sea_dp_trace(
+	struct sea_dp_context_s *this,
+	struct sea_joint_head_s const *prev_head,
+	struct sea_clip_params_s const *clip)
+{
+#if 0
+	/* search if needed */
+	if(head->p == 0) {
+		struct sea_joint_head_s h = trace_search_max_pos(head->tail, tail);
+		head = &h;
+	}
+
+	/* traceback */
+	struct sea_joint_tail_s const *tail = head->tail;
+	while(tail != prev_tail) {
+		/* calc address */
+
+		/* traceback loop */
+		while(p >= 0) {
+			;
+		}
+
+		/* update tail */
+		head = (struct sea_joint_head_s *)blk - 1;
+		tail = head->tail;
+	}
+#endif
+	return(NULL);
 }
 
 /**
@@ -1310,10 +1699,15 @@ struct sea_diff_vec_s sea_init_create_diff_vectors(
 	int8_t raise_dh = max - gev + ofs_a;
 	int8_t drop_dv = gev + ofs_b;
 	int8_t raise_dv = max - geh + ofs_b;
-	int8_t drop_de = giv - giv;
-	int8_t drop_df = gih - gih;
+	int8_t drop_de = 0 - giv;
+	int8_t drop_df = 0 - gih;
 
-	struct sea_diff_vec_s diff;
+	int8_t dh[BW] __attribute__(( aligned(16) ));
+	int8_t dv[BW] __attribute__(( aligned(16) ));
+	int8_t de[BW] __attribute__(( aligned(16) ));
+	int8_t df[BW] __attribute__(( aligned(16) ));
+
+	struct sea_diff_vec_s diff __attribute__(( aligned(16) ));
 	/**
 	 * dh: dH[i, j] - geh
 	 * dv: dV[i, j] - gev
@@ -1322,27 +1716,51 @@ struct sea_diff_vec_s sea_init_create_diff_vectors(
 	 */
 	/* calc dh and dv */
 	for(int i = 0; i < BW/2; i++) {
-		diff.dh[i] = drop_dh;
-		diff.dh[BW/2 + i] = raise_dh;
-		diff.dv[i] = raise_dv;
-		diff.dv[BW/2 + i] = drop_dv;
+		dh[i] = drop_dh;
+		dh[BW/2 + i] = raise_dh;
+		dv[i] = raise_dv;
+		dv[BW/2 + i] = drop_dv;
 	}
- 	diff.dh[BW/2-1] += gih;
- 	diff.dv[BW/2] += giv;
+ 	dh[BW/2-1] += gih;
+ 	dv[BW/2] += giv;
 
 	/* calc de and df */
-	for(int i = 0; i < BW/2; i++) {
-		diff.de[i] = diff.dv[i] + drop_de;
-		diff.de[BW/2 + i] = diff.dv[BW/2 + i] + drop_de;
-		diff.df[i] = diff.dh[i] + drop_df;
-		diff.df[BW/2 + i] = diff.dh[BW/2 + i] + drop_df;
+	for(int i = 0; i < BW; i++) {
+		de[i] = drop_de;
+		df[i] = drop_df;
  	}
 
  	/* negate dh */
  	for(int i = 0; i < BW; i++) {
- 		diff.dh[i] = -diff.dh[i];
+ 		dh[i] = -dh[i];
  	}
+
+	vec_t const mask = _set(0x07);
+ 	vec_t _dh = _load(dh);
+ 	vec_t _dv = _load(dv);
+ 	vec_t _de = _load(de);
+ 	vec_t _df = _load(df);
+	_dh = _shl(_dh, 3);
+	_dv = _shl(_dv, 3);
+	_store(&diff.dh, _or(_andn(mask, _dh), _de));
+	_store(&diff.dv, _or(_dv, _df));
+
 	return(diff);
+}
+
+/**
+ * @fn sea_init_create_char_vector
+ */
+static _force_inline
+struct sea_char_vec_s sea_init_create_char_vector(
+	void)
+{
+	struct sea_char_vec_s ch;
+
+	for(int i = 0; i < BW; i++) {
+		ch.w[i] = 0x80;
+	}
+	return(ch);
 }
 
 /**
@@ -1465,11 +1883,11 @@ sea_t *sea_init(
 		.md = sea_init_create_middle_delta(params_intl.score_matrix),
 		.blk = (struct sea_phantom_block_s) {
 			.mask = {
-				{
+				[0].pair = {
 					.h.all = 0x00000000,
 					.v.all = 0x00000000
 				},
-				{
+				[1].pair = {
 					.h.all = 0x0000ffff,
 					.v.all = 0xffff0000
 				}
@@ -1477,16 +1895,20 @@ sea_t *sea_init(
 			.dir = sea_init_create_dir_dynamic(params_intl.score_matrix),
 			.offset = 0,
 			.diff = sea_init_create_diff_vectors(params_intl.score_matrix),
-			.sd = sea_init_create_small_delta(params_intl.score_matrix)
+			.sd = sea_init_create_small_delta(params_intl.score_matrix),
+			.alen = 0,
+			.blen = 0,
+			.ch = sea_init_create_char_vector()
 		},
 		.tail = (struct sea_joint_tail_s) {
 			.v = &ctx->md,
 			.max = 0,
 			.psum = 2,
 			.p = -BW,
+			.curr = { 0 },
 			.rem = { 0 },
-			.wa = { 0 },
-			.wb = { 0 }
+			.init_alen = 0,
+			.init_blen = 0
 		},
 		.rv = wr_rv_table[params_intl.aln_format],
 		.fw = wr_fw_table[params_intl.aln_format],
@@ -1572,16 +1994,45 @@ static _force_inline
 int32_t sea_dp_add_stack(
 	struct sea_dp_context_s *this)
 {
-	uint8_t *ptr = (uint8_t *)sea_aligned_malloc(
-		(this->mem_size *= 2),
-		SEA_MEM_ALIGN_SIZE);
+	uint8_t *ptr = this->mem_array[this->mem_cnt];
+	uint64_t size = SEA_MEM_INIT_SIZE<<(this->mem_cnt + 1);
 	if(ptr == NULL) {
-		this->mem_size /= 2;
+		ptr = (uint8_t *)sea_aligned_malloc(size, SEA_MEM_ALIGN_SIZE);
+	}
+	if(ptr == NULL) {
 		return(SEA_ERROR_OUT_OF_MEM);
 	}
 	this->mem_array[this->mem_cnt++] = this->stack_top = ptr;
-	this->stack_end = this->stack_top + this->mem_size - SEA_MEM_MARGIN_SIZE;
+	this->stack_end = this->stack_top + size - SEA_MEM_MARGIN_SIZE;
 	return(SEA_SUCCESS);
+}
+
+/**
+ * @fn sea_dp_flush
+ */
+void sea_dp_flush(
+	struct sea_dp_context_s *this,
+	struct sea_seq_pair_s const *p,
+	uint8_t const *guide,
+	uint64_t glen)
+{
+	uint64_t const dp_sz = sizeof(struct sea_dp_context_s);
+	uint64_t const ph_sz = sizeof(struct sea_phantom_block_s);
+	uint64_t const tl_sz = sizeof(struct sea_joint_tail_s);
+
+	_memcpy_blk_au(
+		&this->rr.p,
+		p,
+		sizeof(struct sea_seq_pair_s));
+
+	this->stack_top = (uint8_t *)this + (dp_sz + ph_sz + tl_sz);
+	this->stack_end = (uint8_t *)this + this->mem_size - SEA_MEM_MARGIN_SIZE;
+	this->pdr = guide;
+	this->tdr = guide + glen;
+
+	/* clear memory */
+	this->mem_cnt = 0;
+	return;
 }
 
 /**
@@ -1652,6 +2103,7 @@ void sea_dp_clean(
 	return;
 }
 
+#if 0
 /**
  * @fn sea_align_dynamic
  */
@@ -1677,6 +2129,7 @@ struct sea_result *sea_align_guided(
 {
 	return(NULL);
 }
+#endif
 
 /* unittests */
 #ifdef TEST

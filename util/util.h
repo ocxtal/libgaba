@@ -22,7 +22,6 @@ _static_assert(sizeof(void *) == 8);
 
 /** check size of structs declared in sea.h */
 _static_assert(sizeof(struct sea_seq_pair_s) == 32);
-_static_assert(sizeof(struct sea_checkpoint_s) == 16);
 _static_assert(sizeof(struct sea_section_s) == 24);
 _static_assert(sizeof(struct sea_score_s) == 20);
 _static_assert(sizeof(struct sea_params_s) == 32);
@@ -96,23 +95,30 @@ struct sea_middle_delta_s {
 _static_assert(sizeof(struct sea_middle_delta_s) == 64);
 
 /**
- * @struct sea_mask_pair_s
+ * @struct sea_mask_u
  */
-struct sea_mask_pair_s {
-	union _h {
-		mask_t all;
-		v32i8_mask_t vec;
-	} h;						/** (4) horizontal mask vector */
-	union _v {
-		mask_t all;
-		v32i8_mask_t vec;
-	} v;						/** (4) vertical mask vector */
+union sea_mask_u {
+	vec_mask_t mask;
+	uint32_t all;
 };
-_static_assert(sizeof(struct sea_mask_pair_s) == 8);
+_static_assert(sizeof(union sea_mask_u) == 4);
+
+/**
+ * @struct sea_mask_pair_u
+ */
+union sea_mask_pair_u {
+	struct sea_mask_pair_s {
+		union sea_mask_u h;		/** (4) horizontal mask vector */
+		union sea_mask_u v;		/** (4) vertical mask vector */
+	} pair;
+	uint64_t all;
+};
+_static_assert(sizeof(union sea_mask_pair_u) == 8);
 
 /**
  * @struct sea_diff_vec_s
  */
+#if 0
 struct sea_diff_vec_s {
 	int8_t dh[MAX_BW];			/** (32) */
 	int8_t dv[MAX_BW];			/** (32) */
@@ -120,56 +126,79 @@ struct sea_diff_vec_s {
 	int8_t df[MAX_BW];			/** (32) */
 };
 _static_assert(sizeof(struct sea_diff_vec_s) == 128);
+#endif
+struct sea_diff_vec_s {
+	uint8_t dh[MAX_BW];			/** (32) dh in the lower 5bits, de in the higher 3bits */
+	uint8_t dv[MAX_BW];			/** (32) dv in the lower 5bits, df in the higher 3bits */
+};
+_static_assert(sizeof(struct sea_diff_vec_s) == 64);
+
+/**
+ * @struct sea_char_vec_s
+ */
+struct sea_char_vec_s {
+	uint8_t w[MAX_BW];					/** (32) a in the lower 4bit, b in the higher 4bit */
+};
+_static_assert(sizeof(struct sea_char_vec_s) == 32);
 
 /**
  * @struct sea_block_s
  */
 struct sea_block_s {
-	struct sea_mask_pair_s mask[MAX_BLK];	/** (256) mask vectors */
+	union sea_mask_pair_u mask[MAX_BLK];/** (256) mask vectors */
 	union sea_dir_u dir;				/** (8) direction array */
 	int64_t offset;						/** (8) large offset */
-	struct sea_diff_vec_s diff;			/** (128) diff vectors */
+	struct sea_diff_vec_s diff;			/** (64) diff vectors */
 	struct sea_small_delta_s sd;		/** (64) small delta */
+	uint32_t _pad[2];					/** (8) unused */
+	int32_t alen, blen;					/** (8) remaining length pair */
+	struct sea_char_vec_s ch;			/** (32) char vector */
 };
 struct sea_phantom_block_s {
-	struct sea_mask_pair_s mask[2];		/** (16) */
+	union sea_mask_pair_u mask[2];		/** (16) */
 	union sea_dir_u dir;				/** (8) */
 	int64_t offset;						/** (8) */
-	struct sea_diff_vec_s diff; 		/** (128) */
+	struct sea_diff_vec_s diff; 		/** (64) */
 	struct sea_small_delta_s sd;		/** (64) */
+	uint32_t _pad[2];					/** (8) unused */
+	int32_t alen, blen;					/** (8) remaining length pair */
+	struct sea_char_vec_s ch;			/** (32) char vector */
 };
-_static_assert(sizeof(struct sea_block_s) == 464);
-_static_assert(sizeof(struct sea_phantom_block_s) == 224);
+_static_assert(sizeof(struct sea_block_s) == 448);
+_static_assert(sizeof(struct sea_phantom_block_s) == 208);
 #define SEA_BLOCK_PHANTOM_OFFSET	( offsetof(struct sea_block_s, mask[30]) )
 #define SEA_BLOCK_PHANTOM_SIZE		( sizeof(struct sea_block_s) - SEA_BLOCK_PHANTOM_OFFSET )
 #define _phantom_block(x)			( (struct sea_block_s *)((uint8_t *)(x) - SEA_BLOCK_PHANTOM_OFFSET) )
 #define _last_block(x)				( (struct sea_block_s *)(x) - 1 )
+#define _block(x)					( (struct sea_block_s *)(x) )
 _static_assert(SEA_BLOCK_PHANTOM_OFFSET == 240);
 _static_assert(SEA_BLOCK_PHANTOM_SIZE == sizeof(struct sea_phantom_block_s));
 
+#if 0
 /**
- * @struct sea_local_coord_s
+ * @struct sea_cigar_s
  */
-struct sea_local_coord_s {
-	int32_t p;
-	int32_t q;
+struct sea_cigar_s {
+	uint32_t len;
+	uint32_t _pad[3];
 };
-_static_assert(sizeof(struct sea_local_coord_s) == 8);
-// _static_assert(offsetof(struct sea_local_coord_s, p) == 0);
-// _static_assert(offsetof(struct sea_local_coord_s, q) == 0);
+_static_assert(sizeof(struct sea_cigar_s) == 16);
+#endif
 
 /**
  * @struct sea_joint_head_s
  *
  * @brief (internal) traceback start coordinate (coordinate at the beginning of the band) container
- * sizeof(struct sea_joint_head_s) == 16
+ * sizeof(struct sea_joint_head_s) == 32
  */
 struct sea_joint_head_s {
 	int32_t p;					/** (4) trace start p-coordinate */
 	int32_t q;					/** (4) trace start q-coordinate */
+	struct sea_joint_head_s const *head;/** (8) head of the next section */
+	struct sea_cigar_s *cigar;	/** (8) cigar string container */
 	struct sea_joint_tail_s const *tail;/** (8) tail of the previous section */
 };
-_static_assert(sizeof(struct sea_joint_head_s) == 16);
+_static_assert(sizeof(struct sea_joint_head_s) == 32);
 
 /**
  * @struct sea_joint_tail_s
@@ -179,42 +208,51 @@ _static_assert(sizeof(struct sea_joint_head_s) == 16);
  */
 struct sea_joint_tail_s {
 	struct sea_middle_delta_s const *v;	/** (8) pointer to the middle delta vectors */
-	int64_t max;				/** (8) max */
+
+	/* coordinates */
 	int64_t psum;				/** (8) global p-coordinate of the tail */
 	int32_t p;					/** (4) local p-coordinate of the tail */
-	int32_t reserved;			/** (4) */
+
+	/* max scores */
+	union sea_mask_u mask_max;	/** (4) mask */
+	int64_t max;				/** (8) max */
+
+	/* section info */
+	struct sea_section_s curr;	/** (24) current section */
+	uint64_t _pad1;				/** (8) */
+	// struct sea_joint_tail_s *prev_tail;	/** (8) */
 
 	/* section info */
 	struct sea_section_s rem;	/** (24) */
-	uint64_t _pad;				/** (8) */
-
-	/* prefetched sequence buffer */
-	uint8_t wa[MAX_BW];			/** (32) prefetched sequence */
-	uint8_t wb[MAX_BW];			/** (32) prefetched sequence */
+	int32_t init_alen, init_blen;/** (8) */
 };
-_static_assert(sizeof(struct sea_joint_tail_s) == 128);
+_static_assert(sizeof(struct sea_joint_tail_s) == 96);
 
 /**
  * @struct sea_merge_tail_s
  */
 struct sea_merge_tail_s {
 	struct sea_middle_delta_s const *v;	/** (8) pointer to the middle delta vectors */
-	int64_t max;				/** (8) max */
+
+	/* coordinates */
 	int64_t psum;				/** (8) global p-coordinate of the tail */
 	int32_t p;					/** (4) local p-coordinate of the tail */
-	int32_t reserved;			/** (4) */
+
+	/* max scores */
+	union sea_mask_u mask_max;	/** (4) mask */
+	int64_t max;				/** (8) max */
+
+	/* section info */
+	struct sea_section_s curr;	/** (24) current section */
+	uint64_t _pad1;				/** (8) */
 
 	/* section info */
 	struct sea_section_s rem;	/** (24) */
-	uint64_t _pad;				/** (8) */
-
-	/* prefetched sequence buffer */
-	uint8_t wa[MAX_BW];			/** (32) prefetched sequence */
-	uint8_t wb[MAX_BW];			/** (32) prefetched sequence */
+	int32_t init_alen, init_blen;/** (8) */
 
 	uint8_t tail_idx[2][MAX_BW];	/** (64) array of index of joint_tail */
 };
-_static_assert(sizeof(struct sea_merge_tail_s) == 192);
+_static_assert(sizeof(struct sea_merge_tail_s) == 160);
 
 /**
  * @struct sea_reader_s
@@ -370,24 +408,23 @@ struct sea_context_s {
 
 	/** 64byte aligned */
 	/** phantom vectors */
-	struct sea_phantom_block_s blk;	/** (224) */
-	struct sea_joint_tail_s tail;	/** (128) */
-	/** 352, 1120 */
+	struct sea_phantom_block_s blk;	/** (208) */
+	struct sea_joint_tail_s tail;	/** (96) */
+	/** 304, 1072 */
 
 	/** constants */
-	/** 64byte aligned */
 	struct sea_writer_s rv;			/** (16) reverse writer */
 	struct sea_writer_s fw;			/** (16) forward writer */
-
-	/** params */
-	struct sea_params_s params;		/** (32) */
-	/** 64, 1184 */
+	/** 32, 1104 */
 
 	/** 64byte aligned */
+	/** params */
+	struct sea_params_s params;		/** (32) */
+	/** 32, 1136 */
 };
-_static_assert(sizeof(struct sea_context_s) == 1184);
-#define SEA_DP_ROOT_LOAD_SIZE	( offsetof(struct sea_joint_tail_s, rem) + sizeof(struct sea_phantom_block_s) )
-_static_assert(SEA_DP_ROOT_LOAD_SIZE == 256);
+_static_assert(sizeof(struct sea_context_s) == 1136);
+#define SEA_DP_ROOT_LOAD_SIZE	( offsetof(struct sea_joint_tail_s, curr) + sizeof(struct sea_phantom_block_s) )
+_static_assert(SEA_DP_ROOT_LOAD_SIZE == 240);
 
 /**
  * coordinate conversion macros

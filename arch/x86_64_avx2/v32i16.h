@@ -17,13 +17,6 @@ typedef struct v32i16_s {
 	__m256i v2;
 } v32i16_t;
 
-typedef struct v32i16_mask_s {
-	uint8_t m1;
-	uint8_t m2;
-	uint8_t m3;
-	uint8_t m4;
-} v32i16_mask_t;
-
 /* expanders (without argument) */
 #define _e_x_v32i16_1(u)
 #define _e_x_v32i16_2(u)
@@ -91,7 +84,7 @@ typedef struct v32i16_mask_s {
 #define _and_v32i16(...)	_a_v32i16x(and, _e_vv, __VA_ARGS__)
 #define _or_v32i16(...)		_a_v32i16x(or, _e_vv, __VA_ARGS__)
 #define _xor_v32i16(...)	_a_v32i16x(xor, _e_vv, __VA_ARGS__)
-#define _andn_v32i16(...)	_a_v32i16x(andn, _e_vv, __VA_ARGS__)
+#define _andn_v32i16(...)	_a_v32i16x(andnot, _e_vv, __VA_ARGS__)
 
 /* arithmetics */
 #define _add_v32i16(...)	_a_v32i16(add, _e_vv, __VA_ARGS__)
@@ -118,6 +111,14 @@ typedef struct v32i16_mask_s {
 	(int16_t)(((imm) < sizeof(__m256i)/sizeof(int16_t)) \
 		? _i_v32i16(extract)((a).v1, (imm)) \
 		: _i_v32i16(extract)((a).v2, (imm) - sizeof(__m256i)/sizeof(int16_t))) \
+)
+
+/* mask */
+#define _mask_v32i16(a) ( \
+	(v32_mask_t) { \
+		.m1 = _mm256_movemask_epi8( \
+			_mm256_packs_epi16((a).v1, (a).v2)) \
+	} \
 )
 
 /* horizontal max (reduction max) */

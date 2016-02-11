@@ -58,8 +58,12 @@
 #define _ext		vector_alias_join(_ext_, vector_prefix)
 
 /* shift */
+#define _bsl 		vector_alias_join(_bsl_, vector_prefix)
+#define _bsr 		vector_alias_join(_bsr_, vector_prefix)
 #define _shl 		vector_alias_join(_shl_, vector_prefix)
 #define _shr 		vector_alias_join(_shr_, vector_prefix)
+#define _sal 		vector_alias_join(_sal_, vector_prefix)
+#define _sar 		vector_alias_join(_sar_, vector_prefix)
 
 /* mask */
 #define _mask 		vector_alias_join(_mask_, vector_prefix)

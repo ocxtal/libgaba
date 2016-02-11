@@ -8,6 +8,26 @@
 #define _VECTOR_H_INCLUDED
 
 /**
+ * @struct v32_mask_s
+ *
+ * @brief common 32cell-wide mask type
+ */
+typedef struct v32_mask_s {
+	uint32_t m1;
+} v32_mask_t;
+typedef struct v32_mask_s v32i8_mask_t;
+
+/**
+ * @struct v16_mask_s
+ *
+ * @brief common 16cell-wide mask type
+ */
+typedef struct v16_mask_s {
+	uint16_t m1;
+} v16_mask_t;
+typedef struct v16_mask_s v16i8_mask_t;
+
+/**
  * abstract vector types
  *
  * v2i32_t, v2i64_t for pair of 32-bit, 64-bit signed integers. Mainly for

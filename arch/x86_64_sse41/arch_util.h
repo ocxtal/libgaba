@@ -78,6 +78,13 @@
 #endif
 
 /**
+ * @macro store_stream
+ */
+#define store_stream(_ptr, _a) { \
+	_mm_stream_si64((int64_t *)(_ptr), (int64_t)(_a)); \
+}
+
+/**
  * @macro _aligned_block_memcpy
  *
  * @brief copy size bytes from src to dst.

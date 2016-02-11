@@ -16,10 +16,6 @@ typedef struct v32i8_s {
 	__m256i v1;
 } v32i8_t;
 
-typedef struct v32i8_mask_s {
-	uint32_t m1;
-} v32i8_mask_t;
-
 /* expanders (without argument) */
 #define _e_x_v32i8_1(u)
 
@@ -74,7 +70,7 @@ typedef struct v32i8_mask_s {
 #define _and_v32i8(...)		_a_v32i8x(and, _e_vv, __VA_ARGS__)
 #define _or_v32i8(...)		_a_v32i8x(or, _e_vv, __VA_ARGS__)
 #define _xor_v32i8(...)		_a_v32i8x(xor, _e_vv, __VA_ARGS__)
-#define _andn_v32i8(...)	_a_v32i8x(andn, _e_vv, __VA_ARGS__)
+#define _andn_v32i8(...)	_a_v32i8x(andnot, _e_vv, __VA_ARGS__)
 
 /* arithmetics */
 #define _add_v32i8(...)		_a_v32i8(add, _e_vv, __VA_ARGS__)
@@ -104,7 +100,7 @@ typedef struct v32i8_mask_s {
 )
 
 /* shift */
-#define _shl_v32i8(a, imm) ( \
+#define _bsl_v32i8(a, imm) ( \
 	(v32i8_t) { \
 		_mm256_alignr_epi8( \
 			(a).v1, \
@@ -112,7 +108,7 @@ typedef struct v32i8_mask_s {
 			15) \
 	} \
 )
-#define _shr_v32i8(a, imm) ( \
+#define _bsr_v32i8(a, imm) ( \
 	(v32i8_t) { \
 		_mm256_alignr_epi8( \
 			_mm256_castsi128_si256( \
@@ -121,10 +117,30 @@ typedef struct v32i8_mask_s {
 			1) \
 	} \
 )
+#define _shl_v32i8(a, imm) ( \
+	(v32i8_t) { \
+		_mm256_slli_epi32((a).v1, (imm)) \
+	} \
+)
+#define _shr_v32i8(a, imm) ( \
+	(v32i8_t) { \
+		_mm256_srli_epi32((a).v1, (imm)) \
+	} \
+)
+#define _sal_v32i8(a, imm) ( \
+	(v32i8_t) { \
+		_mm256_slai_epi32((a).v1, (imm)) \
+	} \
+)
+#define _sar_v32i8(a, imm) ( \
+	(v32i8_t) { \
+		_mm256_srai_epi32((a).v1, (imm)) \
+	} \
+)
 
 /* mask */
 #define _mask_v32i8(a) ( \
-	(v32i8_mask_t) { \
+	(v32_mask_t) { \
 		.m1 = _i_v32i8(movemask)((a).v1) \
 	} \
 )

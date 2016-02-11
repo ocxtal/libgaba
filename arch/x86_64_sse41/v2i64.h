@@ -87,7 +87,7 @@ typedef struct v2i64_s {
 #define _and_v2i64(...)		_a_v2i64x(and, _e_vv, __VA_ARGS__)
 #define _or_v2i64(...)		_a_v2i64x(or, _e_vv, __VA_ARGS__)
 #define _xor_v2i64(...)		_a_v2i64x(xor, _e_vv, __VA_ARGS__)
-#define _andn_v2i64(...)	_a_v2i64x(andn, _e_vv, __VA_ARGS__)
+#define _andn_v2i64(...)	_a_v2i64x(andnot, _e_vv, __VA_ARGS__)
 
 /* arithmetics */
 #define _add_v2i64(...)		_a_v2i64(add, _e_vv, __VA_ARGS__)

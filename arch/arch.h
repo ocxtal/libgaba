@@ -25,7 +25,7 @@
 #endif
 
 #if !defined(_ARCH_UTIL_H_INCLUDED) || !defined(_VECTOR_H_INCLUDED)
-#error "No SIMD environment detected. Check CFLAGS."
+#  error "No SIMD environment detected. Check CFLAGS."
 #endif
 
 #endif /* #ifndef _ARCH_H_INCLUDED */

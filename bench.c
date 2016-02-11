@@ -182,7 +182,7 @@ int main(int argc, char *argv[])
 		bench_start(total);
 		
 		struct sea_chain_status_s stat = sea_dp_build_root(dp, &curr);
-		stat = sea_dp_fill(dp, stat.tail, &curr, &next, 32);
+		stat = sea_dp_fill(dp, stat.tail, &curr, &next, strlen(a) + strlen(b));
 
 
 		bench_end(total);
