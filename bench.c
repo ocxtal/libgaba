@@ -176,14 +176,15 @@ int main(int argc, char *argv[])
 	/**
 	 * run benchmark.
 	 */
+	int64_t score = 0;
 	for(i = 0; i < p.cnt; i++) {
 		sea_dp_t *dp = sea_dp_init(ctx, &seq, NULL, 0);
 
 		bench_start(total);
 		
 		struct sea_chain_status_s stat = sea_dp_build_root(dp, &curr);
-		stat = sea_dp_fill(dp, stat.tail, &curr, &next, strlen(a) + strlen(b));
-
+		stat = sea_dp_fill(dp, stat.sec, &curr, &next, strlen(a) + strlen(b));
+		score += stat.sec->max;
 
 		bench_end(total);
 
@@ -193,7 +194,7 @@ int main(int argc, char *argv[])
 	/**
 	 * print results.
 	 */
-	printf("%lld\n", bench_get(total));
+	printf("%lld\t%lld\n", bench_get(total), score);
 
 	/**
 	 * clean malloc'd memories

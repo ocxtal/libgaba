@@ -564,7 +564,7 @@ struct sea_chain_status_s fill_init_seq(
 			this, prev_tail, blk, _lo32(cnt) + _hi32(cnt));
 	}
 	return((struct sea_chain_status_s){
-		.tail = prev_tail,
+		.sec = _fill(prev_tail),
 		.rem = &prev_tail->rem
 	});
 }
@@ -1362,7 +1362,7 @@ struct sea_chain_status_s fill_mem_bounded(
 		fill_create_head(this, prev_tail),
 		blk_cnt);
 	return((struct sea_chain_status_s){
-		.tail = fill_create_tail(this, prev_tail, stat.blk, stat.p),
+		.sec = _fill(fill_create_tail(this, prev_tail, stat.blk, stat.p)),
 		.rem = (stat.stat == TERM) ? NULL : (void *)1
 	});
 }
@@ -1404,7 +1404,7 @@ struct sea_chain_status_s fill_seq_bounded(
 
 _fill_seq_bounded_finish:;
 	return((struct sea_chain_status_s){
-		.tail = fill_create_tail(this, prev_tail, stat.blk, stat.p),
+		.sec = _fill(fill_create_tail(this, prev_tail, stat.blk, stat.p)),
 		.rem = (stat.stat == TERM) ? NULL : (void *)1
 	});
 }
@@ -1415,14 +1415,14 @@ _fill_seq_bounded_finish:;
  */
 struct sea_chain_status_s sea_dp_fill(
 	struct sea_dp_context_s *this,
-	struct sea_joint_tail_s const *prev_tail,
+	struct sea_fill_s const *prev_tail,
 	struct sea_section_s const *curr,
 	struct sea_section_s const *next,
 	int64_t plim)
 {
 	/* init section and restore sequence reader buffer */
-	struct sea_chain_status_s s = fill_init_seq(this, prev_tail, curr, next, plim);
-	if(s.tail->p < 0) {
+	struct sea_chain_status_s s = fill_init_seq(this, _tail(prev_tail), curr, next, plim);
+	if(s.sec->p < 0) {
 		return(s);
 	}
 
@@ -1433,7 +1433,7 @@ struct sea_chain_status_s sea_dp_fill(
 	/* extra large bulk fill (with stack allocation) */
 	while(_unlikely(mem_bulk_blocks < seq_bulk_blocks)) {
 		if(mem_bulk_blocks > MIN_BULK_BLOCKS) {
-			if((s = fill_mem_bounded(this, s.tail, mem_bulk_blocks)).rem == NULL) {
+			if((s = fill_mem_bounded(this, _tail(s.sec), mem_bulk_blocks)).rem == NULL) {
 				return(s);
 			}
 
@@ -1449,7 +1449,7 @@ struct sea_chain_status_s sea_dp_fill(
 	}
 
 	/* bulk fill with seq bound check */
-	return(fill_seq_bounded(this, s.tail));
+	return(fill_seq_bounded(this, _tail(s.sec)));
 }
 
 /**
@@ -1457,7 +1457,7 @@ struct sea_chain_status_s sea_dp_fill(
  */
 struct sea_chain_status_s sea_dp_merge(
 	struct sea_dp_context_s *this,
-	struct sea_joint_tail_s const *tail_list,
+	struct sea_fill_s const *tail_list,
 	uint64_t tail_list_len)
 {
 	return((struct sea_chain_status_s){ 0, 0 });
@@ -1466,9 +1466,9 @@ struct sea_chain_status_s sea_dp_merge(
 /**
  * @fn sea_dp_build_leaf
  */
-struct sea_joint_head_s *sea_dp_build_leaf(
+struct sea_trace_s *sea_dp_build_leaf(
 	struct sea_dp_context_s *this,
-	struct sea_joint_tail_s const *tail)
+	struct sea_fill_s const *tail)
 {
 	/* create joint_head */
 	struct sea_joint_head_s *head = sea_dp_smalloc(
@@ -1476,11 +1476,11 @@ struct sea_joint_head_s *sea_dp_build_leaf(
 		sizeof(struct sea_joint_head_s));
 	head->head = NULL;
 	head->cigar = NULL;
-	head->tail = tail;
+	head->tail = _tail(tail);
 
 	/* search max position */
-	uint32_t mask_max = tail->mask_max.all;
-	struct sea_block_s *blk = _last_block(tail);
+	uint32_t mask_max = _tail(tail)->mask_max.all;
+	struct sea_block_s *blk = _last_block(_tail(tail));
 
 #if 0
 	/* iterate towards the head */
@@ -1512,9 +1512,9 @@ struct sea_joint_head_s *sea_dp_build_leaf(
 /**
  * @fn sea_dp_trace
  */
-struct sea_joint_head_s *sea_dp_trace(
+struct sea_trace_s *sea_dp_trace(
 	struct sea_dp_context_s *this,
-	struct sea_joint_head_s const *prev_head,
+	struct sea_trace_s const *prev_head,
 	struct sea_clip_params_s const *clip)
 {
 #if 0
@@ -1984,7 +1984,7 @@ struct sea_chain_status_s sea_dp_build_root(
 	struct sea_dp_context_s *this,
 	struct sea_section_s const *curr)
 {
-	return((struct sea_chain_status_s){ this->tail, curr });
+	return((struct sea_chain_status_s){ _fill(this->tail), curr });
 }
 
 /**

@@ -252,24 +252,30 @@ typedef struct sea_section_s sea_section_t;
 typedef struct sea_dp_context_s sea_dp_t;
 
 /**
+ * @struct sea_fill_s
+ */
+struct sea_fill_s {
+	uint8_t _pad1[8];
+
+	/* coordinates */
+	int64_t psum;				/** (8) global p-coordinate of the tail of the section */
+	int32_t p;					/** (4) local p-coordinate of the tail of the section */
+
+	/* max scores */
+	uint8_t _pad2[4];
+	int64_t max;				/** (8) max */
+};
+typedef struct sea_fill_s sea_fill_t;
+
+/**
  * @struct sea_chain_status_s
  * @brief tail of the blocks and remaining section.
  */
 struct sea_chain_status_s {
-	struct sea_joint_tail_s const *tail;
-	struct sea_section_s const *rem;
+	sea_fill_t const *sec;
+	sea_section_t const *rem;
 };
 typedef struct sea_chain_status_s sea_chain_status_t;
-
-/**
- * @type sea_joint_tail_t
- */
-typedef struct sea_joint_tail_s sea_joint_tail_t;
-
-/**
- * @type sea_joint_head_t
- */
-typedef struct sea_joint_head_s sea_joint_head_t;
 
 /**
  * @struct sea_cigar_s
@@ -279,6 +285,16 @@ struct sea_cigar_s {
 	uint8_t c;
 	uint8_t _pad[3];
 };
+
+/**
+ * @struct sea_trace_s
+ */
+struct sea_trace_s {
+	uint8_t _pad1[16];
+	struct sea_cigar_s *cigar;	/** (8) cigar string container */
+	uint8_t _pad2[8];
+};
+typedef struct sea_trace_s sea_trace_t;
 
 #if 0
 /**
@@ -365,7 +381,7 @@ sea_chain_status_t sea_dp_build_root(
  */
 sea_chain_status_t sea_dp_fill(
 	sea_dp_t *this,
-	sea_joint_tail_t const *prev_tail,
+	sea_fill_t const *prev_sec,
 	sea_section_t const *curr,
 	sea_section_t const *next,
 	int64_t plim);
@@ -375,7 +391,7 @@ sea_chain_status_t sea_dp_fill(
  */
 sea_chain_status_t sea_dp_merge(
 	sea_dp_t *this,
-	sea_joint_tail_t const *tail_list,
+	sea_fill_t const *sec_list,
 	uint64_t tail_list_len);
 
 /**
@@ -404,18 +420,18 @@ typedef int (*sea_result_writer)(int c);
  * @fn sea_dp_build_leaf
  * @brief search max score position.
  */
-sea_joint_head_t *sea_dp_build_leaf(
+sea_trace_t *sea_dp_build_leaf(
 	sea_dp_t *this,
-	sea_joint_tail_t const *tail);
+	sea_fill_t const *sec);
 
 /**
  * @fn sea_dp_trace
  *
  * @brief generate alignment result string
  */
-sea_joint_head_t *sea_dp_trace(
+sea_trace_t *sea_dp_trace(
 	sea_dp_t *this,
-	sea_joint_head_t const *prev_head,
+	sea_trace_t const *prev_sec,
 	sea_clip_params_t const *clip);
 
 /**
@@ -423,20 +439,20 @@ sea_joint_head_t *sea_dp_trace(
  *
  * @brief connect a root to a leaf of another tree
  */
-sea_joint_head_t *sea_dp_joint(
+sea_trace_t *sea_dp_joint(
 	sea_dp_t *this,
-	sea_joint_head_t const *prev_head,
-	sea_joint_tail_t const *tail);
+	sea_trace_t const *prev_sec,
+	sea_fill_t const *sec);
 
 /**
  * @fn sea_dp_dump_trace
  */
 void sea_dp_dump_trace(
 	sea_dp_t *this,
-	sea_joint_head_t const *fw_head,
-	sea_joint_head_t const *fw_head_term,
-	sea_joint_head_t const *rv_head,
-	sea_joint_head_t const *rv_head_term,
+	sea_trace_t const *fw_sec,
+	sea_trace_t const *fw_sec_term,
+	sea_trace_t const *rv_sec,
+	sea_trace_t const *rv_sec_term,
 	sea_result_writer writer);
 
 #if 0

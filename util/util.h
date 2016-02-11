@@ -21,10 +21,12 @@
 _static_assert(sizeof(void *) == 8);
 
 /** check size of structs declared in sea.h */
-_static_assert(sizeof(struct sea_seq_pair_s) == 32);
-_static_assert(sizeof(struct sea_section_s) == 24);
 _static_assert(sizeof(struct sea_score_s) == 20);
 _static_assert(sizeof(struct sea_params_s) == 32);
+_static_assert(sizeof(struct sea_seq_pair_s) == 32);
+_static_assert(sizeof(struct sea_section_s) == 24);
+_static_assert(sizeof(struct sea_fill_s) == 32);
+_static_assert(sizeof(struct sea_trace_s) == 32);
 
 /**
  * constants
@@ -199,6 +201,9 @@ struct sea_joint_head_s {
 	struct sea_joint_tail_s const *tail;/** (8) tail of the previous section */
 };
 _static_assert(sizeof(struct sea_joint_head_s) == 32);
+_static_assert(offsetof(struct sea_joint_head_s, cigar) == offsetof(struct sea_trace_s, cigar));
+#define _head(x)				( (struct sea_joint_head_s *)(x) )
+#define _trace(x)				( (struct sea_trace_s *)(x) )
 
 /**
  * @struct sea_joint_tail_s
@@ -227,6 +232,11 @@ struct sea_joint_tail_s {
 	int32_t init_alen, init_blen;/** (8) */
 };
 _static_assert(sizeof(struct sea_joint_tail_s) == 96);
+_static_assert(offsetof(struct sea_joint_tail_s, psum) == offsetof(struct sea_fill_s, psum));
+_static_assert(offsetof(struct sea_joint_tail_s, p) == offsetof(struct sea_fill_s, p));
+_static_assert(offsetof(struct sea_joint_tail_s, max) == offsetof(struct sea_fill_s, max));
+#define _tail(x)				( (struct sea_joint_tail_s *)(x) )
+#define _fill(x)				( (struct sea_fill_s *)(x) )
 
 /**
  * @struct sea_merge_tail_s
