@@ -1121,7 +1121,7 @@ struct sea_fill_status_s fill_bulk_predetd_blocks(
 
 		/* bulk fill */
 		debug("blk(%p)", blk);
-		fill_bulk_block(this, blk);
+		fill_bulk_block(this, blk++);
 	}
 	return((struct sea_fill_status_s){
 		.blk = blk,
