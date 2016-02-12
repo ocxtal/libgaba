@@ -31,10 +31,9 @@ _loada_ascii_2bit_fw:
 __loada_ascii_2bit_fw:
 	cmpq $0, %rsi		# check NULL
 	jl _loada_ascii_2bit_fw_null
-	movl $0x03030303, %eax
+	movb $0x03, %al
 	movq %rax, %xmm4
-	vbroadcasti128 %xmm4, %ymm4
-	vpshufd $0, %ymm4, %ymm4
+	vpbroadcastb %xmm4, %ymm4
 	cmpq %rcx, %rdx
 	jge _loada_ascii_2bit_fw_r
 _loada_ascii_2bit_fw_f:
@@ -56,15 +55,14 @@ _loada_ascii_2bit_fw_r:
 	vpsrlq $2, %ymm0, %ymm2
 	vpxor %ymm1, %ymm2, %ymm2
 	vpand %ymm4, %ymm2, %ymm2
-	vpshufb %ymm5, %ymm2
+	vpshufb %ymm5, %ymm2, %ymm2
 	vperm2i128 $1, %ymm2, %ymm2, %ymm2
 	vmovdqu %ymm2, (%rdi)
 	ret
 _loada_ascii_2bit_fw_null:
-	movl $0x80808080, %eax
-	movq %rax, %xmm0
-	vbroadcasti128 %xmm0, %ymm0
-	vpshufd $0, %ymm0, %ymm0
+	movb $0x80, %al
+	movq %rax, %xmm4
+	vpbroadcastb %xmm4, %ymm4
 	vmovdqu %ymm0, (%rdi)
 	ret
 
@@ -75,10 +73,9 @@ _loada_ascii_2bit_fr:
 __loada_ascii_2bit_fr:
 	cmpq $0, %rsi
 	jl _loada_ascii_2bit_fr_null
-	movl $0x03030303, %eax
+	movb $0x03, %al
 	movq %rax, %xmm4
-	vbroadcasti128 %xmm4, %ymm4
-	vpshufd $0, %ymm4, %ymm4
+	vpbroadcastb %xmm4, %ymm4
 	vmovdqu (%rsi, %rdx), %ymm0
 	vpsrlq $1, %ymm0, %ymm1
 	vpsrlq $2, %ymm0, %ymm2
@@ -87,10 +84,9 @@ __loada_ascii_2bit_fr:
 	vmovdqu %ymm2, (%rdi)
 	ret
 _loada_ascii_2bit_fr_null:
-	movl $0x80808080, %eax
+	movb $0x80, %al
 	movq %rax, %xmm0
-	vbroadcasti128 %xmm0, %ymm0
-	vpshufd $0, %ymm0, %ymm0
+	vpbroadcastb %xmm0, %ymm0
 	vmovdqu %ymm0, (%rdi)
 	ret
 
@@ -101,14 +97,13 @@ _loadb_ascii_2bit_fw:
 __loadb_ascii_2bit_fw:
 	cmpq $0, %rsi		# check NULL
 	jl _loadb_ascii_2bit_fw_null
-	movl $0x0c0c0c0c, %eax
+	movb $0x0c, %al
 	movq %rax, %xmm4
-	vbroadcasti128 %xmm4, %ymm4
-	vpshufd $0, %ymm4, %ymm4
+	vpbroadcastb %xmm4, %ymm4
 	cmpq %rcx, %rdx
 	jge _loadb_ascii_2bit_fw_r
 _loadb_ascii_2bit_fw_f:
-	movdqu (%rsi, %rdx), %ymm0
+	vmovdqu (%rsi, %rdx), %ymm0
 	vpsllq $1, %ymm0, %ymm1
 	vpxor %ymm0, %ymm1, %ymm2
 	vpand %ymm4, %ymm2, %ymm2
@@ -129,10 +124,9 @@ _loadb_ascii_2bit_fw_r:
 	vmovdqu %ymm2, (%rdi)
 	ret
 _loadb_ascii_2bit_fw_null:
-	movl $0x80808080, %eax
+	movb $0x80, %al
 	movq %rax, %xmm0
-	vbroadcasti128 %xmm0, %ymm0
-	vpshufd $0, %ymm0, %ymm0
+	vpbroadcastb %xmm0, %ymm0
 	vmovdqu %ymm0, (%rdi)
 	ret
 
@@ -143,10 +137,9 @@ _loadb_ascii_2bit_fr:
 __loadb_ascii_2bit_fr:
 	cmpq $0, %rsi
 	jl _loadb_ascii_2bit_fr_null
-	movl $0x0c0c0c0c, %eax
+	movb $0x0c, %al
 	movq %rax, %xmm4
-	vbroadcasti128 %xmm4, %ymm4
-	vpshufd $0, %ymm4, %ymm4
+	vpbroadcastb %xmm4, %ymm4
 	vmovdqu (%rdx, %rsi), %ymm0
 	vpsllq $1, %ymm0, %ymm1
 	vpxor %ymm0, %ymm1, %ymm2
@@ -154,10 +147,9 @@ __loadb_ascii_2bit_fr:
 	vmovdqu %ymm2, (%rdi)
 	ret
 _loadb_ascii_2bit_fr_null:
-	movl $0x80808080, %eax
+	movb $0x80, %al
 	movq %rax, %xmm0
-	vbroadcasti128 %xmm0, %ymm0
-	vpshufd $0, %ymm0, %ymm0
+	vpbroadcastb %xmm0, %ymm0
 	vmovdqu %ymm0, (%rdi)
 	ret
 
