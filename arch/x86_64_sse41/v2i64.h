@@ -103,7 +103,7 @@ typedef struct v2i64_s {
 // #define _shuf_v2i64(...)	_a_v2i64(shuffle, _e_vv, __VA_ARGS__)
 
 /* blend */
-#define _sel_v2i64(a, b, mask) ( \
+#define _sel_v2i64(mask, a, b) ( \
 	(v2i64_t) { \
 		_mm_blendv_epi8((b).v1, (a).v1, (mask).v1) \
 	} \

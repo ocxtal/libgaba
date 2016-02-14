@@ -93,7 +93,7 @@ typedef struct v16i8_s {
 #define _shuf_v16i8(...)	_a_v16i8(shuffle, _e_vv, __VA_ARGS__)
 
 /* blend */
-#define _sel_v16i8(...)		_a_v16i8(blendv, _e_vvv, __VA_ARGS__)
+// #define _sel_v16i8(...)		_a_v16i8(blendv, _e_vvv, __VA_ARGS__)
 
 /* compare */
 #define _eq_v16i8(...)		_a_v16i8(cmpeq, _e_vv, __VA_ARGS__)
