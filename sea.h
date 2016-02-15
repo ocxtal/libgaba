@@ -233,6 +233,7 @@ typedef struct sea_context_s sea_t;
 struct sea_section_s {
 	uint64_t apos, bpos;	/** global position in genome */
 	uint32_t alen, blen;	/** length of a local segment */
+	uint64_t reserved;		/** reserved; MUST BE ZERO */
 };
 typedef struct sea_section_s sea_section_t;
 #define sea_build_section(_apos, _alen, _bpos, _blen) ( \
@@ -240,7 +241,8 @@ typedef struct sea_section_s sea_section_t;
 		.apos = (_apos), \
 		.bpos = (_bpos), \
 		.alen = (_alen), \
-		.blen = (_blen) \
+		.blen = (_blen), \
+		.reserved = 0 \
 	} \
 )
 
@@ -431,7 +433,7 @@ sea_trace_t *sea_dp_build_leaf(
  */
 sea_trace_t *sea_dp_trace(
 	sea_dp_t *this,
-	sea_trace_t const *prev_sec,
+	sea_trace_t *prev_sec,
 	sea_clip_params_t const *clip);
 
 /**

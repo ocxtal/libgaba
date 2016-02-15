@@ -68,14 +68,19 @@ static void sea_dp_free(struct sea_dp_context_s *this, void *ptr);
 
 /* direction determiners for the dynamic band algorithms */
 /**
+ * @macro _dir_fetch
+ */
+#define _dir_fetch(_dir) { \
+	(_dir).dynamic.array <<= 1; \
+	(_dir).dynamic.array |= (uint32_t)((_dir).dynamic.acc < 0); \
+}
+/**
  * @macro _dir_update
  * @brief update direction determiner for the next band
  */
 #define _dir_update(_dir, _vector, _sign) { \
 	(_dir).dynamic.acc += (_sign) * (_ext(_vector, 0) - _ext(_vector, BW-1)); \
 	/*debug("acc(%d), (%d, %d)", (_dir).dynamic.acc, _ext(_vector, 0), _ext(_vector, BW-1));*/ \
-	(_dir).dynamic.array <<= 1; \
-	(_dir).dynamic.array |= (uint32_t)((_dir).dynamic.acc < 0); \
 }
 /**
  * @macro _dir_adjust_reminder
@@ -96,12 +101,27 @@ static void sea_dp_free(struct sea_dp_context_s *this, void *ptr);
  */
 #define _dir_is_down(_dir)					( (_dir).dynamic.array & 0x01 )
 #define _dir_is_right(_dir)					( !_dir_is_down(_dir) )
+/**
+ * @macro _dir_load
+ */
+#define _dir_load(_blk, _local_idx) ({ \
+	union sea_dir_u _dir = (_blk)->dir; \
+	_dir.dynamic.array >>= (BLK - (_local_idx) - 1); \
+	_dir; \
+})
+/**
+ * @macro _dir_windback
+ */
+#define _dir_windback(_dir) { \
+	(_dir).dynamic.array >>= 1; \
+}
 
 #else
 
 #define direction_prefix 		guided_
 
 /* direction determiners for the guided band algorithms */
+#define _dir_fetch(_dir)					{ /* nothing to do */ }
 #define _dir_update(_dir, _vector) { \
 	(_dir).guided.ptr++; \
 }
@@ -114,6 +134,14 @@ static void sea_dp_free(struct sea_dp_context_s *this, void *ptr);
 )
 #define _dir_is_down(_dir)					( *(_dir).guided.ptr != 0 )
 #define _dir_is_right(_dir)					( *(_dir).guided.ptr == 0 )
+#define _dir_load(_blk, _local_idx) ({ \
+	union sea_dir_u _dir = (_blk)->dir; \
+	_dir.guided.ptr -= (BLK - (_local_idx)); \
+	_dir; \
+})
+#define _dir_windback(_dir) { \
+	(_dir).guided.ptr--; \
+}
 
 #endif
 
@@ -305,15 +333,13 @@ struct sea_joint_tail_s *fill_create_tail(
 	v32i16_t md = _load_v32i16(prev_tail->v);
 	_print_v32i16(md);
 
-	/* add middle and small deltas */
-	md = _add_v32i16(md, sd);
-
 	/* extract max */
-	int16_t max = _hmax_v32i16(_add_v32i16(md, sd));
+	md = _add_v32i16(md, sd);
+	int16_t max = _hmax_v32i16(md);
+	_print_v32i16(md);
 
 	/* determine q-coordinate */
-	vec_mask_t mask_max = _mask_v32i16(
-		_eq_v32i16(_set_v32i16(max), md));
+	vec_mask_t mask_max = _mask_v32i16(_eq_v32i16(_set_v32i16(max), md));
 
 	/* store */
 	tail->mask_max.mask = mask_max;
@@ -322,6 +348,9 @@ struct sea_joint_tail_s *fill_create_tail(
 	debug("offset(%lld)", (blk - 1)->offset);
 	debug("max(%d)", _hmax_v32i16(_add_v32i16(md, sd)));
 	debug("mask_max(%u)", tail->mask_max.all);
+
+	/* misc */
+	tail->internal = 0;
 
 	fill_store_section(this, tail);
 	return(tail);
@@ -352,7 +381,7 @@ v2i32_t fill_bulk_fetch(
 
 	/* fetch seq a */
 	#define _ra(x)		( rev((x), this->rr.p.alen) )
-	_rd_load(this->r.loada,
+	rd_load(this->r.loada,
 		_rd_bufa(this, BW, BLK),			/* dst */
 		this->rr.p.pa,						/* src */
 		_ra(this->rr.curr.apos - (blk - 1)->alen),/* pos */
@@ -363,7 +392,7 @@ v2i32_t fill_bulk_fetch(
 
 	/* fetch seq b */
 	_store(_rd_bufb(this, 0, BW), b);
-	_rd_load(this->r.loadb,
+	rd_load(this->r.loadb,
 		_rd_bufb(this, BW, BLK),			/* dst */
 		this->rr.p.pb,						/* src */
 		this->rr.curr.bpos - (blk - 1)->blen,/* pos */
@@ -411,13 +440,13 @@ v2i32_t fill_cap_fetch(
 
 	/* fetch seq a */
 	#define _ra(x)		( rev((x), this->rr.p.alen) )
-	_rd_load(this->r.loada,
+	rd_load(this->r.loada,
 		_rd_bufa(this, BW + _lo32(len1), _lo32(len2)),	/* dst */
 		this->rr.p.pa,						/* src */
 		_ra(this->rr.next.apos - _lo32(ofs2)),/* pos */
 		this->rr.p.alen,					/* lim */
 		_lo32(len2));						/* len */
-	_rd_load(this->r.loada,
+	rd_load(this->r.loada,
 		_rd_bufa(this, BW, _lo32(len1)),	/* dst */
 		this->rr.p.pa,						/* src */
 		_ra(this->rr.curr.apos - _lo32(ofs1)),/* pos */
@@ -428,13 +457,13 @@ v2i32_t fill_cap_fetch(
 
 	/* fetch seq b */
 	_store(_rd_bufb(this, 0, BW), b);
-	_rd_load(this->r.loadb,
+	rd_load(this->r.loadb,
 		_rd_bufb(this, BW, _hi32(len1)),	/* dst */
 		this->rr.p.pb,						/* src */
 		this->rr.curr.bpos - _hi32(ofs1),	/* pos */
 		this->rr.p.blen,					/* lim */
 		_hi32(len1));						/* len */
-	_rd_load(this->r.loadb,
+	rd_load(this->r.loadb,
 		_rd_bufb(this, BW + _hi32(len1), _hi32(len2)),
 		this->rr.p.pb,						/* src */
 		this->rr.next.bpos - _hi32(ofs2),	/* pos */
@@ -464,8 +493,8 @@ void fill_restore_fetch(
 	vec_t cw = _load(&blk->ch.w);
 	vec_t ca = _and(mask, cw);
 	vec_t cb = _and(mask, _shr(cw, 4));
-	_store(_rd_bufa(this, _lo32(cnt), BW), ca);
-	_store(_rd_bufb(this, _hi32(cnt), BW), cb);
+	_storeu(_rd_bufa(this, _lo32(cnt), BW), ca);
+	_storeu(_rd_bufb(this, _hi32(cnt), BW), cb);
 
 	/* from previous block */
 	vec_t pw = _load(&(blk - 1)->ch.w);
@@ -568,7 +597,7 @@ struct sea_chain_status_s fill_init_seq(
 	_store(_rd_bufb(this, 0, BW), b);
 
 	/* check if additional fetch is needed */
-	if(prev_tail->p < 0) {
+	if(prev_tail->psum < 2) {
 		v2i32_t const tot = _set_v2i32(BW/2);
 
 		/* calc fetched sequence length */
@@ -641,8 +670,8 @@ struct sea_chain_status_s fill_init_seq(
 	vec_t register max = _load(_pv(((_blk) - 1)->sd.max)); \
 	/*_print_v32i16(_load_v32i16(this->tail->v));*/ \
 	/*_print(delta);*/ \
-	/*_print(max);*/ \
-	/*_print_v32i16(_add_v32i16(_cvt_v32i8_v32i16(delta), _load_v32i16(this->tail->v)));*/
+	_print(max); \
+	_print_v32i16(_add_v32i16(_cvt_v32i8_v32i16(delta), _load_v32i16(this->tail->v)));
 
 /**
  * @macro _fill_body
@@ -655,10 +684,10 @@ struct sea_chain_status_s fill_init_seq(
 	/*_print(t);*/ \
 	t = _shuf(_load_sc(this, sb), t); \
 	/*_print(_load_sc(this, sb));*/ \
-	t = _max(df, t); \
-	mask_ptr->pair.h.mask = _mask(_eq(t, df)); \
 	t = _max(de, t); \
-	mask_ptr->pair.v.mask = _mask(_eq(t, de)); \
+	mask_ptr->pair.h.mask = _mask(_eq(t, de)); \
+	t = _max(df, t); \
+	mask_ptr->pair.v.mask = _mask(_eq(t, df)); \
 	mask_ptr++; \
 	df = _sub(_max(_add(df, _load_sc(this, adjv)), t), dv); \
 	dv = _sub(dv, t); \
@@ -689,7 +718,7 @@ struct sea_chain_status_s fill_init_seq(
  * @brief wrapper of _fill_body and _fill_update_delta
  */
 #define _fill_right() { \
-	/*debug("go right");*/ \
+	debug("go right"); \
 	aptr--;				/* increment sequence buffer pointer */ \
 	dh = _bsl(dh, 1);	/* shift left dh */ \
 	df = _bsl(df, 1);	/* shift left df */ \
@@ -697,7 +726,7 @@ struct sea_chain_status_s fill_init_seq(
 	_fill_update_delta(_sub, dh, _load_sc(this, ofsh), -1); \
 }
 #define _fill_down() { \
-	/*debug("go down");*/ \
+	debug("go down"); \
 	bptr++;				/* increment sequence buffer pointer */ \
 	dv = _bsr(dv, 1);	/* shift right dv */ \
 	de = _bsr(de, 1);	/* shift right de */ \
@@ -832,6 +861,7 @@ void fill_bulk_block(
 	 * @brief an element of unrolled fill-in loop
 	 */
 	#define _fill_block(_direction, _label, _jump_to) { \
+		_dir_fetch(dir); \
 		if(_unlikely(!_dir_is_##_direction(dir))) { \
 			goto _linear_fill_##_jump_to; \
 		} \
@@ -963,6 +993,7 @@ struct sea_fill_status_s fill_cap_seq_bounded(
 		 * @brief an element of unrolled fill-in loop
 		 */
 		#define _fill_block_cap() { \
+			_dir_fetch(dir); \
 			if(_dir_is_right(dir)) { \
 				_fill_right(); \
 			} else { \
@@ -1089,12 +1120,6 @@ struct sea_chain_status_s fill_seq_bounded(
 		seq_bulk_blocks = calc_max_bulk_blocks_seq(this);
 	}
 
-	debug("prev_tail(%p), v(%p), psum(%lld), p(%d)",
-		prev_tail,
-		_tail(prev_tail)->v,
-		_tail(prev_tail)->psum,
-		_tail(prev_tail)->p);
-
 	/* bulk fill with ij-bound test */
 	psum += (stat = fill_bulk_seq_bounded(this, stat.blk)).p;
 
@@ -1102,20 +1127,8 @@ struct sea_chain_status_s fill_seq_bounded(
 		goto _fill_seq_bounded_finish;	/* skip cap */
 	}
 
-	debug("prev_tail(%p), v(%p), psum(%lld), p(%d)",
-		prev_tail,
-		_tail(prev_tail)->v,
-		_tail(prev_tail)->psum,
-		_tail(prev_tail)->p);
-
 	/* cap fill (without p-bound test) */
 	psum += (stat = fill_cap_seq_bounded(this, stat.blk)).p;
-
-	debug("prev_tail(%p), v(%p), psum(%lld), p(%d)",
-		prev_tail,
-		_tail(prev_tail)->v,
-		_tail(prev_tail)->psum,
-		_tail(prev_tail)->p);
 
 _fill_seq_bounded_finish:;
 	return((struct sea_chain_status_s){
@@ -1151,6 +1164,9 @@ struct sea_chain_status_s sea_dp_fill(
 			if((s = fill_mem_bounded(this, _tail(s.sec), mem_bulk_blocks)).rem == NULL) {
 				return(s);
 			}
+
+			/* mark tail as internal section */
+			_tail(s.sec)->internal = 1;
 
 			/* fill-in area has changed */
 			seq_bulk_blocks = calc_max_bulk_blocks_seq(this);
@@ -1210,21 +1226,29 @@ struct trace_block_s trace_detect_max_block(
 {
 	struct sea_block_s *blk = _last_block(tail);
 
+	v32i16_t md = _load_v32i16(tail->v);
+	debug("p(%d)", tail->p);
+
 	/* load mask */
 	uint32_t mask_max = _tail(tail)->mask_max.all;
+	debug("mask_max(%x)", mask_max);
 
 	/* load the last max vector */
 	vec_t max = _load(&blk->sd.max);
 	int64_t offset = blk->offset;
+	_print_v32i16(_add_v32i16(_add_v32i16(md, _cvt_v32i8_v32i16(max)), _set_v32i16(offset)));
 
 	/* iterate towards the head */
-	for(int32_t b = tail->p / BLK; b > 0; b--, blk--) {
+	for(int32_t b = (tail->p - 1) / BLK; b > 0; b--, blk--) {
+		debug("b(%d), blk(%p)", b, blk);
+
 		/* load the previous max vector and offset */
 		vec_t prev_max = _load(&(blk - 1)->sd.max);
 		int64_t prev_offset = (blk - 1)->offset;
+		_print_v32i16(_add_v32i16(_add_v32i16(md, _cvt_v32i8_v32i16(prev_max)), _set_v32i16(prev_offset)));
 
 		/* adjust offset */
-		prev_max = _sub(prev_max, _set(offset - prev_offset));
+		prev_max = _add(prev_max, _set(prev_offset - offset));
 		_print(max);
 		_print(prev_max);
 
@@ -1232,14 +1256,21 @@ struct trace_block_s trace_detect_max_block(
 		uint32_t mask_update = mask_max & ~((union sea_mask_u){
 			.mask = _mask(_eq(prev_max, max))
 		}).all;
+		debug("mask_update(%x)", mask_update);
 		if(mask_update != 0) {
 			/* max update occured at current block */
+			debug("blk(%p), len(%d), p(%d)", blk, MIN2(tail->p - b * BLK, BLK), b * BLK);
+			_print_v32i16(_add_v32i16(_add_v32i16(md, _cvt_v32i8_v32i16(prev_max)), _set_v32i16(offset)));
 			return((struct trace_block_s){
 				.blk = blk,
 				.len = MIN2(tail->p - b * BLK, BLK),
 				.p = b * BLK
 			});
 		}
+
+		/* windback a block */
+		max = prev_max;
+		offset = prev_offset;
 	}
 	return((struct trace_block_s){
 		.blk = blk,
@@ -1259,38 +1290,56 @@ struct trace_coord_s trace_detect_max_pos(
 {
 	/* load mask */
 	uint32_t mask_max = _tail(tail)->mask_max.all;
+	debug("mask_max(%x)", mask_max);
 
 	/* recalculate block */
-	union sea_mask_u max_mask_arr[BLK];
-	union sea_mask_u *max_mask_ptr = max_mask_arr;
+	union sea_mask_u mask_max_arr[BLK];
+	union sea_mask_u *mask_max_ptr = mask_max_arr;
 	{
 		fill_restore_fetch(this, b.blk);
 
 		#define _fill_block_leaf(_mask_ptr) { \
+			_dir_fetch(dir); \
 			if(_dir_is_right(dir)) { \
 				_fill_right(); \
 			} else { \
 				_fill_down(); \
 			} \
 			(_mask_ptr)++->mask = _mask(_eq(max, delta)); \
+			debug("mask(%x)", ((union sea_mask_u){ .mask = _mask(_eq(max, delta)) }).all); \
 		}
 
 		_fill_load_contexts(b.blk);
+		(void)offset;			/* to avoid warning */
 		for(int64_t a = 0; a < b.len; a++) {
-			_fill_block_leaf(max_mask_ptr);
+			_fill_block_leaf(mask_max_ptr);
 		}
 	}
 
 	/* determine max pos */
 	for(int64_t a = b.len-1; a >= 0; a--) {
-		if((max_mask_arr[a].all & mask_max) != 0) {
+		uint32_t mask_update = mask_max_arr[a].all & mask_max;
+		if(mask_update != 0) {
+			debug("p(%lld), q(%d)", b.p + a, tzcnt(mask_update) - BW/2);
 			return((struct trace_coord_s){
 				.p = b.p + a,
-				.q = tzcnt(max_mask_arr[a].all & mask_max) - BW/2
+				.q = tzcnt(mask_update) - BW/2
 			});
 		}
 	}
-	return((struct trace_coord_s){ 0, 0 });
+
+	/* not found in the block */
+	v32i16_t md = _load_v32i16(tail->v);
+	v32i16_t max = _cvt_v32i8_v32i16(_load(&(b.blk - 1)->sd.max));
+	md = _add_v32i16(md, max);
+	uint32_t mask = ((union sea_mask_u){
+		.mask = _mask_v32i16(_eq_v32i16(md, _set_v32i16(_hmax_v32i16(md))))
+	}).all;
+	debug("p(%d), q(%d)", b.p - 1, tzcnt(mask & mask_max) - BW/2);
+	return((struct trace_coord_s){
+		.p = b.p - 1,
+		.q = tzcnt(mask & mask_max) - BW / 2
+	});
 }
 
 /**
@@ -1315,10 +1364,10 @@ struct sea_trace_s *sea_dp_build_leaf(
 	head->p = c.p - _tail(tail)->p;
 	head->q = c.q;
 	head->head = NULL;
-	head->cigar = NULL;
+	head->cigar = wr_init(this, _tail(tail)->psum);
 	head->tail = _tail(tail);
 
-	return(NULL);
+	return((struct sea_trace_s *)head);
 }
 
 /**
@@ -1326,32 +1375,74 @@ struct sea_trace_s *sea_dp_build_leaf(
  */
 struct sea_trace_s *sea_dp_trace(
 	struct sea_dp_context_s *this,
-	struct sea_trace_s const *prev_head,
+	struct sea_trace_s *prev_head,
 	struct sea_clip_params_s const *clip)
 {
-#if 0
-	/* search if needed */
-	if(head->p == 0) {
-		struct sea_joint_head_s h = trace_search_max_pos(head->tail, tail);
-		head = &h;
-	}
+	/* state transition arrays */
+	uint64_t const diag_flag_array = 0x00010001<<3;
+	uint64_t const q_diff_array = 0x0fff5000;
+	uint64_t const q_term_array = 0x00c00000;
 
-	/* traceback */
+	struct sea_joint_head_s *head = _head(prev_head);
 	struct sea_joint_tail_s const *tail = head->tail;
-	while(tail != prev_tail) {
-		/* calc address */
+
+	do {
+		/* calc index */
+		int64_t p = tail->p + head->p;
+		int64_t q = head->q + BW/2;		/* offsetted by BW/2 */
+		int64_t a = p % BLK;			/* index in the block */
+
+		/* load direction array */
+		struct sea_block_s *blk = _last_block(tail) - ((tail->p - 1) / BLK) + (p / BLK);
+		union sea_dir_u dir = _dir_load(blk, a);
+
+		/* init diagonal flag */
+		uint32_t diag_flag = 0;
 
 		/* traceback loop */
 		while(p >= 0) {
-			;
+			/* load mask */
+			uint64_t mask = blk->mask[a].all;
+
+			/* 3-bit trace direction pointer flag in trace_flag[3..1] */
+			uint32_t trace_flag = (0x01 & (mask>>q)) | (0x02 & (mask>>(q + BW - 1)));
+			trace_flag = (trace_flag + trace_flag) | diag_flag;
+
+			/* update alignment writer */
+			// wr_push(this->w, this->ww, trace_flag);
+
+			/* state transition */
+			trace_flag |= _dir_is_down(dir)<<4;
+			diag_flag = 0x08 & (diag_flag_array>>trace_flag);
+			p--;
+			q += (int32_t)(q_diff_array<<trace_flag)>>30;
+
+			debug("trans_idx(%x), dir_flag(%x), diag_flag(%x), p(%lld), q(%lld), dq(%d)",
+				trace_flag, _dir_is_down(dir)<<4, diag_flag, p, q, (int32_t)(q_diff_array<<trace_flag)>>30);
+
+			_dir_windback(dir);
+			if(a-- == 0) {
+				/* load the previous block */
+				blk--;
+				a = BLK - 1;
+				dir = _dir_load(blk, a);
+				debug("p(%lld), arr(%x)", p, dir.dynamic.array);
+			}
 		}
 
-		/* update tail */
-		head = (struct sea_joint_head_s *)blk - 1;
+		/* adjust coordinates */
+		p -= diag_flag>>3;
+		q += (int32_t)(q_term_array<<(diag_flag | (_dir_is_down(dir)<<4)))>>30;
+
+		debug("p(%lld), q(%lld)", p, q);
+
+		/* update joint_head */
+		head = _phantom_head(blk);
+		head->p = p;
+		head->q = q - BW/2;
 		tail = head->tail;
-	}
-#endif
-	return(NULL);
+	} while(tail->internal == 1);
+	return(_trace(head));
 }
 
 /**
@@ -1426,7 +1517,7 @@ union sea_dir_u sea_init_create_dir_dynamic(
 	return((union sea_dir_u) {
 		.dynamic = {
 			.acc = 0,			/* zero independent of scoreing schemes */
-			.array = 0x80000000	/* (0, 0) -> (0, 1) */
+			.array = 0x01		/* (0, 0) -> (0, 1) */
 		}
 	});
 }
@@ -1715,12 +1806,13 @@ sea_t *sea_init(
 		.tail = (struct sea_joint_tail_s) {
 			.v = &ctx->md,
 			.max = 0,
-			.psum = 2,
-			.p = -BW,
+			.psum = 2 - BW,
+			.p = 0,
 			.curr = { 0 },
 			.rem = { 0 },
 			.init_alen = 0,
-			.init_blen = 0
+			.init_blen = 0,
+			.internal = 0
 		},
 		.rv = wr_rv_table[params_intl.aln_format],
 		.fw = wr_fw_table[params_intl.aln_format],
@@ -1959,7 +2051,7 @@ void unittest(void)
 		.seq_b_format = SEA_ASCII,
 		.seq_b_direction = SEA_FW_ONLY,
 		.aln_format = SEA_ASCII,
-		.xdrop = 100,
+		.xdrop = 10,
 		.score_matrix = SEA_SCORE_SIMPLE(2, 3, 5, 1)));
 	assert(ctx != NULL);
 
@@ -1980,9 +2072,12 @@ void unittest(void)
 	stat = sea_dp_fill(dp, stat.sec, &curr, &next, 32);
 	debug("stat.tail(%p), stat.rem(%p)", stat.sec, stat.rem);
 	log("max(%lld), psum(%lld), p(%d)", stat.sec->max, stat.sec->psum, stat.sec->p);
-	dump(dp, (void *)stat.sec - (void *)dp + sizeof(struct sea_joint_tail_s));
+	// dump(dp, (void *)stat.sec - (void *)dp + sizeof(struct sea_joint_tail_s));
 
-	// dump(stat.ptr, sizeof(struct sea_joint_tail_s));
+	struct sea_trace_s *trace = sea_dp_build_leaf(dp, stat.sec);
+	debug("p(%d), q(%d)", _head(trace)->p, _head(trace)->q);
+
+	trace = sea_dp_trace(dp, trace, NULL);
 
 	sea_dp_clean(dp);
 

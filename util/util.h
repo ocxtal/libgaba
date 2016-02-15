@@ -194,6 +194,7 @@ _static_assert(sizeof(struct sea_joint_head_s) == 32);
 _static_assert(offsetof(struct sea_joint_head_s, cigar) == offsetof(struct sea_trace_s, cigar));
 #define _head(x)				( (struct sea_joint_head_s *)(x) )
 #define _trace(x)				( (struct sea_trace_s *)(x) )
+#define _phantom_head(x)		( (struct sea_joint_head_s *)((uint8_t *)(x) + SEA_BLOCK_PHANTOM_OFFSET) - 1 )
 
 /**
  * @struct sea_joint_tail_s
@@ -214,8 +215,8 @@ struct sea_joint_tail_s {
 
 	/* section info */
 	struct sea_section_s curr;	/** (24) current section */
-	uint64_t _pad1;				/** (8) */
-	// struct sea_joint_tail_s *prev_tail;	/** (8) */
+	uint8_t internal;			/** (1) internal flag */
+	uint8_t _pad1[7];			/** (7) */
 
 	/* section info */
 	struct sea_section_s rem;	/** (24) */
