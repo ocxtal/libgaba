@@ -134,6 +134,18 @@ typedef struct v2i64_s {
 	} \
 )
 
+/* transpose */
+#define _lo_v2i64(a, b) ( \
+	(v2i64_t) { \
+		_mm_unpacklo_epi64((a).v1, (b).v1) \
+	} \
+)
+#define _hi_v2i64(a, b) ( \
+	(v2i64_t) { \
+		_mm_unpackhi_epi64((a).v1, (b).v1) \
+	} \
+)
+
 /* debug print */
 #define _print_v2i64(a) { \
 	debug("(v2i64_t) %s(%lld, %lld)", #a, _ext_v2i64(a, 1), _ext_v2i64(a, 0)); \

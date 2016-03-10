@@ -210,7 +210,7 @@ struct sea_seq_pair_s {
 };
 typedef struct sea_seq_pair_s sea_seq_pair_t;
 #define sea_build_seq_pair(_a, _alen, _b, _blen) ( \
-	(struct sea_seq_pair_s) { \
+	(struct sea_seq_pair_s){ \
 		.pa = (_a), \
 		.pb = (_b), \
 		.alen = (_alen), \
@@ -228,28 +228,26 @@ typedef struct sea_context_s sea_t;
 /**
  * @struct sea_section_s
  *
- * @brief section container
+ * @brief section container, a tuple of (id, length, head position).
  */
 struct sea_section_s {
-	uint64_t apos, bpos;	/** global position in genome */
-	uint32_t alen, blen;	/** length of a local segment */
-	uint64_t reserved;		/** reserved; MUST BE ZERO */
+	uint32_t id;				/** (4) section id */
+	uint32_t len;				/** (4) length of the  seq */
+	uint64_t base;				/** (8) base position of the head of the seq */
 };
 typedef struct sea_section_s sea_section_t;
-#define sea_build_section(_apos, _alen, _bpos, _blen) ( \
-	(struct sea_section_s) { \
-		.apos = (_apos), \
-		.bpos = (_bpos), \
-		.alen = (_alen), \
-		.blen = (_blen), \
-		.reserved = 0 \
+#define sea_build_section(_id, _base, _len) ( \
+	(struct sea_section_s){ \
+		.id = (_id), \
+		.base = (_base), \
+		.len = (_len) \
 	} \
 )
 
 /**
  * @type sea_dp_t
  *
- * @brief an aliast to `struct sea_dp_context_s`.
+ * @brief an alias to `struct sea_dp_context_s`.
  */
 typedef struct sea_dp_context_s sea_dp_t;
 
@@ -262,67 +260,38 @@ struct sea_fill_s {
 	/* coordinates */
 	int64_t psum;				/** (8) global p-coordinate of the tail of the section */
 	int32_t p;					/** (4) local p-coordinate of the tail of the section */
+	uint32_t ssum;				/** (4) */
 
-	/* max scores */
-	uint8_t _pad2[4];
+	/* status and max scores */
 	int64_t max;				/** (8) max */
+	uint32_t status;			/** (4) */
+
+	uint8_t _pad2[60];
 };
 typedef struct sea_fill_s sea_fill_t;
 
 /**
- * @struct sea_chain_status_s
- * @brief tail of the blocks and remaining section.
+ * @struct sea_path_section_s
  */
-struct sea_chain_status_s {
-	sea_fill_t const *sec;
-	sea_section_t const *rem;
+struct sea_path_section_s {
+	struct sea_section_s a;		/** (16) base section a */
+	struct sea_section_s b;		/** (16) base section b */
+	uint32_t apos, bpos;		/** (8) pos in the section */
+	uint32_t alen, blen;		/** (8) length of the segment */
 };
-typedef struct sea_chain_status_s sea_chain_status_t;
+typedef struct sea_path_section_s sea_path_section_t;
 
-/**
- * @struct sea_cigar_s
- */
-struct sea_cigar_s {
-	uint32_t len;
-	uint8_t c;
-	uint8_t _pad[3];
-};
-
-/**
- * @struct sea_trace_s
- */
-struct sea_trace_s {
-	uint8_t _pad1[16];
-	struct sea_cigar_s *cigar;	/** (8) cigar string container */
-	uint8_t _pad2[8];
-};
-typedef struct sea_trace_s sea_trace_t;
-
-#if 0
 /**
  * @struct sea_result_s
- *
- * @brief alignment trace container
- *
- * @detail
- * modified for graph-based aligner
  */
 struct sea_result_s {
-
-	/* results: score and path */
-	int64_t score;
-	struct sea_cigar_s const *cigar;		/** cigar pair array */
-	uint32_t string_length;
-	uint32_t path_length;
-
-	/* input seq information */
-	struct sea_seq_pair_s const *seq_pair;	/** pointer to sequence pair */
-
-	/* section information */
-	struct sea_section_s sections[1];
+	struct sea_path_section_s const *sec;
+	uint32_t *path;
+	uint32_t rem;
+	uint32_t unused;
+	uint32_t slen, plen;
 };
-typedef struct sea_result_s sea_res_t;
-#endif
+typedef struct sea_result_s sea_result_t;
 
 /**
  * @fn sea_init
@@ -349,9 +318,7 @@ void sea_clean(
  */
 struct sea_dp_context_s *sea_dp_init(
 	sea_t const *ctx,
-	sea_seq_pair_t const *p,
-	uint8_t const *guide,
-	uint64_t glen);
+	sea_seq_pair_t const *p);
 
 /**
  * @fn sea_dp_flush
@@ -360,9 +327,7 @@ struct sea_dp_context_s *sea_dp_init(
  */
 void sea_dp_flush(
 	sea_dp_t *this,
-	sea_seq_pair_t const *p,
-	uint8_t const *guide,
-	uint64_t glen);
+	sea_seq_pair_t const *p);
 
 /**
  * @fn sea_dp_clean
@@ -371,27 +336,29 @@ void sea_dp_clean(
 	sea_dp_t *this);
 
 /**
- * @fn sea_dp_build_root
+ * @fn sea_dp_fill_root
  */
-sea_chain_status_t sea_dp_build_root(
+sea_fill_t *sea_dp_fill_root(
 	sea_dp_t *this,
-	sea_section_t const *curr);
+	sea_section_t const *a,
+	uint32_t apos,
+	sea_section_t const *b,
+	uint32_t bpos);
 
 /**
  * @fn sea_dp_fill
  * @brief fill dp matrix inside section pairs
  */
-sea_chain_status_t sea_dp_fill(
+sea_fill_t *sea_dp_fill(
 	sea_dp_t *this,
 	sea_fill_t const *prev_sec,
-	sea_section_t const *curr,
-	sea_section_t const *next,
-	int64_t plim);
+	sea_section_t const *a,
+	sea_section_t const *b);
 
 /**
  * @fn sea_dp_merge
  */
-sea_chain_status_t sea_dp_merge(
+sea_fill_t *sea_dp_merge(
 	sea_dp_t *this,
 	sea_fill_t const *sec_list,
 	uint64_t tail_list_len);
@@ -400,16 +367,17 @@ sea_chain_status_t sea_dp_merge(
  * @struct sea_clip_params_s
  */
 struct sea_clip_params_s {
-	int64_t head_length;
-	int64_t tail_length;
-	char type;
+	char seq_a_head_type;
+	char seq_a_tail_type;
+	char seq_b_head_type;
+	char seq_b_tail_type;
 };
 typedef struct sea_clip_params_s sea_clip_params_t;
 
 /**
  * @macro SEA_CLIP_PARAMS
  */
-#define SEA_CLIP_PARAMS(...)		( &((struct sea_clip_params) { __VA_ARGS__ }) )
+#define SEA_CLIP_PARAMS(...)		( &((struct sea_clip_params_s) { __VA_ARGS__ }) )
 #define SEA_CLIP_NONE				( NULL )
 
 /**
@@ -419,43 +387,15 @@ typedef struct sea_clip_params_s sea_clip_params_t;
 typedef int (*sea_result_writer)(int c);
 
 /**
- * @fn sea_dp_build_leaf
- * @brief search max score position.
- */
-sea_trace_t *sea_dp_build_leaf(
-	sea_dp_t *this,
-	sea_fill_t const *sec);
-
-/**
  * @fn sea_dp_trace
  *
  * @brief generate alignment result string
  */
-sea_trace_t *sea_dp_trace(
+sea_result_t *sea_dp_trace(
 	sea_dp_t *this,
-	sea_trace_t *prev_sec,
+	sea_fill_t const *fw_tail,
+	sea_fill_t const *rv_tail,
 	sea_clip_params_t const *clip);
-
-/**
- * @fn sea_dp_joint
- *
- * @brief connect a root to a leaf of another tree
- */
-sea_trace_t *sea_dp_joint(
-	sea_dp_t *this,
-	sea_trace_t const *prev_sec,
-	sea_fill_t const *sec);
-
-/**
- * @fn sea_dp_dump_trace
- */
-void sea_dp_dump_trace(
-	sea_dp_t *this,
-	sea_trace_t const *fw_sec,
-	sea_trace_t const *fw_sec_term,
-	sea_trace_t const *rv_sec,
-	sea_trace_t const *rv_sec_term,
-	sea_result_writer writer);
 
 #if 0
 /**

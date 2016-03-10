@@ -22,6 +22,7 @@
 #ifdef __POPCNT__
 	#define popcnt(x)		_mm_popcnt_u64(x)
 #else
+	#warning "popcnt instruction is not enabled."
 	static inline
 	int popcnt(uint64_t n)
 	{
@@ -44,6 +45,7 @@
 	/** immintrin.h is already included */
 	#define tzcnt(x)		_tzcnt_u64(x)
 #else
+	#warning "tzcnt instruction is not enabled."
 	static inline
 	int tzcnt(uint64_t n)
 	{
@@ -64,6 +66,7 @@
 #ifdef __LZCNT__
 	#define lzcnt(x)		_lzcnt_u64(x)
 #else
+	#warning "lzcnt instruction is not enabled."
 	static inline
 	int lzcnt(uint64_t n)
 	{
@@ -203,199 +206,6 @@ void _loadb_ascii_2bit_fr(uint8_t *dst, uint8_t const *src, uint64_t idx, uint64
 		  "b"(len) \
 		: "%r8", "%xmm0", "%xmm1", "%xmm2", "%xmm3", "%xmm4", "%xmm5"); \
 }
-
-/**
- * alnwriters
- */
-
-
-/**
- * @macro wr_init
- *
- * sea_dp_malloc must be in scope
- */
-#define wr_init(_this, _psum) ({ \
-	struct sea_cigar_s *cigar = ; \
-})
-
-#if 0
-/**
- * @macro WR_TAIL_MARGIN, WR_HEAD_MARGIN
- * @brief length of the reserved buffer for clip sequence
- */
-#define WR_TAIL_MARGIN 		( 8 )
-#define WR_HEAD_MARGIN		( 8 + 4 + sizeof(struct sea_result) )
-
-/**
- * @enum _wr_type, _wr_fr
- * @brief writer tag, writer direction
- */
-enum _wr_type {
-	WR_ASCII	= 1,
-	WR_CIGAR	= 2,
-	WR_DIR		= 3
-};
-enum _wr_fr {
-	WR_FW		= 1,
-	WR_RV		= 2
-};
-
-/**
- * @enum _wr_char
- * @brief alignment character, used in ascii output format.
- */
-enum _wr_char {
-	M_CHAR = 0,
-	X_CHAR = 1,
-	I_CHAR = 2,
-	D_CHAR = 3
-};
-
-/**
- * writer function declarations (see io.s)
- */
-uint64_t _push_ascii_r(uint8_t *p, uint64_t dst, uint64_t src, uint8_t c);
-uint64_t _push_ascii_f(uint8_t *p, uint64_t dst, uint64_t src, uint8_t c);
-uint64_t _push_cigar_r(uint8_t *p, uint64_t dst, uint64_t src, uint8_t c);
-uint64_t _push_cigar_f(uint8_t *p, uint64_t dst, uint64_t src, uint8_t c);
-uint64_t _push_dir_r(uint8_t *p, uint64_t dst, uint64_t src, uint8_t c);
-uint64_t _push_dir_f(uint8_t *p, uint64_t dst, uint64_t src, uint8_t c);
-
-/**
- * @struct wr_cigar_pair
- */
-struct wr_cigar_pair {
-	uint32_t len 	: 29;
-	uint32_t c 		: 3;
-};
-#define _cig(ptr, member)		((struct wr_cigar_pair *)(ptr) - 1)->member
-#define _cig_all(ptr)			*((uint32_t *)(ptr) - 1)
-
-/**
- * @macro wr_init
- * @brief initialize alnwriter context
- */
-#define wr_init_intl_ascii(w, ww) { \
-	/** nothing to do */ \
-}
-#define wr_init_intl_cigar(w, ww) { \
-	/** forward writer */ \
-	_cig_all((ww).p + WR_HEAD_MARGIN) = 0; \
-	/** reverse writer */ \
-	_cig_all((ww).p + (ww).rpos) = 0; \
-}
-#define wr_init_intl_dir(w, ww) { \
-	/** nothing to do */ \
-}
-#define wr_init(w, ww, psum) { \
-	debug("wr_init"); \
-	(ww).size = wr_alloc_size(psum); \
-	(ww).p = malloc((ww).size); \
-	(ww).rpos = (ww).size - WR_TAIL_MARGIN; \
-	(ww).pos = (ww).rpos; \
-	(ww).len = 0; \
-	(ww).p[(ww).rpos] = '\0'; \
-	/** reverse writer must be set */ \
-	if((w).type == WR_ASCII) { \
-		wr_init_intl_ascii(w, ww); \
-	} else if((w).type == WR_CIGAR) { \
-		wr_init_intl_cigar(w, ww); \
-	} else if((w).type == WR_DIR) { \
-		wr_init_intl_dir(w, ww); \
-	} else { \
-		/** error */ \
-		log_error("invalid writer tag"); \
-	} \
-}
-
-/**
- * @macro wr_start
- * @brief initialize pos
- */
-#define wr_start(w, ww) { \
-	(ww).pos = ((w).fr == WR_RV) ? (ww).rpos : WR_HEAD_MARGIN; \
-}
-
-/**
- * @macro wr_push_intl, wr_push
- * @brief push an alignment character
- */
-#define wr_push_intl(w, ww, ret, dst, src, c) { \
-	uint64_t register unused1, unused2, unused3; \
-	__asm__ ( \
-		"call *%[fp]" \
-		: "=a"(ret),			/** output list */ \
-		  "=S"(unused1), \
-		  "=d"(unused2), \
-		  "=c"(unused3) \
-		: [fp]"r"((w).push),	/** input list */ \
-		  "D"((ww).p), \
-		  "S"((uint64_t)dst),	/** dst pointer */ \
-		  "d"((uint64_t)src),	/** src (unused) pointer */ \
-		  "c"(c) \
-		: "r8");				/** clobber */ \
-}
-#define wr_push(w, ww, c) { \
-	wr_push_intl(w, ww, (ww).pos, (ww).pos, (ww).pos, c); \
-	(ww).len++; \
-	/*debug("pushm: %c, pos(%lld)", (w).p[(w).pos], (w).pos);*/ \
-}
-
-/**
- * @macro wr_end
- * @brief update rpos
- */
-#define wr_end(w, ww) { \
-	(ww).pos = ((w).fr == WR_RV) ? (ww).pos : (ww).rpos; \
-}
-
-/**
- * @macro wr_finish
- */
-#define wr_finish_reverse_memcpy(dst, src, len) { \
-	uint8_t _src = (src), _dst = (dst); \
-	int64_t _len = (len); \
-	while(_len--) { *--_dst = *--_src; } \
-}
-#define wr_finish_intl_ascii(w, ww) { \
-	/** copy forward string from pos to rpos */ \
-	wr_finish_reverse_memcpy( \
-		(ww).p + (ww).rpos, \
-		(ww).p + (ww).pos, \
-		(ww).pos - WR_HEAD_MARGIN); \
-}
-#define wr_finish_intl_cigar(w, ww) { \
-	/** copy forward string from pos to rpos, converting to cigar string */ \
-	if(_cig((ww).p + (ww).rpos, c) == _cig((ww).p + (ww).pos, c)) { \
-		_cig((ww).p + (ww).pos, len) += _cig((ww).p + (ww).rpos, len); \
-	} else { \
-		(ww).pos += sizeof(uint32_t); \
-		_cig_all((ww).p + (ww).pos) = _cig_all((ww).p + (ww).rpos); \
-	} \
-	while((ww).pos >= WR_HEAD_MARGIN) { \
-		wr_push_intl(w, ww, (ww).rpos, (ww).rpos, (ww).pos, 0); \
-		(ww).pos -= sizeof(uint32_t); \
-	} \
-}
-#define wr_finish_intl_dir(w, ww) { \
-	/** copy forward string from pos to rpos */ \
-	wr_finish_reverse_memcpy( \
-		(ww).p + (ww).rpos, \
-		(ww).p + (ww).pos, \
-		(ww).pos - WR_HEAD_MARGIN); \
-}
-#define wr_finish(w, ww) { \
-	if((ww).tag == WR_ASCII) { \
-		wr_finish_intl_ascii(w, ww); \
-	} else if((ww).tag == WR_CIGAR) { \
-		wr_finish_intl_cigar(w, ww); \
-	} else if((ww).tag == WR_DIR) { \
-		wr_finish_intl_dir(w, ww); \
-	} else { \
-		log_error("invalid writer tag"); \
-	} \
-}
-#endif
 
 #endif /* #ifndef _ARCH_UTIL_H_INCLUDED */
 /**

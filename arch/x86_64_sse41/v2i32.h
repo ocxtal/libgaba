@@ -142,6 +142,18 @@ typedef struct v2i32_s {
 	(uint32_t) (0xff & _mm_movemask_epi8((a).v1)) \
 )
 
+/* transpose */
+#define _lo_v2i32(a, b) ( \
+	(v2i32_t) { \
+		_mm_unpacklo_epi32((a).v1, (b).v1) \
+	} \
+)
+#define _hi_v2i32(a, b) ( \
+	(v2i32_t) { \
+		_mm_shuffle_epi32(_mm_unpacklo_epi32((a).v1, (b).v1), 0x0e) \
+	} \
+)
+
 /* debug print */
 #define _print_v2i32(a) { \
 	debug("(v2i32_t) %s(%d, %d)", #a, _ext_v2i32(a, 1), _ext_v2i32(a, 0)); \

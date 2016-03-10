@@ -57,6 +57,9 @@ typedef struct v16_mask_s v16i8_mask_t;
 #define _bc_v16i8_v16i8(x)		(v16i8_t){ (x).v1 }
 #define _bc_v32i8_v16i8(x)		(v16i8_t){ (x).v1 }
 
+#define _cast_v2i64_v2i32(x)	(v2i32_t){ (x).v1 }
+#define _cast_v2i32_v2i64(x)	(v2i64_t){ (x).v1 }
+
 #endif /* _VECTOR_H_INCLUDED */
 /**
  * end of vector.h
