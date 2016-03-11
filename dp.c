@@ -648,7 +648,7 @@ struct sea_joint_tail_s *fill_create_tail(
 	uint8_t *bptr = _rd_bufb(this, 0, BW); \
 	/* load mask pointer */ \
 	/*union sea_mask_pair_u *mask_ptr = (_blk)->mask;*/ \
-	union sea_mask_u *mask_ptr = (_blk)->mask; \
+	union sea_mask_pair_u *mask_ptr = (_blk)->mask; \
 	/* load vector registers */ \
 	vec_t const mask = _set(0x07); \
 	vec_t register dh = _load(_pv(((_blk) - 1)->diff.dh)); \
@@ -677,17 +677,16 @@ struct sea_joint_tail_s *fill_create_tail(
  */
 #define _fill_body() { \
 	vec_t register t = _match(_loadu(aptr), _loadu(bptr)); \
-	/*_print(_loadu(aptr));*/ \
-	/*_print(_loadu(bptr));*/ \
-	/*_print(t);*/ \
+	_print(_loadu(aptr)); \
+	_print(_loadu(bptr)); \
 	t = _shuf(_load_sc(this, sb), t); \
+	_print(t); \
 	/*_print(_load_sc(this, sb));*/ \
-	mask_ptr++->mask = _mask(_gt(df, de)); \
 	t = _max(de, t); \
-	/*mask_ptr->pair.h.mask = _mask(_eq(t, de));*/ \
+	mask_ptr->pair.h.mask = _mask(_eq(t, de)); \
 	t = _max(df, t); \
-	/*mask_ptr->pair.v.mask = _mask(_eq(t, df));*/ \
-	/*mask_ptr++;*/ \
+	mask_ptr->pair.v.mask = _mask(_eq(t, df)); \
+	mask_ptr++; \
 	/*mask_ptr++->mask = _mask(_eq(t, df));*/ \
 	df = _sub(_max(_add(df, _load_sc(this, adjv)), t), dv); \
 	dv = _sub(dv, t); \
@@ -710,7 +709,8 @@ struct sea_joint_tail_s *fill_create_tail(
 	max = _max(max, delta); \
 	_print(max); \
 	_dir_update(dir, _vector, _sign); \
-	/*_print_v32i16(_add_v32i16(_cvt_v32i8_v32i16(delta), _load_v32i16(this->tail->v)));*/ \
+	_print_v32i16(_add_v32i16(_cvt_v32i8_v32i16(delta), _load_v32i16(this->tail->v))); \
+	_print_v32i16(_add_v32i16(_cvt_v32i8_v32i16(max), _load_v32i16(this->tail->v))); \
 }
 
 /**
@@ -1599,7 +1599,7 @@ void trace_calc_coordinates(
 	int32_t acnt = filled_count - bcnt;
 	v2i32_t ridx = _add_v2i32(
 		_load_v2i32(&(blk - 1)->aridx),
-		_seta_v2i32((BLK - q) - bcnt, q - acnt));
+		_seta_v2i32((BLK - 1 - q) - bcnt, q - acnt));
 
 	debug("acnt(%d), bcnt(%d)", acnt, bcnt);
 	_print_v2i32(_load_v2i32(&(blk - 1)->aridx));
@@ -1640,8 +1640,10 @@ void trace_search_max_pos(
 		#define _fill_block_leaf(_mask_ptr) { \
 			_dir_fetch(dir); \
 			if(_dir_is_right(dir)) { \
+				_fill_right_update_ptr(); \
 				_fill_right(); \
 			} else { \
+				_fill_down_update_ptr(); \
 				_fill_down(); \
 			} \
 			(_mask_ptr)++->mask = _mask(_eq(max, delta)); \
@@ -1652,6 +1654,7 @@ void trace_search_max_pos(
 		(void)offset;			/* to avoid warning */
 		for(int64_t i = 0; i < len; i++) {
 			_fill_block_leaf(mask_max_ptr);
+			_print_v32i16(_add_v32i16(_add_v32i16(_load_v32i16(tail->v), _cvt_v32i8_v32i16(max)), _set_v32i16(offset)));
 		}
 	}
 
@@ -1659,7 +1662,8 @@ void trace_search_max_pos(
 	for(int64_t i = len-1; i >= 0; i--) {
 		uint32_t mask_update = mask_max_arr[i].all & mask_max;
 		if(mask_update != 0) {
-			debug("p(%lld), q(%d)", this->ll.p + i, tzcnt(mask_update) - BW/2);
+			debug("i(%lld), p(%lld), q(%d)",
+				i, this->ll.p + i, tzcnt(mask_update) - BW/2);
 
 			trace_calc_coordinates(this, blk, i, mask_update);
 			return;
@@ -1698,6 +1702,7 @@ struct sea_joint_head_s *trace_create_head(
 	struct sea_joint_head_s *head = sea_dp_smalloc(
 		this,
 		sizeof(struct sea_joint_head_s));
+	debug("this(%p), head(%p), tail(%p)", this, head, tail);
 
 	/* search max block */
 	trace_search_max_block(this, tail);
@@ -1706,6 +1711,7 @@ struct sea_joint_head_s *trace_create_head(
 	trace_search_max_pos(this);
 
 	/* store coordinates to joint_head */
+	debug("this(%p), head(%p), tail(%p)", this, head, tail);
 	head->p = this->ll.p - tail->p;
 	head->q = this->ll.q - BW/2;
 	head->tail = tail;
@@ -1795,8 +1801,8 @@ void trace_update_context(
 		_load_v2i32(&this->ll.aridx),
 		_sel_v2i32(
 			_load_v2i32(&this->ll.a_update_mask),
-			_load_v2i32(&this->ll.alen),
-			_zero_v2i32()));
+			_zero_v2i32(),
+			_load_v2i32(&this->ll.alen)));
 	_store_v2i32(&this->ll.aridx, ridx);
 	_store_v2i32(&this->ll.asridx, ridx);
 
@@ -1816,35 +1822,37 @@ void trace_update_context(
 }
 
 /**
- * @macro _trace_forward_load_context
+ * @macro _trace_load_context, _trace_forward_load_context
  */
-#define _trace_forward_load_context(t) \
-	struct sea_block_s const *blk = (t)->ll.blk; \
-	v2i32_t update_mask = _load_v2i32(&(t)->ll.a_update_mask); \
+#define _trace_load_context(t) \
+	v2i32_t update_mask = _zero_v2i32(); \
 	v2i32_t len = _load_v2i32(&(t)->ll.alen); \
 	v2i32_t ridx = _load_v2i32(&(t)->ll.aridx); \
 	v2i32_t sridx = _load_v2i32(&(t)->ll.asridx); \
-	uint32_t *path = (t)->ll.fw_path; \
-	uint64_t rem = (t)->ll.fw_rem; \
+	struct sea_block_s const *blk = (t)->ll.blk; \
 	int64_t psum = (t)->ll.psum; \
 	int64_t p = (t)->ll.p; \
-	uint64_t q = (t)->ll.q;
+	uint64_t q = (t)->ll.q; \
+	uint64_t prev_c = 0;
+#define _trace_forward_load_context(t) \
+	uint32_t *path = (t)->ll.fw_path; \
+	uint64_t rem = (t)->ll.fw_rem;
 
 /**
  * @macro _trace_load_block
  */
 #define _trace_load_block(_local_idx) \
 	union sea_dir_u dir = _dir_load(blk, (_local_idx)); \
-	union sea_mask_u const *mask_ptr = &blk->mask[(_local_idx)]; \
+	union sea_mask_pair_u const *mask_ptr = &blk->mask[(_local_idx)]; \
 	uint64_t path_array = 0;
 
 /**
  * @macro _trace_test_cap_loop
  *
- * @brief returns non-zero if ridx > len
+ * @brief returns non-zero if ridx >= len
  */
 #define _trace_test_cap_loop() ({ \
-	update_mask = _lt_v2i32(len, ridx); \
+	update_mask = _lt_v2i32(ridx, len); \
 	_print_v2i32(len); \
 	_print_v2i32(ridx); \
 	_print_v2i32(_sub_v2i32(len, ridx)); \
@@ -1874,10 +1882,11 @@ void trace_update_context(
 #define _trace_cap_update_index() { \
 	v2i32_t const ridx_down = _seta_v2i32(1, 0); \
 	v2i32_t const ridx_right = _seta_v2i32(0, 1); \
-	_print_v2i32(_sub_v2i32(len, ridx)); \
-	debug("cap update index p(%lld), psum(%lld)", p, psum); \
+	debug("cap update index dir(%d) p(%lld), psum(%lld)", \
+		_dir_is_down(dir), p, psum); \
 	ridx = _add_v2i32(ridx, \
 		_dir_is_down(dir) ? ridx_down : ridx_right); \
+	_print_v2i32(_sub_v2i32(len, ridx)); \
 	p--; \
 	psum--; \
 }
@@ -1885,17 +1894,38 @@ void trace_update_context(
 /**
  * @macro _trace_forward_body_mask
  */
-#define _trace_forward_body_mask(_mask) { \
-	uint32_t _c = 0x01 & ((_mask)>>q); \
+#define _trace_forward_body_mask(_mask) ({ \
+	uint64_t _mask_h = (_mask)>>q; \
+	uint64_t _mask_v = _mask_h>>32; \
+	uint64_t _c = (0x01 & _mask_v) | prev_c; \
 	path_array = (path_array<<1) | _c; \
 	q += _dir_is_down(dir); \
 	q -= _c; \
-	debug("v(%d), q(%llu), down(%d), mask(%x), path_array(%llx)", _c, q, _dir_is_down(dir), _mask, path_array); \
+	prev_c = 0x01 & ~(prev_c | _mask_h | _mask_v); \
+	debug("c(%lld), prev_c(%llu), q(%llu), down(%d), mask(%llx), path_array(%llx)", \
+		_c, prev_c, q, _dir_is_down(dir), _mask, path_array); \
+	_c; \
+})
+#define _trace_bulk_forward_body() { \
+	_trace_forward_body_mask(mask_ptr->all); \
+	/* update pointers */ \
+	mask_ptr--; \
 	_dir_windback(dir); \
 }
-#define _trace_forward_body() { \
-	_trace_forward_body_mask(mask_ptr->all); \
+#define _trace_cap_forward_body() { \
+	uint64_t _c = _trace_forward_body_mask(mask_ptr->all); \
+	/* update ridx */ \
+	v2i32_t const ridx_down = _seta_v2i32(1, 0); \
+	v2i32_t const ridx_right = _seta_v2i32(0, 1); \
+	debug("cap update index dir(%d) p(%lld), psum(%lld)", \
+		_dir_is_down(dir), p, psum); \
+	ridx = _add_v2i32(ridx, (_c == 1) ? ridx_down : ridx_right); \
+	_print_v2i32(_sub_v2i32(len, ridx)); \
+	/* update pointers and coordinates */ \
 	mask_ptr--; \
+	_dir_windback(dir); \
+	p--; \
+	psum--; \
 }
 
 /**
@@ -1918,8 +1948,6 @@ void trace_update_context(
 	debug("path_adv(%d)", ((rem + (_traced_count)) & BLK) != 0 ? 1 : 0); \
 	rem = (rem + (_traced_count)) % BLK; \
 	debug("i(%lld), rem(%lld)", (int64_t)(_traced_count), rem); \
-	/* load the previous block */ \
-	blk--; \
 }
 #define _trace_reverse_update_path() { \
 	/* load previous array */ \
@@ -1929,6 +1957,14 @@ void trace_update_context(
 	/* write back array */ \
 	path[0] = path_array<<rem; \
 	path[1] = prev_array | (path_array<<(BLK - rem)); \
+	/* load the previous block */ \
+	blk--; \
+}
+
+/**
+ * @macro _trace_windback_block
+ */
+#define _trace_windback_block() { \
 	/* load the previous block */ \
 	blk--; \
 }
@@ -1947,10 +1983,29 @@ void trace_update_context(
  * @macro _trace_forward_save_context
  */
 #define _trace_forward_save_context(t) { \
+	if(prev_c != 0) { \
+		/* push remaining diagonal path */ \
+		debug("push remaining diagonal path"); \
+		uint64_t path_array = 1; \
+		_trace_forward_update_path(1); \
+		/* decrement j and update reload mask */ \
+		_print_v2i32(_sub_v2i32(len, ridx)); \
+		debug("cap update index p(%lld), psum(%lld)", p, psum); \
+		ridx = _add_v2i32(ridx, _seta_v2i32(1, 0)); \
+		update_mask = _lt_v2i32(ridx, len); \
+		/* update q-coordinate */ \
+		q += _dir_is_down(dir) - 1; \
+		/* decrement coordinates */ \
+		p--; \
+		psum--; \
+	} \
 	(t)->ll.blk = blk; \
 	_store_v2i32(&(t)->ll.a_update_mask, update_mask); \
 	_store_v2i32(&(t)->ll.aridx, ridx); \
 	_store_v2i32(&(t)->ll.asridx, sridx); \
+	_print_v2i32(update_mask); \
+	_print_v2i32(ridx); \
+	_print_v2i32(sridx); \
 	(t)->ll.fw_path = path; \
 	(t)->ll.fw_rem = rem; \
 	(t)->ll.psum = psum; \
@@ -1968,12 +2023,18 @@ static
 void trace_forward_trace(
 	struct sea_dp_context_s *this)
 {
-	/* here the t must hold appropriate p-coordinate and ridx. */
 	/* load context onto registers */
+	_trace_load_context(this);
 	_trace_forward_load_context(this);
+	debug("start traceback loop p(%lld), psum(%lld), q(%llu)", p, psum, q);
+
+	if(_trace_test_cap_loop() != 0xff) {
+		/* no need to adjust rem */
+		debug("cap test failed at the head of the traceback loop");
+		return;
+	}
 
 	while(1) {
-		debug("start traceback loop p(%lld), psum(%lld), q(%llu)", p, psum, q);
 		/* cap trace at the head */ {
 			int64_t loop_count = (p + 1) % BLK;		/* loop_count \in (1 .. BLK), 0 is invalid */
 
@@ -1982,18 +2043,20 @@ void trace_forward_trace(
 
 			/* cap trace loop */
 			for(int64_t i = 0; i < loop_count; i++) {
-				if(_trace_test_cap_loop() != 0) {
+				_trace_cap_forward_body();
+
+				/* check if the section invasion occurred */
+				if(_trace_test_cap_loop() != 0xff) {
 					debug("cap test failed, i(%lld)", i);
 					_trace_forward_update_path(i);
 					_trace_forward_save_context(this);
 					return;
 				}
-				_trace_cap_update_index();
-				_trace_forward_body();
 			}
 
 			/* update rem, path, and block */
 			_trace_forward_update_path(loop_count);
+			_trace_windback_block();
 		}
 
 		/* bulk trace */
@@ -2004,12 +2067,13 @@ void trace_forward_trace(
 			/* bulk trace loop */
 			_trace_bulk_update_index();
 			for(int64_t i = 0; i < BLK; i++) {
-				_trace_forward_body();
+				_trace_bulk_forward_body();
 			}
 			debug("bulk loop end p(%lld), psum(%llu), q(%llu)", p, psum, q);
 
 			/* update path and block */
 			_trace_forward_update_path(BLK);
+			_trace_windback_block();
 		}
 
 		/* bulk trace test failed, continue to cap trace */
@@ -2019,27 +2083,21 @@ void trace_forward_trace(
 
 			/* cap trace loop */
 			for(int64_t i = 0; i < BLK; i++) {
-				if(_trace_test_cap_loop() != 0) {
+				_trace_cap_forward_body();
+
+				/* check if the section invasion occurred */
+				if(_trace_test_cap_loop() != 0xff) {
 					debug("cap test failed, i(%lld)", i);
 					_trace_forward_update_path(i);
 					_trace_forward_save_context(this);
 					return;		/* exit is here */
 				}
-				_trace_cap_update_index();
-				_trace_forward_body();
 			}
 			debug("bulk loop end p(%lld), psum(%llu), q(%llu)", p, psum, q);
 
 			/* update path and block */
 			_trace_forward_update_path(BLK);
-		}
-
-		if(psum < 0) {
-			debug("reached the root, p(%lld), psum(%lld), q(%llu)", p, psum, q);
-			_print_v2i32(len);
-			_print_v2i32(ridx);
-			_trace_forward_save_context(this);
-			return;
+			_trace_windback_block();
 		}
 
 		/* reload tail pointer */
@@ -2105,8 +2163,9 @@ void trace(
 	this->ll.btail = head->tail;
 
 	/* set update mask */
-	_store_v2i32(&this->ll.a_update_mask, _set_v2i32(0xffff));
-	_store_v2i32(&this->ll.alen, _zero_v2i32());
+	v2i32_t const z = _zero_v2i32();
+	_store_v2i32(&this->ll.a_update_mask, z);
+	_store_v2i32(&this->ll.alen, z);
 
 	void (*body)(struct sea_dp_context_s *this) = (
 		(dir == 0) ? trace_forward_trace : trace_forward_trace
@@ -2118,17 +2177,16 @@ void trace(
 	/* until the pointer reaches the root of the matrix */
 	while(this->ll.psum >= 0) {
 		/* update section info */
-		if(this->ll.a_update_mask != 0) {
+		if(this->ll.a_update_mask == 0) {
 			trace_load_section_a(this);
 		}
-		if(this->ll.b_update_mask != 0) {
+		if(this->ll.b_update_mask == 0) {
 			trace_load_section_b(this);
 		}
 		trace_update_context(this);
 
 		/* fragment trace */
 		body(this);
-
 		debug("p(%d), psum(%d), q(%d)", this->ll.p, this->ll.psum, this->ll.q);
 
 		/* push section info to section array */
@@ -2160,12 +2218,13 @@ struct sea_result_s *sea_dp_trace(
 	rv_tail = (rv_tail == NULL) ? _fill(this->tail) : rv_tail;
 
 	/* calculate max total path length */
-	uint64_t psum = _tail(fw_tail)->psum + _tail(rv_tail)->psum;
+	uint64_t psum = _tail(fw_tail)->psum + _tail(rv_tail)->psum + BLK;
 	uint64_t ssum = _tail(fw_tail)->ssum + _tail(rv_tail)->ssum;
 
 	/* malloc trace working area */
 	uint64_t path_len = roundup((psum + 1) / 32, 4);
 	uint64_t sec_len = 2 * ssum;
+	debug("psum(%lld), path_len(%llu), sec_len(%llu)", psum, path_len, sec_len);
 
 	uint64_t path_size = sizeof(uint32_t) * path_len;
 	uint64_t sec_size = sizeof(struct sea_path_section_s) * sec_len;
@@ -2507,7 +2566,11 @@ sea_t *sea_init(
 			.sd = sea_init_create_small_delta(params_intl.score_matrix),
 			.ch = sea_init_create_char_vector(),
 			.aridx = 0,
-			.bridx = 0
+			.bridx = 0,
+			.last_mask.pair = {
+				.h.all = 0x0000ffff,
+				.v.all = 0xffff0000
+			}
 		},
 		.tail = (struct sea_joint_tail_s) {
 			.v = &ctx->md,
@@ -2588,12 +2651,15 @@ int32_t sea_dp_add_stack(
 	uint64_t size = MEM_INIT_SIZE<<(this->mem_cnt + 1);
 	if(ptr == NULL) {
 		ptr = (uint8_t *)sea_aligned_malloc(size, MEM_ALIGN_SIZE);
+		debug("ptr(%p)", ptr);
 	}
 	if(ptr == NULL) {
 		return(SEA_ERROR_OUT_OF_MEM);
 	}
 	this->mem_array[this->mem_cnt++] = this->stack_top = ptr;
 	this->stack_end = this->stack_top + size - MEM_MARGIN_SIZE;
+	debug("stack_top(%p), stack_end(%p), size(%llu)",
+		this->stack_top, this->stack_end, size);
 	return(SEA_SUCCESS);
 }
 
@@ -2635,11 +2701,13 @@ void *sea_dp_malloc(
 	size = roundup(size, 16);
 
 	/* malloc */
+	debug("this(%p), stack_top(%p), size(%llu)", this, this->stack_top, size);
 	if((this->stack_end - this->stack_top) < size) {
 		if(this->mem_size < size) { this->mem_size = size; }
 		if(sea_dp_add_stack(this) != SEA_SUCCESS) {
 			return(NULL);
 		}
+		debug("stack_top(%p)", this->stack_top);
 	}
 	this->stack_top += size;
 	return((void *)(this->stack_top - size));
@@ -2654,10 +2722,8 @@ void *sea_dp_smalloc(
 	struct sea_dp_context_s *this,
 	uint64_t size)
 {
-	// assert(size < 256);
-
-	this->stack_top += size;
-	return((void *)(this->stack_top - size));
+	debug("this(%p), stack_top(%p)", this, this->stack_top);
+	return((void *)((this->stack_top += roundup(size, 16)) - roundup(size, 16)));
 }
 
 /**
@@ -2722,10 +2788,10 @@ struct sea_result *sea_align_guided(
 #include <assert.h>
 void unittest(void)
 {
-	// char const *a = "ACGTACGTACGTACGTCCCCGGGCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC";
-	// char const *b = "ACGTACGTACGTACGTGCCCGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG";
-	char const *a = "ACGTAAAAAAAAAAAAAAAA";
-	char const *b = "ACGTCCCCCCCCCCCCCCCC";
+	char const *a = "ACGTACGTCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC";
+	char const *b = "AAACGTACGTGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG";
+	// char const *a = "ACGTAAAAAAAAAAAAAAAA";
+	// char const *b = "ACGTCCCCCCCCCCCCCCCC";
 
 	/* sea_init */
 	sea_t *ctx = sea_init(SEA_PARAMS(
@@ -2745,10 +2811,10 @@ void unittest(void)
 	assert(dp != NULL);
 
 	struct sea_section_s asec = sea_build_section(2, 0, 4);
-	struct sea_section_s atail = sea_build_section(3, 4, 16);
+	struct sea_section_s atail = sea_build_section(3, 4, strlen(a) - 4);
 
 	struct sea_section_s bsec = sea_build_section(4, 0, 4);
-	struct sea_section_s btail = sea_build_section(5, 4, 16);
+	struct sea_section_s btail = sea_build_section(5, 4, strlen(b) - 4);
 
 	struct sea_fill_s *f = sea_dp_fill_root(dp, &asec, 0, &bsec, 0);
 	struct sea_fill_s *fmax = f;

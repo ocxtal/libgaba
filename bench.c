@@ -168,8 +168,8 @@ int main(int argc, char *argv[])
 		.xdrop = 100,
 		.score_matrix = SEA_SCORE_SIMPLE(2, 3, 5, 1)));
 	sea_seq_pair_t seq = sea_build_seq_pair(a, strlen(a), b, strlen(b));
-	struct sea_section_s curr = sea_build_section(0, strlen(a), 0, strlen(b));
-	struct sea_section_s next = sea_build_section(0, strlen(a), 0, strlen(b));
+	struct sea_section_s asec = sea_build_section(1, 0, strlen(a));
+	struct sea_section_s bsec = sea_build_section(2, 0, strlen(b));
 
 	bench_init(total);
 
@@ -178,13 +178,13 @@ int main(int argc, char *argv[])
 	 */
 	int64_t score = 0;
 	for(i = 0; i < p.cnt; i++) {
-		sea_dp_t *dp = sea_dp_init(ctx, &seq, NULL, 0);
+		sea_dp_t *dp = sea_dp_init(ctx, &seq);
 
 		bench_start(total);
-		
-		struct sea_chain_status_s stat = sea_dp_build_root(dp, &curr);
-		stat = sea_dp_fill(dp, stat.sec, &curr, &next, strlen(a) + strlen(b));
-		score += stat.sec->max;
+
+		struct sea_fill_s *f = sea_dp_fill_root(dp, &asec, 0, &bsec, 0);
+		struct sea_result_s *r = sea_dp_trace(dp, f, NULL, NULL);
+		score += f->max;
 
 		bench_end(total);
 
