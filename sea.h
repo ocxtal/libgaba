@@ -205,14 +205,14 @@ typedef struct sea_params_s sea_params_t;
  * @brief ref-read pair
  */
 struct sea_seq_pair_s {
-	void const *pa, *pb;		/** (16) */
+	void const *a, *b;			/** (16) */
 	uint64_t alen, blen;		/** (16) */
 };
 typedef struct sea_seq_pair_s sea_seq_pair_t;
 #define sea_build_seq_pair(_a, _alen, _b, _blen) ( \
 	(struct sea_seq_pair_s){ \
-		.pa = (_a), \
-		.pb = (_b), \
+		.a = (_a), \
+		.b = (_b), \
 		.alen = (_alen), \
 		.blen = (_blen) \
 	} \

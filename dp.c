@@ -1,6 +1,6 @@
 
 /**
- * @file branch2.c
+ * @file dp.c
  *
  * @brief libsea3 API implementations
  *
@@ -16,9 +16,22 @@
 #define _VECTOR_ALIAS_PREFIX	v32i8
 #include "arch/vector_alias.h"
 
-/* include utils */
+/* import utils */
 #include "util/util.h"
 
+/* import unittest */
+#define UNITTEST_UNIQUE_ID			33
+
+#ifdef TEST
+/* use auto-generated main function to run tests */
+#define UNITTEST 					1
+#define UNITTEST_ALIAS_MAIN			1
+#endif
+
+#include  "util/unittest.h"
+
+
+/* constants */
 #define BW 							( 32 )
 #define BLK 						( 32 )
 #define MIN_BULK_BLOCKS				( 32 )
@@ -31,7 +44,7 @@
 static int32_t sea_dp_add_stack(struct sea_dp_context_s *this);
 static void *sea_dp_malloc(struct sea_dp_context_s *this, uint64_t size);
 static void *sea_dp_smalloc(struct sea_dp_context_s *this, uint64_t size);
-static void sea_dp_free(struct sea_dp_context_s *this, void *ptr);
+// static void sea_dp_free(struct sea_dp_context_s *this, void *ptr);
 
 
 /**
@@ -75,7 +88,7 @@ static void sea_dp_free(struct sea_dp_context_s *this, void *ptr);
 #define _dir_fetch(_dir) { \
 	(_dir).dynamic.array <<= 1; \
 	(_dir).dynamic.array |= (uint32_t)((_dir).dynamic.acc < 0); \
-	debug("fetched dir(%x)", (_dir).dynamic.array); \
+	debug("fetched dir(%x), %s", (_dir).dynamic.array, _dir_is_down(dir) ? "go down" : "go right"); \
 }
 /**
  * @macro _dir_update
@@ -295,7 +308,7 @@ void fill_bulk_fetch(
 	#define _ra(x)		( rev((x), this->rr.p.alen) )
 	rd_load(this->r.loada,
 		_rd_bufa(this, BW, BLK),			/* dst */
-		this->rr.p.pa,						/* src */
+		this->rr.p.a,						/* src */
 		_ra(this->rr.atail - (blk - 1)->aridx),/* pos */
 		this->rr.p.alen,					/* lim */
 		BLK);								/* len */
@@ -306,7 +319,7 @@ void fill_bulk_fetch(
 	_store(_rd_bufb(this, 0, BW), b);
 	rd_load(this->r.loadb,
 		_rd_bufb(this, BW, BLK),			/* dst */
-		this->rr.p.pb,						/* src */
+		this->rr.p.b,						/* src */
 		this->rr.btail - (blk - 1)->bridx,	/* pos */
 		this->rr.p.blen,					/* lim */
 		BLK);								/* len */
@@ -349,7 +362,7 @@ void fill_cap_fetch(
 	#define _ra(x)		( rev((x), this->rr.p.alen) )
 	rd_load(this->r.loada,
 		_rd_bufa(this, BW, _lo32(len)),		/* dst */
-		this->rr.p.pa,						/* src */
+		this->rr.p.a,						/* src */
 		_ra(this->rr.atail - _lo32(ridx)),	/* pos */
 		this->rr.p.alen,					/* lim */
 		_lo32(len));						/* len */
@@ -360,7 +373,7 @@ void fill_cap_fetch(
 	_store(_rd_bufb(this, 0, BW), b);
 	rd_load(this->r.loadb,
 		_rd_bufb(this, BW, _hi32(len)),		/* dst */
-		this->rr.p.pb,						/* src */
+		this->rr.p.b,						/* src */
 		this->rr.btail - _hi32(ridx),		/* pos */
 		this->rr.p.blen,					/* lim */
 		_hi32(len));						/* len */
@@ -412,7 +425,7 @@ struct sea_joint_block_s fill_init_fetch(
 		#define _ra(x)		( rev((x), this->rr.p.alen) )
 		rd_load(this->r.loada,
 			_rd_bufa(this, BW, _lo32(len)),		/* dst */
-			this->rr.p.pa,						/* src */
+			this->rr.p.a,						/* src */
 			_ra(this->rr.atail - _lo32(ridx)),	/* pos */
 			this->rr.p.alen,					/* lim */
 			_lo32(len));						/* len */
@@ -423,7 +436,7 @@ struct sea_joint_block_s fill_init_fetch(
 		_store(_rd_bufb(this, 0, BW), b);
 		rd_load(this->r.loadb,
 			_rd_bufb(this, BW, _hi32(len)),		/* dst */
-			this->rr.p.pb,						/* src */
+			this->rr.p.b,						/* src */
 			this->rr.btail - _hi32(ridx),		/* pos */
 			this->rr.p.blen,					/* lim */
 			_hi32(len));						/* len */
@@ -587,9 +600,14 @@ struct sea_joint_tail_s *fill_create_tail(
 	this->stack_top = (void *)(tail + 1);	/* write back stack_top */
 	tail->v = prev_tail->v;					/* copy middle deltas */
 
+	/* update p */
+	int64_t np = p - MAX2(0, MIN2(PSUM_BASE - prev_tail->psum, p));
+	debug("p(%lld), prev_tail->p(%lld), np(%lld)", p, prev_tail->psum, np);
+
 	/* save misc to joint_tail */
 	tail->psum = p + prev_tail->psum;
-	tail->p = p + MIN2(prev_tail->psum - PSUM_BASE, 0);
+	tail->p = np;
+	// tail->p = MAX3(p, PSUM_BASE - prev_tail->psum, 0);
 	tail->ssum = prev_tail->ssum + 1;
 	tail->stat = stat;
 	tail->tail = prev_tail;					/* to treat tail chain as linked list */
@@ -724,7 +742,6 @@ struct sea_joint_tail_s *fill_create_tail(
 	aptr++; \
 }
 #define _fill_right() { \
-	debug("go right"); \
 	dh = _bsl(dh, 1);	/* shift left dh */ \
 	df = _bsl(df, 1);	/* shift left df */ \
 	_fill_body();		/* update vectors */ \
@@ -737,7 +754,6 @@ struct sea_joint_tail_s *fill_create_tail(
 	bptr--; \
 }
 #define _fill_down() { \
-	debug("go down"); \
 	dv = _bsr(dv, 1);	/* shift right dv */ \
 	de = _bsr(de, 1);	/* shift right de */ \
 	_fill_body();		/* update vectors */ \
@@ -2519,7 +2535,7 @@ sea_t *sea_init(
 	/* restore defaults */
 	sea_init_restore_default_params(&params_intl);
 
-	/* malloc sea_context */
+	/* malloc sea_context_s */
 	struct sea_context_s *ctx = (struct sea_context_s *)sea_aligned_malloc(
 		sizeof(struct sea_context_s),
 		MEM_ALIGN_SIZE);
@@ -2726,6 +2742,7 @@ void *sea_dp_smalloc(
 	return((void *)((this->stack_top += roundup(size, 16)) - roundup(size, 16)));
 }
 
+#if 0
 /**
  * @fn sea_dp_free
  */
@@ -2737,6 +2754,7 @@ void sea_dp_free(
 	/* nothing to do */
 	return;
 }
+#endif
 
 /**
  * @fn sea_dp_clean
@@ -2755,45 +2773,22 @@ void sea_dp_clean(
 	return;
 }
 
-#if 0
-/**
- * @fn sea_align_dynamic
- */
-struct sea_result *sea_align_dynamic(
-	struct sea_context_s const *ctx,
-	struct sea_seq_pair_s const *seq,
-	struct sea_checkpoint_s const *cp,
-	uint64_t cplen)
-{
-	return(NULL);
-}
-
-/**
- * @fn sea_align_guided
- */
-struct sea_result *sea_align_guided(
-	struct sea_context_s const *ctx,
-	struct sea_seq_pair_s const *seq,
-	struct sea_checkpoint_s const *cp,
-	uint64_t cplen,
-	uint8_t const *guide,
-	uint64_t glen)
-{
-	return(NULL);
-}
-#endif
-
 /* unittests */
 #ifdef TEST
-#include <assert.h>
-void unittest(void)
-{
-	char const *a = "ACGTACGTCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC";
-	char const *b = "AAACGTACGTGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG";
-	// char const *a = "ACGTAAAAAAAAAAAAAAAA";
-	// char const *b = "ACGTCCCCCCCCCCCCCCCC";
+#include <string.h>
 
-	/* sea_init */
+/**
+ * @fn unittest_build_context
+ * @brief build context for unittest
+ */
+static
+void *unittest_build_context(void *params)
+{
+	struct sea_score_s const *score = (params != NULL)
+		? (struct sea_score_s const *)params
+		: SEA_SCORE_SIMPLE(2, 3, 5, 1);
+
+	/* build context */
 	sea_t *ctx = sea_init(SEA_PARAMS(
 		.seq_a_format = SEA_ASCII,
 		.seq_a_direction = SEA_FW_ONLY,
@@ -2801,53 +2796,215 @@ void unittest(void)
 		.seq_b_direction = SEA_FW_ONLY,
 		.aln_format = SEA_ASCII,
 		.xdrop = 10,
-		.score_matrix = SEA_SCORE_SIMPLE(2, 3, 5, 1)));
-	assert(ctx != NULL);
+		.score_matrix = score));
+	return((void *)ctx);
+}
 
-	/* build dp context */
-	sea_seq_pair_t seq = sea_build_seq_pair(a, strlen(a), b, strlen(b));
-
-	sea_dp_t *dp = sea_dp_init(ctx, &seq);
-	assert(dp != NULL);
-
-	struct sea_section_s asec = sea_build_section(2, 0, 4);
-	struct sea_section_s atail = sea_build_section(3, 4, strlen(a) - 4);
-
-	struct sea_section_s bsec = sea_build_section(4, 0, 4);
-	struct sea_section_s btail = sea_build_section(5, 4, strlen(b) - 4);
-
-	struct sea_fill_s *f = sea_dp_fill_root(dp, &asec, 0, &bsec, 0);
-	struct sea_fill_s *fmax = f;
-	log("max(%lld), psum(%lld), p(%d)", f->max, f->psum, f->p);
-	for(int i = 0; i < 2; i++) {
-		f = sea_dp_fill(dp, f, &atail, &btail);
-		log("max(%lld), psum(%lld), p(%d)", f->max, f->psum, f->p);
-		fmax = (f->max >= fmax->max) ? f : fmax;
-	}
-
-	log("max(%lld), psum(%lld), p(%d)", fmax->max, fmax->psum, fmax->p);
-	struct sea_result_s *res = sea_dp_trace(dp, fmax, NULL, NULL);
-	debug("slen(%d), plen(%d)", res->slen, res->plen);
-
-	sea_dp_clean(dp);
-
-	/* sea_clean */
-	sea_clean(ctx);
-
+/**
+ * @fn unittest_clean_context
+ */
+static
+void unittest_clean_context(void *ctx)
+{
+	sea_clean((struct sea_context_s *)ctx);
 	return;
 }
 
-#endif
+/**
+ * @struct unittest_seqs_s
+ * @brief sequence container
+ */
+struct unittest_seqs_s {
+	char const *a;
+	char const *b;
+};
+#define unittest_seq_pair(_a, _b) ( \
+	(void *)&((struct unittest_seqs_s const){ \
+		.a = _a "GGGGGGGGGGGGGGGG", \
+		.b = _b "CCCCCCCCCCCCCCCC" \
+	}) \
+)
 
-#ifdef MAIN
-#include <stdio.h>
-int main(void)
+/**
+ * @struct unittest_sections_s
+ * @brief section container
+ */
+struct unittest_sections_s {
+	struct sea_seq_pair_s seq;
+	struct sea_section_s asec, atail, bsec, btail;
+};
+
+/**
+ * @fn unittest_build_seqs
+ * @brief build seq_pair and sections
+ */
+static
+void *unittest_build_seqs(void *params)
 {
-	unittest();
-	return 0;
+	struct unittest_seqs_s const *seqs = (struct unittest_seqs_s const *)params;
+	char const *a = seqs->a;
+	char const *b = seqs->b;
+
+	struct unittest_sections_s *sec = malloc(
+		sizeof(struct unittest_sections_s));
+	*sec = (struct unittest_sections_s){
+		.seq = sea_build_seq_pair(a, strlen(a), b, strlen(b)),
+		.asec = sea_build_section(1, 0, strlen(a) - 16),
+		.atail = sea_build_section(2, strlen(a) - 16, 16),
+		.bsec = sea_build_section(3, 0, strlen(b) - 16),
+		.btail = sea_build_section(4, strlen(b) - 16, 16)
+	};
+	return((void *)sec);
 }
+
+/**
+ * @fn unittest_clean_seqs
+ */
+static
+void unittest_clean_seqs(void *ctx)
+{
+	free(ctx);
+}
+
+/**
+ * @macro with_seq_pair
+ * @brief constructs .param, .init, and .clean parameters
+ */
+#define with_seq_pair(_a, _b) \
+	.params = unittest_seq_pair(_a, _b), \
+	.init = unittest_build_seqs, \
+	.clean = unittest_clean_seqs
+
+/* global configuration of the tests */
+unittest_config(
+	.name = "sea",
+	.init = unittest_build_context,
+	.clean = unittest_clean_context
+);
+
+/**
+ * check if sea_init returns a valid pointer to a context
+ */
+unittest()
+{
+	struct sea_context_s *c = (struct sea_context_s *)gctx;
+	assert(c != NULL, "%p", c);
+}
+
+/**
+ * check if unittest_build_seqs returns a valid seq_pair and sections
+ */
+unittest(with_seq_pair("A", "A"))
+{
+	struct unittest_sections_s *s = (struct unittest_sections_s *)ctx;
+
+	/* check pointer */
+	assert(s != NULL, "%p", s);
+
+	/* check sequences */
+	assert(strcmp(s->seq.a, "AGGGGGGGGGGGGGGGG") == 0, "%s", s->seq.a);
+	assert(strcmp(s->seq.b, "ACCCCCCCCCCCCCCCC") == 0, "%s", s->seq.b);
+	assert(s->seq.alen == 17, "%llu", s->seq.alen);
+	assert(s->seq.blen == 17, "%llu", s->seq.blen);
+
+	/* check sections */
+	assert(s->asec.base == 0, "%llu", s->asec.base);
+	assert(s->asec.len == 1, "%u", s->asec.len);
+
+	assert(s->atail.base == 1, "%llu", s->atail.base);
+	assert(s->atail.len == 16, "%u", s->atail.len);
+
+	assert(s->bsec.base == 0, "%llu", s->bsec.base);
+	assert(s->bsec.len == 1, "%u", s->bsec.len);
+
+	assert(s->btail.base == 1, "%llu", s->btail.base);
+	assert(s->btail.len == 16, "%u", s->btail.len);
+}
+
+/**
+ * check if sea_dp_init returns a vaild pointer to a dp context
+ */
+unittest(with_seq_pair("A", "A"))
+{
+	struct sea_context_s *c = (struct sea_context_s *)gctx;
+	struct unittest_sections_s *s = (struct unittest_sections_s *)ctx;
+
+	/* generate dp context */
+	struct sea_dp_context_s *d = sea_dp_init(c, &s->seq);
+	assert(d != NULL, "%p", d);
+	sea_dp_clean(d);
+}
+
+/**
+ * check if sea_dp_fill_root returns a valid pointer to a tail
+ */
+#define check_tail(_t, _max, _p, _psum, _ssum) \
+	((_t) != NULL && (_t)->max == (_max) && (_t)->p == (_p) && (_t)->psum == (_psum) && (_t)->ssum == (_ssum))
+#define print_tail(_t) \
+	"tail(%p), max(%lld), p(%d), psum(%lld), ssum(%lld)", \
+	(_t), (_t)->max, (_t)->p, (_t)->psum, (_t)->ssum
+
+unittest(with_seq_pair("A", "A"))
+{
+	struct sea_context_s *c = (struct sea_context_s *)gctx;
+	struct unittest_sections_s *s = (struct unittest_sections_s *)ctx;
+
+	/* generate dp context */
+	struct sea_dp_context_s *d = sea_dp_init(c, &s->seq);
+
+	/* fill root section */
+	struct sea_fill_s *f = sea_dp_fill_root(d, &s->asec, 0, &s->bsec, 0);
+	assert(check_tail(f, 0, 0, -29, 1), print_tail(f));
+
+	/* fill again */
+	f = sea_dp_fill(d, f, &s->asec, &s->bsec);
+	assert(check_tail(f, 0, 0, -27, 2), print_tail(f));
+
+	/* fill tail section */
+	f = sea_dp_fill(d, f, &s->atail, &s->btail);
+	assert(check_tail(f, 4, 4, 5, 3), print_tail(f));
+
+	/* fill tail section again */
+	f = sea_dp_fill(d, f, &s->atail, &s->btail);
+	assert(check_tail(f, 1, 31, 36, 4), print_tail(f));
+
+	/* cleanup */
+	sea_dp_clean(d);
+}
+
+/**
+ * with longer sequences
+ */
+unittest(with_seq_pair("ACGTACGTACGT", "ACGTACGTACGT"))
+{
+	struct sea_context_s *c = (struct sea_context_s *)gctx;
+	struct unittest_sections_s *s = (struct unittest_sections_s *)ctx;
+
+	/* generate dp context */
+	struct sea_dp_context_s *d = sea_dp_init(c, &s->seq);
+
+	/* fill root section */
+	struct sea_fill_s *f = sea_dp_fill_root(d, &s->asec, 0, &s->bsec, 0);
+	assert(check_tail(f, 0, 0, -7, 1), print_tail(f));
+
+	/* fill again */
+	f = sea_dp_fill(d, f, &s->asec, &s->bsec);
+	assert(check_tail(f, 16, 16, 17, 2), print_tail(f));
+
+	/* fill tail section */
+	f = sea_dp_fill(d, f, &s->atail, &s->btail);
+	assert(check_tail(f, 48, 32, 49, 3), print_tail(f));
+
+	/* fill tail section again */
+	f = sea_dp_fill(d, f, &s->atail, &s->btail);
+	assert(check_tail(f, 45, 31, 80, 4), print_tail(f));
+
+	/* cleanup */
+	sea_dp_clean(d);
+}
+
 #endif
 
 /**
- * end of branch2.c
+ * end of dp.c
  */
