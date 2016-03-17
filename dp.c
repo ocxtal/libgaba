@@ -69,6 +69,7 @@ static void *sea_dp_smalloc(struct sea_dp_context_s *this, uint64_t size);
  * @brief inline directive for gcc-compatible compilers
  */
 #define _force_inline	inline
+// #define _force_inline
 
 /**
  * @macro _load_sc
@@ -394,13 +395,14 @@ struct sea_joint_block_s fill_init_fetch(
 	v2i32_t ridx)
 {
 	/* restore (brem, arem) */
-	int64_t prem = PSUM_BASE - prev_tail->psum;
-	int64_t arem = prem / 2;
-	int64_t brem = (prem + 1) / 2;
+	int64_t prem = -prev_tail->psum;
+	int64_t arem = (prem + 1) / 2;
+	int64_t brem = prem / 2;
 	v2i32_t rem = _seta_v2i32(brem, arem);
 
 	/* calc the next rem */
 	v2i32_t const z = _zero_v2i32();
+	// v2i32_t const ofs = _seta_v2i32(0, 1);
 	v2i32_t const ofs = _seta_v2i32(1, 0);
 	v2i32_t nrem = _max_v2i32(_sub_v2i32(rem, ridx), z);
 	v2i32_t rrem = _sub_v2i32(_swap_v2i32(nrem), ofs);
@@ -452,17 +454,17 @@ struct sea_joint_block_s fill_init_fetch(
 	}
 
 	/* adjust and store ridx */
-	debug("fetched init seq");
 	_print_v2i32(ridx);
 	_print_v2i32(len);
 	ridx = _sub_v2i32(ridx, len);
 	_store_v2i32(&blk->aridx, ridx);
 	_print_v2i32(ridx);
+	debug("blk(%p), p(%d), stat(%x)", blk + 1, _lo32(len) + _hi32(len), _mask_v2i32(_eq_v2i32(ridx, z)));
 
 	return((struct sea_joint_block_s){
 		.blk = blk + 1,
 		.p = _lo32(len) + _hi32(len),
-		.stat = _mask_v2i32(_eq_v2i32(ridx, z)) != 0 ? TERM : CONT
+		.stat = (_mask_v2i32(_eq_v2i32(ridx, z)) == V2I32_MASK_00) ? CONT : UPDATE
 	});
 }
 
@@ -506,7 +508,7 @@ void fill_restore_fetch(
  * @macro fill_update_section
  */
 static _force_inline
-void fill_update_section(
+v2i32_t fill_update_section(
 	struct sea_dp_context_s *this,
 	struct sea_block_s *blk,
 	v2i32_t cnt)
@@ -525,7 +527,7 @@ void fill_update_section(
 
 	_print(a);
 	_print(b);
-	return;
+	return(ridx);
 }
 
 /**
@@ -560,9 +562,10 @@ struct sea_joint_block_s fill_create_head(
 	v2i32_t ridx = _sub_v2i32(
 		_load_v2i32(_rd_len(this)),
 		_load_v2i32(&prev_tail->apos));
+	_print_v2i32(ridx);
 
 	/* check if init fetch is needed */
-	if(prev_tail->psum >= PSUM_BASE) {
+	if(prev_tail->psum >= 0) {
 		/* not needed, copy char vectors from prev_tail */
 		struct sea_block_s *prev_blk = _last_block(prev_tail);
 		_store(&blk->ch, _load(&prev_blk->ch));
@@ -601,19 +604,17 @@ struct sea_joint_tail_s *fill_create_tail(
 	tail->v = prev_tail->v;					/* copy middle deltas */
 
 	/* update p */
-	int64_t np = p - MAX2(0, MIN2(PSUM_BASE - prev_tail->psum, p));
-	debug("p(%lld), prev_tail->p(%lld), np(%lld)", p, prev_tail->psum, np);
+	int64_t prev_psum = prev_tail->psum;
+	int32_t np = (prev_psum < 0) ? MAX2(p + prev_psum, 0) : p;
 
 	/* save misc to joint_tail */
 	tail->psum = p + prev_tail->psum;
 	tail->p = np;
-	// tail->p = MAX3(p, PSUM_BASE - prev_tail->psum, 0);
+	debug("p(%lld), prev_tail->psum(%lld), prev_tail->p(%d), tail->psum(%lld), tail->p(%d)",
+		p, prev_tail->psum, prev_tail->p, tail->psum, tail->p);
 	tail->ssum = prev_tail->ssum + 1;
-	tail->stat = stat;
 	tail->tail = prev_tail;					/* to treat tail chain as linked list */
 	tail->rem_len = 0;
-	debug("psum(%lld), p(%d), ssum(%d), v(%p)",
-		tail->psum, tail->p, tail->ssum, prev_tail->v);
 
 	/* search max section */
 	v32i16_t sd = _cvt_v32i8_v32i16(_load(&(blk - 1)->sd.max));
@@ -643,10 +644,11 @@ struct sea_joint_tail_s *fill_create_tail(
 	_print_v2i32(_sel_v2i32(
 		_eq_v2i32(ridx, z),
 		z, _sub_v2i32(len, ridx)));
-	_store_v2i32(&tail->apos,
-		_sel_v2i32(
-			_eq_v2i32(ridx, z),
-			z, _sub_v2i32(len, ridx)));
+	_store_v2i32(&tail->apos, _sel_v2i32(_eq_v2i32(ridx, z),
+		z, _sub_v2i32(len, ridx)));
+
+	/* store status */
+	tail->stat = stat | _mask_v2i32(_eq_v2i32(ridx, z));
 	return(tail);
 }
 
@@ -673,14 +675,15 @@ struct sea_joint_tail_s *fill_create_tail(
 	vec_t register dv = _load(_pv(((_blk) - 1)->diff.dv)); \
 	vec_t register de = _and(mask, dh); \
 	vec_t register df = _and(mask, dv); \
-	dh = _sar(_or(mask, dh), 3); \
+	dh = _shr(_andn(mask, dh), 3); \
 	dv = _shr(_andn(mask, dv), 3); \
-	df = _sub(df, dh); \
-	de = _add(de, dv); \
-	_print(dh); \
-	_print(dv); \
-	/*_print(de);*/ \
-	/*_print(df);*/ \
+	de = _add(dv, de); \
+	df = _add(dh, df); \
+	dh = _sub(_zero(), dh); \
+	_print(_add(dh, _load_sc(this, ofsh))); \
+	_print(_add(dv, _load_sc(this, ofsv))); \
+	_print(_sub(_sub(de, dv), _load_sc(this, adjh))); \
+	_print(_sub(_add(df, dh), _load_sc(this, adjv))); \
 	/* load delta vectors */ \
 	vec_t register delta = _load(_pv(((_blk) - 1)->sd.delta)); \
 	vec_t register max = _load(_pv(((_blk) - 1)->sd.max)); \
@@ -704,6 +707,7 @@ struct sea_joint_tail_s *fill_create_tail(
 	mask_ptr->pair.h.mask = _mask(_eq(t, de)); \
 	t = _max(df, t); \
 	mask_ptr->pair.v.mask = _mask(_eq(t, df)); \
+	debug("mask(%llx)", mask_ptr->all); \
 	mask_ptr++; \
 	/*mask_ptr++->mask = _mask(_eq(t, df));*/ \
 	df = _sub(_max(_add(df, _load_sc(this, adjv)), t), dv); \
@@ -711,10 +715,10 @@ struct sea_joint_tail_s *fill_create_tail(
 	de = _add(_max(_add(de, _load_sc(this, adjh)), t), dh); \
 	t = _add(dh, t); \
 	dh = dv; dv = t; \
-	_print(dh); \
-	_print(dv); \
-	/*_print(de);*/ \
-	/*_print(df);*/ \
+	_print(_add(dh, _load_sc(this, ofsh))); \
+	_print(_add(dv, _load_sc(this, ofsv))); \
+	_print(_sub(_sub(de, dv), _load_sc(this, adjh))); \
+	_print(_sub(_add(df, dh), _load_sc(this, adjv))); \
 }
 
 /**
@@ -723,12 +727,12 @@ struct sea_joint_tail_s *fill_create_tail(
  */
 #define _fill_update_delta(_op, _vector, _offset, _sign) { \
 	delta = _op(delta, _add(_vector, _offset)); \
-	_print(delta); \
+	/*_print(delta);*/ \
 	max = _max(max, delta); \
-	_print(max); \
+	/*_print(max);*/ \
 	_dir_update(dir, _vector, _sign); \
-	_print_v32i16(_add_v32i16(_cvt_v32i8_v32i16(delta), _load_v32i16(this->tail->v))); \
-	_print_v32i16(_add_v32i16(_cvt_v32i8_v32i16(max), _load_v32i16(this->tail->v))); \
+	_print_v32i16(_add_v32i16(_set_v32i16(offset), _add_v32i16(_cvt_v32i8_v32i16(delta), _load_v32i16(this->tail->v)))); \
+	_print_v32i16(_add_v32i16(_set_v32i16(offset), _add_v32i16(_cvt_v32i8_v32i16(max), _load_v32i16(this->tail->v)))); \
 }
 
 /**
@@ -782,19 +786,27 @@ struct sea_joint_tail_s *fill_create_tail(
 	/* store large offset */ \
 	(_blk)->offset = offset; \
 	/* store diff vectors */ \
-	vec_t const mask = _set(0x07); \
 	de = _sub(de, dv); \
 	df = _add(df, dh); \
+	dh = _sub(_zero(), dh); \
+	_print(dh); \
+	_print(dv); \
+	_print(de); \
+	_print(df); \
 	dh = _shl(dh, 3); \
 	dv = _shl(dv, 3); \
-	_store(_pv((_blk)->diff.dh), _or(_andn(mask, dh), de)); \
-	_store(_pv((_blk)->diff.dv), _or(dv, df)); \
+	_print(dh); \
+	_print(dv); \
+	_store(_pv((_blk)->diff.dh), _add(dh, de)); \
+	_store(_pv((_blk)->diff.dv), _add(dv, df)); \
+	_print(_add(dh, de)); \
+	_print(_add(dv, df)); \
 	/* store delta vectors */ \
 	_store(_pv((_blk)->sd.delta), delta); \
 	_store(_pv((_blk)->sd.max), max); \
 	/* calc cnt */ \
-	uint64_t acnt = bptr - _rd_bufb(this, 0, BW); \
-	uint64_t bcnt = _rd_bufa(this, 0, BW) - aptr; \
+	uint64_t acnt = _rd_bufa(this, 0, BW) - aptr; \
+	uint64_t bcnt = bptr - _rd_bufb(this, 0, BW); \
 	/*_print_v2i32(_seta_v2i32(bcnt, acnt));*/ \
 	_seta_v2i32(bcnt, acnt); \
 })
@@ -835,10 +847,9 @@ int64_t fill_bulk_test_seq_bound(
 #define _fill_cap_test_seq_bound_init(_blk) \
 	uint8_t *alim = _rd_bufa(this, ((_blk) - 1)->aridx, BW); \
 	uint8_t *blim = _rd_bufb(this, ((_blk) - 1)->bridx, BW);
-#define _fill_cap_test_seq_bound() ({ \
-	/*debug("a(%lld), b(%lld)", ((int64_t)aptr - (int64_t)alim), ((int64_t)blim - (int64_t)bptr));*/ \
-	((int64_t)aptr - (int64_t)alim) | ((int64_t)blim - (int64_t)bptr); \
-})
+#define _fill_cap_test_seq_bound() ( \
+	((int64_t)aptr - (int64_t)alim) | ((int64_t)blim - (int64_t)bptr) \
+)
 
 /**
  * @fn fill_bulk_test_p_bound
@@ -968,7 +979,7 @@ struct sea_joint_block_s fill_bulk_seq_bounded(
 		/* update p-coordinate */
 		p += BLK;
 	}
-	if(fill_test_xdrop(this, blk) < 0) { stat = TERM; }
+	if(fill_test_xdrop(this, blk - 1) < 0) { stat = TERM; }
 	return((struct sea_joint_block_s){
 		.blk = blk,
 		.p = p,
@@ -1006,7 +1017,7 @@ struct sea_joint_block_s fill_bulk_seq_p_bounded(
 		/* update p-coordinate */
 		p += BLK;
 	}
-	if(fill_test_xdrop(this, blk) < 0) { stat = TERM; }
+	if(fill_test_xdrop(this, blk - 1) < 0) { stat = TERM; }
 	return((struct sea_joint_block_s){
 		.blk = blk,
 		.p = p,
@@ -1086,11 +1097,11 @@ struct sea_joint_block_s fill_cap_seq_bounded(
 			blk += (i != 0); p += i;
 
 			/* break if not filled full length */
-			if(i != BLK) { break; }
+			if(i != BLK) { stat = UPDATE; break; }
 		}
 	}
 
-	debug("blk(%p), p(%lld), stat(%d)", blk, p, stat);
+	debug("blk(%p), p(%lld), stat(%x)", blk, p, stat);
 
 _fill_cap_seq_bounded_finish:;
 	return((struct sea_joint_block_s){
@@ -1174,11 +1185,11 @@ struct sea_joint_block_s fill_cap_seq_p_bounded(
 			blk += (i != 0);
 
 			/* break if not filled full length */
-			if(i != BLK) { break; }
+			if(i != BLK) { stat = UPDATE; break; }
 		}
 	}
 
-	debug("blk(%p), p(%lld), stat(%d)", blk, p, stat);
+	debug("blk(%p), p(%lld), stat(%x)", blk, p, stat);
 
 _fill_cap_seq_bounded_finish:;
 	return((struct sea_joint_block_s){
@@ -1260,7 +1271,7 @@ struct sea_joint_tail_s *fill_seq_bounded(
 	int64_t psum = stat.p;
 
 	/* check if term detected in init fetch */
-	if(stat.stat == TERM) {
+	if(stat.stat != CONT) {
 		goto _fill_seq_bounded_finish;
 	}
 
@@ -1269,7 +1280,7 @@ struct sea_joint_tail_s *fill_seq_bounded(
 	while(seq_bulk_blocks > MIN_BULK_BLOCKS) {
 		/* bulk fill without ij-bound test */
 		psum += (stat = fill_bulk_predetd_blocks(this, stat.blk, seq_bulk_blocks)).p;
-		if(stat.stat == TERM) {
+		if(stat.stat != CONT) {
 			goto _fill_seq_bounded_finish;	/* skip cap */
 		}
 		seq_bulk_blocks = calc_max_bulk_blocks_seq(this);
@@ -1278,7 +1289,7 @@ struct sea_joint_tail_s *fill_seq_bounded(
 	/* bulk fill with ij-bound test */
 	psum += (stat = fill_bulk_seq_bounded(this, stat.blk)).p;
 
-	if(stat.stat == TERM) {
+	if(stat.stat != CONT) {
 		goto _fill_seq_bounded_finish;	/* skip cap */
 	}
 
@@ -1302,7 +1313,7 @@ struct sea_joint_tail_s *fill_seq_p_bounded(
 	int64_t psum = stat.p;
 
 	/* check if term detected in init fetch */
-	if(stat.stat == TERM) {
+	if(stat.stat != CONT) {
 		goto _fill_seq_p_bounded_finish;
 	}
 
@@ -1311,7 +1322,7 @@ struct sea_joint_tail_s *fill_seq_p_bounded(
 	while(seq_bulk_blocks > MIN_BULK_BLOCKS) {
 		/* bulk fill without ij-bound test */
 		psum += (stat = fill_bulk_predetd_blocks(this, stat.blk, seq_bulk_blocks)).p;
-		if(stat.stat == TERM) {
+		if(stat.stat != CONT) {
 			goto _fill_seq_p_bounded_finish;	/* skip cap */
 		}
 		seq_bulk_blocks = calc_max_bulk_blocks_seq_p(this);
@@ -1320,7 +1331,7 @@ struct sea_joint_tail_s *fill_seq_p_bounded(
 	/* bulk fill with ij-bound test */
 	psum += (stat = fill_bulk_seq_p_bounded(this, stat.blk)).p;
 
-	if(stat.stat == TERM) {
+	if(stat.stat != CONT) {
 		goto _fill_seq_p_bounded_finish;	/* skip cap */
 	}
 
@@ -1609,6 +1620,8 @@ void trace_calc_coordinates(
 	this->ll.psum += mask_idx;
 	int64_t q = this->ll.q = tzcnt(mask_update);
 
+	debug("mask_idx(%lld), mask_update(%u)", mask_idx, mask_update);
+
 	/* calc ridx */
 	int64_t filled_count = mask_idx + 1;
 	int32_t bcnt = _dir_bcnt(_dir_load(blk, mask_idx));
@@ -1619,7 +1632,7 @@ void trace_calc_coordinates(
 
 	debug("acnt(%d), bcnt(%d)", acnt, bcnt);
 	_print_v2i32(_load_v2i32(&(blk - 1)->aridx));
-	_print_v2i32(_seta_v2i32((BLK - q) - bcnt, q - acnt));
+	_print_v2i32(_seta_v2i32((BLK - 1 - q) - bcnt, q - acnt));
 	_print_v2i32(ridx);
 
 	/* save ridx */
@@ -1745,30 +1758,34 @@ void trace_load_section_a(
 	struct sea_dp_context_s *this)
 {
 	debug("load section a");
-
-	/* load the last section id (may be invalid on init) */
-	v2i64_t prev_sec = _load_v2i64(&this->ll.asec);
-
 	/* load tail pointer (must be inited with leaf tail) */
 	struct sea_joint_tail_s const *tail = this->ll.atail;
-	v2i64_t sec = _load_v2i64(&tail->a);
+	int32_t ridx = this->ll.aridx;
+	int32_t len = tail->a.len;
 
-	while(_id(sec) != -1) {
-		/* check if the id of the current section matches the previous id */
-		if(_id(sec) != _id(prev_sec)) {
-			debug("a: sec(%d), prev_sec(%d)", _id(sec), _id(prev_sec));
-			_store_v2i64(&this->ll.asec, sec);
-			this->ll.atail = tail->tail;
-			return;
+	while(ridx >= len) {
+		debug("ridx exceeds len, reload needed ridx(%d), len(%d)", ridx, len);
+		for(tail = tail->tail; tail->apos != 0; tail = tail->tail) {
+			debug("windback tail id(%d), base(%lld), len(%d)",
+				tail->a.id, tail->a.base, tail->a.len);
 		}
+		debug("tail of the previous section found, tail->apos(%d), id(%d), base(%lld), len(%d)",
+			tail->apos, tail->a.id, tail->a.base, tail->a.len);
 
-		/* if the ids match, windback a fragment */
-		tail = tail->tail;
-		prev_sec = sec;
-		sec = _load_v2i64(&tail->a);
+		/* update ridx and len */
+		ridx -= len;
+		len = tail->a.len;
+		debug("updated ridx(%d), len(%d)", ridx, len);
 	}
-	_store_v2i64(&this->ll.asec, _set_v2i64(-1));
-	this->ll.tail = NULL;
+
+	/* store section info */
+	debug("reload tail done, id(%d), len(%d), ridx(%d)", tail->a.id, len, ridx);
+	v2i64_t sec = _load_v2i64(&tail->a);
+	_store_v2i64(&this->ll.asec, sec);
+	this->ll.atail = tail;
+	this->ll.alen = len;
+	this->ll.aridx = ridx;
+	this->ll.asridx = ridx;
 	return;
 }
 static _force_inline
@@ -1776,64 +1793,34 @@ void trace_load_section_b(
 	struct sea_dp_context_s *this)
 {
 	debug("load section b");
-
-	/* load the last section id (may be invalid on init) */
-	v2i64_t prev_sec = _load_v2i64(&this->ll.bsec);
-
 	/* load tail pointer (must be inited with leaf tail) */
 	struct sea_joint_tail_s const *tail = this->ll.btail;
-	v2i64_t sec = _load_v2i64(&tail->b);
+	int32_t ridx = this->ll.bridx;
+	int32_t len = tail->b.len;
 
-	while(_id(sec) != -1) {
-		/* check if the id of the current section matches the previous id */
-		if(_id(sec) != _id(prev_sec)) {
-			debug("b: sec(%d), prev_sec(%d)", _id(sec), _id(prev_sec));
-			_store_v2i64(&this->ll.bsec, sec);
-			this->ll.btail = tail->tail;
-			return;
+	while(ridx >= len) {
+		debug("ridx exceeds len, reload needed ridx(%d), len(%d)", ridx, len);
+		for(tail = tail->tail; tail->bpos != 0; tail = tail->tail) {
+			debug("windback tail id(%d), base(%lld), len(%d)",
+				tail->b.id, tail->b.base, tail->b.len);
 		}
+		debug("tail of the previous section found, tail->bpos(%d), id(%d), base(%lld), len(%d)",
+			tail->bpos, tail->b.id, tail->b.base, tail->b.len);
 
-		/* if the ids match, windback a fragment */
-		tail = tail->tail;
-		prev_sec = sec;
-		sec = _load_v2i64(&tail->b);
+		/* update ridx and len */
+		ridx -= len;
+		len = tail->b.len;
+		debug("updated ridx(%d), len(%d)", ridx, len);
 	}
-	_store_v2i64(&this->ll.bsec, _set_v2i64(-1));
-	this->ll.tail = NULL;
-	return;
-}
 
-/**
- * @fn trace_update_context
- */
-static _force_inline
-void trace_update_context(
-	struct sea_dp_context_s *this)
-{
-	debug("update context");
-
-	/* adjust ridx */
-	v2i32_t ridx = _sub_v2i32(
-		_load_v2i32(&this->ll.aridx),
-		_sel_v2i32(
-			_load_v2i32(&this->ll.a_update_mask),
-			_zero_v2i32(),
-			_load_v2i32(&this->ll.alen)));
-	_store_v2i32(&this->ll.aridx, ridx);
-	_store_v2i32(&this->ll.asridx, ridx);
-
-	_print_v2i32(_load_v2i32(&this->ll.a_update_mask));
-	_print_v2i32(ridx);
-
-	/* clear mask */
-	_store_v2i32(&this->ll.a_update_mask, _zero_v2i32());
-
-	/* transpose length */
-	v2i32_t id_len_a = _cast_v2i64_v2i32(_load_v2i64(&this->ll.asec));
-	v2i32_t id_len_b = _cast_v2i64_v2i32(_load_v2i64(&this->ll.bsec));
-	_store_v2i32(&this->ll.alen, _hi_v2i32(id_len_a, id_len_b));
-
-	_print_v2i32(_hi_v2i32(id_len_a, id_len_b));
+	/* store section info */
+	debug("reload tail done, id(%d), len(%d), ridx(%d)", tail->b.id, len, ridx);
+	v2i64_t sec = _load_v2i64(&tail->b);
+	_store_v2i64(&this->ll.bsec, sec);
+	this->ll.btail = tail;
+	this->ll.blen = len;
+	this->ll.bridx = ridx;
+	this->ll.bsridx = ridx;
 	return;
 }
 
@@ -1841,18 +1828,22 @@ void trace_update_context(
  * @macro _trace_load_context, _trace_forward_load_context
  */
 #define _trace_load_context(t) \
-	v2i32_t update_mask = _zero_v2i32(); \
+	/*v2i32_t update_mask = _zero_v2i32();*/ \
 	v2i32_t len = _load_v2i32(&(t)->ll.alen); \
 	v2i32_t ridx = _load_v2i32(&(t)->ll.aridx); \
 	v2i32_t sridx = _load_v2i32(&(t)->ll.asridx); \
+	_print_v2i32(len); \
+	_print_v2i32(ridx); \
+	_print_v2i32(sridx); \
 	struct sea_block_s const *blk = (t)->ll.blk; \
 	int64_t psum = (t)->ll.psum; \
 	int64_t p = (t)->ll.p; \
-	uint64_t q = (t)->ll.q; \
+	int64_t q = (t)->ll.q; \
+	int64_t diff_q; \
 	uint64_t prev_c = 0;
 #define _trace_forward_load_context(t) \
 	uint32_t *path = (t)->ll.fw_path; \
-	uint64_t rem = (t)->ll.fw_rem;
+	int64_t rem = (t)->ll.fw_rem;
 
 /**
  * @macro _trace_load_block
@@ -1860,32 +1851,85 @@ void trace_update_context(
 #define _trace_load_block(_local_idx) \
 	union sea_dir_u dir = _dir_load(blk, (_local_idx)); \
 	union sea_mask_pair_u const *mask_ptr = &blk->mask[(_local_idx)]; \
-	uint64_t path_array = 0;
+	uint64_t path_array = 0; \
+	/* working registers */ \
+	v2i32_t next_ridx; \
+	uint64_t next_path_array, next_prev_c;
+
+/**
+ * @macro _trace_determine_direction
+ */
+#define _trace_determine_direction(_mask) ({ \
+	uint64_t _mask_h = (_mask)>>q; \
+	uint64_t _mask_v = _mask_h>>32; \
+	uint64_t _c = (0x01 & _mask_v) | prev_c; \
+	next_path_array = (path_array<<1) | _c; \
+	diff_q = _dir_is_down(dir) - _c; \
+	next_prev_c = 0x01 & ~(prev_c | _mask_h | _mask_v); \
+	debug("c(%lld), prev_c(%llu), q(%lld), diff_q(%lld), down(%d), mask(%llx), path_array(%llx)", \
+		_c, prev_c, q, diff_q, _dir_is_down(dir), _mask, path_array); \
+	_c; \
+})
+
+/**
+ * @macro _trace_update_index
+ */
+#define _trace_update_index() { \
+	path_array = next_path_array; \
+	prev_c = next_prev_c; \
+	q += diff_q; \
+	mask_ptr--; \
+	_dir_windback(dir); \
+}
+
+/**
+ * @macro _trace_bulk_forward_body
+ */
+#define _trace_bulk_forward_body() { \
+	_trace_determine_direction(mask_ptr->all); \
+	_trace_update_index(); \
+}
+
+/**
+ * @macro _trace_cap_forward_body
+ */
+#define _trace_cap_forward_body() { \
+	uint64_t _c = _trace_determine_direction(mask_ptr->all); \
+	/* calculate the next ridx */ \
+	v2i32_t const ridx_down = _seta_v2i32(1, 0); \
+	v2i32_t const ridx_right = _seta_v2i32(0, 1); \
+	next_ridx = _add_v2i32(ridx, _c ? ridx_down : ridx_right); \
+	_print_v2i32(len); \
+	_print_v2i32(next_ridx); \
+	_print_v2i32(_sub_v2i32(len, next_ridx)); \
+	debug("%x", _mask_v2i32(_lt_v2i32(len, next_ridx))); \
+}
+
+/**
+ * @macro _trace_cap_update_index
+ */
+#define _trace_cap_update_index() { \
+	_trace_update_index(); \
+ 	ridx = next_ridx; \
+	p--; \
+	psum--; \
+}
 
 /**
  * @macro _trace_test_cap_loop
  *
  * @brief returns non-zero if ridx >= len
  */
-#define _trace_test_cap_loop() ({ \
-	update_mask = _lt_v2i32(ridx, len); \
-	_print_v2i32(len); \
-	_print_v2i32(ridx); \
-	_print_v2i32(_sub_v2i32(len, ridx)); \
-	debug("%x", _mask_v2i32(update_mask)); \
-	_mask_v2i32(update_mask); \
-})
-/*
 #define _trace_test_cap_loop() ( \
-	_mask_v2i32(update_mask = _gt_v2i32(ridx, len)) \
+	/* next_ridx must be precalculated */ \
+	_mask_v2i32(_lt_v2i32(len, next_ridx)) \
 )
-*/
 #define _trace_test_bulk_loop() ( \
-	_mask_v2i32(update_mask = _gt_v2i32(_add_v2i32(ridx, _set_v2i32(BW)), len)) \
+	_mask_v2i32(_gt_v2i32(_add_v2i32(ridx, _set_v2i32(BW)), len)) \
 )
 
-/**
- * @macro _trace_bulk_update_ridx, _trace_cap_update_ridx
+/** 
+ * @macro _trace_bulk_update_index
  */
 #define _trace_bulk_update_index() { \
 	ridx = _add_v2i32(ridx, _sub_v2i32( \
@@ -1895,58 +1939,21 @@ void trace_update_context(
 	p -= BLK; \
 	psum -= BLK; \
 }
-#define _trace_cap_update_index() { \
-	v2i32_t const ridx_down = _seta_v2i32(1, 0); \
-	v2i32_t const ridx_right = _seta_v2i32(0, 1); \
-	debug("cap update index dir(%d) p(%lld), psum(%lld)", \
-		_dir_is_down(dir), p, psum); \
-	ridx = _add_v2i32(ridx, \
-		_dir_is_down(dir) ? ridx_down : ridx_right); \
-	_print_v2i32(_sub_v2i32(len, ridx)); \
-	p--; \
-	psum--; \
-}
-
-/**
- * @macro _trace_forward_body_mask
- */
-#define _trace_forward_body_mask(_mask) ({ \
-	uint64_t _mask_h = (_mask)>>q; \
-	uint64_t _mask_v = _mask_h>>32; \
-	uint64_t _c = (0x01 & _mask_v) | prev_c; \
-	path_array = (path_array<<1) | _c; \
-	q += _dir_is_down(dir); \
-	q -= _c; \
-	prev_c = 0x01 & ~(prev_c | _mask_h | _mask_v); \
-	debug("c(%lld), prev_c(%llu), q(%llu), down(%d), mask(%llx), path_array(%llx)", \
-		_c, prev_c, q, _dir_is_down(dir), _mask, path_array); \
-	_c; \
-})
-#define _trace_bulk_forward_body() { \
-	_trace_forward_body_mask(mask_ptr->all); \
-	/* update pointers */ \
-	mask_ptr--; \
-	_dir_windback(dir); \
-}
-#define _trace_cap_forward_body() { \
-	uint64_t _c = _trace_forward_body_mask(mask_ptr->all); \
-	/* update ridx */ \
-	v2i32_t const ridx_down = _seta_v2i32(1, 0); \
-	v2i32_t const ridx_right = _seta_v2i32(0, 1); \
-	debug("cap update index dir(%d) p(%lld), psum(%lld)", \
-		_dir_is_down(dir), p, psum); \
-	ridx = _add_v2i32(ridx, (_c == 1) ? ridx_down : ridx_right); \
-	_print_v2i32(_sub_v2i32(len, ridx)); \
-	/* update pointers and coordinates */ \
-	mask_ptr--; \
-	_dir_windback(dir); \
-	p--; \
-	psum--; \
-}
 
 /**
  * @macro _trace_forward_update_path, _trace_backward_update_path
  */
+#define _trace_compensate_remainder(_traced_count) ({ \
+	/* decrement cnt when invasion of boundary on seq b with diagonal path occurred */ \
+	int64_t _cnt = (_traced_count) - prev_c; \
+	path_array >>= prev_c; \
+	p += prev_c; \
+	psum += prev_c; \
+	ridx = _sub_v2i32(ridx, _seta_v2i32(0, prev_c)); \
+	debug("cnt(%lld), traced_count(%lld), prev_c(%lld), path_array(%llx)", \
+		_cnt, _traced_count, prev_c, path_array); \
+	_cnt; \
+})
 #define _trace_forward_update_path(_traced_count) { \
 	/* adjust path_array */ \
 	path_array <<= BLK - (_traced_count); \
@@ -1957,12 +1964,11 @@ void trace_update_context(
 	path[0] = (uint32_t)(prev_array | (path_array>>rem)); \
 	debug("prev_array(%llx), path_array(%llx), path[-1](%x), path[0](%x), blk(%p)", \
 		prev_array, path_array, path[0], path[1], blk); \
-	debug("prev_array(%llx), path_array<<(%llx), path_array>>(%llx), rem(%lld)", \
-		prev_array, path_array<<(BLK - rem), path_array>>rem, rem); \
 	/* update path and remainder */ \
-	path -= (((rem + (_traced_count)) & BLK) != 0) ? 1 : 0; \
+	/*path -= (((rem + (_traced_count)) & BLK) != 0) ? 1 : 0;*/ \
+	path -= (rem + (_traced_count)) / BLK; \
 	debug("path_adv(%d)", ((rem + (_traced_count)) & BLK) != 0 ? 1 : 0); \
-	rem = (rem + (_traced_count)) % BLK; \
+	rem = (rem + (_traced_count)) & (BLK - 1); \
 	debug("i(%lld), rem(%lld)", (int64_t)(_traced_count), rem); \
 }
 #define _trace_reverse_update_path() { \
@@ -1986,40 +1992,14 @@ void trace_update_context(
 }
 
 /**
- * @macro _trace_reload_tail
- */
-#define _trace_reload_tail(t) { \
-	debug("tail(%p), next tail(%p), p(%d)", (t)->ll.tail, _phantom_head(blk)->tail, _phantom_head(blk)->tail->p); \
-	struct sea_joint_tail_s const *tail = (t)->ll.tail = _phantom_head(blk)->tail; \
-	blk = _last_block(tail); \
-	p += tail->p; \
-}
-
-/**
  * @macro _trace_forward_save_context
  */
 #define _trace_forward_save_context(t) { \
-	if(prev_c != 0) { \
-		/* push remaining diagonal path */ \
-		debug("push remaining diagonal path"); \
-		uint64_t path_array = 1; \
-		_trace_forward_update_path(1); \
-		/* decrement j and update reload mask */ \
-		_print_v2i32(_sub_v2i32(len, ridx)); \
-		debug("cap update index p(%lld), psum(%lld)", p, psum); \
-		ridx = _add_v2i32(ridx, _seta_v2i32(1, 0)); \
-		update_mask = _lt_v2i32(ridx, len); \
-		/* update q-coordinate */ \
-		q += _dir_is_down(dir) - 1; \
-		/* decrement coordinates */ \
-		p--; \
-		psum--; \
-	} \
 	(t)->ll.blk = blk; \
-	_store_v2i32(&(t)->ll.a_update_mask, update_mask); \
+	/*_store_v2i32(&(t)->ll.a_update_mask, update_mask);*/ \
 	_store_v2i32(&(t)->ll.aridx, ridx); \
 	_store_v2i32(&(t)->ll.asridx, sridx); \
-	_print_v2i32(update_mask); \
+	/*_print_v2i32(update_mask);*/ \
 	_print_v2i32(ridx); \
 	_print_v2i32(sridx); \
 	(t)->ll.fw_path = path; \
@@ -2028,6 +2008,18 @@ void trace_update_context(
 	(t)->ll.p = p; \
 	(t)->ll.q = q; \
 	debug("p(%lld), psum(%lld), q(%llu)", p, psum, q); \
+}
+
+/**
+ * @macro _trace_reload_tail
+ */
+#define _trace_reload_tail(t) { \
+	debug("tail(%p), next tail(%p), p(%d), psum(%lld), ssum(%d)", \
+		(t)->ll.tail, (t)->ll.tail->tail, (t)->ll.tail->tail->p, \
+		(t)->ll.tail->tail->psum, (t)->ll.tail->tail->ssum); \
+	struct sea_joint_tail_s const *tail = (t)->ll.tail = (t)->ll.tail->tail; \
+	blk = _last_block(tail); \
+	p += tail->p; \
 }
 
 /**
@@ -2043,13 +2035,13 @@ void trace_forward_trace(
 	_trace_load_context(this);
 	_trace_forward_load_context(this);
 	debug("start traceback loop p(%lld), psum(%lld), q(%llu)", p, psum, q);
-
-	if(_trace_test_cap_loop() != 0xff) {
+#if 0
+	if(_trace_test_cap_loop() != 0) {
 		/* no need to adjust rem */
 		debug("cap test failed at the head of the traceback loop");
 		return;
 	}
-
+#endif
 	while(1) {
 		/* cap trace at the head */ {
 			int64_t loop_count = (p + 1) % BLK;		/* loop_count \in (1 .. BLK), 0 is invalid */
@@ -2062,12 +2054,15 @@ void trace_forward_trace(
 				_trace_cap_forward_body();
 
 				/* check if the section invasion occurred */
-				if(_trace_test_cap_loop() != 0xff) {
+				if(_trace_test_cap_loop() != 0) {
 					debug("cap test failed, i(%lld)", i);
+					i = _trace_compensate_remainder(i);
 					_trace_forward_update_path(i);
 					_trace_forward_save_context(this);
 					return;
 				}
+
+				_trace_cap_update_index();
 			}
 
 			/* update rem, path, and block */
@@ -2079,6 +2074,7 @@ void trace_forward_trace(
 		while(p > 0 && _trace_test_bulk_loop() == 0) {
 			/* load direction array and mask pointer */
 			_trace_load_block(BLK - 1);
+			(void)next_ridx;		/* to avoid warning */
 
 			/* bulk trace loop */
 			_trace_bulk_update_index();
@@ -2102,12 +2098,15 @@ void trace_forward_trace(
 				_trace_cap_forward_body();
 
 				/* check if the section invasion occurred */
-				if(_trace_test_cap_loop() != 0xff) {
+				if(_trace_test_cap_loop() != 0) {
 					debug("cap test failed, i(%lld)", i);
+					i = _trace_compensate_remainder(i);
 					_trace_forward_update_path(i);
 					_trace_forward_save_context(this);
 					return;		/* exit is here */
 				}
+
+				_trace_cap_update_index();
 			}
 			debug("bulk loop end p(%lld), psum(%llu), q(%llu)", p, psum, q);
 
@@ -2116,11 +2115,14 @@ void trace_forward_trace(
 			_trace_windback_block();
 		}
 
+		if(psum < 0) {
+			_trace_forward_save_context(this);
+			return;
+		}
+
 		/* reload tail pointer */
 		_trace_reload_tail(this);
 	}
-
-	/* never reaches here */
 	return;
 }
 
@@ -2140,14 +2142,14 @@ void trace_forward_push(
 	_print_v2i64(_load_v2i64(&this->ll.bsec));
 
 	/* store segment info */
-	_store_v2i32(&this->ll.fw_sec->apos,
-		_sub_v2i32(
-			_load_v2i32(&this->ll.alen),
-			_load_v2i32(&this->ll.aridx)));
-	_store_v2i32(&this->ll.fw_sec->alen,
-		_sub_v2i32(
-			_load_v2i32(&this->ll.aridx),
-			_load_v2i32(&this->ll.asridx)));
+	v2i32_t len = _load_v2i32(&this->ll.alen);
+	v2i32_t ridx = _load_v2i32(&this->ll.aridx);
+	v2i32_t rsidx = _load_v2i32(&this->ll.asridx);
+	_store_v2i32(&this->ll.fw_sec->apos, _sub_v2i32(len, ridx));
+	_store_v2i32(&this->ll.fw_sec->alen, _sub_v2i32(ridx, rsidx));
+
+	/* update rsidx */
+	_store_v2i32(&this->ll.asridx, ridx);
 
 	debug("push segment info");
 	_print_v2i32(_sub_v2i32(
@@ -2180,7 +2182,8 @@ void trace(
 
 	/* set update mask */
 	v2i32_t const z = _zero_v2i32();
-	_store_v2i32(&this->ll.a_update_mask, z);
+	// _store_v2i32(&this->ll.a_update_mask, z);
+	// _store_v2i32(&this->ll.aridx, z);
 	_store_v2i32(&this->ll.alen, z);
 
 	void (*body)(struct sea_dp_context_s *this) = (
@@ -2191,15 +2194,16 @@ void trace(
 	);
 
 	/* until the pointer reaches the root of the matrix */
-	while(this->ll.psum >= 0) {
+	while(this->ll.psum > 0) {
 		/* update section info */
-		if(this->ll.a_update_mask == 0) {
+		// if(this->ll.a_update_mask == 0) {
+		if(this->ll.aridx >= this->ll.alen) {
 			trace_load_section_a(this);
 		}
-		if(this->ll.b_update_mask == 0) {
+		// if(this->ll.b_update_mask == 0) {
+		if(this->ll.bridx >= this->ll.blen) {
 			trace_load_section_b(this);
 		}
-		trace_update_context(this);
 
 		/* fragment trace */
 		body(this);
@@ -2216,9 +2220,72 @@ void trace(
  */
 static _force_inline
 struct sea_result_s *trace_concatenate_path(
-	struct sea_dp_context_s *this)
+	struct sea_dp_context_s *this,
+	uint32_t *fw_path_base,
+	uint32_t *rv_path_base,
+	struct sea_path_section_s *fw_sec_base,
+	struct sea_path_section_s *rv_sec_base)
 {
-	return((struct sea_result_s *)this->ll.ptr);
+	/* fixme: current implementation handle forward path only */
+	struct sea_result_s *res = (struct sea_result_s *)this->ll.ptr;
+
+	debug("fw_path_base(%p), rv_path_base(%p), fw_sec_base(%p), rv_sec_base(%p)",
+		fw_path_base, rv_path_base, fw_sec_base, rv_sec_base);
+	debug("fw_path(%p), rv_path(%p), fw_sec(%p), rv_sec(%p)",
+		this->ll.fw_path, this->ll.rv_path, this->ll.fw_sec, this->ll.rv_sec);
+	debug("fw_scnt(%d), rv_scnt(%d)", this->ll.fw_scnt, this->ll.rv_scnt);
+	debug("fw_rem(%d), rv_rem(%d)", this->ll.fw_rem, this->ll.rv_rem);
+
+
+	/* push forward path and update rem */
+	uint64_t fw_rem = this->ll.fw_rem;
+	uint64_t rv_rem = this->ll.rv_rem;
+	uint32_t *fw_path = this->ll.fw_path;
+	uint32_t *rv_path = this->ll.rv_path;
+
+	/* concatenate the heads */
+	uint32_t prev_array = *fw_path;
+	uint32_t path_array = *rv_path-->>(BLK - rv_rem);
+
+	debug("fw_path_array(%x), rv_path_array(%x)", prev_array, path_array);
+
+	*fw_path = prev_array | (path_array>>fw_rem);
+	prev_array = path_array<<(BLK - fw_rem);
+	debug("path_array(%x), prev_array(%x)", *fw_path, prev_array);
+
+	fw_path -= (((fw_rem + rv_rem) & BLK) != 0) ? 1 : 0;
+	fw_rem = (fw_rem + rv_rem) % BLK;
+
+	while(rv_path > rv_path_base) {
+		path_array = *rv_path--;
+		*fw_path-- = prev_array | (path_array>>fw_rem);
+		prev_array = path_array<<(BLK - fw_rem);
+		debug("path_array(%x), prev_array(%x)", fw_path[1], prev_array);
+	}
+	/* store path info */
+	res->path = fw_path;
+	res->rem = fw_rem;
+
+	/* calc path length */
+	int64_t fw_path_block_len = fw_path_base - this->ll.fw_path;
+	int64_t rv_path_block_len = this->ll.rv_path - rv_path_base;
+	int64_t path_len = 32 * (fw_path_block_len + rv_path_block_len) + fw_rem;
+	res->plen = path_len;
+
+	/* push forward section and calc section length */
+	int64_t sec_len = this->ll.fw_scnt + this->ll.rv_scnt;
+	struct sea_path_section_s *fw_sec = this->ll.fw_sec;
+	struct sea_path_section_s *rv_sec = this->ll.rv_sec;
+	while(rv_sec > rv_sec_base) {
+		*fw_sec-- = *rv_sec--;
+		debug("copy reverse section");
+	}
+	res->sec = fw_sec + 1;
+	res->slen = sec_len;
+
+	debug("sec(%p), path(%p), path_array(%x), rem(%llu), slen(%lld), plen(%lld)",
+		fw_sec, fw_path, *fw_path, fw_rem, sec_len, path_len);
+	return(res);
 }
 
 /**
@@ -2233,12 +2300,19 @@ struct sea_result_s *sea_dp_trace(
 	/* substitute rv_tail if NULL */
 	rv_tail = (rv_tail == NULL) ? _fill(this->tail) : rv_tail;
 
+	/* clear working variables */
+	this->ll.fw_rem = 0;
+	this->ll.rv_rem = 0;
+	this->ll.fw_scnt = 0;
+	this->ll.rv_scnt = 0;
+
 	/* calculate max total path length */
-	uint64_t psum = _tail(fw_tail)->psum + _tail(rv_tail)->psum + BLK;
+	uint64_t psum = roundup(_tail(fw_tail)->psum + BLK, 32)
+				  + roundup(_tail(rv_tail)->psum + BLK, 32);
 	uint64_t ssum = _tail(fw_tail)->ssum + _tail(rv_tail)->ssum;
 
 	/* malloc trace working area */
-	uint64_t path_len = roundup((psum + 1) / 32, 4);
+	uint64_t path_len = roundup(psum / 32, 4);
 	uint64_t sec_len = 2 * ssum;
 	debug("psum(%lld), path_len(%llu), sec_len(%llu)", psum, path_len, sec_len);
 
@@ -2249,13 +2323,17 @@ struct sea_result_s *sea_dp_trace(
 
 	/* set path pointers */
 	uint32_t *path_base = (uint32_t *)(this->ll.ptr + sizeof(struct sea_result_s));
-	this->ll.fw_path = path_base + path_len - 1;
-	this->ll.rv_path = path_base;
+	uint32_t *fw_path_base = this->ll.fw_path = path_base + path_len - 1;
+	uint32_t *rv_path_base = this->ll.rv_path = path_base;
+
+	/* clear path array */
+	*this->ll.fw_path = 0;
+	*this->ll.rv_path = 0;
 
 	/* set sec pointers */
 	struct sea_path_section_s *sec_base = (struct sea_path_section_s *)&path_base[path_len];
-	this->ll.fw_sec = sec_base + sec_len - 1;
-	this->ll.rv_sec = sec_base;
+	struct sea_path_section_s *fw_sec_base = this->ll.fw_sec = sec_base + sec_len - 1;
+	struct sea_path_section_s *rv_sec_base = this->ll.rv_sec = sec_base;
 
 	/* forward trace */
 	struct sea_joint_head_s *fw_head = trace_create_head(this, _tail(fw_tail));
@@ -2266,7 +2344,9 @@ struct sea_result_s *sea_dp_trace(
 	// struct sea_result_s *rv_path = trace_reverse(this, rv_head, NULL);
 
 	/* concatenate */
-	return(trace_concatenate_path(this));
+	return(trace_concatenate_path(this,
+		fw_path_base, rv_path_base,
+		fw_sec_base, rv_sec_base));
 }
 
 /**
@@ -2338,9 +2418,21 @@ static _force_inline
 union sea_dir_u sea_init_create_dir_dynamic(
 	struct sea_score_s const *score_matrix)
 {
+	int8_t max = extract_max(score_matrix->score_sub);
+	int8_t geh = -score_matrix->score_ge_a;
+	int8_t gev = -score_matrix->score_ge_b;
+	int8_t gih = -score_matrix->score_gi_a;
+	int8_t giv = -score_matrix->score_gi_b;
+
+	int16_t coef_a = -max + 2*geh;
+	int16_t coef_b = -max + 2*gev;
+	int16_t ofs_a = gih;
+	int16_t ofs_b = giv;
+
+	int64_t acc = (ofs_a + coef_a * BW/2) - (ofs_b + coef_b * (BW/2 - 1));
 	return((union sea_dir_u) {
 		.dynamic = {
-			.acc = 0,			/* zero independent of scoreing schemes */
+			.acc = acc,
 			.array = 0x80000000	/* (0, 0) -> (0, 1) (down) */
 		}
 	});
@@ -2353,6 +2445,7 @@ static _force_inline
 struct sea_small_delta_s sea_init_create_small_delta(
 	struct sea_score_s const *score_matrix)
 {
+	/*
 	int8_t max = extract_max(score_matrix->score_sub);
 	int8_t geh = -score_matrix->score_ge_a;
 	int8_t gev = -score_matrix->score_ge_b;
@@ -2371,6 +2464,11 @@ struct sea_small_delta_s sea_init_create_small_delta(
 	}
 	sd.delta[BW/2] += giv;
 	return(sd);
+	*/
+	return((struct sea_small_delta_s){
+		.delta = {0},
+		.max = {0}
+	});
 }
 
 /**
@@ -2419,15 +2517,19 @@ struct sea_diff_vec_s sea_init_create_diff_vectors(
 	int8_t gih = -score_matrix->score_gi_a;
 	int8_t giv = -score_matrix->score_gi_b;
 
-	int8_t ofs_a = -(geh + gih);
-	int8_t ofs_b = -(gev + giv);
+	int8_t ofs_dh = -(geh + gih);
+	int8_t ofs_dv = -(gev + giv);
+	int8_t ofs_de = -gih;
+	int8_t ofs_df = -giv;
 	
-	int8_t drop_dh = geh + ofs_a;
-	int8_t raise_dh = max - gev + ofs_a;
-	int8_t drop_dv = gev + ofs_b;
-	int8_t raise_dv = max - geh + ofs_b;
-	int8_t drop_de = 0 - giv;
-	int8_t drop_df = 0 - gih;
+	int8_t drop_dh = geh + ofs_dh;
+	int8_t raise_dh = max - gev + ofs_dh;
+	int8_t drop_dv = gev + ofs_dv;
+	int8_t raise_dv = max - geh + ofs_dv;
+	int8_t drop_de = gih + ofs_de;
+	int8_t raise_de = ofs_de;
+	int8_t drop_df = giv + ofs_df;
+	int8_t raise_df = ofs_df;
 
 	int8_t dh[BW] __attribute__(( aligned(16) ));
 	int8_t dv[BW] __attribute__(( aligned(16) ));
@@ -2448,29 +2550,44 @@ struct sea_diff_vec_s sea_init_create_diff_vectors(
 		dv[i] = raise_dv;
 		dv[BW/2 + i] = drop_dv;
 	}
- 	dh[BW/2-1] += gih;
- 	dv[BW/2] += giv;
+ 	// dh[BW/2-1] += gih;
+ 	// dv[BW/2] += giv;
+ 	dh[BW/2] = raise_dh - gih;
+ 	dv[BW/2] = raise_dv - giv;
 
 	/* calc de and df */
-	for(int i = 0; i < BW; i++) {
-		de[i] = drop_de;
-		df[i] = drop_df;
+ 	for(int i = 0; i < BW/2; i++) {
+ 		de[i] = raise_de;
+ 		de[BW/2 + i] = drop_de;
+ 		df[i] = drop_df;
+ 		df[BW/2 + i] = raise_df;
  	}
+ 	de[BW/2] = drop_de;
+ 	df[BW/2] = drop_df;
 
  	/* negate dh */
+ 	#if 0
  	for(int i = 0; i < BW; i++) {
  		dh[i] = -dh[i];
  	}
+ 	#endif
 
-	vec_t const mask = _set(0x07);
  	vec_t _dh = _load(dh);
  	vec_t _dv = _load(dv);
  	vec_t _de = _load(de);
  	vec_t _df = _load(df);
+
+ 	_print(_dh);
+ 	_print(_dv);
+ 	_print(_de);
+ 	_print(_df);
+
 	_dh = _shl(_dh, 3);
 	_dv = _shl(_dv, 3);
-	_store(&diff.dh, _or(_andn(mask, _dh), _de));
-	_store(&diff.dv, _or(_dv, _df));
+	_store(&diff.dh, _add(_dh, _de));
+	_store(&diff.dv, _add(_dv, _df));
+	_print(_add(_dh, _de));
+	_print(_add(_dv, _df));
 
 	return(diff);
 }
@@ -2573,8 +2690,14 @@ sea_t *sea_init(
 		.md = sea_init_create_middle_delta(params_intl.score_matrix),
 		.blk = (struct sea_block_s) {
 			.mask = {
-				[PSUM_BASE - 1].all = 0xffff0000,
-				[BLK - 1].all = 0xffff0000
+				[0].pair = {
+					.v.all = 0xffff0000,
+					.h.all = 0x0000ffff
+				},
+				[BLK - 1].pair = {
+					.v.all = 0xffff0000,
+					.h.all = 0x0000ffff
+				}
 			},
 			.dir = sea_init_create_dir_dynamic(params_intl.score_matrix),
 			.offset = 0,
@@ -2582,16 +2705,12 @@ sea_t *sea_init(
 			.sd = sea_init_create_small_delta(params_intl.score_matrix),
 			.ch = sea_init_create_char_vector(),
 			.aridx = 0,
-			.bridx = 0,
-			.last_mask.pair = {
-				.h.all = 0x0000ffff,
-				.v.all = 0xffff0000
-			}
+			.bridx = 0
 		},
 		.tail = (struct sea_joint_tail_s) {
 			.v = &ctx->md,
 			.psum = PSUM_BASE - BW,
-			.p = PSUM_BASE,
+			.p = 0,
 			.ssum = 0,
 			.max = 0,
 			.stat = CONT,
@@ -2742,20 +2861,6 @@ void *sea_dp_smalloc(
 	return((void *)((this->stack_top += roundup(size, 16)) - roundup(size, 16)));
 }
 
-#if 0
-/**
- * @fn sea_dp_free
- */
-static _force_inline
-void sea_dp_free(
-	struct sea_dp_context_s *this,
-	void *ptr)
-{
-	/* nothing to do */
-	return;
-}
-#endif
-
 /**
  * @fn sea_dp_clean
  */
@@ -2820,8 +2925,8 @@ struct unittest_seqs_s {
 };
 #define unittest_seq_pair(_a, _b) ( \
 	(void *)&((struct unittest_seqs_s const){ \
-		.a = _a "GGGGGGGGGGGGGGGG", \
-		.b = _b "CCCCCCCCCCCCCCCC" \
+		.a = _a "GGGGGGGGGGGGGGGGGGGG", \
+		.b = _b "CCCCCCCCCCCCCCCCCCCC" \
 	}) \
 )
 
@@ -2849,10 +2954,10 @@ void *unittest_build_seqs(void *params)
 		sizeof(struct unittest_sections_s));
 	*sec = (struct unittest_sections_s){
 		.seq = sea_build_seq_pair(a, strlen(a), b, strlen(b)),
-		.asec = sea_build_section(1, 0, strlen(a) - 16),
-		.atail = sea_build_section(2, strlen(a) - 16, 16),
-		.bsec = sea_build_section(3, 0, strlen(b) - 16),
-		.btail = sea_build_section(4, strlen(b) - 16, 16)
+		.asec = sea_build_section(1, 0, strlen(a) - 20),
+		.atail = sea_build_section(2, strlen(a) - 20, 20),
+		.bsec = sea_build_section(3, 0, strlen(b) - 20),
+		.btail = sea_build_section(4, strlen(b) - 20, 20)
 	};
 	return((void *)sec);
 }
@@ -2874,6 +2979,77 @@ void unittest_clean_seqs(void *ctx)
 	.params = unittest_seq_pair(_a, _b), \
 	.init = unittest_build_seqs, \
 	.clean = unittest_clean_seqs
+
+/**
+ * misc macros and functions for assertion
+ */
+#define check_tail(_t, _max, _p, _psum, _ssum) \
+	((_t) != NULL && (_t)->max == (_max) && (_t)->p == (_p) && (_t)->psum == (_psum) && (_t)->ssum == (_ssum))
+#define print_tail(_t) \
+	"tail(%p), max(%lld), p(%d), psum(%lld), ssum(%lld)", \
+	(_t), (_t)->max, (_t)->p, (_t)->psum, (_t)->ssum
+#define check_result(_r, _plen, _rem, _slen) \
+	((_r) != NULL && (_r)->sec != NULL && (_r)->path != NULL && \
+	(_r)->rem == (_rem) && (_r)->slen == (_slen) && (_r)->plen == (_plen))
+#define print_result(_r) \
+	"res(%p), rem(%u), slen(%u), plen(%u)", \
+	(_r), (_r)->rem, (_r)->slen, (_r)->plen
+
+static
+int check_path(
+	struct sea_result_s const *res,
+	char const *str)
+{
+	int64_t plen = res->plen, slen = strlen(str);
+	uint32_t *p = &res->path[plen / 32];
+	char const *s = &str[slen - 1];
+	debug("%s", str);
+	if(plen != slen) { return(0); }
+	while(plen > 0) {
+		int64_t i = 0;
+		uint32_t array = 0;
+		for(i = 0; i < 32; i++) {
+			if(plen-- == 0) { break; }
+			array = (array<<1) | ((*s-- == 'D') ? 1 : 0);
+			debug("%c, %x", s[1], array);
+		}
+		array <<= 32 - i;
+		debug("path(%x), array(%x), i(%lld)", *p, array, i);
+		if(*p-- != array) {
+			return(0);
+		}
+	}
+	return(1);
+}
+
+#define print_path(_r) \
+	"%s", \
+	({ \
+		int64_t plen = (_r)->plen, cnt = 0; \
+		uint32_t *path = &(_r)->path[plen / 32]; \
+		uint32_t path_array = *path; \
+		char *p = alloca(plen) + plen; \
+		*p-- = '\0'; \
+		while(plen-- > 0) { \
+			*p-- = (path_array & 0x80000000) ? 'D' : 'R'; \
+			path_array <<= 1; \
+			if(++cnt == 32) { \
+				path_array = *--path; \
+				cnt = 0; \
+			} \
+		} \
+		(p + 1); \
+	})
+#define eq_section(_s1, _s2) \
+	((_s1).id == (_s2).id && (_s1).len == (_s2).len && (_s1).base == (_s2).base)
+#define check_section(_s, _a, _apos, _alen, _b, _bpos, _blen) \
+	(eq_section((_s).a, _a) && (_s).apos == (_apos) && (_s).alen == (_alen) \
+	&& eq_section((_s).b, _b) && (_s).bpos == (_bpos) && (_s).blen == (_blen))
+#define print_section(_s) \
+	"a(%u, %llu, %u), apos(%u), alen(%u), b(%u, %llu, %u), bpos(%u), blen(%u)", \
+	(_s).a.id, (_s).a.base, (_s).a.len, (_s).apos, (_s).alen, \
+	(_s).b.id, (_s).b.base, (_s).b.len, (_s).bpos, (_s).blen
+
 
 /* global configuration of the tests */
 unittest_config(
@@ -2902,104 +3078,295 @@ unittest(with_seq_pair("A", "A"))
 	assert(s != NULL, "%p", s);
 
 	/* check sequences */
-	assert(strcmp(s->seq.a, "AGGGGGGGGGGGGGGGG") == 0, "%s", s->seq.a);
-	assert(strcmp(s->seq.b, "ACCCCCCCCCCCCCCCC") == 0, "%s", s->seq.b);
-	assert(s->seq.alen == 17, "%llu", s->seq.alen);
-	assert(s->seq.blen == 17, "%llu", s->seq.blen);
+	assert(strcmp(s->seq.a, "AGGGGGGGGGGGGGGGGGGGG") == 0, "%s", s->seq.a);
+	assert(strcmp(s->seq.b, "ACCCCCCCCCCCCCCCCCCCC") == 0, "%s", s->seq.b);
+	assert(s->seq.alen == 21, "%llu", s->seq.alen);
+	assert(s->seq.blen == 21, "%llu", s->seq.blen);
 
 	/* check sections */
 	assert(s->asec.base == 0, "%llu", s->asec.base);
 	assert(s->asec.len == 1, "%u", s->asec.len);
 
 	assert(s->atail.base == 1, "%llu", s->atail.base);
-	assert(s->atail.len == 16, "%u", s->atail.len);
+	assert(s->atail.len == 20, "%u", s->atail.len);
 
 	assert(s->bsec.base == 0, "%llu", s->bsec.base);
 	assert(s->bsec.len == 1, "%u", s->bsec.len);
 
 	assert(s->btail.base == 1, "%llu", s->btail.base);
-	assert(s->btail.len == 16, "%u", s->btail.len);
+	assert(s->btail.len == 20, "%u", s->btail.len);
 }
 
 /**
  * check if sea_dp_init returns a vaild pointer to a dp context
  */
+#define omajinai() \
+	struct sea_context_s *c = (struct sea_context_s *)gctx; \
+	struct unittest_sections_s *s = (struct unittest_sections_s *)ctx; \
+	struct sea_dp_context_s *d = sea_dp_init(c, &s->seq);
+
 unittest(with_seq_pair("A", "A"))
 {
-	struct sea_context_s *c = (struct sea_context_s *)gctx;
-	struct unittest_sections_s *s = (struct unittest_sections_s *)ctx;
+	omajinai();
 
-	/* generate dp context */
-	struct sea_dp_context_s *d = sea_dp_init(c, &s->seq);
 	assert(d != NULL, "%p", d);
 	sea_dp_clean(d);
 }
 
 /**
- * check if sea_dp_fill_root returns a valid pointer to a tail
+ * check if sea_dp_fill_root and sea_dp_fill returns a correct score
  */
-#define check_tail(_t, _max, _p, _psum, _ssum) \
-	((_t) != NULL && (_t)->max == (_max) && (_t)->p == (_p) && (_t)->psum == (_psum) && (_t)->ssum == (_ssum))
-#define print_tail(_t) \
-	"tail(%p), max(%lld), p(%d), psum(%lld), ssum(%lld)", \
-	(_t), (_t)->max, (_t)->p, (_t)->psum, (_t)->ssum
-
 unittest(with_seq_pair("A", "A"))
 {
-	struct sea_context_s *c = (struct sea_context_s *)gctx;
-	struct unittest_sections_s *s = (struct unittest_sections_s *)ctx;
-
-	/* generate dp context */
-	struct sea_dp_context_s *d = sea_dp_init(c, &s->seq);
+	omajinai();
 
 	/* fill root section */
 	struct sea_fill_s *f = sea_dp_fill_root(d, &s->asec, 0, &s->bsec, 0);
+	assert(f->status == 0x1ff, "%x", f->status);
 	assert(check_tail(f, 0, 0, -29, 1), print_tail(f));
 
 	/* fill again */
 	f = sea_dp_fill(d, f, &s->asec, &s->bsec);
+	assert(f->status == 0x1ff, "%x", f->status);
 	assert(check_tail(f, 0, 0, -27, 2), print_tail(f));
 
 	/* fill tail section */
 	f = sea_dp_fill(d, f, &s->atail, &s->btail);
-	assert(check_tail(f, 4, 4, 5, 3), print_tail(f));
+	assert(f->status == 0x1ff, "%x", f->status);
+	assert(check_tail(f, 4, 13, 13, 3), print_tail(f));
 
 	/* fill tail section again */
 	f = sea_dp_fill(d, f, &s->atail, &s->btail);
-	assert(check_tail(f, 1, 31, 36, 4), print_tail(f));
+	assert(f->status == 0x10f, "%x", f->status);
+	assert(check_tail(f, -11, 31, 44, 4), print_tail(f));
 
-	/* cleanup */
 	sea_dp_clean(d);
 }
 
-/**
- * with longer sequences
- */
+/* with longer sequences */
 unittest(with_seq_pair("ACGTACGTACGT", "ACGTACGTACGT"))
 {
-	struct sea_context_s *c = (struct sea_context_s *)gctx;
-	struct unittest_sections_s *s = (struct unittest_sections_s *)ctx;
-
-	/* generate dp context */
-	struct sea_dp_context_s *d = sea_dp_init(c, &s->seq);
+	omajinai();
 
 	/* fill root section */
 	struct sea_fill_s *f = sea_dp_fill_root(d, &s->asec, 0, &s->bsec, 0);
+	assert(f->status == 0x1ff, "%x", f->status);
 	assert(check_tail(f, 0, 0, -7, 1), print_tail(f));
 
 	/* fill again */
 	f = sea_dp_fill(d, f, &s->asec, &s->bsec);
-	assert(check_tail(f, 16, 16, 17, 2), print_tail(f));
+	assert(f->status == 0x1ff, "%x", f->status);
+	assert(check_tail(f, 16, 17, 17, 2), print_tail(f));
 
 	/* fill tail section */
 	f = sea_dp_fill(d, f, &s->atail, &s->btail);
-	assert(check_tail(f, 48, 32, 49, 3), print_tail(f));
+	assert(f->status == 0x1ff, "%x", f->status);
+	assert(check_tail(f, 48, 40, 57, 3), print_tail(f));
 
 	/* fill tail section again */
 	f = sea_dp_fill(d, f, &s->atail, &s->btail);
-	assert(check_tail(f, 45, 31, 80, 4), print_tail(f));
+	assert(f->status == 0x10f, "%x", f->status);
+	assert(check_tail(f, 33, 31, 88, 4), print_tail(f));
 
-	/* cleanup */
+	sea_dp_clean(d);
+}
+
+/* sequences with different lengths (consumed as mismatches) */
+unittest(with_seq_pair("GAAAAAAAA", "AAAAAAAA"))
+{
+	omajinai();
+
+	struct sea_fill_s *f = sea_dp_fill_root(d, &s->asec, 0, &s->bsec, 0);
+	assert(f->status == 0x01ff, "%x", f->status);
+	f = sea_dp_fill(d, f, &s->asec, &s->bsec);
+	assert(f->status == 0x01f0, "%x", f->status);
+	f = sea_dp_fill(d, f, &s->asec, &s->btail);
+	assert(f->status == 0x010f, "%x", f->status);
+	f = sea_dp_fill(d, f, &s->atail, &s->btail);
+	assert(f->status == 0x01f0, "%x", f->status);
+	assert(check_tail(f, 22, 37, 42, 4), print_tail(f));
+
+	sea_dp_clean(d);
+}
+
+/* another pair with different lengths */
+unittest(with_seq_pair("TTTTTTTT", "CTTTTTTTT"))
+{
+	omajinai();
+
+	struct sea_fill_s *f = sea_dp_fill_root(d, &s->asec, 0, &s->bsec, 0);
+	assert(f->status == 0x010f, "%x", f->status);
+	f = sea_dp_fill(d, f, &s->asec, &s->bsec);
+	assert(f->status == 0x01f0, "%x", f->status);
+	f = sea_dp_fill(d, f, &s->asec, &s->bsec);
+	assert(f->status == 0x010f, "%x", f->status);
+	f = sea_dp_fill(d, f, &s->atail, &s->bsec);
+	assert(f->status == 0x01f0, "%x", f->status);
+	f = sea_dp_fill(d, f, &s->atail, &s->btail);
+	assert(f->status == 0x010f, "%x", f->status);
+	assert(check_tail(f, 22, 35, 41, 5), print_tail(f));
+
+	sea_dp_clean(d);
+}
+
+/* with insertions */
+unittest(with_seq_pair("GACGTACGT", "ACGTACGT"))
+{
+	omajinai();
+
+	struct sea_fill_s *f = sea_dp_fill_root(d, &s->asec, 0, &s->bsec, 0);
+	assert(f->status == 0x01ff, "%x", f->status);
+	f = sea_dp_fill(d, f, &s->asec, &s->bsec);
+	assert(f->status == 0x01f0, "%x", f->status);
+	f = sea_dp_fill(d, f, &s->asec, &s->btail);
+	assert(f->status == 0x010f, "%x", f->status);
+	f = sea_dp_fill(d, f, &s->atail, &s->btail);
+	assert(f->status == 0x01ff, "%x", f->status);
+	assert(check_tail(f, 20, 38, 43, 4), print_tail(f));
+
+	sea_dp_clean(d);
+}
+
+/* with deletions */
+unittest(with_seq_pair("ACGTACGT", "GACGTACGT"))
+{
+	omajinai();
+
+	struct sea_fill_s *f = sea_dp_fill_root(d, &s->asec, 0, &s->bsec, 0);
+	assert(f->status == 0x010f, "%x", f->status);
+	f = sea_dp_fill(d, f, &s->asec, &s->bsec);
+	assert(f->status == 0x01f0, "%x", f->status);
+	f = sea_dp_fill(d, f, &s->asec, &s->bsec);
+	assert(f->status == 0x010f, "%x", f->status);
+	f = sea_dp_fill(d, f, &s->atail, &s->bsec);
+	assert(f->status == 0x01f0, "%x", f->status);
+	f = sea_dp_fill(d, f, &s->atail, &s->btail);
+	assert(f->status == 0x010f, "%x", f->status);
+	assert(check_tail(f, 20, 36, 42, 5), print_tail(f));
+
+	sea_dp_clean(d);
+}
+
+/**
+ * check if sea_dp_trace returns a correct path
+ */
+unittest(with_seq_pair("A", "A"))
+{
+	omajinai();
+
+	/* fill sections */
+	struct sea_fill_s *f = sea_dp_fill_root(d, &s->asec, 0, &s->bsec, 0);
+	f = sea_dp_fill(d, f, &s->asec, &s->bsec);
+	f = sea_dp_fill(d, f, &s->atail, &s->btail);
+
+	/* forward-only traceback */
+	struct sea_result_s *r = sea_dp_trace(d, f, NULL, NULL);
+	assert(check_result(r, 4, 4, 2), print_result(r));
+	assert(check_path(r, "DRDR"), print_path(r));
+	assert(check_section(r->sec[0], s->asec, 0, 1, s->bsec, 0, 1), print_section(r->sec[0]));
+	assert(check_section(r->sec[1], s->asec, 0, 1, s->bsec, 0, 1), print_section(r->sec[1]));
+
+	/* forward-reverse traceback */
+
+	sea_dp_clean(d);
+}
+
+unittest(with_seq_pair("ACGTACGTACGT", "ACGTACGTACGT"))
+{
+	omajinai();
+
+	/* fill sections */
+	struct sea_fill_s *f = sea_dp_fill_root(d, &s->asec, 0, &s->bsec, 0);
+	f = sea_dp_fill(d, f, &s->asec, &s->bsec);
+	f = sea_dp_fill(d, f, &s->atail, &s->btail);
+
+	/* traceback */
+	struct sea_result_s *r = sea_dp_trace(d, f, NULL, NULL);
+	assert(check_result(r, 48, 16, 2), print_result(r));
+	assert(check_path(r, "DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"), print_path(r));
+	assert(check_section(r->sec[0], s->asec, 0, 12, s->bsec, 0, 12), print_section(r->sec[0]));
+	assert(check_section(r->sec[1], s->asec, 0, 12, s->bsec, 0, 12), print_section(r->sec[1]));
+
+	sea_dp_clean(d);
+}
+
+/* sequences with different lengths (consumed as mismatches) */
+unittest(with_seq_pair("GAAAAAAAA", "AAAAAAAA"))
+{
+	omajinai();
+
+	struct sea_fill_s *f = sea_dp_fill_root(d, &s->asec, 0, &s->bsec, 0);
+	f = sea_dp_fill(d, f, &s->asec, &s->bsec);
+	f = sea_dp_fill(d, f, &s->asec, &s->btail);
+	f = sea_dp_fill(d, f, &s->atail, &s->btail);
+	
+	struct sea_result_s *r = sea_dp_trace(d, f, NULL, NULL);
+	assert(check_result(r, 32, 0, 3), print_result(r));
+	assert(check_path(r, "DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"), print_path(r));
+	assert(check_section(r->sec[0], s->asec, 0, 8, s->bsec, 0, 8), print_section(r->sec[0]));
+	assert(check_section(r->sec[1], s->asec, 8, 1, s->bsec, 0, 1), print_section(r->sec[1]));
+	assert(check_section(r->sec[2], s->asec, 0, 7, s->bsec, 1, 7), print_section(r->sec[2]));
+
+	sea_dp_clean(d);
+}
+
+/* another pair with different lengths */
+unittest(with_seq_pair("TTTTTTTT", "CTTTTTTTT"))
+{
+	omajinai();
+
+	struct sea_fill_s *f = sea_dp_fill_root(d, &s->asec, 0, &s->bsec, 0);
+	f = sea_dp_fill(d, f, &s->asec, &s->bsec);
+	f = sea_dp_fill(d, f, &s->asec, &s->bsec);
+	f = sea_dp_fill(d, f, &s->atail, &s->bsec);
+	f = sea_dp_fill(d, f, &s->atail, &s->btail);
+
+	struct sea_result_s *r = sea_dp_trace(d, f, NULL, NULL);
+	assert(check_result(r, 32, 0, 3), print_result(r));
+	assert(check_path(r, "DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"), print_path(r));
+	assert(check_section(r->sec[0], s->asec, 0, 8, s->bsec, 0, 8), print_section(r->sec[0]));
+	assert(check_section(r->sec[1], s->asec, 0, 1, s->bsec, 8, 1), print_section(r->sec[1]));
+	assert(check_section(r->sec[2], s->asec, 1, 7, s->bsec, 0, 7), print_section(r->sec[2]));
+
+	sea_dp_clean(d);
+}
+
+/* with insertions */
+unittest(with_seq_pair("GACGTACGT", "ACGTACGT"))
+{
+	omajinai();
+
+	struct sea_fill_s *f = sea_dp_fill_root(d, &s->asec, 0, &s->bsec, 0);
+	f = sea_dp_fill(d, f, &s->asec, &s->bsec);
+	f = sea_dp_fill(d, f, &s->asec, &s->btail);
+	f = sea_dp_fill(d, f, &s->atail, &s->btail);
+
+	struct sea_result_s *r = sea_dp_trace(d, f, NULL, NULL);
+	assert(check_result(r, 34, 2, 2), print_result(r));
+	assert(check_path(r, "RDRDRDRDRDRDRDRDRRDRDRDRDRDRDRDRDR"), print_path(r));
+	assert(check_section(r->sec[0], s->asec, 0, 9, s->bsec, 0, 8), print_section(r->sec[0]));
+	assert(check_section(r->sec[1], s->asec, 0, 9, s->bsec, 0, 8), print_section(r->sec[1]));
+
+	sea_dp_clean(d);
+}
+
+/* with deletions */
+unittest(with_seq_pair("ACGTACGT", "GACGTACGT"))
+{
+	omajinai();
+
+	struct sea_fill_s *f = sea_dp_fill_root(d, &s->asec, 0, &s->bsec, 0);
+	f = sea_dp_fill(d, f, &s->asec, &s->bsec);
+	f = sea_dp_fill(d, f, &s->asec, &s->bsec);
+	f = sea_dp_fill(d, f, &s->atail, &s->bsec);
+	f = sea_dp_fill(d, f, &s->atail, &s->btail);
+
+	struct sea_result_s *r = sea_dp_trace(d, f, NULL, NULL);
+	assert(check_result(r, 34, 2, 2), print_result(r));
+	assert(check_path(r, "DDRDRDRDRDRDRDRDRDDRDRDRDRDRDRDRDR"), print_path(r));
+	assert(check_section(r->sec[0], s->asec, 0, 8, s->bsec, 0, 9), print_section(r->sec[0]));
+	assert(check_section(r->sec[1], s->asec, 0, 8, s->bsec, 0, 9), print_section(r->sec[1]));
+
 	sea_dp_clean(d);
 }
 

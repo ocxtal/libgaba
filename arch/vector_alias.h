@@ -26,6 +26,8 @@
 
 /* broadcast */
 #define _set 		vector_alias_join(_set_, vector_prefix)
+#define _zero 		vector_alias_join(_zero_, vector_prefix)
+#define _seta 		vector_alias_join(_seta_, vector_prefix)
 
 /* logics */
 #define _not 		vector_alias_join(_not_, vector_prefix)

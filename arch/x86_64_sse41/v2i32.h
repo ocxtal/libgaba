@@ -85,7 +85,7 @@ typedef struct v2i32_s {
 #define _zero_v2i32()		_a_v2i32x(setzero, _e_x, _unused)
 #define _seta_v2i32(x, y) ( \
 	(v2i32_t) { \
-		_mm_cvtsi64_si128((((uint64_t)(x))<<32) | ((uint64_t)(y))) \
+		_mm_cvtsi64_si128((((uint64_t)(x))<<32) | ((uint32_t)(y))) \
 	} \
 )
 #define _swap_v2i32(x) ( \
@@ -141,6 +141,10 @@ typedef struct v2i32_s {
 #define _mask_v2i32(a) ( \
 	(uint32_t) (0xff & _mm_movemask_epi8((a).v1)) \
 )
+#define V2I32_MASK_00		( 0x00 )
+#define V2I32_MASK_01		( 0x0f )
+#define V2I32_MASK_10		( 0xf0 )
+#define V2I32_MASK_11		( 0xff )
 
 /* transpose */
 #define _lo_v2i32(a, b) ( \

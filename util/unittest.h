@@ -15,7 +15,7 @@
 #pragma once	/* instead of include guard */
 
 #ifndef UNITTEST
-#define UNITTEST 				0
+#define UNITTEST 				1
 #endif
 
 #ifndef UNITTEST_ALIAS_MAIN
@@ -26,6 +26,7 @@
 
 #include <alloca.h>
 #include <ctype.h>
+#include <inttypes.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -244,7 +245,7 @@ void ut_print_assertion_failed(
 	va_start(l, fmt);
 
 	fprintf(stderr,
-		ut_color(UT_YELLOW, "assertion failed") ": [%s] %s:" ut_color(UT_BLUE, "%lld") " (%s) `" ut_color(UT_MAGENTA, "%s") "'",
+		ut_color(UT_YELLOW, "assertion failed") ": [%s] %s:" ut_color(UT_BLUE, "%" PRId64 "") " (%s) `" ut_color(UT_MAGENTA, "%s") "'",
 		ut_null_replace(config->name, "no name"),
 		ut_null_replace(info->file, "(unknown filename)"),
 		line,
@@ -270,14 +271,14 @@ void ut_print_assertion_failed(
 	char *_str = alloca(size); \
 	char *_s = _str; \
 	/* make header */ \
-	_s += sprintf(_s, "\n`%s' len: %lld\n", #ptr, (int64_t)len); \
+	_s += sprintf(_s, "\n`%s' len: %" PRId64 "\n", #ptr, (int64_t)len); \
 	_s += sprintf(_s, "                   "); \
 	for(int64_t i = 0; i < 16; i++) { \
 		_s += sprintf(_s, " %02x", (uint8_t)i); \
 	} \
 	_s += sprintf(_s, "\n"); \
 	for(int64_t i = 0; i < ((len) + 15) / 16; i++) { \
-		_s += sprintf(_s, "0x%016llx:", (uint64_t)_ptr); \
+		_s += sprintf(_s, "0x%016" PRIx64 ":", (uint64_t)_ptr); \
 		for(int64_t j = 0; j < 16; j++) { \
 			_s += sprintf(_s, " %02x", (uint8_t)_ptr[j]); \
 		} \
@@ -426,7 +427,7 @@ struct ut_nm_result_s *ut_parse_nm_output(
 		/* check the sanity of the line */
 		char const *sp = p;
 		while(*sp != '\r' && *sp != '\n' && *sp != '\0') { sp++; }
-		// printf("%p, %p, %lld\n", p, sp, (int64_t)(sp - p));
+		// printf("%p, %p, %" PRId64 "\n", p, sp, (int64_t)(sp - p));
 		if((int64_t)(sp - p) < 1) { break; }
 
 		/* if the first character of the line is space, pass the PTR state */
@@ -584,7 +585,7 @@ void ut_dump_test(
 {
 	struct ut_s const *t = test;
 	while(t->file != NULL) {
-		printf("%s, %llu, %lld, %s, %s, %p, %p\n",
+		printf("%s, %" PRIu64 ", %" PRId64 ", %s, %s, %p, %p\n",
 			t->file,
 			t->line,
 			t->unique_id,
@@ -603,7 +604,7 @@ void ut_dump_config(
 {
 	struct ut_config_s const *c = config;
 	while(c->file != NULL) {
-		printf("%s, %lld, %s, %s, %p, %p\n",
+		printf("%s, %" PRId64 ", %s, %s, %p, %p\n",
 			c->file,
 			c->unique_id,
 			c->name,
@@ -714,7 +715,7 @@ void ut_sort(
 		sizeof(struct ut_config_s),
 		ut_config_compare);
 	// ut_dump_test(test);
-	// printf("%lld\n", ut_get_total_file_count(test));
+	// printf("%" PRId64 "\n", ut_get_total_file_count(test));
 	return;
 }
 
@@ -762,7 +763,7 @@ struct ut_config_s *ut_compensate_config(
 	utkv_init(compd_config);
 
 	int64_t i = 0;
-	// printf("%lld\n", file_idx[i]);
+	// printf("%" PRId64 "\n", file_idx[i]);
 	struct ut_s const *t = &sorted_test[file_idx[i]];
 	struct ut_config_s const *c = sorted_config;
 
@@ -804,7 +805,7 @@ int ut_toposort_by_tag(
 			for(int64_t j = 0; j < test_cnt; j++) {
 				if(i == j) { continue; }
 				if(ut_strcmp(sorted_test[j].name, *d) == 0) {
-					// printf("edge found from node %lld to node %lld\n", j, i);
+					// printf("edge found from node %" PRId64 " to node %" PRId64 "\n", j, i);
 					utkv_push(utkv_at(dag, i), j);
 				}
 			}
@@ -816,7 +817,7 @@ int ut_toposort_by_tag(
 	utkvec_t(int8_t) mark;
 	utkv_init(mark);
 	for(int64_t i = 0; i < test_cnt; i++) {
-		// printf("incoming edge count %lld : %lld\n", i, utkv_size(utkv_at(dag, i)));
+		// printf("incoming edge count %" PRId64 " : %" PRId64 "\n", i, utkv_size(utkv_at(dag, i)));
 		utkv_push(mark, utkv_size(utkv_at(dag, i)));
 	}
 
@@ -840,7 +841,7 @@ int ut_toposort_by_tag(
 		}
 
 		/* the node has no incoming edge */
-		// printf("the node %lld has no incoming edge\n", node_id);
+		// printf("the node %" PRId64 " has no incoming edge\n", node_id);
 		utkv_push(res, sorted_test[node_id]);
 
 		/* mark pushed */
@@ -852,10 +853,10 @@ int ut_toposort_by_tag(
 
 			for(int64_t k = 0; k < utkv_size(utkv_at(dag, j)); k++) {
 				if(utkv_at(utkv_at(dag, j), k) == node_id) {
-					// printf("the node %lld had edge from %lld\n", j, node_id);
+					// printf("the node %" PRId64 " had edge from %" PRId64 "\n", j, node_id);
 					utkv_at(utkv_at(dag, j), k) = -1;
 					utkv_at(mark, j)--;
-					// printf("and then node %lld has %d incoming edges\n", j, utkv_at(mark, j));
+					// printf("and then node %" PRId64 " has %d incoming edges\n", j, utkv_at(mark, j));
 				}
 			}
 		}
@@ -909,7 +910,7 @@ int ut_toposort_by_group(
 			for(int64_t j = 0; j < file_cnt; j++) {
 				if(i == j) { continue; }
 				if(ut_strcmp(sorted_config[j].name, *d) == 0) {
-					// printf("edge found from group %lld to group %lld\n", j, i);
+					// printf("edge found from group %" PRId64 " to group %" PRId64 "\n", j, i);
 					utkv_push(utkv_at(dag, i), j);
 				}
 			}
@@ -921,7 +922,7 @@ int ut_toposort_by_group(
 	utkvec_t(int8_t) mark;
 	utkv_init(mark);
 	for(int64_t i = 0; i < file_cnt; i++) {
-		// printf("incoming edge count %lld : %lld\n", i, utkv_size(utkv_at(dag, i)));
+		// printf("incoming edge count %" PRId64 " : %" PRId64 "\n", i, utkv_size(utkv_at(dag, i)));
 		utkv_push(mark, utkv_size(utkv_at(dag, i)));
 	}
 
@@ -947,7 +948,7 @@ int ut_toposort_by_group(
 		}
 
 		/* the node has no incoming edge */
-		// printf("the node %lld has no incoming edge\n", file_id);
+		// printf("the node %" PRId64 " has no incoming edge\n", file_id);
 		// utkv_push(res, file_id);
 
 		utkv_push(config_buf, sorted_config[file_id]);
@@ -964,10 +965,10 @@ int ut_toposort_by_group(
 
 			for(int64_t k = 0; k < utkv_size(utkv_at(dag, j)); k++) {
 				if(utkv_at(utkv_at(dag, j), k) == file_id) {
-					// printf("the node %lld had edge from %lld\n", j, file_id);
+					// printf("the node %" PRId64 " had edge from %" PRId64 "\n", j, file_id);
 					utkv_at(utkv_at(dag, j), k) = -1;
 					utkv_at(mark, j)--;
-					// printf("and then node %lld has %d incoming edges\n", j, utkv_at(mark, j));
+					// printf("and then node %" PRId64 " has %d incoming edges\n", j, utkv_at(mark, j));
 				}
 			}
 		}
@@ -1009,7 +1010,7 @@ void ut_print_results(
 	int64_t fail = 0;
 
 	for(int64_t i = 0; i < file_cnt; i++) {
-		fprintf(stderr, "%sGroup %s: %lld succeeded, %lld failed in total %lld assertions in %lld tests.%s\n",
+		fprintf(stderr, "%sGroup %s: %" PRId64 " succeeded, %" PRId64 " failed in total %" PRId64 " assertions in %" PRId64 " tests.%s\n",
 			(result[i].fail == 0) ? UT_GREEN : UT_RED,
 			ut_null_replace(config[i].name, "(no name)"),
 			result[i].succ,
@@ -1023,7 +1024,7 @@ void ut_print_results(
 		fail += result[i].fail;
 	}
 
-	fprintf(stderr, "%sSummary: %lld succeeded, %lld failed in total %lld assertions in %lld tests.%s\n",
+	fprintf(stderr, "%sSummary: %" PRId64 " succeeded, %" PRId64 " failed in total %" PRId64 " assertions in %" PRId64 " tests.%s\n",
 		(fail == 0) ? UT_GREEN : UT_RED,
 		succ, fail, succ + fail, cnt,
 		UT_DEFAULT_COLOR);
@@ -1051,11 +1052,11 @@ int ut_main_impl(int argc, char *argv[])
 	int64_t *file_idx = ut_build_file_index(test);
 	int64_t file_cnt = ut_get_total_file_count(test);
 
-	// printf("%lld\n", file_cnt);
+	// printf("%" PRId64 "\n", file_cnt);
 
 	/* topological sort by tag */
 	for(int64_t i = 0; i < file_cnt; i++) {
-		// printf("toposort %lld, %lld\n", file_idx[i], file_idx[i + 1]);
+		// printf("toposort %" PRId64 ", %" PRId64 "\n", file_idx[i], file_idx[i + 1]);
 		if(ut_toposort_by_tag(&test[file_idx[i]], file_idx[i + 1] - file_idx[i]) != 0) {
 			fprintf(stderr, ut_color(UT_RED, "ERROR") ": failed to order tests. check if the depends_on options are sane.\n");
 			return(1);
@@ -1076,27 +1077,32 @@ int ut_main_impl(int argc, char *argv[])
 	for(int64_t i = 0; i < file_cnt; i++) {
 		struct ut_result_s r = { 0 };
 
-		void *gctx = NULL;
-		if(compd_config[i].init != NULL && compd_config[i].clean != NULL) {
-			gctx = compd_config[i].init(compd_config[i].params);
-		}
-
 		for(int64_t j = file_idx[i]; j < file_idx[i + 1]; j++) {
 			r.cnt++;
-			if(test[j].init != NULL && test[j].clean != NULL) {
-				void *ctx = test[j].init(test[j].params);
-				test[j].fn(ctx, gctx, &test[j], &compd_config[i], &r);
-				test[j].clean(ctx);
-			} else {
-				test[j].fn(NULL, gctx, &test[j], &compd_config[i], &r);
+
+			/* initialize group context */
+			void *gctx = NULL;
+			if(compd_config[i].init != NULL && compd_config[i].clean != NULL) {
+				gctx = compd_config[i].init(compd_config[i].params);
 			}
-			// printf("run test %s, %lld, %lld\n", test[j].name, r.succ, r.fail);
-		}
 
-		if(compd_config[i].init != NULL && compd_config[i].clean != NULL) {
-			compd_config[i].clean(gctx);
-		}
+			/* initialize local context */
+			void *ctx = NULL;
+			if(test[j].init != NULL && test[j].clean != NULL) {
+				ctx = test[j].init(test[j].params);
+			}
 
+			/* run a test */
+			test[j].fn(ctx, gctx, &test[j], &compd_config[i], &r);
+
+			/* cleanup contexts */
+			if(test[j].init != NULL && test[j].clean != NULL) {
+				test[j].clean(ctx);
+			}
+			if(compd_config[i].init != NULL && compd_config[i].clean != NULL) {
+				compd_config[i].clean(gctx);
+			}
+		}
 		utkv_push(res, r);
 	}
 

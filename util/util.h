@@ -157,7 +157,7 @@ struct sea_block_s {
 	struct sea_small_delta_s sd;		/** (64) small delta */
 	struct sea_char_vec_s ch;			/** (32) char vector */
 	int32_t aridx, bridx;				/** (8) reverse index on the current section */
-	union sea_mask_pair_u last_mask;	/** (8) corresponds to (blk + 1)->mask[-1] */
+	uint64_t reserved;					/** (8) */
 };
 struct sea_phantom_block_s {
 	union sea_dir_u dir;				/** (8) */
@@ -166,7 +166,7 @@ struct sea_phantom_block_s {
 	struct sea_small_delta_s sd;		/** (64) */
 	struct sea_char_vec_s ch;			/** (32) char vector */
 	int32_t aridx, bridx;				/** (8) reverse index on the current section */
-	union sea_mask_pair_u last_mask;	/** (8) corresponds to (blk + 1)->mask[-1] */
+	uint64_t reserved;					/** (8) */
 };
 _static_assert(sizeof(struct sea_block_s) == 448);
 _static_assert(sizeof(struct sea_phantom_block_s) == 192);
@@ -303,48 +303,9 @@ struct sea_reader_work_s {
 };
 _static_assert(sizeof(struct sea_reader_work_s) == 256);
 
-#if 0
-/**
- * @struct sea_writer_s
- *
- * @brief (internal) abstract sequence writer
- * sizeof(struct sea_writer_s) == 12
- * sizeof(struct sea_writer_work_s) == 24
- */
-struct sea_writer_s {
-	uint64_t (*push)(			/** (8) */
-		uint8_t *p,
-		uint64_t dst,
-		uint64_t src,
-		uint8_t c);
-	uint8_t type;				/** (1) */
-	uint8_t fr;					/** (1) */
-	uint8_t _pad[6];			/** (6) */
-};
-_static_assert(sizeof(struct sea_writer_s) == 16);
-struct sea_writer_work_s {
-	uint8_t *p;					/** (8) */
-	uint32_t size;				/** (4) malloc size */
-	uint32_t rpos;				/** (4) previous reverse head */
-	uint32_t pos;				/** (4) current head */
-	uint32_t len;				/** (4) length of the string */
-};
-_static_assert(sizeof(struct sea_writer_work_s) == 24);
-#endif
-
 /**
  * @struct sea_writer_work_s
  */
-#if 0
-struct sea_writer_work_s {
-	struct sea_path_section_s *fw_sec;
-	struct sea_path_section_s *rv_sec;
-	int32_t fw_scnt;
-	int32_t rv_scnt;
-	void *ptr;
-};
-_static_assert(sizeof(struct sea_writer_work_s) == 32);
-#endif
 struct sea_writer_work_s {
 	/** 64byte aligned */
 
@@ -360,7 +321,8 @@ struct sea_writer_work_s {
 	/** 64, 64 */
 
 	/** 64byte aligned */
-	uint32_t a_update_mask, b_update_mask;/** (8) update is required if 0xffff */
+	uint64_t reserved;				/** (8) */
+	// uint32_t a_update_mask, b_update_mask;/** (8) update is required if 0xffff */
 	int32_t alen, blen;				/** (8) lengths of the current section */
 	int32_t aridx, bridx;			/** (8) current ridx pair */
 	int32_t asridx, bsridx;			/** (8) start ridx pair */
@@ -505,8 +467,9 @@ _static_assert(SEA_DP_ROOT_LOAD_SIZE == 240);
  * @enum _STATE
  */
 enum _STATE {
-	CONT 	= 1,
-	TERM 	= 0
+	CONT 	= 0,
+	UPDATE  = 0x0100,
+	TERM 	= 0x0200
 };
 
 /**

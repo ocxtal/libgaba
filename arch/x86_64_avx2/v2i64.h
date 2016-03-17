@@ -126,6 +126,10 @@ typedef struct v2i64_s {
 #define _mask_v2i64(a) ( \
 	(uint32_t) (_mm_movemask_epi8((a).v1)) \
 )
+#define V2I64_MASK_00		( 0x0000 )
+#define V2I64_MASK_01		( 0x00ff )
+#define V2I64_MASK_10		( 0xff00 )
+#define V2I64_MASK_11		( 0xffff )
 
 /* convert */
 #define _cvt_v2i32_v2i64(a) ( \
