@@ -149,10 +149,10 @@
 #define _memcpy_blk_uu(dst, src, len)		_memcpy_blk_intl(dst, src, len, _ymm_wr_u, _ymm_rd_u)
 #define _memset_blk_intl(dst, a, size, _wr) { \
 	void *_dst = (void *)(dst); \
-	__m128i const ymm0 = _mm_set1_epi8((int8_t)a); \
+	__m256i const ymm0 = _mm256_set1_epi8((int8_t)a); \
 	int64_t i; \
-	for(i = 0; i < size / sizeof(__m128i); i++) { \
-		_wr(_dst, 0); _dst += sizeof(__m128i); \
+	for(i = 0; i < size / sizeof(__m256i); i++) { \
+		_wr(_dst, 0); _dst += sizeof(__m256i); \
 	} \
 }
 #define _memset_blk_a(dst, a, size)			_memset_blk_intl(dst, a, size, _ymm_wr_a)
