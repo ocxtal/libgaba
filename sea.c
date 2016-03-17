@@ -2329,7 +2329,7 @@ struct sea_result_s *sea_dp_trace(
 	trace(this, _tail(fw_tail), 0);
 
 	/* reverse trace */
-	trace(this, _tail(rv_tail), 0);
+	// trace(this, _tail(rv_tail), 0);
 
 	/* concatenate */
 	return(trace_concatenate_path(this,
