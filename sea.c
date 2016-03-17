@@ -531,11 +531,11 @@ v2i32_t fill_update_section(
 }
 
 /**
- * @fn fill_create_head
+ * @fn fill_create_phantom_block
  * @brief create joint_head on the stack to start block extension
  */
 static _force_inline
-struct sea_joint_block_s fill_create_head(
+struct sea_joint_block_s fill_create_phantom_block(
 	struct sea_dp_context_s *this,
 	struct sea_joint_tail_s const *prev_tail)
 {
@@ -1272,7 +1272,7 @@ struct sea_joint_tail_s *fill_mem_bounded(
 	struct sea_joint_tail_s const *prev_tail,
 	uint64_t blk_cnt)
 {
-	struct sea_joint_block_s h = fill_create_head(this, prev_tail);
+	struct sea_joint_block_s h = fill_create_phantom_block(this, prev_tail);
 	struct sea_joint_block_s b = fill_bulk_predetd_blocks(this, h.blk, blk_cnt);
 	return(fill_create_tail(this, prev_tail, b.blk, h.p + b.p, b.stat));
 }
@@ -1286,7 +1286,7 @@ struct sea_joint_tail_s *fill_seq_bounded(
 	struct sea_dp_context_s *this,
 	struct sea_joint_tail_s const *prev_tail)
 {
-	struct sea_joint_block_s stat = fill_create_head(this, prev_tail);
+	struct sea_joint_block_s stat = fill_create_phantom_block(this, prev_tail);
 	int64_t psum = stat.p;
 
 	/* check if term detected in init fetch */
@@ -1328,7 +1328,7 @@ struct sea_joint_tail_s *fill_seq_p_bounded(
 	struct sea_dp_context_s *this,
 	struct sea_joint_tail_s const *prev_tail)
 {
-	struct sea_joint_block_s stat = fill_create_head(this, prev_tail);
+	struct sea_joint_block_s stat = fill_create_phantom_block(this, prev_tail);
 	int64_t psum = stat.p;
 
 	/* check if term detected in init fetch */
