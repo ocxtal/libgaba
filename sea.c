@@ -35,7 +35,7 @@
 #define BW 							( 32 )
 #define BLK 						( 32 )
 #define MIN_BULK_BLOCKS				( 32 )
-#define MEM_ALIGN_SIZE				( 16 )
+#define MEM_ALIGN_SIZE				( 32 )		/* 32byte aligned for AVX2 environments */
 #define MEM_INIT_SIZE				( (uint64_t)32 * 1024 * 1024 )
 #define MEM_MARGIN_SIZE				( 2048 )
 #define PSUM_BASE					( 1 )
@@ -543,11 +543,12 @@ struct sea_joint_block_s fill_create_head(
 		prev_tail, prev_tail->p, prev_tail->psum, prev_tail->ssum);
 
 	/* init working stack */
-	struct sea_joint_head_s *head = (struct sea_joint_head_s *)this->stack_top;
-	head->tail = prev_tail;
+	// struct sea_joint_head_s *head = (struct sea_joint_head_s *)this->stack_top;
+	// head->tail = prev_tail;
 
 	/* copy phantom vectors from the previous fragment */
-	struct sea_block_s *blk = _phantom_block(head);
+	// struct sea_block_s *blk = _phantom_block(head);
+	struct sea_block_s *blk = (struct sea_block_s *)this->stack_top;
 	_memcpy_blk_aa(
 		(uint8_t *)blk + SEA_BLOCK_PHANTOM_OFFSET,
 		(uint8_t *)_last_block(prev_tail) + SEA_BLOCK_PHANTOM_OFFSET,
@@ -1740,42 +1741,6 @@ void trace_search_max_pos(
 }
 
 /**
- * @fn trace_create_head
- *
- * @brief detect max score position and create head
- */
-static _force_inline
-struct sea_joint_head_s *trace_create_head(
-	struct sea_dp_context_s *this,
-	struct sea_joint_tail_s const *tail)
-{
-	debug("trace_create_head tail(%p), p(%d), psum(%lld), ssum(%d)",
-		tail, tail->p, tail->psum, tail->ssum);
-
-	/* create joint_head */
-	struct sea_joint_head_s *head = sea_dp_smalloc(
-		this,
-		sizeof(struct sea_joint_head_s));
-	debug("this(%p), head(%p), tail(%p)", this, head, tail);
-
-	/* search max block */
-	trace_search_max_block(this, tail);
-
-	/* determine pos in the block */
-	trace_search_max_pos(this);
-
-	/* store coordinates to joint_head */
-	debug("this(%p), head(%p), tail(%p)", this, head, tail);
-	head->p = this->ll.p - tail->p;
-	head->q = this->ll.q - BW/2;
-	head->tail = tail;
-
-	debug("create head p(%d), q(%d), tail(%p)", head->p, head->q, head->tail);
-
-	return(head);
-}
-
-/**
  * @fn trace_load_section_a, trace_load_section_b
  */
 static _force_inline
@@ -2194,27 +2159,36 @@ void trace_forward_push(
 static _force_inline
 void trace(
 	struct sea_dp_context_s *this,
-	struct sea_joint_head_s const *head,
+	struct sea_joint_tail_s const *tail,
 	uint64_t dir)
 {
+	debug("trace_init_start_pos tail(%p), p(%d), psum(%lld), ssum(%d)",
+		tail, tail->p, tail->psum, tail->ssum);
+
 	/* initialize sections */
 	_store_v2i64(&this->ll.asec, _set_v2i64(-1));
 	_store_v2i64(&this->ll.bsec, _set_v2i64(-1));
-	this->ll.atail = head->tail;
-	this->ll.btail = head->tail;
+	this->ll.tail = tail;
+	this->ll.atail = tail;
+	this->ll.btail = tail;
 
 	/* set update mask */
 	v2i32_t const z = _zero_v2i32();
-	// _store_v2i32(&this->ll.a_update_mask, z);
-	// _store_v2i32(&this->ll.aridx, z);
 	_store_v2i32(&this->ll.alen, z);
 
+	/* initialize function pointers */
 	void (*body)(struct sea_dp_context_s *this) = (
 		(dir == 0) ? trace_forward_trace : trace_forward_trace
 	);
 	void (*push)(struct sea_dp_context_s *this) = (
 		(dir == 0) ? trace_forward_push : trace_forward_push
 	);
+
+	/* search max block */
+	trace_search_max_block(this, tail);
+
+	/* determine pos in the block */
+	trace_search_max_pos(this);
 
 	/* until the pointer reaches the root of the matrix */
 	while(this->ll.psum > 0) {
@@ -2359,12 +2333,10 @@ struct sea_result_s *sea_dp_trace(
 	struct sea_path_section_s *rv_sec_base = this->ll.rv_sec = sec_base;
 
 	/* forward trace */
-	struct sea_joint_head_s *fw_head = trace_create_head(this, _tail(fw_tail));
-	trace(this, fw_head, 0);
+	trace(this, _tail(fw_tail), 0);
 
 	/* reverse trace */
-	// struct sea_joint_head_s *rv_head = trace_create_head(this, _tail(rv_tail));
-	// struct sea_result_s *rv_path = trace_reverse(this, rv_head, NULL);
+	trace(this, _tail(rv_tail), 0);
 
 	/* concatenate */
 	return(trace_concatenate_path(this,
