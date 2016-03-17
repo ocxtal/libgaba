@@ -117,7 +117,8 @@ typedef struct v32i16_s {
 #define _mask_v32i16(a) ( \
 	(v32_mask_t) { \
 		.m1 = _mm256_movemask_epi8( \
-			_mm256_packs_epi16((a).v1, (a).v2)) \
+			_mm256_permute4x64_epi64( \
+				_mm256_packs_epi16((a).v1, (a).v2), 0xd8)) \
 	} \
 )
 
