@@ -1,6 +1,6 @@
 
 /**
- * @file dp.c
+ * @file sea.c
  *
  * @brief libsea3 API implementations
  *
@@ -3373,5 +3373,5 @@ unittest(with_seq_pair("ACGTACGT", "GACGTACGT"))
 #endif
 
 /**
- * end of dp.c
+ * end of sea.c
  */
