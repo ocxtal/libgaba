@@ -183,7 +183,7 @@ int main(int argc, char *argv[])
 		bench_start(total);
 
 		struct sea_fill_s *f = sea_dp_fill_root(dp, &asec, 0, &bsec, 0);
-		struct sea_result_s *r = sea_dp_trace(dp, f, NULL, NULL);
+		// struct sea_result_s *r = sea_dp_trace(dp, f, NULL, NULL);
 		score += f->max;
 
 		bench_end(total);

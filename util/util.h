@@ -321,21 +321,19 @@ struct sea_writer_work_s {
 	/** 64, 64 */
 
 	/** 64byte aligned */
-	uint64_t reserved;				/** (8) */
-	// uint32_t a_update_mask, b_update_mask;/** (8) update is required if 0xffff */
 	int32_t alen, blen;				/** (8) lengths of the current section */
 	int32_t aridx, bridx;			/** (8) current ridx pair */
 	int32_t asridx, bsridx;			/** (8) start ridx pair */
 
-	uint32_t mask_max;				/** (4) */
-	int32_t psum;					/** (4) */
+	int64_t psum;					/** (8) */
 	int32_t p;						/** (4) */
-	int8_t q;						/** (1) */
-	uint8_t len;					/** (1) */
+	uint32_t mask_max;				/** (4) */
+	int16_t q;						/** (2) */
+	int16_t len;					/** (2) */
 
 	/* path string information */
-	uint8_t fw_rem;					/** (1) */
-	uint8_t rv_rem;					/** (1) */
+	int16_t fw_rem;					/** (2) */
+	int16_t rv_rem;					/** (2) */
 	uint32_t *fw_path;				/** (8) */
 	uint32_t *rv_path;				/** (8) */
 	/** 64, 128 */

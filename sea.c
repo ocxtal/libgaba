@@ -1219,12 +1219,23 @@ uint64_t calc_max_bulk_blocks_mem(
  * @brief calculate maximum number of blocks (limited by seq bounds)
  */
 static _force_inline
-uint64_t calc_max_bulk_blocks_seq(
-	struct sea_dp_context_s const *this)
+uint64_t calc_max_bulk_blocks_seq_blk(
+	struct sea_dp_context_s const *this,
+	struct sea_block_s const *blk)
 {
 	uint64_t max_bulk_p = MIN2(
-		this->rr.alen,
-		this->rr.blen);
+		(blk - 1)->aridx,
+		(blk - 1)->bridx);
+	return(max_bulk_p / BLK);
+}
+static _force_inline
+uint64_t calc_max_bulk_blocks_seq_tail(
+	struct sea_dp_context_s const *this,
+	struct sea_joint_tail_s const *tail)
+{
+	uint64_t max_bulk_p = MIN2(
+		this->rr.alen - tail->apos,
+		this->rr.blen - tail->bpos);
 	return(max_bulk_p / BLK);
 }
 
@@ -1233,13 +1244,27 @@ uint64_t calc_max_bulk_blocks_seq(
  * @brief calculate maximum number of blocks (limited by seq bounds)
  */
 static _force_inline
-uint64_t calc_max_bulk_blocks_seq_p(
-	struct sea_dp_context_s const *this)
+uint64_t calc_max_bulk_blocks_seq_p_blk(
+	struct sea_dp_context_s const *this,
+	struct sea_block_s const *blk,
+	int64_t psum)
 {
 	uint64_t max_bulk_p = MIN3(
-		this->rr.alen,
-		this->rr.blen,
-		this->rr.plim);
+		(blk - 1)->aridx,
+		(blk - 1)->bridx,
+		this->rr.plim - psum);
+	return(max_bulk_p / BLK);
+}
+static _force_inline
+uint64_t calc_max_bulk_blocks_seq_p_tail(
+	struct sea_dp_context_s const *this,
+	struct sea_joint_tail_s const *tail,
+	int64_t psum)
+{
+	uint64_t max_bulk_p = MIN3(
+		this->rr.alen - tail->apos,
+		this->rr.blen - tail->bpos,
+		this->rr.plim - psum);
 	return(max_bulk_p / BLK);
 }
 
@@ -1276,14 +1301,14 @@ struct sea_joint_tail_s *fill_seq_bounded(
 	}
 
 	/* calculate block size */
-	uint64_t seq_bulk_blocks = calc_max_bulk_blocks_seq(this);
+	uint64_t seq_bulk_blocks = calc_max_bulk_blocks_seq_blk(this, stat.blk);
 	while(seq_bulk_blocks > MIN_BULK_BLOCKS) {
 		/* bulk fill without ij-bound test */
 		psum += (stat = fill_bulk_predetd_blocks(this, stat.blk, seq_bulk_blocks)).p;
 		if(stat.stat != CONT) {
 			goto _fill_seq_bounded_finish;	/* skip cap */
 		}
-		seq_bulk_blocks = calc_max_bulk_blocks_seq(this);
+		seq_bulk_blocks = calc_max_bulk_blocks_seq_blk(this, stat.blk);
 	}
 
 	/* bulk fill with ij-bound test */
@@ -1318,14 +1343,14 @@ struct sea_joint_tail_s *fill_seq_p_bounded(
 	}
 
 	/* calculate block size */
-	uint64_t seq_bulk_blocks = calc_max_bulk_blocks_seq_p(this);
+	uint64_t seq_bulk_blocks = calc_max_bulk_blocks_seq_p_blk(this, stat.blk, psum);
 	while(seq_bulk_blocks > MIN_BULK_BLOCKS) {
 		/* bulk fill without ij-bound test */
 		psum += (stat = fill_bulk_predetd_blocks(this, stat.blk, seq_bulk_blocks)).p;
 		if(stat.stat != CONT) {
 			goto _fill_seq_p_bounded_finish;	/* skip cap */
 		}
-		seq_bulk_blocks = calc_max_bulk_blocks_seq_p(this);
+		seq_bulk_blocks = calc_max_bulk_blocks_seq_p_blk(this, stat.blk, psum);
 	}
 
 	/* bulk fill with ij-bound test */
@@ -1361,7 +1386,7 @@ struct sea_joint_tail_s *fill_section_seq_bounded(
 
 	/* calculate block sizes */
 	uint64_t mem_bulk_blocks = calc_max_bulk_blocks_mem(this);
-	uint64_t seq_bulk_blocks = calc_max_bulk_blocks_seq(this);
+	uint64_t seq_bulk_blocks = calc_max_bulk_blocks_seq_tail(this, tail);
 
 	/* extra large bulk fill (with stack allocation) */
 	while(_unlikely(mem_bulk_blocks < seq_bulk_blocks)) {
@@ -1373,7 +1398,7 @@ struct sea_joint_tail_s *fill_section_seq_bounded(
 			}
 
 			/* fill-in area has changed */
-			seq_bulk_blocks = calc_max_bulk_blocks_seq(this);
+			seq_bulk_blocks = calc_max_bulk_blocks_seq_tail(this, tail);
 		}
 
 		/* malloc the next stack and set pointers */
@@ -1409,7 +1434,7 @@ struct sea_joint_tail_s *fill_section_seq_p_bounded(
 
 	/* calculate block sizes */
 	uint64_t mem_bulk_blocks = calc_max_bulk_blocks_mem(this);
-	uint64_t seq_bulk_blocks = calc_max_bulk_blocks_seq_p(this);
+	uint64_t seq_bulk_blocks = calc_max_bulk_blocks_seq_p_tail(this, tail, 0);
 
 	/* extra large bulk fill (with stack allocation) */
 	while(_unlikely(mem_bulk_blocks < seq_bulk_blocks)) {
@@ -1421,7 +1446,7 @@ struct sea_joint_tail_s *fill_section_seq_p_bounded(
 			}
 
 			/* fill-in area has changed */
-			seq_bulk_blocks = calc_max_bulk_blocks_seq_p(this);
+			seq_bulk_blocks = calc_max_bulk_blocks_seq_p_tail(this, tail, 0);
 		}
 
 		/* malloc the next stack and set pointers */
@@ -1836,7 +1861,7 @@ void trace_load_section_b(
 	_print_v2i32(ridx); \
 	_print_v2i32(sridx); \
 	struct sea_block_s const *blk = (t)->ll.blk; \
-	int64_t psum = (t)->ll.psum; \
+	/*int64_t psum = (t)->ll.psum;*/ \
 	int64_t p = (t)->ll.p; \
 	int64_t q = (t)->ll.q; \
 	int64_t diff_q; \
@@ -1866,8 +1891,8 @@ void trace_load_section_b(
 	next_path_array = (path_array<<1) | _c; \
 	diff_q = _dir_is_down(dir) - _c; \
 	next_prev_c = 0x01 & ~(prev_c | _mask_h | _mask_v); \
-	debug("c(%lld), prev_c(%llu), q(%lld), diff_q(%lld), down(%d), mask(%llx), path_array(%llx)", \
-		_c, prev_c, q, diff_q, _dir_is_down(dir), _mask, path_array); \
+	debug("c(%lld), prev_c(%llu), p(%lld), psum(%lld), q(%lld), diff_q(%lld), down(%d), mask(%llx), path_array(%llx)", \
+		_c, prev_c, p, this->ll.psum - (this->ll.p - p), q, diff_q, _dir_is_down(dir), _mask, path_array); \
 	_c; \
 })
 
@@ -1912,7 +1937,7 @@ void trace_load_section_b(
 	_trace_update_index(); \
  	ridx = next_ridx; \
 	p--; \
-	psum--; \
+	/*psum--;*/ \
 }
 
 /**
@@ -1935,9 +1960,9 @@ void trace_load_section_b(
 	ridx = _add_v2i32(ridx, _sub_v2i32( \
 		_load_v2i32(&(blk - 1)->aridx), \
 		_load_v2i32(&blk->aridx))); \
-	debug("bulk update index p(%lld), psum(%lld)", p, psum); \
+	debug("bulk update index p(%lld)", p); \
 	p -= BLK; \
-	psum -= BLK; \
+	/*psum -= BLK;*/ \
 }
 
 /**
@@ -1948,10 +1973,10 @@ void trace_load_section_b(
 	int64_t _cnt = (_traced_count) - prev_c; \
 	path_array >>= prev_c; \
 	p += prev_c; \
-	psum += prev_c; \
+	/*psum += prev_c;*/ \
 	ridx = _sub_v2i32(ridx, _seta_v2i32(0, prev_c)); \
-	debug("cnt(%lld), traced_count(%lld), prev_c(%lld), path_array(%llx)", \
-		_cnt, _traced_count, prev_c, path_array); \
+	debug("cnt(%lld), traced_count(%lld), prev_c(%lld), path_array(%llx), p(%lld)", \
+		_cnt, _traced_count, prev_c, path_array, p); \
 	_cnt; \
 })
 #define _trace_forward_update_path(_traced_count) { \
@@ -2004,10 +2029,11 @@ void trace_load_section_b(
 	_print_v2i32(sridx); \
 	(t)->ll.fw_path = path; \
 	(t)->ll.fw_rem = rem; \
-	(t)->ll.psum = psum; \
+	/*(t)->ll.psum = psum;*/ \
+	(t)->ll.psum -= (t)->ll.p - p; \
 	(t)->ll.p = p; \
 	(t)->ll.q = q; \
-	debug("p(%lld), psum(%lld), q(%llu)", p, psum, q); \
+	debug("p(%lld), psum(%lld), q(%llu)", p, (t)->ll.psum, q); \
 }
 
 /**
@@ -2019,7 +2045,9 @@ void trace_load_section_b(
 		(t)->ll.tail->tail->psum, (t)->ll.tail->tail->ssum); \
 	struct sea_joint_tail_s const *tail = (t)->ll.tail = (t)->ll.tail->tail; \
 	blk = _last_block(tail); \
-	p += tail->p; \
+	(t)->ll.psum -= (t)->ll.p; \
+	p += ((t)->ll.p = tail->p); \
+	debug("updated psum(%lld), ll.p(%d), p(%lld)", (t)->ll.psum, (t)->ll.p, p); \
 }
 
 /**
@@ -2034,14 +2062,8 @@ void trace_forward_trace(
 	/* load context onto registers */
 	_trace_load_context(this);
 	_trace_forward_load_context(this);
-	debug("start traceback loop p(%lld), psum(%lld), q(%llu)", p, psum, q);
-#if 0
-	if(_trace_test_cap_loop() != 0) {
-		/* no need to adjust rem */
-		debug("cap test failed at the head of the traceback loop");
-		return;
-	}
-#endif
+	debug("start traceback loop p(%lld), q(%llu)", p, q);
+
 	while(1) {
 		/* cap trace at the head */ {
 			int64_t loop_count = (p + 1) % BLK;		/* loop_count \in (1 .. BLK), 0 is invalid */
@@ -2081,7 +2103,7 @@ void trace_forward_trace(
 			for(int64_t i = 0; i < BLK; i++) {
 				_trace_bulk_forward_body();
 			}
-			debug("bulk loop end p(%lld), psum(%llu), q(%llu)", p, psum, q);
+			debug("bulk loop end p(%lld), q(%llu)", p, q);
 
 			/* update path and block */
 			_trace_forward_update_path(BLK);
@@ -2108,14 +2130,15 @@ void trace_forward_trace(
 
 				_trace_cap_update_index();
 			}
-			debug("bulk loop end p(%lld), psum(%llu), q(%llu)", p, psum, q);
+			debug("bulk loop end p(%lld), q(%llu)", p, q);
 
 			/* update path and block */
 			_trace_forward_update_path(BLK);
 			_trace_windback_block();
 		}
 
-		if(psum < 0) {
+		/* check psum termination */
+		if(this->ll.psum < this->ll.p - p) {
 			_trace_forward_save_context(this);
 			return;
 		}
@@ -2207,7 +2230,7 @@ void trace(
 
 		/* fragment trace */
 		body(this);
-		debug("p(%d), psum(%d), q(%d)", this->ll.p, this->ll.psum, this->ll.q);
+		debug("p(%d), psum(%lld), q(%d)", this->ll.p, this->ll.psum, this->ll.q);
 
 		/* push section info to section array */
 		push(this);
@@ -2445,26 +2468,6 @@ static _force_inline
 struct sea_small_delta_s sea_init_create_small_delta(
 	struct sea_score_s const *score_matrix)
 {
-	/*
-	int8_t max = extract_max(score_matrix->score_sub);
-	int8_t geh = -score_matrix->score_ge_a;
-	int8_t gev = -score_matrix->score_ge_b;
-	// int8_t gih = -score_matrix->score_gi_a;
-	int8_t giv = -score_matrix->score_gi_b;
-
-	int8_t diff_a = max - geh;
-	int8_t diff_b = gev;
-
-	struct sea_small_delta_s sd;
-	for(int i = 0; i < BW/2; i++) {
-		sd.delta[i] = diff_a;
-		sd.delta[BW/2 + i] = diff_b;
-		sd.max[i] = diff_a;
-		sd.max[BW/2 + i] = 0;
-	}
-	sd.delta[BW/2] += giv;
-	return(sd);
-	*/
 	return((struct sea_small_delta_s){
 		.delta = {0},
 		.max = {0}

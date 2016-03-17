@@ -76,3 +76,9 @@ def build(bld):
 		target = 'unittest',
 		includes = 'util',
 		defines = ['TEST'])
+
+	bld.program(
+		source = ['bench.c', 'sea.c', 'arch/io.s'],
+		target = 'bench',
+		includes = 'util',
+		defines = ['BENCH'])
