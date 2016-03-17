@@ -390,7 +390,7 @@ void fill_cap_fetch(
 static _force_inline
 struct sea_joint_block_s fill_init_fetch(
 	struct sea_dp_context_s *this,
-	struct sea_block_s *blk,
+	struct sea_phantom_block_s *blk,
 	struct sea_joint_tail_s const *prev_tail,
 	v2i32_t ridx)
 {
@@ -462,7 +462,7 @@ struct sea_joint_block_s fill_init_fetch(
 	debug("blk(%p), p(%d), stat(%x)", blk + 1, _lo32(len) + _hi32(len), _mask_v2i32(_eq_v2i32(ridx, z)));
 
 	return((struct sea_joint_block_s){
-		.blk = blk + 1,
+		.blk = (struct sea_block_s *)(blk + 1),
 		.p = _lo32(len) + _hi32(len),
 		.stat = (_mask_v2i32(_eq_v2i32(ridx, z)) == V2I32_MASK_00) ? CONT : UPDATE
 	});
@@ -543,21 +543,18 @@ struct sea_joint_block_s fill_create_head(
 		prev_tail, prev_tail->p, prev_tail->psum, prev_tail->ssum);
 
 	/* init working stack */
-	// struct sea_joint_head_s *head = (struct sea_joint_head_s *)this->stack_top;
-	// head->tail = prev_tail;
+	struct sea_phantom_block_s *blk = (struct sea_phantom_block_s *)this->stack_top;
+	struct sea_block_s *pblk = _last_block(prev_tail);
 
 	/* copy phantom vectors from the previous fragment */
-	// struct sea_block_s *blk = _phantom_block(head);
-	struct sea_block_s *blk = (struct sea_block_s *)this->stack_top;
-	_memcpy_blk_aa(
-		(uint8_t *)blk + SEA_BLOCK_PHANTOM_OFFSET,
-		(uint8_t *)_last_block(prev_tail) + SEA_BLOCK_PHANTOM_OFFSET,
-		SEA_BLOCK_PHANTOM_SIZE);
+	_memcpy_blk_aa(&blk->diff, &pblk->diff, offsetof(struct sea_phantom_block_s, sd.max));
+
 	/* fill max vector with zero */
-	_memset_blk_a(
-		(uint8_t *)blk + SEA_BLOCK_ZERO_OFFSET,
-		0,
-		SEA_BLOCK_ZERO_SIZE);
+	_store(&blk->sd.max, _zero());
+
+	/* copy remaining */
+	blk->dir = pblk->dir;
+	blk->offset = pblk->offset;
 
 	/* calc ridx */
 	v2i32_t ridx = _sub_v2i32(
@@ -567,15 +564,14 @@ struct sea_joint_block_s fill_create_head(
 
 	/* check if init fetch is needed */
 	if(prev_tail->psum >= 0) {
-		/* not needed, copy char vectors from prev_tail */
-		struct sea_block_s *prev_blk = _last_block(prev_tail);
-		_store(&blk->ch, _load(&prev_blk->ch));
-
 		/* store index on the current section */
 		_store_v2i32(&blk->aridx, ridx);
+		
+		/* copy char vectors from prev_tail */
+		_store(&blk->ch, _load(&pblk->ch));
 
 		return((struct sea_joint_block_s){
-			.blk = blk + 1,
+			.blk = (struct sea_block_s *)(blk + 1),
 			.p = 0,
 			.stat = CONT
 		});
@@ -659,11 +655,6 @@ struct sea_joint_tail_s *fill_create_tail(
  */
 #define _fill_load_contexts(_blk) \
 	debug("blk(%p)", (_blk)); \
-	/* load direction determiner */ \
-	union sea_dir_u dir = ((_blk) - 1)->dir; \
-	/* load large offset */ \
-	int64_t offset = ((_blk) - 1)->offset; \
-	debug("offset(%lld)", offset); \
 	/* load sequence buffer offset */ \
 	uint8_t *aptr = _rd_bufa(this, 0, BW); \
 	uint8_t *bptr = _rd_bufb(this, 0, BW); \
@@ -688,10 +679,13 @@ struct sea_joint_tail_s *fill_create_tail(
 	/* load delta vectors */ \
 	vec_t register delta = _load(_pv(((_blk) - 1)->sd.delta)); \
 	vec_t register max = _load(_pv(((_blk) - 1)->sd.max)); \
-	/*_print_v32i16(_load_v32i16(this->tail->v));*/ \
-	/*_print(delta);*/ \
 	_print(max); \
-	_print_v32i16(_add_v32i16(_cvt_v32i8_v32i16(delta), _load_v32i16(this->tail->v)));
+	_print_v32i16(_add_v32i16(_cvt_v32i8_v32i16(delta), _load_v32i16(this->tail->v))); \
+	/* load direction determiner */ \
+	union sea_dir_u dir = ((_blk) - 1)->dir; \
+	/* load large offset */ \
+	int64_t offset = ((_blk) - 1)->offset; \
+	debug("offset(%lld)", offset);
 
 /**
  * @macro _fill_body
@@ -782,10 +776,6 @@ struct sea_joint_tail_s *fill_create_tail(
  * @brief store vectors at the end of the block
  */
 #define _fill_store_vectors(_blk) ({ \
-	/* store direction array */ \
-	(_blk)->dir = dir; \
-	/* store large offset */ \
-	(_blk)->offset = offset; \
 	/* store diff vectors */ \
 	de = _sub(de, dv); \
 	df = _add(df, dh); \
@@ -805,6 +795,10 @@ struct sea_joint_tail_s *fill_create_tail(
 	/* store delta vectors */ \
 	_store(_pv((_blk)->sd.delta), delta); \
 	_store(_pv((_blk)->sd.max), max); \
+	/* store direction array */ \
+	(_blk)->dir = dir; \
+	/* store large offset */ \
+	(_blk)->offset = offset; \
 	/* calc cnt */ \
 	uint64_t acnt = _rd_bufa(this, 0, BW) - aptr; \
 	uint64_t bcnt = bptr - _rd_bufb(this, 0, BW); \
@@ -1208,8 +1202,7 @@ static _force_inline
 uint64_t calc_max_bulk_blocks_mem(
 	struct sea_dp_context_s const *this)
 {
-	uint64_t const rem = sizeof(struct sea_joint_head_s)
-					   + sizeof(struct sea_joint_tail_s)
+	uint64_t const rem = sizeof(struct sea_joint_tail_s)
 					   + 3 * sizeof(struct sea_block_s);
 	uint64_t mem_size = this->stack_end - this->stack_top;
 	return((mem_size - rem) / sizeof(struct sea_block_s) / BLK);
@@ -2663,8 +2656,8 @@ sea_t *sea_init(
 			.mem_array = { 0 },						/* NULL */
 		},
 		.md = sea_init_create_middle_delta(params_intl.score_matrix),
-		.blk = (struct sea_block_s) {
-			.mask = {
+		.blk = (struct sea_phantom_block_s) {
+/*			.mask = {
 				[0].pair = {
 					.v.all = 0xffff0000,
 					.h.all = 0x0000ffff
@@ -2673,7 +2666,7 @@ sea_t *sea_init(
 					.v.all = 0xffff0000,
 					.h.all = 0x0000ffff
 				}
-			},
+			},*/
 			.dir = sea_init_create_dir_dynamic(params_intl.score_matrix),
 			.offset = 0,
 			.diff = sea_init_create_diff_vectors(params_intl.score_matrix),

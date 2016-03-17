@@ -151,48 +151,26 @@ _static_assert(sizeof(struct sea_char_vec_s) == 32);
  */
 struct sea_block_s {
 	union sea_mask_pair_u mask[MAX_BLK];/** (256) mask vectors */
-	union sea_dir_u dir;				/** (8) direction array */
-	int64_t offset;						/** (8) large offset */
-	struct sea_diff_vec_s diff;			/** (64) diff vectors */
-	struct sea_small_delta_s sd;		/** (64) small delta */
-	struct sea_char_vec_s ch;			/** (32) char vector */
-	int32_t aridx, bridx;				/** (8) reverse index on the current section */
-	uint64_t reserved;					/** (8) */
-};
-struct sea_phantom_block_s {
-	union sea_dir_u dir;				/** (8) */
-	int64_t offset;						/** (8) */
 	struct sea_diff_vec_s diff; 		/** (64) */
 	struct sea_small_delta_s sd;		/** (64) */
-	struct sea_char_vec_s ch;			/** (32) char vector */
+	union sea_dir_u dir;				/** (8) */
+	int64_t offset;						/** (8) */
 	int32_t aridx, bridx;				/** (8) reverse index on the current section */
 	uint64_t reserved;					/** (8) */
+	struct sea_char_vec_s ch;			/** (32) char vector */
+};
+struct sea_phantom_block_s {
+	struct sea_diff_vec_s diff; 		/** (64) */
+	struct sea_small_delta_s sd;		/** (64) */
+	union sea_dir_u dir;				/** (8) */
+	int64_t offset;						/** (8) */
+	int32_t aridx, bridx;				/** (8) reverse index on the current section */
+	uint64_t reserved;					/** (8) */
+	struct sea_char_vec_s ch;			/** (32) char vector */
 };
 _static_assert(sizeof(struct sea_block_s) == 448);
 _static_assert(sizeof(struct sea_phantom_block_s) == 192);
-#define SEA_BLOCK_PHANTOM_OFFSET	( offsetof(struct sea_block_s, dir) )
-#define SEA_BLOCK_PHANTOM_SIZE		( offsetof(struct sea_phantom_block_s, sd) + offsetof(struct sea_small_delta_s, max) )
-#define SEA_BLOCK_ZERO_OFFSET		( SEA_BLOCK_PHANTOM_OFFSET + SEA_BLOCK_PHANTOM_SIZE )
-#define SEA_BLOCK_ZERO_SIZE			( sizeof(struct sea_small_delta_s) - offsetof(struct sea_small_delta_s, max) )
-#define _phantom_block(x)			( (struct sea_block_s *)((uint8_t *)(x) + sizeof(struct sea_joint_head_s) - SEA_BLOCK_PHANTOM_OFFSET) )
 #define _last_block(x)				( (struct sea_block_s *)(x) - 1 )
-#define _block(x)					( (struct sea_block_s *)(x) )
-_static_assert(SEA_BLOCK_PHANTOM_OFFSET == 256);
-_static_assert(SEA_BLOCK_PHANTOM_SIZE == 112);
-
-/**
- * @struct sea_joint_head_s
- *
- * @brief (internal) traceback start coordinate (coordinate at the beginning of the band) container
- * sizeof(struct sea_joint_head_s) == 32
- */
-struct sea_joint_head_s {
-	int32_t p;					/** (4) trace start p-coordinate */
-	int32_t q;					/** (4) trace start q-coordinate */
-	struct sea_joint_tail_s const *tail;/** (8) tail of the previous section */
-};
-_static_assert(sizeof(struct sea_joint_head_s) == 16);
-#define _phantom_head(x)		( (struct sea_joint_head_s *)((uint8_t *)(x) + SEA_BLOCK_PHANTOM_OFFSET) - 1 )
 
 /**
  * @struct sea_joint_tail_s
@@ -430,18 +408,18 @@ struct sea_context_s {
 
 	/** 64byte aligned */
 	/** phantom vectors */
-	struct sea_block_s blk;			/** (448) */
+	struct sea_phantom_block_s blk;	/** (192) */
 	struct sea_joint_tail_s tail;	/** (96) */
-	/** 544, 1312 */
+	/** 288, 1056 */
 
 	/** 64byte aligned */
 	/** params */
 	struct sea_params_s params;		/** (32) */
-	/** 32, 1344 */
+	/** 32, 1088 */
 
 	/** 64byte aligned */
 };
-_static_assert(sizeof(struct sea_context_s) == 1344);
+_static_assert(sizeof(struct sea_context_s) == 1088);
 #define SEA_DP_ROOT_SIZE 		( sizeof(struct sea_joint_tail_s) + sizeof(struct sea_phantom_block_s) )
 #define SEA_DP_ROOT_TAIL_OFFSET	( sizeof(struct sea_phantom_block_s) )
 #define SEA_DP_ROOT_LOAD_SIZE	( SEA_JOINT_TAIL_COPY_SIZE + sizeof(struct sea_phantom_block_s) )
