@@ -21,7 +21,7 @@ def configure(conf):
 	conf.load('ar')
 	conf.load('compiler_c')
 
-	conf.recurse('util')
+	# conf.recurse('util')
 	conf.recurse('arch')
 
 	# debug options
@@ -34,7 +34,7 @@ def configure(conf):
 		# conf.env.append_value('CFLAGS', '-DDEBUG')
 		conf.env.append_value('CFLAGS', '-O3')
 
-	conf.env.append_value('CFLAGS', '-DBENCH')
+	# conf.env.append_value('CFLAGS', '-DBENCH')
 	conf.env.append_value('CFLAGS', '-Wall')
 	conf.env.append_value('CFLAGS', '-std=c99')
 	# conf.env.append_value('CFLAGS', '-D_POSIX_C_SOURCE=200112L')	# for posix_memalign and clock_gettime
@@ -55,22 +55,11 @@ def configure(conf):
 	else:
 		pass
 
-	from itertools import product
-	for (v, c, d) in product(variants, costs, dps):
-		conf.env.append_value('OBJ', v + suffix(c, d))
-
 
 def build(bld):
 
-	bld.recurse('util')
+	# bld.recurse('util')
 	bld.recurse('arch')
-
-	from itertools import product
-	for (v, c, d) in product(variants, costs, dps):
-		bld.objects(
-			source = 'dp.c',			# 'dp.c' + 'variant/naive_impl.h'
-			target = v + suffix(c, d),	# 'naive_linear_dynamic'
-			defines = ['BASE=' + v.upper(), 'COST=' + c.upper(), 'DP=' + d.upper()])
 
 #	bld.shlib(
 #		source = 'sea.c',
@@ -80,15 +69,10 @@ def build(bld):
 	bld.stlib(
 		source = 'sea.c',
 		target = 'sea',
-		use = bld.env.OBJ)
+		includes = 'util')
 
 	bld.program(
-		source = 'test.c',
-		target = 'test',
-		use = 'sea')
-	"""
-	bld.program(
-		source = 'bench.c',
-		target = 'bench',
-		use = 'sea')
-	"""
+		source = ['sea.c', 'arch/io.s'],
+		target = 'unittest',
+		includes = 'util',
+		defines = ['TEST'])
