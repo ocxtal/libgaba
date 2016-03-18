@@ -699,8 +699,8 @@ struct sea_joint_tail_s *fill_create_tail(
 	_print(t); \
 	/*_print(_load_sc(this, sb));*/ \
 	t = _max(de, t); \
-	mask_ptr->pair.h.mask = _mask(_eq(t, de)); \
 	t = _max(df, t); \
+	mask_ptr->pair.h.mask = _mask(_eq(t, de)); \
 	mask_ptr->pair.v.mask = _mask(_eq(t, df)); \
 	debug("mask(%llx)", mask_ptr->all); \
 	mask_ptr++; \
@@ -1811,20 +1811,18 @@ void trace_load_section_b(
  * @macro _trace_load_context, _trace_forward_load_context
  */
 #define _trace_load_context(t) \
-	/*v2i32_t update_mask = _zero_v2i32();*/ \
-	v2i32_t len = _load_v2i32(&(t)->ll.alen); \
-	v2i32_t ridx = _load_v2i32(&(t)->ll.aridx); \
-	v2i32_t sridx = _load_v2i32(&(t)->ll.asridx); \
-	_print_v2i32(len); \
-	_print_v2i32(ridx); \
-	_print_v2i32(sridx); \
+	v2i32_t idx = _sub_v2i32( \
+		_load_v2i32(&(t)->ll.alen), \
+		_load_v2i32(&(t)->ll.aridx)); \
 	struct sea_block_s const *blk = (t)->ll.blk; \
-	/*int64_t psum = (t)->ll.psum;*/ \
 	int64_t p = (t)->ll.p; \
 	int64_t q = (t)->ll.q; \
 	int64_t diff_q; \
 	uint64_t prev_c = 0;
 #define _trace_forward_load_context(t) \
+	uint32_t *path = (t)->ll.fw_path; \
+	int64_t rem = (t)->ll.fw_rem;
+#define _trace_reverse_load_context(t) \
 	uint32_t *path = (t)->ll.fw_path; \
 	int64_t rem = (t)->ll.fw_rem;
 
@@ -1836,7 +1834,7 @@ void trace_load_section_b(
 	union sea_mask_pair_u const *mask_ptr = &blk->mask[(_local_idx)]; \
 	uint64_t path_array = 0; \
 	/* working registers */ \
-	v2i32_t next_ridx; \
+	v2i32_t next_idx; \
 	uint64_t next_path_array, next_prev_c;
 
 /**
@@ -1879,13 +1877,9 @@ void trace_load_section_b(
 #define _trace_cap_forward_body() { \
 	uint64_t _c = _trace_determine_direction(mask_ptr->all); \
 	/* calculate the next ridx */ \
-	v2i32_t const ridx_down = _seta_v2i32(1, 0); \
-	v2i32_t const ridx_right = _seta_v2i32(0, 1); \
-	next_ridx = _add_v2i32(ridx, _c ? ridx_down : ridx_right); \
-	_print_v2i32(len); \
-	_print_v2i32(next_ridx); \
-	_print_v2i32(_sub_v2i32(len, next_ridx)); \
-	debug("%x", _mask_v2i32(_lt_v2i32(len, next_ridx))); \
+	v2i32_t const idx_down = _seta_v2i32(1, 0); \
+	v2i32_t const idx_right = _seta_v2i32(0, 1); \
+	next_idx = _sub_v2i32(idx, _c ? idx_down : idx_right); \
 }
 
 /**
@@ -1893,9 +1887,8 @@ void trace_load_section_b(
  */
 #define _trace_cap_update_index() { \
 	_trace_update_index(); \
- 	ridx = next_ridx; \
+ 	idx = next_idx; \
 	p--; \
-	/*psum--;*/ \
 }
 
 /**
@@ -1905,22 +1898,21 @@ void trace_load_section_b(
  */
 #define _trace_test_cap_loop() ( \
 	/* next_ridx must be precalculated */ \
-	_mask_v2i32(_lt_v2i32(len, next_ridx)) \
+	_mask_v2i32(_lt_v2i32(next_idx, _zero_v2i32())) \
 )
 #define _trace_test_bulk_loop() ( \
-	_mask_v2i32(_gt_v2i32(_add_v2i32(ridx, _set_v2i32(BW)), len)) \
+	_mask_v2i32(_lt_v2i32(_sub_v2i32(idx, _set_v2i32(BW)), _zero_v2i32())) \
 )
 
 /** 
  * @macro _trace_bulk_update_index
  */
 #define _trace_bulk_update_index() { \
-	ridx = _add_v2i32(ridx, _sub_v2i32( \
+	idx = _sub_v2i32(idx, _sub_v2i32( \
 		_load_v2i32(&(blk - 1)->aridx), \
 		_load_v2i32(&blk->aridx))); \
 	debug("bulk update index p(%lld)", p); \
 	p -= BLK; \
-	/*psum -= BLK;*/ \
 }
 
 /**
@@ -1931,8 +1923,7 @@ void trace_load_section_b(
 	int64_t _cnt = (_traced_count) - prev_c; \
 	path_array >>= prev_c; \
 	p += prev_c; \
-	/*psum += prev_c;*/ \
-	ridx = _sub_v2i32(ridx, _seta_v2i32(0, prev_c)); \
+	idx = _add_v2i32(idx, _seta_v2i32(0, prev_c)); \
 	debug("cnt(%lld), traced_count(%lld), prev_c(%lld), path_array(%llx), p(%lld)", \
 		_cnt, _traced_count, prev_c, path_array, p); \
 	_cnt; \
@@ -1979,15 +1970,11 @@ void trace_load_section_b(
  */
 #define _trace_forward_save_context(t) { \
 	(t)->ll.blk = blk; \
-	/*_store_v2i32(&(t)->ll.a_update_mask, update_mask);*/ \
-	_store_v2i32(&(t)->ll.aridx, ridx); \
-	_store_v2i32(&(t)->ll.asridx, sridx); \
-	/*_print_v2i32(update_mask);*/ \
-	_print_v2i32(ridx); \
-	_print_v2i32(sridx); \
+	_store_v2i32(&(t)->ll.aridx, \
+		_sub_v2i32(_load_v2i32(&(t)->ll.alen), idx)); \
+	_print_v2i32(idx); \
 	(t)->ll.fw_path = path; \
 	(t)->ll.fw_rem = rem; \
-	/*(t)->ll.psum = psum;*/ \
 	(t)->ll.psum -= (t)->ll.p - p; \
 	(t)->ll.p = p; \
 	(t)->ll.q = q; \
@@ -2054,7 +2041,7 @@ void trace_forward_trace(
 		while(p > 0 && _trace_test_bulk_loop() == 0) {
 			/* load direction array and mask pointer */
 			_trace_load_block(BLK - 1);
-			(void)next_ridx;		/* to avoid warning */
+			(void)next_idx;		/* to avoid warning */
 
 			/* bulk trace loop */
 			_trace_bulk_update_index();
