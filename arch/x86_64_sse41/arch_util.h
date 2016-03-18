@@ -22,7 +22,7 @@
 #ifdef __POPCNT__
 	#define popcnt(x)		_mm_popcnt_u64(x)
 #else
-	#warning "popcnt instruction is not enabled."
+	// #warning "popcnt instruction is not enabled."
 	static inline
 	int popcnt(uint64_t n)
 	{
@@ -45,7 +45,7 @@
 	/** immintrin.h is already included */
 	#define tzcnt(x)		_tzcnt_u64(x)
 #else
-	#warning "tzcnt instruction is not enabled."
+	// #warning "tzcnt instruction is not enabled."
 	static inline
 	int tzcnt(uint64_t n)
 	{
@@ -66,7 +66,7 @@
 #ifdef __LZCNT__
 	#define lzcnt(x)		_lzcnt_u64(x)
 #else
-	#warning "lzcnt instruction is not enabled."
+	// #warning "lzcnt instruction is not enabled."
 	static inline
 	int lzcnt(uint64_t n)
 	{
