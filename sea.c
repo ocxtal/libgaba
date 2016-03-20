@@ -1655,7 +1655,7 @@ void trace_calc_coordinates(
 	_print_v2i32(ridx);
 
 	/* save ridx */
-	_store_v2i32(&this->ll.aridx, ridx);
+	_store_v2i32(&this->ll.aidx, _sub_v2i32(_zero_v2i32(), ridx));
 
 	return;
 }
@@ -1743,32 +1743,24 @@ void trace_load_section_a(
 	debug("load section a");
 	/* load tail pointer (must be inited with leaf tail) */
 	struct sea_joint_tail_s const *tail = this->ll.atail;
-	int32_t ridx = this->ll.aridx;
+	int32_t idx = this->ll.aidx;
 	int32_t len = tail->a.len;
 
-	while(ridx >= len) {
-		debug("ridx exceeds len, reload needed ridx(%d), len(%d)", ridx, len);
-		for(tail = tail->tail; tail->apos != 0; tail = tail->tail) {
-			debug("windback tail id(%d), base(%lld), len(%d)",
-				tail->a.id, tail->a.base, tail->a.len);
-		}
-		debug("tail of the previous section found, tail->apos(%d), id(%d), base(%lld), len(%d)",
-			tail->apos, tail->a.id, tail->a.base, tail->a.len);
+	while(idx <= 0) {
+		for(tail = tail->tail; tail->apos != 0; tail = tail->tail) {}
 
 		/* update ridx and len */
-		ridx -= len;
+		idx += len;
 		len = tail->a.len;
-		debug("updated ridx(%d), len(%d)", ridx, len);
 	}
 
 	/* store section info */
-	debug("reload tail done, id(%d), len(%d), ridx(%d)", tail->a.id, len, ridx);
 	v2i64_t sec = _load_v2i64(&tail->a);
 	_store_v2i64(&this->ll.asec, sec);
 	this->ll.atail = tail;
 	this->ll.alen = len;
-	this->ll.aridx = ridx;
-	this->ll.asridx = ridx;
+	this->ll.aidx = idx;
+	this->ll.asidx = idx;
 	return;
 }
 static _force_inline
@@ -1778,32 +1770,25 @@ void trace_load_section_b(
 	debug("load section b");
 	/* load tail pointer (must be inited with leaf tail) */
 	struct sea_joint_tail_s const *tail = this->ll.btail;
-	int32_t ridx = this->ll.bridx;
+	int32_t idx = this->ll.bidx;
 	int32_t len = tail->b.len;
 
-	while(ridx >= len) {
-		debug("ridx exceeds len, reload needed ridx(%d), len(%d)", ridx, len);
-		for(tail = tail->tail; tail->bpos != 0; tail = tail->tail) {
-			debug("windback tail id(%d), base(%lld), len(%d)",
-				tail->b.id, tail->b.base, tail->b.len);
-		}
-		debug("tail of the previous section found, tail->bpos(%d), id(%d), base(%lld), len(%d)",
-			tail->bpos, tail->b.id, tail->b.base, tail->b.len);
+	// while(ridx >= len) {
+	while(idx <= 0) {
+		for(tail = tail->tail; tail->bpos != 0; tail = tail->tail) {}
 
 		/* update ridx and len */
-		ridx -= len;
+		idx += len;
 		len = tail->b.len;
-		debug("updated ridx(%d), len(%d)", ridx, len);
 	}
 
 	/* store section info */
-	debug("reload tail done, id(%d), len(%d), ridx(%d)", tail->b.id, len, ridx);
 	v2i64_t sec = _load_v2i64(&tail->b);
 	_store_v2i64(&this->ll.bsec, sec);
 	this->ll.btail = tail;
 	this->ll.blen = len;
-	this->ll.bridx = ridx;
-	this->ll.bsridx = ridx;
+	this->ll.bidx = idx;
+	this->ll.bsidx = idx;
 	return;
 }
 
@@ -1811,9 +1796,7 @@ void trace_load_section_b(
  * @macro _trace_load_context, _trace_forward_load_context
  */
 #define _trace_load_context(t) \
-	v2i32_t idx = _sub_v2i32( \
-		_load_v2i32(&(t)->ll.alen), \
-		_load_v2i32(&(t)->ll.aridx)); \
+	v2i32_t idx = _load_v2i32(&(t)->ll.aidx); \
 	struct sea_block_s const *blk = (t)->ll.blk; \
 	int64_t p = (t)->ll.p; \
 	int64_t q = (t)->ll.q; \
@@ -2018,8 +2001,7 @@ void trace_load_section_b(
  */
 #define _trace_save_context(t) { \
 	(t)->ll.blk = blk; \
-	_store_v2i32(&(t)->ll.aridx, \
-		_sub_v2i32(_load_v2i32(&(t)->ll.alen), idx)); \
+	_store_v2i32(&(t)->ll.aidx, idx); \
 	(t)->ll.psum -= (t)->ll.p - p; \
 	(t)->ll.p = p; \
 	(t)->ll.q = q; \
@@ -2265,22 +2247,18 @@ void trace_forward_push(
 	_print_v2i64(_load_v2i64(&this->ll.bsec));
 
 	/* store segment info */
-	v2i32_t len = _load_v2i32(&this->ll.alen);
-	v2i32_t ridx = _load_v2i32(&this->ll.aridx);
-	v2i32_t rsidx = _load_v2i32(&this->ll.asridx);
-	_store_v2i32(&this->ll.fw_sec->apos, _sub_v2i32(len, ridx));
-	_store_v2i32(&this->ll.fw_sec->alen, _sub_v2i32(ridx, rsidx));
+	v2i32_t idx = _load_v2i32(&this->ll.aidx);
+	v2i32_t sidx = _load_v2i32(&this->ll.asidx);
+	_store_v2i32(&this->ll.fw_sec->apos, idx);
+	_store_v2i32(&this->ll.fw_sec->alen, _sub_v2i32(sidx, idx));
 
 	/* update rsidx */
-	_store_v2i32(&this->ll.asridx, ridx);
+	// _store_v2i32(&this->ll.asridx, ridx);
+	_store_v2i32(&this->ll.asidx, idx);
 
 	debug("push segment info");
-	_print_v2i32(_sub_v2i32(
-		_load_v2i32(&this->ll.alen),
-		_load_v2i32(&this->ll.aridx)));
-	_print_v2i32(_sub_v2i32(
-		_load_v2i32(&this->ll.aridx),
-		_load_v2i32(&this->ll.asridx)));
+	_print_v2i32(idx);
+	_print_v2i32(_sub_v2i32(sidx, idx));
 
 	/* windback pointer */
 	this->ll.fw_sec--;
@@ -2312,20 +2290,20 @@ void trace_reverse_push(
 	_print_v2i64(_load_v2i64(&this->ll.rv_sec->b));
 
 	/* store segment info */
-	v2i32_t ridx = _load_v2i32(&this->ll.aridx);
-	v2i32_t rsidx = _load_v2i32(&this->ll.asridx);
+	v2i32_t len = _load_v2i32(&this->ll.alen);
+	v2i32_t idx = _load_v2i32(&this->ll.aidx);
+	v2i32_t sidx = _load_v2i32(&this->ll.asidx);
 
-	_store_v2i32(&this->ll.rv_sec->apos, rsidx);
-	_store_v2i32(&this->ll.rv_sec->alen, _sub_v2i32(ridx, rsidx));
+	_store_v2i32(&this->ll.rv_sec->apos, _sub_v2i32(len, sidx));
+	_store_v2i32(&this->ll.rv_sec->alen, _sub_v2i32(sidx, idx));
 
 	/* update rsidx */
-	_store_v2i32(&this->ll.asridx, ridx);
+	_store_v2i32(&this->ll.asidx, idx);
 
 	debug("push segment info");
-	_print_v2i32(_load_v2i32(&this->ll.alen));
-	_print_v2i32(ridx);
-	_print_v2i32(rsidx);
-	_print_v2i32(_sub_v2i32(ridx, rsidx));
+	_print_v2i32(len);
+	_print_v2i32(_sub_v2i32(len, sidx));
+	_print_v2i32(_sub_v2i32(sidx, idx));
 
 	/* windback pointer */
 	this->ll.rv_sec++;
@@ -2359,7 +2337,7 @@ void trace_generate_path(
 	this->ll.atail = tail;
 	this->ll.btail = tail;
 
-	/* set update mask */
+	/* set initial section lengths */
 	v2i32_t const z = _zero_v2i32();
 	_store_v2i32(&this->ll.alen, z);
 
@@ -2380,10 +2358,10 @@ void trace_generate_path(
 	/* until the pointer reaches the root of the matrix */
 	while(this->ll.psum >= 0) {
 		/* update section info */
-		if(this->ll.aridx >= this->ll.alen) {
+		if(this->ll.aidx <= 0) {
 			trace_load_section_a(this);
 		}
-		if(this->ll.bridx >= this->ll.blen) {
+		if(this->ll.bidx <= 0) {
 			trace_load_section_b(this);
 		}
 
@@ -2433,7 +2411,6 @@ struct sea_result_s *trace_concatenate_path(
 
 	fw_path[0] = prev_array | (path_array>>fw_rem);
 	fw_path[-1] = path_array<<(BLK - fw_rem);
-	// prev_array = path_array<<(BLK - fw_rem);
 	debug("path_array(%x), prev_array(%x)", fw_path[0], fw_path[-1]);
 
 	debug("dec fw_path(%d), fw_rem(%llu), rv_rem(%llu), rem(%llu)",
@@ -2463,9 +2440,7 @@ struct sea_result_s *trace_concatenate_path(
 	res->rem = fw_rem;
 
 	/* calc path length */
-	int64_t fw_path_block_len = fw_path_base - fw_path; // + (fw_rem == 0);
-	// int64_t rv_path_block_len = this->ll.rv_path - rv_path_base;
-	// int64_t path_len = 32 * (fw_path_block_len + rv_path_block_len) + fw_rem;
+	int64_t fw_path_block_len = fw_path_base - fw_path;
 	int64_t path_len = 32 * fw_path_block_len + fw_rem;
 	res->plen = path_len;
 

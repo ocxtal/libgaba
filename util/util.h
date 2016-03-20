@@ -286,8 +286,8 @@ struct sea_writer_work_s {
 
 	/** 64byte aligned */
 	int32_t alen, blen;				/** (8) lengths of the current section */
-	int32_t aridx, bridx;			/** (8) current ridx pair */
-	int32_t asridx, bsridx;			/** (8) start ridx pair */
+	int32_t aidx, bidx;				/** (8) current ridx pair */
+	int32_t asidx, bsidx;			/** (8) start ridx pair */
 
 	int64_t psum;					/** (8) */
 	int32_t p;						/** (4) */
