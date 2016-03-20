@@ -1595,14 +1595,13 @@ vec_t trace_search_max_block(
 		_print(prev_max);
 
 		/* take mask */
-		uint32_t prev_mask_update = mask_max & ((union sea_mask_u){
+		uint32_t prev_mask_update = mask_update & ((union sea_mask_u){
 			.mask = _mask(_eq(prev_max, max))
 		}).all;
-		debug("mask_update(%x)", mask_update);
+		debug("mask_update(%x)", prev_mask_update);
 		if(prev_mask_update == 0) {
 			/* max update occured at current block */
 			debug("blk(%p), len(%d), p(%d)", blk, MIN2(tail->p - b * BLK, BLK), b * BLK);
-			_print_v32i16(_add_v32i16(_add_v32i16(_load_v32i16(tail->v), _cvt_v32i8_v32i16(prev_max)), _set_v32i16(offset)));
 			
 			/* save results to writer_work */
 			this->ll.tail = tail;
@@ -3258,7 +3257,7 @@ unittest()
 	struct sea_context_s *c = (struct sea_context_s *)gctx;
 	assert(c != NULL, "%p", c);
 }
-#if 0
+
 /**
  * check if unittest_build_seqs returns a valid seq_pair and sections
  */
@@ -3729,7 +3728,7 @@ unittest(with_seq_pair("ACGTACGT", "GACGTACGT"))
 
 	sea_dp_clean(d);
 }
-#endif
+
 /* cross tests */
 
 /**
@@ -3828,7 +3827,8 @@ struct unittest_naive_result_s unittest_naive(
 			int16_t score = mat[s(i, j)] = MAX4(min,
 				mat[s(i - 1, j - 1)] + m(i, j),
 				score_e, score_f);
-			if(score > max.score) {
+			if(score > max.score
+			|| (score == max.score && (i + j) < (max.apos + max.bpos))) {
 				max = (struct unittest_naive_maxpos_s){
 					score, i, j
 				};
@@ -4065,7 +4065,7 @@ unittest()
 	#endif
 	srand(seed);
 
-	int64_t cross_test_count = 1;
+	int64_t cross_test_count = 10000;
 	for(int64_t i = 0; i < cross_test_count; i++) {
 		/* generate sequences */
 		char *a = unittest_generate_random_sequence(1000);
@@ -4104,10 +4104,11 @@ unittest()
 		struct unittest_naive_result_s n = unittest_naive(p, a, b);
 
 		/* check scores */
-		assert(r->score == n.score, "seed(%d), f->max(%lld), r->score(%lld), n.score(%d)",
-			seed, f->max, r->score, n.score);
-		assert(check_path(r, n.path), "seed(%d)\n%s",
-			seed, format_string_pair_diff(decode_path(r), n.path));
+		assert(r->score == n.score, "f->max(%lld), r->score(%lld), n.score(%d)",
+			f->max, r->score, n.score);
+		assert(check_path(r, n.path), "\n%s\n%s",
+			format_string_pair_diff(a, b),
+			format_string_pair_diff(decode_path(r), n.path));
 
 		debug("score(%lld, %d), alen(%lld), blen(%lld)\n%s",
 			r->score, n.score, n.alen, n.blen,
@@ -4119,6 +4120,37 @@ unittest()
 	}
 }
 
+#if 0
+/* for debugging */
+unittest(with_seq_pair("A", "A"))
+{
+	omajinai();
+	struct sea_score_s const *p = c->params.score_matrix;
+
+	/* diff */
+	struct sea_fill_s *f = sea_dp_fill_root(d, &s->afsec, 0, &s->bfsec, 0);
+	struct sea_result_s *r = sea_dp_trace(d, f, NULL, NULL);
+
+	/* naive */
+	char const *a = s->seq.a;
+	char const *b = s->seq.b;
+	struct unittest_naive_result_s n = unittest_naive(p, a, b);
+
+	/* check scores */
+	assert(r->score == n.score, "f->max(%lld), r->score(%lld), n.score(%d)",
+		f->max, r->score, n.score);
+	assert(check_path(r, n.path), "\n%s\n%s",
+		format_string_pair_diff(a, b),
+		format_string_pair_diff(decode_path(r), n.path));
+
+	debug("score(%lld, %d), alen(%lld), blen(%lld)\n%s",
+		r->score, n.score, n.alen, n.blen,
+		format_string_pair_diff(decode_path(r), n.path));
+
+	/* cleanup */
+	sea_dp_clean(d);
+}
+#endif
 #endif
 
 /**
