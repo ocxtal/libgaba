@@ -64,18 +64,6 @@ void sea_aligned_free(
 /** forward declarations */
 struct sea_dp_context_s;
 
-#if 0
-/**
- * @struct sea_position_s
- */
-struct sea_position_s {
-	int64_t apos, bpos;			/** (16) */
-};
-_static_assert(sizeof(struct sea_position_s) == 16);
-_static_assert(offsetof(struct sea_position_s, apos) == offsetof(struct sea_section_s, apos));
-_static_assert(offsetof(struct sea_position_s, bpos) == offsetof(struct sea_section_s, bpos));
-#endif
-
 /**
  * @union sea_dir_u
  */
@@ -207,8 +195,6 @@ _static_assert(offsetof(struct sea_joint_tail_s, p) == offsetof(struct sea_fill_
 _static_assert(offsetof(struct sea_joint_tail_s, max) == offsetof(struct sea_fill_s, max));
 #define _tail(x)				( (struct sea_joint_tail_s *)(x) )
 #define _fill(x)				( (struct sea_fill_s *)(x) )
-#define SEA_JOINT_TAIL_COPY_SIZE	( offsetof(struct sea_joint_tail_s, _unused) )
-_static_assert(SEA_JOINT_TAIL_COPY_SIZE == 48);
 
 /**
  * @struct sea_merge_tail_s
@@ -420,23 +406,12 @@ struct sea_context_s {
 	/** 64byte aligned */
 };
 _static_assert(sizeof(struct sea_context_s) == 1088);
-#define SEA_DP_ROOT_SIZE 		( sizeof(struct sea_joint_tail_s) + sizeof(struct sea_phantom_block_s) )
-#define SEA_DP_ROOT_TAIL_OFFSET	( sizeof(struct sea_phantom_block_s) )
-#define SEA_DP_ROOT_LOAD_SIZE	( SEA_JOINT_TAIL_COPY_SIZE + sizeof(struct sea_phantom_block_s) )
-_static_assert(SEA_DP_ROOT_SIZE == 288);
-_static_assert(SEA_DP_ROOT_TAIL_OFFSET == 192);
-_static_assert(SEA_DP_ROOT_LOAD_SIZE == 240);
 
 /**
  * coordinate conversion macros
  */
-#if 0
-#define cox(p, q, band)				( ((p)>>1) - (q) )
-#define coy(p, q, band)				( (((p)+1)>>1) + (q) )
-#define cop(x, y, band)				( (x) + (y) )
-#define coq(x, y, band) 			( ((y)-(x))>>1 )
-#endif
 #define rev(pos, len)				( 2 * (len) - (pos) )
+// #define rev(pos, len)				( (len) - (pos) )		/* len must be twiced on load */
 #define roundup(x, base)			( ((x) + (base) - 1) & ~((base) - 1) )
 
 /**

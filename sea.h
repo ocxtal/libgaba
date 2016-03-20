@@ -231,7 +231,7 @@ typedef struct sea_context_s sea_t;
  * @brief section container, a tuple of (id, length, head position).
  */
 struct sea_section_s {
-	uint32_t id;				/** (4) section id */
+	int32_t id;					/** (4) section id */
 	uint32_t len;				/** (4) length of the  seq */
 	uint64_t base;				/** (8) base position of the head of the seq */
 };
