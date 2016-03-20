@@ -282,14 +282,23 @@ struct sea_path_section_s {
 typedef struct sea_path_section_s sea_path_section_t;
 
 /**
+ * @struct sea_path_s
+ */
+struct sea_path_s {
+	uint32_t len;				/** (4) path length (= array bit length) */
+	uint32_t rem;				/** (4) remainder at the head of the path */
+	uint32_t array[];			/** () path array */
+};
+typedef struct sea_path_s sea_path_t;
+
+/**
  * @struct sea_result_s
  */
 struct sea_result_s {
 	struct sea_path_section_s const *sec;
-	uint32_t *path;
-	uint32_t rem;
-	uint32_t unused;
-	uint32_t slen, plen;
+	struct sea_path_s const *path;
+	int64_t score;
+	uint32_t slen, reserved;
 };
 typedef struct sea_result_s sea_result_t;
 

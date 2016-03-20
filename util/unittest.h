@@ -27,6 +27,7 @@
 #include <alloca.h>
 #include <ctype.h>
 #include <inttypes.h>
+#include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -1032,11 +1033,23 @@ void ut_print_results(
 }
 
 /**
+ * @fn ut_catch_sigint
+ */
+static volatile int64_t ut_terminate = 0;
+void ut_catch_sigint(int signal) {
+	ut_terminate = 1;
+	return;
+}
+
+/**
  * @fn ut_main_impl
  */
 static
 int ut_main_impl(int argc, char *argv[])
 {
+	/* set signal handler */
+	signal(SIGINT, ut_catch_sigint);
+
 	/* dump symbol table */
 	struct ut_nm_result_s *nm = ut_nm(argv[0]);
 
@@ -1102,11 +1115,23 @@ int ut_main_impl(int argc, char *argv[])
 			if(compd_config[i].init != NULL && compd_config[i].clean != NULL) {
 				compd_config[i].clean(gctx);
 			}
+
+			if(ut_terminate != 0) {
+				utkv_push(res, r);
+				goto _ut_main_impl_print_result;
+			}
 		}
 		utkv_push(res, r);
+
+		/* check interruption */
+		if(ut_terminate != 0) {
+			// goto _ut_main_impl_print_result;
+			break;
+		}
 	}
 
 	/* print results */
+_ut_main_impl_print_result:;
 	ut_print_results(compd_config, utkv_ptr(res), file_cnt);
 
 	utkv_destroy(res);
