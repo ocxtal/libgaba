@@ -7,6 +7,8 @@
 #ifndef _SASSERT_H_INCLUDED
 #define _SASSERT_H_INCLUDED
 
+#include <stddef.h>
+
 /**
  * assert macros
  */
