@@ -353,7 +353,7 @@ char *ut_build_nm_cmd(
 	}
 
 	/* cat name */
-	char *cmd = (char *)malloc(strlen(cmd_base) + strlen(filename));
+	char *cmd = (char *)malloc(strlen(cmd_base) + strlen(filename) + 1);
 	strcpy(cmd, cmd_base);
 	strcat(cmd, filename);
 
@@ -624,13 +624,19 @@ int ut_compare(
 	struct ut_s const *a = (struct ut_s const *)_a;
 	struct ut_s const *b = (struct ut_s const *)_b;
 
-	int comp_res = 0;
+	int64_t comp_res = 0;
 	/* first sort by file name */
 	if((comp_res = ut_strcmp(a->file, b->file)) != 0) {
 		return(comp_res);
 	}
 
-	/* second sort by name */
+	#define sat(a)	( ((a) > INT32_MAX) ? INT32_MAX : (((a) < INT32_MIN) ? INT32_MIN : (a)) )
+
+	if((comp_res = (a->unique_id - b->unique_id)) != 0) {
+		return(sat(comp_res));
+	}
+
+	/* third sort by name */
 	if((comp_res = ut_strcmp(a->name, b->name)) != 0) {
 		return(comp_res);
 	}
@@ -736,7 +742,7 @@ int64_t *ut_build_file_index(
 
 	utkv_push(idx, 0);
 	while(t->file != NULL) {
-		// printf("comp %s and %s\n", (t - 1)->group, t->group);
+		// printf("comp %s and %s\n", (t - 1)->name, t->name);
 		if(ut_match((void *)(t - 1), (void *)t) != 0) {
 			utkv_push(idx, cnt);
 		}
