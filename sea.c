@@ -1756,7 +1756,34 @@ void trace_load_section_a(
 	int32_t len = tail->a.len;
 
 	while(idx <= 0) {
-		for(tail = tail->tail; tail->apos != 0; tail = tail->tail) {}
+		if(tail->tail == NULL) {
+			log("NULL detected in load_section_a: "
+				"atail(%p, %d), btail(%p, %d), tail(%p, %d), "
+				"p(%d), psum(%lld), q(%d), "
+				"len(%d, %d), idx(%d, %d), sidx(%d, %d)",
+				tail, tail->ssum,
+				this->ll.btail, this->ll.btail->ssum,
+				this->ll.tail, this->ll.tail->ssum,
+				this->ll.p, this->ll.psum, this->ll.q,
+				this->ll.blen, this->ll.alen,
+				this->ll.bidx, this->ll.aidx,
+				this->ll.bsidx, this->ll.asidx);
+		}
+		for(tail = tail->tail; tail->apos != 0; tail = tail->tail) {
+			if(tail->tail == NULL) {
+				log("NULL detected in load_section_a: "
+					"atail(%p, %d), btail(%p, %d), tail(%p, %d), "
+					"p(%d), psum(%lld), q(%d), "
+					"len(%d, %d), idx(%d, %d), sidx(%d, %d)",
+					tail, tail->ssum,
+					this->ll.btail, this->ll.btail->ssum,
+					this->ll.tail, this->ll.tail->ssum,
+					this->ll.p, this->ll.psum, this->ll.q,
+					this->ll.blen, this->ll.alen,
+					this->ll.bidx, this->ll.aidx,
+					this->ll.bsidx, this->ll.asidx);
+			}
+		}
 
 		/* update ridx and len */
 		idx += len;
@@ -1784,7 +1811,34 @@ void trace_load_section_b(
 
 	// while(ridx >= len) {
 	while(idx <= 0) {
-		for(tail = tail->tail; tail->bpos != 0; tail = tail->tail) {}
+		if(tail->tail == NULL) {
+			log("NULL detected in load_section_b: "
+				"atail(%p, %d), btail(%p, %d), tail(%p, %d), "
+				"p(%d), psum(%lld), q(%d), "
+				"len(%d, %d), idx(%d, %d), sidx(%d, %d)",
+				this->ll.atail, this->ll.atail->ssum,
+				tail, tail->ssum,
+				this->ll.tail, this->ll.tail->ssum,
+				this->ll.p, this->ll.psum, this->ll.q,
+				this->ll.blen, this->ll.alen,
+				this->ll.bidx, this->ll.aidx,
+				this->ll.bsidx, this->ll.asidx);
+		}
+		for(tail = tail->tail; tail->bpos != 0; tail = tail->tail) {
+			if(tail->tail == NULL) {
+				log("NULL detected in load_section_b: "
+					"atail(%p, %d), btail(%p, %d), tail(%p, %d), "
+					"p(%d), psum(%lld), q(%d), "
+					"len(%d, %d), idx(%d, %d), sidx(%d, %d)",
+					this->ll.atail, this->ll.atail->ssum,
+					tail, tail->ssum,
+					this->ll.tail, this->ll.tail->ssum,
+					this->ll.p, this->ll.psum, this->ll.q,
+					this->ll.blen, this->ll.alen,
+					this->ll.bidx, this->ll.aidx,
+					this->ll.bsidx, this->ll.asidx);
+			}
+		}
 
 		/* update ridx and len */
 		idx += len;
@@ -3123,10 +3177,21 @@ void *unittest_build_seqs(void *params)
 	uint32_t alen = alim - 20;
 	uint32_t blen = blim - 20;
 
+	int64_t margin = 64;
 	struct unittest_sections_s *sec = malloc(
-		sizeof(struct unittest_sections_s));
+		sizeof(struct unittest_sections_s) + (alim + 1) + (blim + 1) + margin);
+
+	/* copy sequences */
+	char *ca = (char *)(sec + 1);
+	char *cb = ca + alim + 1;
+	char *cm = cb + blim + 1;
+	strcpy(ca, a);
+	strcpy(cb, b);
+	memset(cm, 0, margin);
+
+	/* build context */
 	*sec = (struct unittest_sections_s){
-		.seq = sea_build_seq_pair(a, strlen(a), b, strlen(b)),
+		.seq = sea_build_seq_pair(ca, alim, cb, blim),
 		
 		/* forward */
 		.afsec = sea_build_section(1, 0, alen),
@@ -3214,23 +3279,22 @@ int check_path(
 	return(1);
 }
 
-#define decode_path(_r) \
-	({ \
-		int64_t plen = (_r)->path->len, cnt = 0; \
-		uint32_t const *path = &(_r)->path->array[roundup(plen, 32) / 32 - 1]; \
-		uint32_t path_array = *path; \
-		char *p = alloca(plen) + plen; \
-		*p-- = '\0'; \
-		while(plen-- > 0) { \
-			*p-- = (path_array & 0x80000000) ? 'D' : 'R'; \
-			path_array <<= 1; \
-			if(++cnt == 32) { \
-				path_array = *--path; \
-				cnt = 0; \
-			} \
+#define decode_path(_r) ({ \
+	int64_t plen = (_r)->path->len, cnt = 0; \
+	uint32_t const *path = &(_r)->path->array[roundup(plen, 32) / 32 - 1]; \
+	uint32_t path_array = *path; \
+	char *p = alloca(plen) + plen; \
+	*p-- = '\0'; \
+	while(plen-- > 0) { \
+		*p-- = (path_array & 0x80000000) ? 'D' : 'R'; \
+		path_array <<= 1; \
+		if(++cnt == 32) { \
+			path_array = *--path; \
+			cnt = 0; \
 		} \
-		(p + 1); \
-	})
+	} \
+	(p + 1); \
+})
 #define print_path(_r)			"%s", decode_path(_r)
 #define eq_section(_s1, _s2) \
 	((_s1).id == (_s2).id && (_s1).len == (_s2).len && (_s1).base == (_s2).base)
@@ -3952,10 +4016,10 @@ char *unittest_generate_mutated_sequence(
  */
 char *unittest_add_tail(
 	char *seq,
-	char c)
+	char c,
+	int64_t tail_len)
 {
 	int64_t len = strlen(seq);
-	int64_t tail_len = 64;
 	seq = realloc(seq, len + tail_len + 1);
 
 	for(int64_t i = 0; i < tail_len; i++) {
@@ -4022,7 +4086,7 @@ char *string_pair_diff(
 }
 #define format_string_pair_diff(_a, _b) ({ \
 	char *str = string_pair_diff(_a, _b); \
-	char *copy = alloca(strlen(str)); \
+	char *copy = alloca(strlen(str) + 1); \
 	strcpy(copy, str); \
 	free(str); \
 	copy; \
@@ -4050,7 +4114,7 @@ unittest()
 	assert(check_naive_result(n, 13, "DRDRDDDRDRDRDRDRDRDRDR"), print_naive_result(n));
 	free(n.path);
 }
-
+#if 1
 /* cross test */
 unittest()
 {
@@ -4065,37 +4129,45 @@ unittest()
 	#endif
 	srand(seed);
 
-	int64_t cross_test_count = 10000;
+	int64_t cross_test_count = 10000000;
 	for(int64_t i = 0; i < cross_test_count; i++) {
 		/* generate sequences */
 		char *a = unittest_generate_random_sequence(1000);
 		char *b = unittest_generate_mutated_sequence(a, 0.1, 0.1, 500);
 
-		a = unittest_add_tail(a, 'A');
-		b = unittest_add_tail(b, 'T');
+		/* add random sequences at the tail */
+		a = unittest_add_tail(a, 0, 64);
+		b = unittest_add_tail(b, 0, 64);
+
+		/* add tail margin */
+		a = unittest_add_tail(a, 'C', 20);
+		b = unittest_add_tail(b, 'G', 20);
+
+		/* build section */
+		struct unittest_sections_s *sec = unittest_build_seqs(
+			&((struct unittest_seqs_s){ .a = a, .b = b }));
+
 		debug("seed(%d)\n%s", seed, format_string_pair_diff(a, b));
 
 		/* generate dp context */
-		struct sea_dp_context_s *d = sea_dp_init(c,
-			&((struct sea_seq_pair_s){
-				.a = a,
-				.alen = strlen(a),
-				.b = b,
-				.blen = strlen(b)
-			}));
+		struct sea_dp_context_s *d = sea_dp_init(c, &sec->seq);
 
 		/* fill section */
-		struct sea_fill_s *f = sea_dp_fill_root(d,
-			&((struct sea_section_s){
-				.id = 1,
-				.base = 0,
-				.len = strlen(a)
-			}), 0,
-			&((struct sea_section_s){
-				.id = 3,
-				.base = 0,
-				.len = strlen(b)
-			}), 0);
+		struct sea_section_s const *as = &sec->afsec;
+		struct sea_section_s const *bs = &sec->bfsec;
+		struct sea_fill_s *f = sea_dp_fill_root(d, as, 0, bs, 0);
+		
+		/* fill tail (1) */
+		as = (f->status & 0x0f) ? &sec->aftail : as;
+		bs = (f->status & 0xf0) ? &sec->bftail : bs;
+		struct sea_fill_s *t1 = sea_dp_fill(d, f, as, bs);
+		f = (t1->max > f->max) ? t1 : f;
+
+		/* fill tail (2) */
+		as = (f->status & 0x0f) ? &sec->aftail : as;
+		bs = (f->status & 0xf0) ? &sec->bftail : bs;
+		struct sea_fill_s *t2 = sea_dp_fill(d, t1, as, bs);
+		f = (t2->max > f->max) ? t2 : f;
 
 		/* trace */
 		struct sea_result_s *r = sea_dp_trace(d, f, NULL, NULL);
@@ -4116,19 +4188,42 @@ unittest()
 
 		/* cleanup */
 		sea_dp_clean(d);
+		free(sec);
 		free(n.path);
+		free(a);
+		free(b);
 	}
 }
-
+#else
 #if 0
+"GACGCCTAATAATGTAGAAGACGGATCGTAACTTGATTGCTCGTTTTACTCATTGAGCAGCCTACAGAAATCGTGCCCCCCGACGGGACTGTAAGCCGTTAGGACATCGTTCTAGTCCTTACTTGCTCCGCCCCCGACGGGCGATCCAGCTCGGTAACAACAAACATAGTTGTACCATCTGCGAGTTTGAGACTTAAGCCGGACGCGCAAGCGGCTGGGCGGTTTAGAAGGATTTACTGACGATTTATATTCTATTCCACCAGTGCTTCAGCACTGGGCGCGTGGGATACGAACATTCAAAGCGGATACTATCCATAGTGAAGGGGCCGTGCTGGTTTAAAGAGGAGGCGTACTATATGTAGCTTGCTTTGCCGCGGGGGCAGCCAGAGGGAACCATGACAGGATAGACACCGGAGTCCCGATCAAACGTCTTCATAGTTTGCATTATCGTCAGCGTCTCGGATAGTCACAGTAGTTAAGTTACTTTCTTAGCACAATGTGTTGGAGTTGGCAATTCTCCTCAGGCCCAGTGATATCCCGGTGTTGACTAAAAGCTTGGAAACCGACTCGAACTCGTGGCCCCTCTGATTAATTCCAGCTAAGGAACGGTTTAGATGCCAAAGGGAGGATCCGTTCCAACACTGGTATACAATATACCGTCGCGACGACCTCGCGAACGGCTGAAAATATGTAGCTATGAGTCCTACTTGGGAGGGACCCAGATCACGCTGACAATTGATAGGGCTGTTGCATTACTCCCCGTCTCGACCTTCGGGGGATCCACCAGAACGTCCCCAGGCCTGAATCTCCAGTCGCTCTGAAGTAGACCCAATAGGTGAATAGGCCCCATTAGACAATAGCTCGCGAAATTTGGGAAACTGGACTCCGCGAGAATATCCGACGGTGACATTCCTATACCCGGAAGCTACCTAAAGCGTTGAGTGGACGTGACGGGCCGTCGCAATCTAAGATCAACCCTCCCGGTTTACGGACTAAGGCTAAAGACGAGTGATACCTACATTGGCGTACCCGGGCTGTGCACAGCTTTACTCGACTATCATCGCCCCCCCCCCCCCCCCCCCCC",
+"GACGACCTAATAATGTACAAAACGGCTCGTATGCTAGATTCCCGTGTACTCATTGAAGCAGTCTACAGAAATCTTGCACCACCACGGGACTTACAAGCCGTCTAGGACATCGTTTCTAGTCCTTGACTTGCCCGCCCCCGACGAGCGATCAAGCTCGGTAACAACAAACATAGTTTCACCATCTAGCGACTTTGAGACTAATCCGGACGCGCAAGCGGCTGGGCGAGTTTAAGAGGATATACTGACGATTTATATTCCTTATTCCACCTAGTGATTCAGCACAGTGCGTGTGGGATCGAACATTCGAGCTTGATACTGTCCATAGTGAAGGGACCGTGACTCGTTTAAAGAGGAGGCGTACTATATGTTGCCTGTTGCCGCGGGGCAGCCAAGGGTCCCATGACACCATAAGACACGGAGTCCCGCCAAACGTCTTCATTGTTTGCATCTCGTCCGCGTCTCGGCATAGTCACTGTAGTTAAGTTACTTCTTAGCACATTTTGAGGTTGTGCAATTCTCCCTCGGCCCAGTGGTACCCGGGTTTGTGACTAATCAGCTTGGAAACCGACTCGAACTCGTGGCCCCTCTGATTAATTCCAGCTAAAGGAGACGGTTTAGATGCCCAAGGAGGATCCGTCCAACACTGGTATACAATAATACCGTAGCGACGACCCGCGACACGGATAAAATCTAGCTATGGTCCTACTTGGGAGGGACCCAATCACGGGACAATTGATAGGGCAGTTGCATTACTCCGCGTGACGCCTTCGGGGGATCCACCACAACTCCCCAGGCCTGAATCTCCAGTCGCTCTGAATTAGACCCAGTAGGCAATAGGCCCCGTTAGACAAATAGCTCGCGGAAAGTTTGGGATAACTGGAGCTCCGCGAGAATAACCGCGGTGACATTCCATATCCCGGAAGCTACCTTAAAGCCGCTGAGTGACTGTACGGGCCGTCGGCATCTGTACATCAACCCTCCCGGTTTACGGACTAAGGCTGAATGTCCCCGTAAGGCCTGTGCACTGCTCTTACTCTCCGGACTGTTTGCTCTTATAGTTGTTTGGGGGGGGGGGGGGGGGGGG"
+#endif
 /* for debugging */
-unittest(with_seq_pair("A", "A"))
+unittest(with_seq_pair(
+"TCATACCGACACATTTCTTAAAAGCAAGCAGACTCGGAGGTCGACAGAAGTGATGGTACGCGGACTCCCCTGACGCGCGAACCTGATGCCGCGTGCCACGCCCTCAGGAAAGTATTAACATGAGCATGGTATTTTTTTGACGGCGGAACGGTGTCCAGCCGTGACCTACCCCCGCGACGGTGACAACGGCATAGTAATGCCTTGTGAATGCGCCACAGGGAAGTCTTCGCGTACGCAAACAGCGGATAATACGGTGTCCGCCGGCTCGGCCTACCCCAGCCTTTGATATTAGGAACGGACACCTTGTTGTTTAATAATTCAAAAAACAAAGATCCTACTGAGCCGGTTTAACTCGTCTGTCACCGTGTCGAATACACCCCGACCGAGGGACATCTCAGACCAGAACCTACAACCCTCTTCAACATGGGAAAAGGAACTCGTGTAGGAGAAAACTTGAGGGAGAACTCTATTATAGTCGATCCACTCCGGGATCGTAGTGGGATTCTAACGACCTTTTGGTGACGGATGTAGTGCCTAAGGGTTCCTCTAGCGACGGCCATGGTTACTATCGGTCCTGAACCAGCAGCTTATACTATCCGTATAGTAATCTCTTGACTCTGTGGAGGTGATTTGTGGAAGAAGCTGCCGTCCATAGTTAGTCCCTTTAACCGCACCACTATCTTAAATCATCGACGATCGAGGGTATAACGCGGCGCGAAGCACAACTCGCATCCTAACTGCTTAACTGTTCCCACTTGTAATCGAATGCACGCCAATCGGGAGAGACGCCTATCCGAGTTACACGCCTGTTGGCAGGGGAACCATTACTGATGGCGCAACTGACACCGCCTGCGAACATGAAGCACGGATTAAACAACGTTTGACCCCGTGATTTATGGTCAATAGTACCTATCCCGCACGCGCCATCTCGTTACGATTGACGAGGCCGGCCGACTTTGCGAGCTCCCATTTTACTGCCAAAGTTTGGACGTGCCCGTGGGCCGGGTTAACAGCTCACTACTATGTTCTAGTGGTAGTAAGCAGGCTTGTGCTGCTGGCTGTGTCCCCCCCCCCCCCCCCCCCC",
+"TGATAAGGCACATTTCTTAAAATGCAAGCGACGCGGAGGTCGACGAAGTGATGTACGCGACTCCCCTAGAAGGCGCACCTCCAGGCCGCGTGCCACGCCCTCAGGAAAGTATTGACATGAGCATGGTATTTTTTTCGACGGCGTGAAGTGTCCAGCCGTGGACCTACCCTCGCGACGGTCATAAGGGCTACGAGTAATGCTGTGAATGCGCCACAGGGAAGTCGTGCGGTACGCAAACAGCGGATACTACGTGTCCGGCGGCACGTCCTACTCCAGCATTTGGTAATAGAAACGGGACAACCTTGTTGTTTAACTAATTGCAAAAAACACAGATCCTACTGGAGCTGGTTTAAGTCGTCTGTCGCCGTGTCGAATGCACCGGCACCGAGGAAAATTTATGCCCAGAACCTACCACCCTCTATCAACATTGGGGAAAAGGAACTCGTGAGGTGATAACTTGAGGGAGAACTCTATTATAGTCGCTCCACCCTGGGGATCCTAGTGGGAATTCTAACGACCTTTTCGGTGACGGATGTAGTTCCTAAGGGTTTCGCTATCACTGCCATGGTTACTATCTGTCTGAACCACAGCTATATACTTCCGTATGGCAATCCCTTGACTCTGTGGAGGTGATTTGTGGATGATGCTGCCGTCCATTAGTTAGTCCCTTTAATCGCACCACTATCTTATATTAAAGCCGACCAGGGTACAGTAACGCGGTGGAAGCACACCCGCATCCTAGATGCTGAACTGTTCCCACTCTATAATCGAATGTACGCCAATCGGGAGAGACGCCTACCAGTTACTCGCCATGTTGGAGGGGAACCACAGTGATGGGCGCAACTGATCACCGCCTGCGAACATAAGCACGTATCAAACGAACGTTTGTCCCCGTGATTTATGGTCATAGTACCTAGTCCCGCACGCGCCATGTCATTACGGATTGACTAGGCCGGGCCGACTTGGAGCTCGCATTTTAGCTTGCCAAAGTTTGGCCGTGCTTTGCCGTGGTCGTGGCAATAGCACACAAGCCGACGTTCACTGGTAGGTCCCTACTGTAGTGAGGGGGGGGGGGGGGGGGGGG"
+))
 {
 	omajinai();
 	struct sea_score_s const *p = c->params.score_matrix;
 
-	/* diff */
-	struct sea_fill_s *f = sea_dp_fill_root(d, &s->afsec, 0, &s->bfsec, 0);
+	/* fill section */
+	struct sea_section_s const *as = &s->afsec;
+	struct sea_section_s const *bs = &s->bfsec;
+	struct sea_fill_s *f = sea_dp_fill_root(d, as, 0, bs, 0);
+	
+	/* fill tail (1) */
+	as = (f->status & 0x0f) ? &s->aftail : as;
+	bs = (f->status & 0xf0) ? &s->bftail : bs;
+	struct sea_fill_s *t1 = sea_dp_fill(d, f, as, bs);
+	f = (t1->max > f->max) ? t1 : f;
+
+	/* fill tail (2) */
+	as = (f->status & 0x0f) ? &s->aftail : as;
+	bs = (f->status & 0xf0) ? &s->bftail : bs;
+	struct sea_fill_s *t2 = sea_dp_fill(d, t1, as, bs);
+	f = (t2->max > f->max) ? t2 : f;
 	struct sea_result_s *r = sea_dp_trace(d, f, NULL, NULL);
 
 	/* naive */
