@@ -62,23 +62,23 @@ def build(bld):
 	bld.recurse('arch')
 
 #	bld.shlib(
-#		source = 'sea.c',
-#		target = 'sea',
+#		source = 'gaba.c',
+#		target = 'gaba',
 #		use = bld.env.OBJ)
 
 	bld.stlib(
-		source = 'sea.c',
-		target = 'sea',
+		source = 'gaba.c',
+		target = 'gaba',
 		includes = 'util')
 
 	bld.program(
-		source = ['sea.c', 'arch/io.s'],
+		source = ['gaba.c', 'arch/io.s'],
 		target = 'unittest',
 		includes = 'util',
 		defines = ['TEST'])
 
 	bld.program(
-		source = ['bench.c', 'sea.c', 'arch/io.s'],
+		source = ['bench.c', 'gaba.c', 'arch/io.s'],
 		target = 'bench',
 		includes = 'util',
 		defines = ['BENCH'])

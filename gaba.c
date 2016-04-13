@@ -1,15 +1,15 @@
 
 /**
- * @file sea.c
+ * @file gaba.c
  *
- * @brief libsea3 API implementations
+ * @brief libgaba (libsea3) API implementations
  *
  * @author Hajime Suzuki
  * @date 2016/1/11
  * @license Apache v2
  */
 #include <stdint.h>
-#include "sea.h"
+#include "gaba.h"
 #include "arch/arch.h"
 
 /* aliasing vector macros */
@@ -41,10 +41,10 @@
 #define PSUM_BASE					( 1 )
 
 /* forward declarations */
-static int32_t sea_dp_add_stack(struct sea_dp_context_s *this);
-static void *sea_dp_malloc(struct sea_dp_context_s *this, uint64_t size);
-static void *sea_dp_smalloc(struct sea_dp_context_s *this, uint64_t size);
-// static void sea_dp_free(struct sea_dp_context_s *this, void *ptr);
+static int32_t gaba_dp_add_stack(struct gaba_dp_context_s *this);
+static void *gaba_dp_malloc(struct gaba_dp_context_s *this, uint64_t size);
+static void *gaba_dp_smalloc(struct gaba_dp_context_s *this, uint64_t size);
+// static void gaba_dp_free(struct gaba_dp_context_s *this, void *ptr);
 
 
 /**
@@ -73,7 +73,7 @@ static void *sea_dp_smalloc(struct sea_dp_context_s *this, uint64_t size);
 
 /**
  * @macro _load_sc
- * @brief load constant vectors from sea_dp_context_s
+ * @brief load constant vectors from gaba_dp_context_s
  */
 #define _load_sc(this, name)	( _bc_v16i8(_load_v16i8((this)->scv.name)) )
 
@@ -125,7 +125,7 @@ static void *sea_dp_smalloc(struct sea_dp_context_s *this, uint64_t size);
  * @macro _dir_load
  */
 #define _dir_load(_blk, _local_idx) ({ \
-	union sea_dir_u _dir = (_blk)->dir; \
+	union gaba_dir_u _dir = (_blk)->dir; \
 	debug("load dir idx(%d), mask(%x), shifted mask(%x)", (int32_t)_local_idx, _dir.dynamic.array, _dir.dynamic.array>>(BLK - (_local_idx) - 1)); \
 	_dir.dynamic.array >>= (BLK - (_local_idx) - 1); \
 	_dir; \
@@ -162,7 +162,7 @@ static void *sea_dp_smalloc(struct sea_dp_context_s *this, uint64_t size);
 #define _dir_is_down(_dir)					( *(_dir).guided.ptr != 0 )
 #define _dir_is_right(_dir)					( *(_dir).guided.ptr == 0 )
 #define _dir_load(_blk, _local_idx) ({ \
-	union sea_dir_u _dir = (_blk)->dir; \
+	union gaba_dir_u _dir = (_blk)->dir; \
 	_dir.guided.ptr -= (BLK - (_local_idx)); \
 	_dir; \
 })
@@ -196,7 +196,7 @@ static void *sea_dp_smalloc(struct sea_dp_context_s *this, uint64_t size);
  * @fn transpose_section_pair
  */
 static _force_inline
-struct sea_trans_section_s {
+struct gaba_trans_section_s {
 	v2i32_t id;
 	v2i32_t len;
 	v2i64_t base;
@@ -222,7 +222,7 @@ struct sea_trans_section_s {
 	_print_v2i32(len);
 	_print_v2i64(base);
 
-	return((struct sea_trans_section_s){
+	return((struct gaba_trans_section_s){
 		.id = id,
 		.len = len,
 		.base = base
@@ -234,13 +234,13 @@ struct sea_trans_section_s {
  */
 static _force_inline
 void fill_load_section(
-	struct sea_dp_context_s *this,
-	struct sea_section_s const *a,
-	struct sea_section_s const *b,
+	struct gaba_dp_context_s *this,
+	struct gaba_section_s const *a,
+	struct gaba_section_s const *b,
 	uint64_t plim)
 {
 	/* load current section lengths */
-	struct sea_trans_section_s c = transpose_section_pair(
+	struct gaba_trans_section_s c = transpose_section_pair(
 		_loadu_v2i64(a), _loadu_v2i64(b));
 
 	/* convert current section to (pos of the end, len) */
@@ -262,10 +262,10 @@ void fill_load_section(
  * @fn fill_store_section
  */
 static _force_inline
-struct sea_joint_tail_s *fill_store_section(
-	struct sea_joint_tail_s *tail,
-	struct sea_section_s const *a,
-	struct sea_section_s const *b)
+struct gaba_joint_tail_s *fill_store_section(
+	struct gaba_joint_tail_s *tail,
+	struct gaba_section_s const *a,
+	struct gaba_section_s const *b)
 {
 	_store_v2i64(&tail->a, _loadu_v2i64(a));
 	_store_v2i64(&tail->b, _loadu_v2i64(b));
@@ -273,11 +273,11 @@ struct sea_joint_tail_s *fill_store_section(
 }
 
 /**
- * @struct sea_joint_block_s
+ * @struct gaba_joint_block_s
  * @brief result container for block fill functions
  */
-struct sea_joint_block_s {
-	struct sea_block_s *blk;
+struct gaba_joint_block_s {
+	struct gaba_block_s *blk;
 	int64_t p;
 	int32_t stat;
 };
@@ -289,8 +289,8 @@ struct sea_joint_block_s {
  */
 static _force_inline
 void fill_bulk_fetch(
-	struct sea_dp_context_s *this,
-	struct sea_block_s *blk)
+	struct gaba_dp_context_s *this,
+	struct gaba_block_s *blk)
 {
 	/* load sequence from previous block */
 	vec_t const mask = _set(0x0f);
@@ -336,8 +336,8 @@ void fill_bulk_fetch(
  */
 static _force_inline
 void fill_cap_fetch(
-	struct sea_dp_context_s *this,
-	struct sea_block_s *blk)
+	struct gaba_dp_context_s *this,
+	struct gaba_block_s *blk)
 {
 	/* const */
 	v2i32_t const z = _zero_v2i32();
@@ -388,10 +388,10 @@ void fill_cap_fetch(
  * @brief similar to cap fetch, updating ridx and rem
  */
 static _force_inline
-struct sea_joint_block_s fill_init_fetch(
-	struct sea_dp_context_s *this,
-	struct sea_phantom_block_s *blk,
-	struct sea_joint_tail_s const *prev_tail,
+struct gaba_joint_block_s fill_init_fetch(
+	struct gaba_dp_context_s *this,
+	struct gaba_phantom_block_s *blk,
+	struct gaba_joint_tail_s const *prev_tail,
 	v2i32_t ridx)
 {
 	/* restore (brem, arem) */
@@ -412,7 +412,7 @@ struct sea_joint_block_s fill_init_fetch(
 	v2i32_t len = _sub_v2i32(rem, nrem);
 
 	/* load sequence from the previous block */ {
-		struct sea_block_s *prev_blk = _last_block(prev_tail);
+		struct gaba_block_s *prev_blk = _last_block(prev_tail);
 		vec_t const mask = _set(0x0f);
 		vec_t w = _load(&prev_blk->ch.w);
 		vec_t a = _and(mask, w);
@@ -461,8 +461,8 @@ struct sea_joint_block_s fill_init_fetch(
 	_print_v2i32(ridx);
 	debug("blk(%p), p(%d), stat(%x)", blk + 1, _lo32(len) + _hi32(len), _mask_v2i32(_eq_v2i32(ridx, z)));
 
-	return((struct sea_joint_block_s){
-		.blk = (struct sea_block_s *)(blk + 1),
+	return((struct gaba_joint_block_s){
+		.blk = (struct gaba_block_s *)(blk + 1),
 		.p = _lo32(len) + _hi32(len),
 		.stat = (_mask_v2i32(_eq_v2i32(ridx, z)) == V2I32_MASK_00) ? CONT : UPDATE
 	});
@@ -474,8 +474,8 @@ struct sea_joint_block_s fill_init_fetch(
  */
 static _force_inline
 void fill_restore_fetch(
-	struct sea_dp_context_s *this,
-	struct sea_block_s const *blk)
+	struct gaba_dp_context_s *this,
+	struct gaba_block_s const *blk)
 {
 	vec_t const mask = _set(0x0f);
 
@@ -509,8 +509,8 @@ void fill_restore_fetch(
  */
 static _force_inline
 v2i32_t fill_update_section(
-	struct sea_dp_context_s *this,
-	struct sea_block_s *blk,
+	struct gaba_dp_context_s *this,
+	struct gaba_block_s *blk,
 	v2i32_t cnt)
 {
 	/* update pos and ridx */
@@ -535,19 +535,19 @@ v2i32_t fill_update_section(
  * @brief create joint_head on the stack to start block extension
  */
 static _force_inline
-struct sea_joint_block_s fill_create_phantom_block(
-	struct sea_dp_context_s *this,
-	struct sea_joint_tail_s const *prev_tail)
+struct gaba_joint_block_s fill_create_phantom_block(
+	struct gaba_dp_context_s *this,
+	struct gaba_joint_tail_s const *prev_tail)
 {
 	debug("create head prev_tail(%p), p(%d), psum(%lld), ssum(%d)",
 		prev_tail, prev_tail->p, prev_tail->psum, prev_tail->ssum);
 
 	/* init working stack */
-	struct sea_phantom_block_s *blk = (struct sea_phantom_block_s *)this->stack_top;
-	struct sea_block_s *pblk = _last_block(prev_tail);
+	struct gaba_phantom_block_s *blk = (struct gaba_phantom_block_s *)this->stack_top;
+	struct gaba_block_s *pblk = _last_block(prev_tail);
 
 	/* copy phantom vectors from the previous fragment */
-	_memcpy_blk_aa(&blk->diff, &pblk->diff, offsetof(struct sea_phantom_block_s, sd.max));
+	_memcpy_blk_aa(&blk->diff, &pblk->diff, offsetof(struct gaba_phantom_block_s, sd.max));
 
 	/* fill max vector with zero */
 	_store(&blk->sd.max, _zero());
@@ -570,8 +570,8 @@ struct sea_joint_block_s fill_create_phantom_block(
 		/* copy char vectors from prev_tail */
 		_store(&blk->ch, _load(&pblk->ch));
 
-		return((struct sea_joint_block_s){
-			.blk = (struct sea_block_s *)(blk + 1),
+		return((struct gaba_joint_block_s){
+			.blk = (struct gaba_block_s *)(blk + 1),
 			.p = 0,
 			.stat = CONT
 		});
@@ -586,17 +586,17 @@ struct sea_joint_block_s fill_create_phantom_block(
  * @brief create joint_tail at the end of the blocks
  */
 static _force_inline
-struct sea_joint_tail_s *fill_create_tail(
-	struct sea_dp_context_s *this,
-	struct sea_joint_tail_s const *prev_tail,
-	struct sea_block_s *blk,
+struct gaba_joint_tail_s *fill_create_tail(
+	struct gaba_dp_context_s *this,
+	struct gaba_joint_tail_s const *prev_tail,
+	struct gaba_block_s *blk,
 	int64_t p,
 	int32_t stat)
 {
 	debug("create tail, p(%lld)", p);
 
 	/* create joint_tail */
-	struct sea_joint_tail_s *tail = (struct sea_joint_tail_s *)blk;
+	struct gaba_joint_tail_s *tail = (struct gaba_joint_tail_s *)blk;
 	this->stack_top = (void *)(tail + 1);	/* write back stack_top */
 	tail->v = prev_tail->v;					/* copy middle deltas */
 
@@ -659,8 +659,8 @@ struct sea_joint_tail_s *fill_create_tail(
 	uint8_t *aptr = _rd_bufa(this, 0, BW); \
 	uint8_t *bptr = _rd_bufb(this, 0, BW); \
 	/* load mask pointer */ \
-	/*union sea_mask_pair_u *mask_ptr = (_blk)->mask;*/ \
-	union sea_mask_pair_u *mask_ptr = (_blk)->mask; \
+	/*union gaba_mask_pair_u *mask_ptr = (_blk)->mask;*/ \
+	union gaba_mask_pair_u *mask_ptr = (_blk)->mask; \
 	/* load vector registers */ \
 	vec_t const mask = _set(0x07); \
 	vec_t register dh = _load(_pv(((_blk) - 1)->diff.dh)); \
@@ -682,7 +682,7 @@ struct sea_joint_tail_s *fill_create_tail(
 	_print(max); \
 	_print_v32i16(_add_v32i16(_cvt_v32i8_v32i16(delta), _load_v32i16(this->tail->v))); \
 	/* load direction determiner */ \
-	union sea_dir_u dir = ((_blk) - 1)->dir; \
+	union gaba_dir_u dir = ((_blk) - 1)->dir; \
 	/* load large offset */ \
 	int64_t offset = ((_blk) - 1)->offset; \
 	debug("offset(%lld)", offset);
@@ -812,8 +812,8 @@ struct sea_joint_tail_s *fill_create_tail(
  */
 static _force_inline
 int64_t fill_test_xdrop(
-	struct sea_dp_context_s const *this,
-	struct sea_block_s const *blk)
+	struct gaba_dp_context_s const *this,
+	struct gaba_block_s const *blk)
 {
 	return(this->tx - blk->sd.max[BW/2]);
 }
@@ -824,8 +824,8 @@ int64_t fill_test_xdrop(
  */
 static _force_inline
 int64_t fill_bulk_test_seq_bound(
-	struct sea_dp_context_s const *this,
-	struct sea_block_s const *blk)
+	struct gaba_dp_context_s const *this,
+	struct gaba_block_s const *blk)
 {
 	debug("test(%lld, %lld), len(%d, %d)",
 		(int64_t)blk->aridx - BW,
@@ -852,14 +852,14 @@ int64_t fill_bulk_test_seq_bound(
  */
 static _force_inline
 int64_t fill_bulk_test_p_bound(
-	struct sea_dp_context_s const *this,
+	struct gaba_dp_context_s const *this,
 	int64_t p)
 {
 	return(this->rr.plim - p - BW);
 }
 static _force_inline
 int64_t fill_cap_test_p_bound(
-	struct sea_dp_context_s const *this,
+	struct gaba_dp_context_s const *this,
 	int64_t p)
 {
 	return(this->rr.plim - p);
@@ -871,8 +871,8 @@ int64_t fill_cap_test_p_bound(
  */
 static _force_inline
 void fill_bulk_block(
-	struct sea_dp_context_s *this,
-	struct sea_block_s *blk)
+	struct gaba_dp_context_s *this,
+	struct gaba_block_s *blk)
 {
 	/* fetch sequence */
 	fill_bulk_fetch(this, blk);
@@ -921,9 +921,9 @@ void fill_bulk_block(
  * @brief fill <blk_cnt> contiguous blocks without ij-bound test
  */
 static _force_inline
-struct sea_joint_block_s fill_bulk_predetd_blocks(
-	struct sea_dp_context_s *this,
-	struct sea_block_s *blk,
+struct gaba_joint_block_s fill_bulk_predetd_blocks(
+	struct gaba_dp_context_s *this,
+	struct gaba_block_s *blk,
 	uint64_t blk_cnt)
 {
 	int32_t stat = CONT;
@@ -938,7 +938,7 @@ struct sea_joint_block_s fill_bulk_predetd_blocks(
 		debug("blk(%p)", blk);
 		fill_bulk_block(this, blk++);
 	}
-	return((struct sea_joint_block_s){
+	return((struct gaba_joint_block_s){
 		.blk = blk,
 		.p = (int64_t)bc * BLK,
 		.stat = stat
@@ -950,9 +950,9 @@ struct sea_joint_block_s fill_bulk_predetd_blocks(
  * @brief fill blocks with ij-bound test
  */
 static _force_inline
-struct sea_joint_block_s fill_bulk_seq_bounded(
-	struct sea_dp_context_s *this,
-	struct sea_block_s *blk)
+struct gaba_joint_block_s fill_bulk_seq_bounded(
+	struct gaba_dp_context_s *this,
+	struct gaba_block_s *blk)
 {
 	int32_t stat = CONT;
 
@@ -975,7 +975,7 @@ struct sea_joint_block_s fill_bulk_seq_bounded(
 		p += BLK;
 	}
 	if(fill_test_xdrop(this, blk - 1) < 0) { stat = TERM; }
-	return((struct sea_joint_block_s){
+	return((struct gaba_joint_block_s){
 		.blk = blk,
 		.p = p,
 		.stat = stat 		/* < 0 if stat == TERM */
@@ -987,9 +987,9 @@ struct sea_joint_block_s fill_bulk_seq_bounded(
  * @brief fill blocks with ij-bound and p-bound test
  */
 static _force_inline
-struct sea_joint_block_s fill_bulk_seq_p_bounded(
-	struct sea_dp_context_s *this,
-	struct sea_block_s *blk)
+struct gaba_joint_block_s fill_bulk_seq_p_bounded(
+	struct gaba_dp_context_s *this,
+	struct gaba_block_s *blk)
 {
 	int32_t stat = CONT;
 
@@ -1013,7 +1013,7 @@ struct sea_joint_block_s fill_bulk_seq_p_bounded(
 		p += BLK;
 	}
 	if(fill_test_xdrop(this, blk - 1) < 0) { stat = TERM; }
-	return((struct sea_joint_block_s){
+	return((struct gaba_joint_block_s){
 		.blk = blk,
 		.p = p,
 		.stat = stat 		/* < 0 if stat == TERM */
@@ -1025,9 +1025,9 @@ struct sea_joint_block_s fill_bulk_seq_p_bounded(
  * @brief fill blocks with cap test
  */
 static _force_inline
-struct sea_joint_block_s fill_cap_seq_bounded(
-	struct sea_dp_context_s *this,
-	struct sea_block_s *blk)
+struct gaba_joint_block_s fill_cap_seq_bounded(
+	struct gaba_dp_context_s *this,
+	struct gaba_block_s *blk)
 {
 	int32_t stat = CONT;
 	int64_t p = 0;
@@ -1099,7 +1099,7 @@ struct sea_joint_block_s fill_cap_seq_bounded(
 	debug("blk(%p), p(%lld), stat(%x)", blk, p, stat);
 
 _fill_cap_seq_bounded_finish:;
-	return((struct sea_joint_block_s){
+	return((struct gaba_joint_block_s){
 		.blk = blk,
 		.p = p,
 		.stat = stat
@@ -1111,9 +1111,9 @@ _fill_cap_seq_bounded_finish:;
  * @brief fill blocks with cap test
  */
 static _force_inline
-struct sea_joint_block_s fill_cap_seq_p_bounded(
-	struct sea_dp_context_s *this,
-	struct sea_block_s *blk)
+struct gaba_joint_block_s fill_cap_seq_p_bounded(
+	struct gaba_dp_context_s *this,
+	struct gaba_block_s *blk)
 {
 	int32_t stat = CONT;
 	int64_t p = 0;
@@ -1187,7 +1187,7 @@ struct sea_joint_block_s fill_cap_seq_p_bounded(
 	debug("blk(%p), p(%lld), stat(%x)", blk, p, stat);
 
 _fill_cap_seq_bounded_finish:;
-	return((struct sea_joint_block_s){
+	return((struct gaba_joint_block_s){
 		.blk = blk,
 		.p = p,
 		.stat = stat
@@ -1200,12 +1200,12 @@ _fill_cap_seq_bounded_finish:;
  */
 static _force_inline
 uint64_t calc_max_bulk_blocks_mem(
-	struct sea_dp_context_s const *this)
+	struct gaba_dp_context_s const *this)
 {
-	uint64_t const rem = sizeof(struct sea_joint_tail_s)
-					   + 3 * sizeof(struct sea_block_s);
+	uint64_t const rem = sizeof(struct gaba_joint_tail_s)
+					   + 3 * sizeof(struct gaba_block_s);
 	uint64_t mem_size = this->stack_end - this->stack_top;
-	return((mem_size - rem) / sizeof(struct sea_block_s) / BLK);
+	return((mem_size - rem) / sizeof(struct gaba_block_s) / BLK);
 }
 
 /**
@@ -1214,8 +1214,8 @@ uint64_t calc_max_bulk_blocks_mem(
  */
 static _force_inline
 uint64_t calc_max_bulk_blocks_seq_blk(
-	struct sea_dp_context_s const *this,
-	struct sea_block_s const *blk)
+	struct gaba_dp_context_s const *this,
+	struct gaba_block_s const *blk)
 {
 	uint64_t max_bulk_p = MIN2(
 		(blk - 1)->aridx,
@@ -1224,8 +1224,8 @@ uint64_t calc_max_bulk_blocks_seq_blk(
 }
 static _force_inline
 uint64_t calc_max_bulk_blocks_seq_tail(
-	struct sea_dp_context_s const *this,
-	struct sea_joint_tail_s const *tail)
+	struct gaba_dp_context_s const *this,
+	struct gaba_joint_tail_s const *tail)
 {
 	uint64_t max_bulk_p = MIN2(
 		this->rr.alen - tail->apos,
@@ -1239,8 +1239,8 @@ uint64_t calc_max_bulk_blocks_seq_tail(
  */
 static _force_inline
 uint64_t calc_max_bulk_blocks_seq_p_blk(
-	struct sea_dp_context_s const *this,
-	struct sea_block_s const *blk,
+	struct gaba_dp_context_s const *this,
+	struct gaba_block_s const *blk,
 	int64_t psum)
 {
 	uint64_t max_bulk_p = MIN3(
@@ -1251,8 +1251,8 @@ uint64_t calc_max_bulk_blocks_seq_p_blk(
 }
 static _force_inline
 uint64_t calc_max_bulk_blocks_seq_p_tail(
-	struct sea_dp_context_s const *this,
-	struct sea_joint_tail_s const *tail,
+	struct gaba_dp_context_s const *this,
+	struct gaba_joint_tail_s const *tail,
 	int64_t psum)
 {
 	uint64_t max_bulk_p = MIN3(
@@ -1267,13 +1267,13 @@ uint64_t calc_max_bulk_blocks_seq_p_tail(
  * @brief fill <blk_cnt> contiguous blocks without seq bound tests, adding head and tail
  */
 static _force_inline
-struct sea_joint_tail_s *fill_mem_bounded(
-	struct sea_dp_context_s *this,
-	struct sea_joint_tail_s const *prev_tail,
+struct gaba_joint_tail_s *fill_mem_bounded(
+	struct gaba_dp_context_s *this,
+	struct gaba_joint_tail_s const *prev_tail,
 	uint64_t blk_cnt)
 {
-	struct sea_joint_block_s h = fill_create_phantom_block(this, prev_tail);
-	struct sea_joint_block_s b = fill_bulk_predetd_blocks(this, h.blk, blk_cnt);
+	struct gaba_joint_block_s h = fill_create_phantom_block(this, prev_tail);
+	struct gaba_joint_block_s b = fill_bulk_predetd_blocks(this, h.blk, blk_cnt);
 	return(fill_create_tail(this, prev_tail, b.blk, h.p + b.p, b.stat));
 }
 
@@ -1282,11 +1282,11 @@ struct sea_joint_tail_s *fill_mem_bounded(
  * @brief fill blocks with seq bound tests, adding head and tail
  */
 static _force_inline
-struct sea_joint_tail_s *fill_seq_bounded(
-	struct sea_dp_context_s *this,
-	struct sea_joint_tail_s const *prev_tail)
+struct gaba_joint_tail_s *fill_seq_bounded(
+	struct gaba_dp_context_s *this,
+	struct gaba_joint_tail_s const *prev_tail)
 {
-	struct sea_joint_block_s stat = fill_create_phantom_block(this, prev_tail);
+	struct gaba_joint_block_s stat = fill_create_phantom_block(this, prev_tail);
 	int64_t psum = stat.p;
 
 	/* check if term detected in init fetch */
@@ -1324,11 +1324,11 @@ _fill_seq_bounded_finish:;
  * @brief fill blocks with seq bound tests, adding head and tail
  */
 static _force_inline
-struct sea_joint_tail_s *fill_seq_p_bounded(
-	struct sea_dp_context_s *this,
-	struct sea_joint_tail_s const *prev_tail)
+struct gaba_joint_tail_s *fill_seq_p_bounded(
+	struct gaba_dp_context_s *this,
+	struct gaba_joint_tail_s const *prev_tail)
 {
-	struct sea_joint_block_s stat = fill_create_phantom_block(this, prev_tail);
+	struct gaba_joint_block_s stat = fill_create_phantom_block(this, prev_tail);
 	int64_t psum = stat.p;
 
 	/* check if term detected in init fetch */
@@ -1366,17 +1366,17 @@ _fill_seq_p_bounded_finish:;
  * @brief fill dp matrix inside section pairs
  */
 static _force_inline
-struct sea_joint_tail_s *fill_section_seq_bounded(
-	struct sea_dp_context_s *this,
-	struct sea_joint_tail_s const *prev_tail,
-	struct sea_section_s const *a,
-	struct sea_section_s const *b)
+struct gaba_joint_tail_s *fill_section_seq_bounded(
+	struct gaba_dp_context_s *this,
+	struct gaba_joint_tail_s const *prev_tail,
+	struct gaba_section_s const *a,
+	struct gaba_section_s const *b)
 {
 	/* init section and restore sequence reader buffer */
 	fill_load_section(this, a, b, INT64_MAX);
 
 	/* init tail pointer */
-	struct sea_joint_tail_s *tail = _tail(prev_tail);
+	struct gaba_joint_tail_s *tail = _tail(prev_tail);
 
 	/* calculate block sizes */
 	uint64_t mem_bulk_blocks = calc_max_bulk_blocks_mem(this);
@@ -1396,7 +1396,7 @@ struct sea_joint_tail_s *fill_section_seq_bounded(
 		}
 
 		/* malloc the next stack and set pointers */
-		sea_dp_add_stack(this);
+		gaba_dp_add_stack(this);
 
 		/* stack size has changed */
 		mem_bulk_blocks = calc_max_bulk_blocks_mem(this);
@@ -1413,18 +1413,18 @@ struct sea_joint_tail_s *fill_section_seq_bounded(
  * @brief fill dp matrix inside section pairs
  */
 static _force_inline
-struct sea_joint_tail_s *fill_section_seq_p_bounded(
-	struct sea_dp_context_s *this,
-	struct sea_joint_tail_s const *prev_tail,
-	struct sea_section_s const *a,
-	struct sea_section_s const *b,
+struct gaba_joint_tail_s *fill_section_seq_p_bounded(
+	struct gaba_dp_context_s *this,
+	struct gaba_joint_tail_s const *prev_tail,
+	struct gaba_section_s const *a,
+	struct gaba_section_s const *b,
 	int64_t plim)
 {
 	/* init section and restore sequence reader buffer */
 	fill_load_section(this, a, b, plim);
 
 	/* init tail pointer */
-	struct sea_joint_tail_s *tail = _tail(prev_tail);
+	struct gaba_joint_tail_s *tail = _tail(prev_tail);
 
 	/* calculate block sizes */
 	uint64_t mem_bulk_blocks = calc_max_bulk_blocks_mem(this);
@@ -1444,7 +1444,7 @@ struct sea_joint_tail_s *fill_section_seq_p_bounded(
 		}
 
 		/* malloc the next stack and set pointers */
-		sea_dp_add_stack(this);
+		gaba_dp_add_stack(this);
 
 		/* stack size has changed */
 		mem_bulk_blocks = calc_max_bulk_blocks_mem(this);
@@ -1457,15 +1457,15 @@ struct sea_joint_tail_s *fill_section_seq_p_bounded(
 }
 
 /**
- * @fn sea_dp_fill_root
+ * @fn gaba_dp_fill_root
  *
  * @brief build_root API
  */
-struct sea_fill_s *sea_dp_fill_root(
-	struct sea_dp_context_s *this,
-	struct sea_section_s const *a,
+struct gaba_fill_s *gaba_dp_fill_root(
+	struct gaba_dp_context_s *this,
+	struct gaba_section_s const *a,
 	uint32_t apos,
-	struct sea_section_s const *b,
+	struct gaba_section_s const *b,
 	uint32_t bpos)
 {
 	/* store section info */
@@ -1478,19 +1478,19 @@ struct sea_fill_s *sea_dp_fill_root(
 }
 
 /**
- * @fn sea_dp_fill
+ * @fn gaba_dp_fill
  *
  * @brief fill API
  */
-struct sea_fill_s *sea_dp_fill(
-	struct sea_dp_context_s *this,
-	struct sea_fill_s const *prev_sec,
-	struct sea_section_s const *a,
-	struct sea_section_s const *b)
+struct gaba_fill_s *gaba_dp_fill(
+	struct gaba_dp_context_s *this,
+	struct gaba_fill_s const *prev_sec,
+	struct gaba_section_s const *a,
+	struct gaba_section_s const *b)
 {
-	struct sea_joint_tail_s const *tail = _tail(prev_sec);
+	struct gaba_joint_tail_s const *tail = _tail(prev_sec);
 
-	dump(tail, sizeof(struct sea_joint_tail_s));
+	dump(tail, sizeof(struct gaba_joint_tail_s));
 
 	/* check if the tail is merge_tail */
 	if(tail->v == NULL) {
@@ -1502,7 +1502,7 @@ struct sea_fill_s *sea_dp_fill(
 			cb = clip_to_bw(b);
 
 			/* バンドに対応するseqが揃うまでfillを続ける */
-			new_tail = sea_dp_smalloc(sizeof(struct sea_merge_tail_s));
+			new_tail = gaba_dp_smalloc(sizeof(struct gaba_merge_tail_s));
 			for(i = 0; i < tail->num_tail; i++) {
 				new_tail->tail[i] = fill_section_seq_bounded(
 					this, tail->tail[i], ca, cb);
@@ -1516,7 +1516,7 @@ struct sea_fill_s *sea_dp_fill(
 		} else {
 			#if 0
 			/* pが揃うまでfillを続ける */
-			new_tail = sea_dp_smalloc(sizeof(struct sea_merge_tail_s));
+			new_tail = gaba_dp_smalloc(sizeof(struct gaba_merge_tail_s));
 			for(i = 0; i < tail->num_tail; i++) {
 				if(tail->prem[i] != tail->p) {
 					new_tail->tail[i] = fill_section_seq_p_bounded(
@@ -1555,10 +1555,10 @@ struct sea_fill_s *sea_dp_fill(
  */
 static _force_inline
 vec_t trace_search_max_block(
-	struct sea_dp_context_s *this,
-	struct sea_joint_tail_s const *tail)
+	struct gaba_dp_context_s *this,
+	struct gaba_joint_tail_s const *tail)
 {
-	struct sea_block_s *blk = _last_block(tail);
+	struct gaba_block_s *blk = _last_block(tail);
 
 	debug("p(%d), psum(%lld), ssum(%d), offset(%lld)",
 		tail->p, tail->psum, tail->ssum, blk->offset);
@@ -1569,7 +1569,7 @@ vec_t trace_search_max_block(
 	_print(max);
 
 	/* determine q-coordinate */
-	uint32_t mask_max = ((union sea_mask_u){
+	uint32_t mask_max = ((union gaba_mask_u){
 		.mask = _mask_v32i16(_eq_v32i16(
 			_set_v32i16(tail->max - offset),
 			_add_v32i16(_load_v32i16(tail->v), _cvt_v32i8_v32i16(max))))
@@ -1595,7 +1595,7 @@ vec_t trace_search_max_block(
 		_print(prev_max);
 
 		/* take mask */
-		uint32_t prev_mask_update = mask_update & ((union sea_mask_u){
+		uint32_t prev_mask_update = mask_update & ((union gaba_mask_u){
 			.mask = _mask(_eq(prev_max, max))
 		}).all;
 		debug("mask_update(%x)", prev_mask_update);
@@ -1632,8 +1632,8 @@ vec_t trace_search_max_block(
  */
 static _force_inline
 void trace_calc_coordinates(
-	struct sea_dp_context_s *this,
-	struct sea_block_s const *blk,
+	struct gaba_dp_context_s *this,
+	struct gaba_block_s const *blk,
 	int64_t mask_idx,
 	uint32_t mask_update)
 {
@@ -1673,19 +1673,19 @@ void trace_calc_coordinates(
  */
 static _force_inline
 void trace_search_max_pos(
-	struct sea_dp_context_s *this,
+	struct gaba_dp_context_s *this,
 	vec_t compd_max)
 {
 	/* load coordinates, mask and pointers */
-	struct sea_joint_tail_s const *tail = this->ll.tail;
-	struct sea_block_s *blk = (struct sea_block_s *)this->ll.blk;
+	struct gaba_joint_tail_s const *tail = this->ll.tail;
+	struct gaba_block_s *blk = (struct gaba_block_s *)this->ll.blk;
 	int64_t len = this->ll.len;
 	uint32_t mask_max = this->ll.mask_max;
 	debug("mask_max(%x)", mask_max);
 
 	/* recalculate block */
-	union sea_mask_u mask_max_arr[BLK];
-	union sea_mask_u *mask_max_ptr = mask_max_arr;
+	union gaba_mask_u mask_max_arr[BLK];
+	union gaba_mask_u *mask_max_ptr = mask_max_arr;
 
 	fill_restore_fetch(this, blk);
 	/* vectors on registers inside this block */ {
@@ -1700,7 +1700,7 @@ void trace_search_max_pos(
 				_fill_down(); \
 			} \
 			(_mask_ptr)++->mask = _mask(_eq(max, delta)); \
-			debug("mask(%x)", ((union sea_mask_u){ .mask = _mask(_eq(max, delta)) }).all); \
+			debug("mask(%x)", ((union gaba_mask_u){ .mask = _mask(_eq(max, delta)) }).all); \
 		}
 
 		/* load contexts and overwrite max vector */
@@ -1732,7 +1732,7 @@ void trace_search_max_pos(
 	v32i16_t md = _load_v32i16(tail->v);
 	v32i16_t max = _cvt_v32i8_v32i16(_load(&(blk - 1)->sd.max));
 	md = _add_v32i16(md, max);
-	uint32_t mask = ((union sea_mask_u){
+	uint32_t mask = ((union gaba_mask_u){
 		.mask = _mask_v32i16(_eq_v32i16(md, _set_v32i16(_hmax_v32i16(md))))
 	}).all;
 	debug("p(%d), q(%d)", this->ll.p - 1, tzcnt(mask & mask_max) - BW/2);
@@ -1747,11 +1747,11 @@ void trace_search_max_pos(
  */
 static _force_inline
 void trace_load_section_a(
-	struct sea_dp_context_s *this)
+	struct gaba_dp_context_s *this)
 {
 	debug("load section a");
 	/* load tail pointer (must be inited with leaf tail) */
-	struct sea_joint_tail_s const *tail = this->ll.atail;
+	struct gaba_joint_tail_s const *tail = this->ll.atail;
 	int32_t idx = this->ll.aidx;
 	int32_t len = tail->a.len;
 
@@ -1801,11 +1801,11 @@ void trace_load_section_a(
 }
 static _force_inline
 void trace_load_section_b(
-	struct sea_dp_context_s *this)
+	struct gaba_dp_context_s *this)
 {
 	debug("load section b");
 	/* load tail pointer (must be inited with leaf tail) */
-	struct sea_joint_tail_s const *tail = this->ll.btail;
+	struct gaba_joint_tail_s const *tail = this->ll.btail;
 	int32_t idx = this->ll.bidx;
 	int32_t len = tail->b.len;
 
@@ -1860,7 +1860,7 @@ void trace_load_section_b(
  */
 #define _trace_load_context(t) \
 	v2i32_t idx = _load_v2i32(&(t)->ll.aidx); \
-	struct sea_block_s const *blk = (t)->ll.blk; \
+	struct gaba_block_s const *blk = (t)->ll.blk; \
 	int64_t p = (t)->ll.p; \
 	int64_t q = (t)->ll.q; \
 	int64_t diff_q = 0; \
@@ -1881,8 +1881,8 @@ void trace_load_section_b(
  * @macro _trace_load_block
  */
 #define _trace_load_block(_local_idx) \
-	union sea_dir_u dir = _dir_load(blk, (_local_idx)); \
-	union sea_mask_pair_u const *mask_ptr = &blk->mask[(_local_idx)]; \
+	union gaba_dir_u dir = _dir_load(blk, (_local_idx)); \
+	union gaba_mask_pair_u const *mask_ptr = &blk->mask[(_local_idx)]; \
 	uint64_t path_array = 0; \
 	/* working registers need not be initialized */ \
 	v2i32_t next_idx; \
@@ -2094,7 +2094,7 @@ void trace_load_section_b(
 	debug("tail(%p), next tail(%p), p(%d), psum(%lld), ssum(%d)", \
 		(t)->ll.tail, (t)->ll.tail->tail, (t)->ll.tail->tail->p, \
 		(t)->ll.tail->tail->psum, (t)->ll.tail->tail->ssum); \
-	struct sea_joint_tail_s const *tail = (t)->ll.tail = (t)->ll.tail->tail; \
+	struct gaba_joint_tail_s const *tail = (t)->ll.tail = (t)->ll.tail->tail; \
 	blk = _last_block(tail); \
 	(t)->ll.psum -= (t)->ll.p; \
 	p += ((t)->ll.p = tail->p); \
@@ -2108,7 +2108,7 @@ void trace_load_section_b(
  */
 static
 void trace_forward_trace(
-	struct sea_dp_context_s *this)
+	struct gaba_dp_context_s *this)
 {
 	/* load context onto registers */
 	_trace_forward_load_context(this);
@@ -2208,7 +2208,7 @@ void trace_forward_trace(
  */
 static
 void trace_reverse_trace(
-	struct sea_dp_context_s *this)
+	struct gaba_dp_context_s *this)
 {
 	/* load context onto registers */
 	_trace_reverse_load_context(this);
@@ -2304,7 +2304,7 @@ void trace_reverse_trace(
  */
 static
 void trace_forward_push(
-	struct sea_dp_context_s *this)
+	struct gaba_dp_context_s *this)
 {
 	/* push current section info */
 	_store_v2i64(&this->ll.fw_sec->a, _load_v2i64(&this->ll.asec));
@@ -2339,15 +2339,15 @@ void trace_forward_push(
  */
 static
 void trace_reverse_push(
-	struct sea_dp_context_s *this)
+	struct gaba_dp_context_s *this)
 {
 	/* push current (revcomped) section info */
-	this->ll.rv_sec->a = (struct sea_section_s){
+	this->ll.rv_sec->a = (struct gaba_section_s){
 		.id = -this->ll.asec.id,
 		.len = this->ll.asec.len,
 		.base = 2 * this->rr.p.alen - this->ll.asec.base - this->ll.asec.len
 	};
-	this->ll.rv_sec->b = (struct sea_section_s){
+	this->ll.rv_sec->b = (struct gaba_section_s){
 		.id = -this->ll.bsec.id,
 		.len = this->ll.bsec.len,
 		.base = 2 * this->rr.p.blen - this->ll.bsec.base - this->ll.bsec.len
@@ -2386,8 +2386,8 @@ void trace_reverse_push(
 #define TRACE_REVERSE 		( 1 )
 static _force_inline
 void trace_generate_path(
-	struct sea_dp_context_s *this,
-	struct sea_joint_tail_s const *tail,
+	struct gaba_dp_context_s *this,
+	struct gaba_joint_tail_s const *tail,
 	uint64_t dir)
 {
 	debug("trace_init_start_pos tail(%p), p(%d), psum(%lld), ssum(%d)",
@@ -2410,10 +2410,10 @@ void trace_generate_path(
 	_store_v2i32(&this->ll.alen, z);
 
 	/* initialize function pointers */
-	void (*body)(struct sea_dp_context_s *this) = (
+	void (*body)(struct gaba_dp_context_s *this) = (
 		(dir == TRACE_FORWARD) ? trace_forward_trace : trace_reverse_trace
 	);
-	void (*push)(struct sea_dp_context_s *this) = (
+	void (*push)(struct gaba_dp_context_s *this) = (
 		(dir == TRACE_FORWARD) ? trace_forward_push : trace_reverse_push
 	);
 
@@ -2447,16 +2447,16 @@ void trace_generate_path(
  * @fn trace_concatenate_path
  */
 static _force_inline
-struct sea_result_s *trace_concatenate_path(
-	struct sea_dp_context_s *this,
+struct gaba_result_s *trace_concatenate_path(
+	struct gaba_dp_context_s *this,
 	uint32_t *fw_path_base,
 	uint32_t *rv_path_base,
-	struct sea_path_section_s *fw_sec_base,
-	struct sea_path_section_s *rv_sec_base,
+	struct gaba_path_section_s *fw_sec_base,
+	struct gaba_path_section_s *rv_sec_base,
 	int64_t score_sum)
 {
 	/* fixme: current implementation handle forward path only */
-	struct sea_result_s *res = (struct sea_result_s *)this->ll.ptr;
+	struct gaba_result_s *res = (struct gaba_result_s *)this->ll.ptr;
 
 	debug("fw_path_base(%p), rv_path_base(%p), fw_sec_base(%p), rv_sec_base(%p)",
 		fw_path_base, rv_path_base, fw_sec_base, rv_sec_base);
@@ -2505,8 +2505,8 @@ struct sea_result_s *trace_concatenate_path(
 	}
 
 	/* create path info container */
-	struct sea_path_s *path = (struct sea_path_s *)(
-		(uint8_t *)(fw_path + (fw_rem == 0)) - sizeof(struct sea_path_s));
+	struct gaba_path_s *path = (struct gaba_path_s *)(
+		(uint8_t *)(fw_path + (fw_rem == 0)) - sizeof(struct gaba_path_s));
 
 	/* calc path length */
 	int64_t fw_path_block_len = fw_path_base - fw_path;
@@ -2519,8 +2519,8 @@ struct sea_result_s *trace_concatenate_path(
 
 	/* push forward section and calc section length */
 	int64_t sec_len = this->ll.fw_scnt + this->ll.rv_scnt;
-	struct sea_path_section_s *fw_sec = this->ll.fw_sec;
-	struct sea_path_section_s *rv_sec = this->ll.rv_sec;
+	struct gaba_path_section_s *fw_sec = this->ll.fw_sec;
+	struct gaba_path_section_s *rv_sec = this->ll.rv_sec;
 	while(rv_sec > rv_sec_base) {
 		*fw_sec-- = *--rv_sec;
 		debug("copy reverse section");
@@ -2538,13 +2538,13 @@ struct sea_result_s *trace_concatenate_path(
 }
 
 /**
- * @fn sea_dp_trace
+ * @fn gaba_dp_trace
  */
-struct sea_result_s *sea_dp_trace(
-	struct sea_dp_context_s *this,
-	struct sea_fill_s const *fw_tail,
-	struct sea_fill_s const *rv_tail,
-	struct sea_clip_params_s const *clip)
+struct gaba_result_s *gaba_dp_trace(
+	struct gaba_dp_context_s *this,
+	struct gaba_fill_s const *fw_tail,
+	struct gaba_fill_s const *rv_tail,
+	struct gaba_clip_params_s const *clip)
 {
 	/* substitute tail if NULL */
 	fw_tail = (fw_tail == NULL) ? _fill(this->tail) : fw_tail;
@@ -2567,12 +2567,12 @@ struct sea_result_s *sea_dp_trace(
 	debug("psum(%lld), path_len(%llu), sec_len(%llu)", psum, path_len, sec_len);
 
 	uint64_t path_size = sizeof(uint32_t) * path_len;
-	uint64_t sec_size = sizeof(struct sea_path_section_s) * sec_len;
-	this->ll.ptr = (uint8_t *)sea_dp_malloc(this,
-		sizeof(struct sea_result_s) + path_size + sec_size);
+	uint64_t sec_size = sizeof(struct gaba_path_section_s) * sec_len;
+	this->ll.ptr = (uint8_t *)gaba_dp_malloc(this,
+		sizeof(struct gaba_result_s) + path_size + sec_size);
 
 	/* set path pointers */
-	uint32_t *path_base = (uint32_t *)(this->ll.ptr + sizeof(struct sea_result_s));
+	uint32_t *path_base = (uint32_t *)(this->ll.ptr + sizeof(struct gaba_result_s));
 	uint32_t *fw_path_base = this->ll.fw_path = path_base + path_len - 1;
 	uint32_t *rv_path_base = this->ll.rv_path = path_base;
 
@@ -2581,9 +2581,9 @@ struct sea_result_s *sea_dp_trace(
 	*this->ll.rv_path = 0;
 
 	/* set sec pointers */
-	struct sea_path_section_s *sec_base = (struct sea_path_section_s *)&path_base[path_len];
-	struct sea_path_section_s *fw_sec_base = this->ll.fw_sec = sec_base + sec_len - 1;
-	struct sea_path_section_s *rv_sec_base = this->ll.rv_sec = sec_base;
+	struct gaba_path_section_s *sec_base = (struct gaba_path_section_s *)&path_base[path_len];
+	struct gaba_path_section_s *fw_sec_base = this->ll.fw_sec = sec_base + sec_len - 1;
+	struct gaba_path_section_s *rv_sec_base = this->ll.rv_sec = sec_base;
 
 	/* forward trace */
 	trace_generate_path(this, _tail(fw_tail), TRACE_FORWARD);
@@ -2614,22 +2614,22 @@ int8_t extract_max(int8_t const vector[][4])
 }
 
 /**
- * @fn sea_init_restore_default_params
+ * @fn gaba_init_restore_default_params
  */
 static
-struct sea_score_s const *default_score_matrix = SEA_SCORE_SIMPLE(1, 1, 1, 1);
+struct gaba_score_s const *default_score_matrix = GABA_SCORE_SIMPLE(1, 1, 1, 1);
 static _force_inline
-void sea_init_restore_default_params(
-	struct sea_params_s *params)
+void gaba_init_restore_default_params(
+	struct gaba_params_s *params)
 {
 	#define restore(_name, _default) { \
 		params->_name = ((uint64_t)(params->_name) == 0) ? (_default) : (params->_name); \
 	}
-	restore(seq_a_format, 		SEA_ASCII);
-	restore(seq_a_direction, 	SEA_FW_ONLY);
-	restore(seq_b_format, 		SEA_ASCII);
-	restore(seq_b_direction, 	SEA_FW_ONLY);
-	restore(aln_format, 		SEA_ASCII);
+	restore(seq_a_format, 		GABA_ASCII);
+	restore(seq_a_direction, 	GABA_FW_ONLY);
+	restore(seq_b_format, 		GABA_ASCII);
+	restore(seq_b_direction, 	GABA_FW_ONLY);
+	restore(aln_format, 		GABA_ASCII);
 	restore(head_margin, 		0);
 	restore(tail_margin, 		0);
 	restore(xdrop, 				100);
@@ -2638,18 +2638,18 @@ void sea_init_restore_default_params(
 }
 
 /**
- * @fn sea_init_create_score_vector
+ * @fn gaba_init_create_score_vector
  */
 static _force_inline
-struct sea_score_vec_s sea_init_create_score_vector(
-	struct sea_score_s const *score_matrix)
+struct gaba_score_vec_s gaba_init_create_score_vector(
+	struct gaba_score_s const *score_matrix)
 {
 	int8_t *v = (int8_t *)score_matrix->score_sub;
 	int8_t geh = -score_matrix->score_ge_a;
 	int8_t gev = -score_matrix->score_ge_b;
 	int8_t gih = -score_matrix->score_gi_a;
 	int8_t giv = -score_matrix->score_gi_b;
-	struct sea_score_vec_s sc;
+	struct gaba_score_vec_s sc;
 	for(int i = 0; i < 16; i++) {
 		sc.sb[i] = v[i] - (geh + gih + gev + giv);
 		sc.adjh[i] = -gih;
@@ -2661,11 +2661,11 @@ struct sea_score_vec_s sea_init_create_score_vector(
 }
 
 /**
- * @fn sea_init_create_dir_dynamic
+ * @fn gaba_init_create_dir_dynamic
  */
 static _force_inline
-union sea_dir_u sea_init_create_dir_dynamic(
-	struct sea_score_s const *score_matrix)
+union gaba_dir_u gaba_init_create_dir_dynamic(
+	struct gaba_score_s const *score_matrix)
 {
 	int8_t max = extract_max(score_matrix->score_sub);
 	int8_t geh = -score_matrix->score_ge_a;
@@ -2679,7 +2679,7 @@ union sea_dir_u sea_init_create_dir_dynamic(
 	int16_t ofs_b = giv;
 
 	int64_t acc = (ofs_a + coef_a * BW/2) - (ofs_b + coef_b * (BW/2 - 1));
-	return((union sea_dir_u) {
+	return((union gaba_dir_u) {
 		.dynamic = {
 			.acc = acc,
 			.array = 0x80000000	/* (0, 0) -> (0, 1) (down) */
@@ -2688,24 +2688,24 @@ union sea_dir_u sea_init_create_dir_dynamic(
 }
 
 /**
- * @fn sea_init_create_small_delta
+ * @fn gaba_init_create_small_delta
  */
 static _force_inline
-struct sea_small_delta_s sea_init_create_small_delta(
-	struct sea_score_s const *score_matrix)
+struct gaba_small_delta_s gaba_init_create_small_delta(
+	struct gaba_score_s const *score_matrix)
 {
-	return((struct sea_small_delta_s){
+	return((struct gaba_small_delta_s){
 		.delta = {0},
 		.max = {0}
 	});
 }
 
 /**
- * @fn sea_init_create_middle_delta
+ * @fn gaba_init_create_middle_delta
  */
 static _force_inline
-struct sea_middle_delta_s sea_init_create_middle_delta(
-	struct sea_score_s const *score_matrix)
+struct gaba_middle_delta_s gaba_init_create_middle_delta(
+	struct gaba_score_s const *score_matrix)
 {
 	int8_t max = extract_max(score_matrix->score_sub);
 	int8_t geh = -score_matrix->score_ge_a;
@@ -2718,7 +2718,7 @@ struct sea_middle_delta_s sea_init_create_middle_delta(
 	int16_t ofs_a = gih;
 	int16_t ofs_b = giv;
 
-	struct sea_middle_delta_s md;
+	struct gaba_middle_delta_s md;
 	for(int i = 0; i < BW/2; i++) {
 		md.delta[i] = ofs_a + coef_a * (BW/2 - i);
 		md.delta[BW/2 + i] = ofs_b + coef_b * i;
@@ -2728,7 +2728,7 @@ struct sea_middle_delta_s sea_init_create_middle_delta(
 }
 
 /**
- * @fn sea_init_create_diff_vectors
+ * @fn gaba_init_create_diff_vectors
  *
  * @detail
  * dH[i, j] = S[i, j] - S[i - 1, j]
@@ -2737,8 +2737,8 @@ struct sea_middle_delta_s sea_init_create_middle_delta(
  * dF[i, j] = F[i, j] - S[i, j]
  */
 static _force_inline
-struct sea_diff_vec_s sea_init_create_diff_vectors(
-	struct sea_score_s const *score_matrix)
+struct gaba_diff_vec_s gaba_init_create_diff_vectors(
+	struct gaba_score_s const *score_matrix)
 {
 	int8_t max = extract_max(score_matrix->score_sub);
 	int8_t geh = -score_matrix->score_ge_a;
@@ -2765,7 +2765,7 @@ struct sea_diff_vec_s sea_init_create_diff_vectors(
 	int8_t de[BW] __attribute__(( aligned(16) ));
 	int8_t df[BW] __attribute__(( aligned(16) ));
 
-	struct sea_diff_vec_s diff __attribute__(( aligned(16) ));
+	struct gaba_diff_vec_s diff __attribute__(( aligned(16) ));
 	/**
 	 * dh: dH[i, j] - geh
 	 * dv: dV[i, j] - gev
@@ -2822,13 +2822,13 @@ struct sea_diff_vec_s sea_init_create_diff_vectors(
 }
 
 /**
- * @fn sea_init_create_char_vector
+ * @fn gaba_init_create_char_vector
  */
 static _force_inline
-struct sea_char_vec_s sea_init_create_char_vector(
+struct gaba_char_vec_s gaba_init_create_char_vector(
 	void)
 {
-	struct sea_char_vec_s ch;
+	struct gaba_char_vec_s ch;
 
 	for(int i = 0; i < BW; i++) {
 		ch.w[i] = 0x80;
@@ -2837,10 +2837,10 @@ struct sea_char_vec_s sea_init_create_char_vector(
 }
 
 /**
- * @fn sea_init
+ * @fn gaba_init
  */
-sea_t *sea_init(
-	struct sea_params_s const *params)
+gaba_t *gaba_init(
+	struct gaba_params_s const *params)
 {
 	/* sequence reader table */
 	void (*const rd_seq_a_table[3][7])(
@@ -2849,11 +2849,11 @@ sea_t *sea_init(
 		uint64_t idx,
 		uint64_t src_len,
 		uint64_t copy_len) = {
-		[SEA_FW_ONLY] = {
-			[SEA_ASCII] = _loada_ascii_2bit_fw
+		[GABA_FW_ONLY] = {
+			[GABA_ASCII] = _loada_ascii_2bit_fw
 		},
-		[SEA_FW_RV] = {
-			[SEA_ASCII] = _loada_ascii_2bit_fr
+		[GABA_FW_RV] = {
+			[GABA_ASCII] = _loada_ascii_2bit_fr
 		}
 	};
 	void (*const rd_seq_b_table[3][7])(
@@ -2862,11 +2862,11 @@ sea_t *sea_init(
 		uint64_t idx,
 		uint64_t src_len,
 		uint64_t copy_len) = {
-		[SEA_FW_ONLY] = {
-			[SEA_ASCII] = _loadb_ascii_2bit_fw
+		[GABA_FW_ONLY] = {
+			[GABA_ASCII] = _loadb_ascii_2bit_fw
 		},
-		[SEA_FW_RV] = {
-			[SEA_ASCII] = _loadb_ascii_2bit_fr
+		[GABA_FW_RV] = {
+			[GABA_ASCII] = _loadb_ascii_2bit_fr
 		}
 	};
 
@@ -2876,27 +2876,27 @@ sea_t *sea_init(
 	}
 
 	/* copy params to local stack */
-	struct sea_params_s params_intl = *params;
+	struct gaba_params_s params_intl = *params;
 
 	/* restore defaults */
-	sea_init_restore_default_params(&params_intl);
+	gaba_init_restore_default_params(&params_intl);
 
-	/* malloc sea_context_s */
-	struct sea_context_s *ctx = (struct sea_context_s *)sea_aligned_malloc(
-		sizeof(struct sea_context_s),
+	/* malloc gaba_context_s */
+	struct gaba_context_s *ctx = (struct gaba_context_s *)gaba_aligned_malloc(
+		sizeof(struct gaba_context_s),
 		MEM_ALIGN_SIZE);
 	if(ctx == NULL) {
 		return(NULL);
 	}
 
 	/* fill context */
-	*ctx = (struct sea_context_s) {
+	*ctx = (struct gaba_context_s) {
 		/* template */
-		.k = (struct sea_dp_context_s) {
+		.k = (struct gaba_dp_context_s) {
 			.stack_top = NULL,						/* stored on init */
 			.stack_end = NULL,						/* stored on init */
 
-			.r = (struct sea_reader_s) {
+			.r = (struct gaba_reader_s) {
 				.loada = rd_seq_a_table
 					[params_intl.seq_a_direction]
 					[params_intl.seq_a_format],		/* seq a reader */
@@ -2905,7 +2905,7 @@ sea_t *sea_init(
 					[params_intl.seq_b_format]		/* seq b reader */
 			},
 
-			.scv = sea_init_create_score_vector(params_intl.score_matrix),
+			.scv = gaba_init_create_score_vector(params_intl.score_matrix),
 			.tx = params_intl.xdrop,
 
 			.tail = &ctx->tail,
@@ -2914,17 +2914,17 @@ sea_t *sea_init(
 			.mem_size = MEM_INIT_SIZE,
 			.mem_array = { 0 },						/* NULL */
 		},
-		.md = sea_init_create_middle_delta(params_intl.score_matrix),
-		.blk = (struct sea_phantom_block_s) {
-			.dir = sea_init_create_dir_dynamic(params_intl.score_matrix),
+		.md = gaba_init_create_middle_delta(params_intl.score_matrix),
+		.blk = (struct gaba_phantom_block_s) {
+			.dir = gaba_init_create_dir_dynamic(params_intl.score_matrix),
 			.offset = 0,
-			.diff = sea_init_create_diff_vectors(params_intl.score_matrix),
-			.sd = sea_init_create_small_delta(params_intl.score_matrix),
-			.ch = sea_init_create_char_vector(),
+			.diff = gaba_init_create_diff_vectors(params_intl.score_matrix),
+			.sd = gaba_init_create_small_delta(params_intl.score_matrix),
+			.ch = gaba_init_create_char_vector(),
 			.aridx = 0,
 			.bridx = 0
 		},
-		.tail = (struct sea_joint_tail_s) {
+		.tail = (struct gaba_joint_tail_s) {
 			.v = &ctx->md,
 			.psum = PSUM_BASE - BW,
 			.p = 0,
@@ -2941,28 +2941,28 @@ sea_t *sea_init(
 		.params = params_intl
 	};
 
-	return((sea_t *)ctx);
+	return((gaba_t *)ctx);
 }
 
 /**
- * @fn sea_clean
+ * @fn gaba_clean
  */
-void sea_clean(
-	struct sea_context_s *ctx)
+void gaba_clean(
+	struct gaba_context_s *ctx)
 {
-	if(ctx != NULL) { sea_aligned_free(ctx); }
+	if(ctx != NULL) { gaba_aligned_free(ctx); }
 	return;
 }
 
 /**
- * @fn sea_dp_init
+ * @fn gaba_dp_init
  */
-struct sea_dp_context_s *sea_dp_init(
-	struct sea_context_s const *ctx,
-	struct sea_seq_pair_s const *p)
+struct gaba_dp_context_s *gaba_dp_init(
+	struct gaba_context_s const *ctx,
+	struct gaba_seq_pair_s const *p)
 {
 	/* malloc stack memory */
-	struct sea_dp_context_s *this = (struct sea_dp_context_s *)sea_aligned_malloc(
+	struct gaba_dp_context_s *this = (struct gaba_dp_context_s *)gaba_aligned_malloc(
 		ctx->k.mem_size,
 		MEM_ALIGN_SIZE);
 	if(this == NULL) {
@@ -2974,62 +2974,62 @@ struct sea_dp_context_s *sea_dp_init(
 	_memcpy_blk_au(
 		&this->rr.p,
 		p,
-		sizeof(struct sea_seq_pair_s));
+		sizeof(struct gaba_seq_pair_s));
 
 	/* copy template */
 	_memcpy_blk_aa(
-		(uint8_t *)this + SEA_DP_CONTEXT_LOAD_OFFSET,
-		(uint8_t *)&ctx->k + SEA_DP_CONTEXT_LOAD_OFFSET,
-		SEA_DP_CONTEXT_LOAD_SIZE);
+		(uint8_t *)this + GABA_DP_CONTEXT_LOAD_OFFSET,
+		(uint8_t *)&ctx->k + GABA_DP_CONTEXT_LOAD_OFFSET,
+		GABA_DP_CONTEXT_LOAD_SIZE);
 
 	/* init stack pointers */
-	this->stack_top = (uint8_t *)this + sizeof(struct sea_dp_context_s);
+	this->stack_top = (uint8_t *)this + sizeof(struct gaba_dp_context_s);
 	this->stack_end = (uint8_t *)this + this->mem_size - MEM_MARGIN_SIZE;
 	// this->pdr = guide;
 	// this->tdr = guide + glen;
-	// this->tail = (struct sea_joint_tail_s *)((uint8_t *)this + (dp_sz + ph_sz));
+	// this->tail = (struct gaba_joint_tail_s *)((uint8_t *)this + (dp_sz + ph_sz));
 
 	return(this);
 }
 
 /**
- * @fn sea_dp_add_stack
+ * @fn gaba_dp_add_stack
  */
 static _force_inline
-int32_t sea_dp_add_stack(
-	struct sea_dp_context_s *this)
+int32_t gaba_dp_add_stack(
+	struct gaba_dp_context_s *this)
 {
 	uint8_t *ptr = this->mem_array[this->mem_cnt];
 	uint64_t size = MEM_INIT_SIZE<<(this->mem_cnt + 1);
 	if(ptr == NULL) {
-		ptr = (uint8_t *)sea_aligned_malloc(size, MEM_ALIGN_SIZE);
+		ptr = (uint8_t *)gaba_aligned_malloc(size, MEM_ALIGN_SIZE);
 		debug("ptr(%p)", ptr);
 	}
 	if(ptr == NULL) {
-		return(SEA_ERROR_OUT_OF_MEM);
+		return(GABA_ERROR_OUT_OF_MEM);
 	}
 	this->mem_array[this->mem_cnt++] = this->stack_top = ptr;
 	this->stack_end = this->stack_top + size - MEM_MARGIN_SIZE;
 	debug("stack_top(%p), stack_end(%p), size(%llu)",
 		this->stack_top, this->stack_end, size);
-	return(SEA_SUCCESS);
+	return(GABA_SUCCESS);
 }
 
 /**
- * @fn sea_dp_flush
+ * @fn gaba_dp_flush
  */
-void sea_dp_flush(
-	struct sea_dp_context_s *this,
-	struct sea_seq_pair_s const *p)
+void gaba_dp_flush(
+	struct gaba_dp_context_s *this,
+	struct gaba_seq_pair_s const *p)
 {
-	uint64_t const dp_sz = sizeof(struct sea_dp_context_s);
-	uint64_t const ph_sz = sizeof(struct sea_phantom_block_s);
-	uint64_t const tl_sz = sizeof(struct sea_joint_tail_s);
+	uint64_t const dp_sz = sizeof(struct gaba_dp_context_s);
+	uint64_t const ph_sz = sizeof(struct gaba_phantom_block_s);
+	uint64_t const tl_sz = sizeof(struct gaba_joint_tail_s);
 
 	_memcpy_blk_au(
 		&this->rr.p,
 		p,
-		sizeof(struct sea_seq_pair_s));
+		sizeof(struct gaba_seq_pair_s));
 
 	this->stack_top = (uint8_t *)this + (dp_sz + ph_sz + tl_sz);
 	this->stack_end = (uint8_t *)this + this->mem_size - MEM_MARGIN_SIZE;
@@ -3042,11 +3042,11 @@ void sea_dp_flush(
 }
 
 /**
- * @fn sea_dp_malloc
+ * @fn gaba_dp_malloc
  */
 static _force_inline
-void *sea_dp_malloc(
-	struct sea_dp_context_s *this,
+void *gaba_dp_malloc(
+	struct gaba_dp_context_s *this,
 	uint64_t size)
 {
 	/* roundup */
@@ -3056,7 +3056,7 @@ void *sea_dp_malloc(
 	debug("this(%p), stack_top(%p), size(%llu)", this, this->stack_top, size);
 	if((this->stack_end - this->stack_top) < size) {
 		if(this->mem_size < size) { this->mem_size = size; }
-		if(sea_dp_add_stack(this) != SEA_SUCCESS) {
+		if(gaba_dp_add_stack(this) != GABA_SUCCESS) {
 			return(NULL);
 		}
 		debug("stack_top(%p)", this->stack_top);
@@ -3066,12 +3066,12 @@ void *sea_dp_malloc(
 }
 
 /**
- * @fn sea_dp_smalloc
+ * @fn gaba_dp_smalloc
  * @brief small malloc without boundary check, for joint_head, joint_tail, merge_tail, and delta vectors.
  */
 static _force_inline
-void *sea_dp_smalloc(
-	struct sea_dp_context_s *this,
+void *gaba_dp_smalloc(
+	struct gaba_dp_context_s *this,
 	uint64_t size)
 {
 	debug("this(%p), stack_top(%p)", this, this->stack_top);
@@ -3079,19 +3079,19 @@ void *sea_dp_smalloc(
 }
 
 /**
- * @fn sea_dp_clean
+ * @fn gaba_dp_clean
  */
-void sea_dp_clean(
-	struct sea_dp_context_s *this)
+void gaba_dp_clean(
+	struct gaba_dp_context_s *this)
 {
 	if(this == NULL) {
 		return;
 	}
 
-	for(uint64_t i = 0; i < SEA_MEM_ARRAY_SIZE; i++) {
-		sea_aligned_free(this->mem_array[i]);
+	for(uint64_t i = 0; i < GABA_MEM_ARRAY_SIZE; i++) {
+		gaba_aligned_free(this->mem_array[i]);
 	}
-	sea_aligned_free(this);
+	gaba_aligned_free(this);
 	return;
 }
 
@@ -3106,21 +3106,21 @@ void sea_dp_clean(
  * @brief build context for unittest
  */
 static
-struct sea_score_s const *unittest_default_score_matrix = SEA_SCORE_SIMPLE(2, 3, 5, 1);
+struct gaba_score_s const *unittest_default_score_matrix = GABA_SCORE_SIMPLE(2, 3, 5, 1);
 static
 void *unittest_build_context(void *params)
 {
-	struct sea_score_s const *score = (params != NULL)
-		? (struct sea_score_s const *)params
+	struct gaba_score_s const *score = (params != NULL)
+		? (struct gaba_score_s const *)params
 		: unittest_default_score_matrix;
 
 	/* build context */
-	sea_t *ctx = sea_init(SEA_PARAMS(
-		.seq_a_format = SEA_ASCII,
-		.seq_a_direction = SEA_FW_ONLY,
-		.seq_b_format = SEA_ASCII,
-		.seq_b_direction = SEA_FW_ONLY,
-		.aln_format = SEA_ASCII,
+	gaba_t *ctx = gaba_init(GABA_PARAMS(
+		.seq_a_format = GABA_ASCII,
+		.seq_a_direction = GABA_FW_ONLY,
+		.seq_b_format = GABA_ASCII,
+		.seq_b_direction = GABA_FW_ONLY,
+		.aln_format = GABA_ASCII,
 		.xdrop = 100,
 		.score_matrix = score));
 	return((void *)ctx);
@@ -3132,7 +3132,7 @@ void *unittest_build_context(void *params)
 static
 void unittest_clean_context(void *ctx)
 {
-	sea_clean((struct sea_context_s *)ctx);
+	gaba_clean((struct gaba_context_s *)ctx);
 	return;
 }
 
@@ -3156,9 +3156,9 @@ struct unittest_seqs_s {
  * @brief section container
  */
 struct unittest_sections_s {
-	struct sea_seq_pair_s seq;
-	struct sea_section_s afsec, aftail, bfsec, bftail;
-	struct sea_section_s arsec, artail, brsec, brtail;
+	struct gaba_seq_pair_s seq;
+	struct gaba_section_s afsec, aftail, bfsec, bftail;
+	struct gaba_section_s arsec, artail, brsec, brtail;
 };
 
 /**
@@ -3191,19 +3191,19 @@ void *unittest_build_seqs(void *params)
 
 	/* build context */
 	*sec = (struct unittest_sections_s){
-		.seq = sea_build_seq_pair(ca, alim, cb, blim),
+		.seq = gaba_build_seq_pair(ca, alim, cb, blim),
 		
 		/* forward */
-		.afsec = sea_build_section(1, 0, alen),
-		.aftail = sea_build_section(2, alen, 20),
-		.bfsec = sea_build_section(3, 0, blen),
-		.bftail = sea_build_section(4, blen, 20),
+		.afsec = gaba_build_section(1, 0, alen),
+		.aftail = gaba_build_section(2, alen, 20),
+		.bfsec = gaba_build_section(3, 0, blen),
+		.bftail = gaba_build_section(4, blen, 20),
 
 		/* reverse */
-		.arsec = sea_build_section(-1, 2 * alim - alen, alen),
-		.artail = sea_build_section(-2, alim, 20),
-		.brsec = sea_build_section(-3, 2 * blim - blen, blen),
-		.brtail = sea_build_section(-4, blim, 20)
+		.arsec = gaba_build_section(-1, 2 * alim - alen, alen),
+		.artail = gaba_build_section(-2, alim, 20),
+		.brsec = gaba_build_section(-3, 2 * blim - blen, blen),
+		.brtail = gaba_build_section(-4, blim, 20)
 	};
 	return((void *)sec);
 }
@@ -3254,7 +3254,7 @@ void unittest_clean_seqs(void *ctx)
 
 static
 int check_path(
-	struct sea_result_s const *res,
+	struct gaba_result_s const *res,
 	char const *str)
 {
 	int64_t plen = res->path->len, slen = strlen(str);
@@ -3314,11 +3314,11 @@ unittest_config(
 );
 
 /**
- * check if sea_init returns a valid pointer to a context
+ * check if gaba_init returns a valid pointer to a context
  */
 unittest()
 {
-	struct sea_context_s *c = (struct sea_context_s *)gctx;
+	struct gaba_context_s *c = (struct gaba_context_s *)gctx;
 	assert(c != NULL, "%p", c);
 }
 
@@ -3374,49 +3374,49 @@ unittest(with_seq_pair("A", "A"))
 }
 
 /**
- * check if sea_dp_init returns a vaild pointer to a dp context
+ * check if gaba_dp_init returns a vaild pointer to a dp context
  */
 #define omajinai() \
-	struct sea_context_s const *c = (struct sea_context_s const *)gctx; \
+	struct gaba_context_s const *c = (struct gaba_context_s const *)gctx; \
 	struct unittest_sections_s *s = (struct unittest_sections_s *)ctx; \
-	struct sea_dp_context_s *d = sea_dp_init(c, &s->seq);
+	struct gaba_dp_context_s *d = gaba_dp_init(c, &s->seq);
 
 unittest(with_seq_pair("A", "A"))
 {
 	omajinai();
 
 	assert(d != NULL, "%p", d);
-	sea_dp_clean(d);
+	gaba_dp_clean(d);
 }
 
 /**
- * check if sea_dp_fill_root and sea_dp_fill returns a correct score
+ * check if gaba_dp_fill_root and gaba_dp_fill returns a correct score
  */
 unittest(with_seq_pair("A", "A"))
 {
 	omajinai();
 
 	/* fill root section */
-	struct sea_fill_s *f = sea_dp_fill_root(d, &s->afsec, 0, &s->bfsec, 0);
+	struct gaba_fill_s *f = gaba_dp_fill_root(d, &s->afsec, 0, &s->bfsec, 0);
 	assert(f->status == 0x1ff, "%x", f->status);
 	assert(check_tail(f, 0, 0, -29, 1), print_tail(f));
 
 	/* fill again */
-	f = sea_dp_fill(d, f, &s->afsec, &s->bfsec);
+	f = gaba_dp_fill(d, f, &s->afsec, &s->bfsec);
 	assert(f->status == 0x1ff, "%x", f->status);
 	assert(check_tail(f, 0, 0, -27, 2), print_tail(f));
 
 	/* fill tail section */
-	f = sea_dp_fill(d, f, &s->aftail, &s->bftail);
+	f = gaba_dp_fill(d, f, &s->aftail, &s->bftail);
 	assert(f->status == 0x1ff, "%x", f->status);
 	assert(check_tail(f, 4, 13, 13, 3), print_tail(f));
 
 	/* fill tail section again */
-	f = sea_dp_fill(d, f, &s->aftail, &s->bftail);
+	f = gaba_dp_fill(d, f, &s->aftail, &s->bftail);
 	assert(f->status == 0x10f, "%x", f->status);
 	assert(check_tail(f, -11, 31, 44, 4), print_tail(f));
 
-	sea_dp_clean(d);
+	gaba_dp_clean(d);
 }
 
 /* with longer sequences */
@@ -3425,26 +3425,26 @@ unittest(with_seq_pair("ACGTACGTACGT", "ACGTACGTACGT"))
 	omajinai();
 
 	/* fill root section */
-	struct sea_fill_s *f = sea_dp_fill_root(d, &s->afsec, 0, &s->bfsec, 0);
+	struct gaba_fill_s *f = gaba_dp_fill_root(d, &s->afsec, 0, &s->bfsec, 0);
 	assert(f->status == 0x1ff, "%x", f->status);
 	assert(check_tail(f, 0, 0, -7, 1), print_tail(f));
 
 	/* fill again */
-	f = sea_dp_fill(d, f, &s->afsec, &s->bfsec);
+	f = gaba_dp_fill(d, f, &s->afsec, &s->bfsec);
 	assert(f->status == 0x1ff, "%x", f->status);
 	assert(check_tail(f, 16, 17, 17, 2), print_tail(f));
 
 	/* fill tail section */
-	f = sea_dp_fill(d, f, &s->aftail, &s->bftail);
+	f = gaba_dp_fill(d, f, &s->aftail, &s->bftail);
 	assert(f->status == 0x1ff, "%x", f->status);
 	assert(check_tail(f, 48, 40, 57, 3), print_tail(f));
 
 	/* fill tail section again */
-	f = sea_dp_fill(d, f, &s->aftail, &s->bftail);
+	f = gaba_dp_fill(d, f, &s->aftail, &s->bftail);
 	assert(f->status == 0x10f, "%x", f->status);
 	assert(check_tail(f, 33, 31, 88, 4), print_tail(f));
 
-	sea_dp_clean(d);
+	gaba_dp_clean(d);
 }
 
 /* sequences with different lengths (consumed as mismatches) */
@@ -3452,17 +3452,17 @@ unittest(with_seq_pair("GAAAAAAAA", "AAAAAAAA"))
 {
 	omajinai();
 
-	struct sea_fill_s *f = sea_dp_fill_root(d, &s->afsec, 0, &s->bfsec, 0);
+	struct gaba_fill_s *f = gaba_dp_fill_root(d, &s->afsec, 0, &s->bfsec, 0);
 	assert(f->status == 0x01ff, "%x", f->status);
-	f = sea_dp_fill(d, f, &s->afsec, &s->bfsec);
+	f = gaba_dp_fill(d, f, &s->afsec, &s->bfsec);
 	assert(f->status == 0x01f0, "%x", f->status);
-	f = sea_dp_fill(d, f, &s->afsec, &s->bftail);
+	f = gaba_dp_fill(d, f, &s->afsec, &s->bftail);
 	assert(f->status == 0x010f, "%x", f->status);
-	f = sea_dp_fill(d, f, &s->aftail, &s->bftail);
+	f = gaba_dp_fill(d, f, &s->aftail, &s->bftail);
 	assert(f->status == 0x01f0, "%x", f->status);
 	assert(check_tail(f, 22, 37, 42, 4), print_tail(f));
 
-	sea_dp_clean(d);
+	gaba_dp_clean(d);
 }
 
 /* another pair with different lengths */
@@ -3470,19 +3470,19 @@ unittest(with_seq_pair("TTTTTTTT", "CTTTTTTTT"))
 {
 	omajinai();
 
-	struct sea_fill_s *f = sea_dp_fill_root(d, &s->afsec, 0, &s->bfsec, 0);
+	struct gaba_fill_s *f = gaba_dp_fill_root(d, &s->afsec, 0, &s->bfsec, 0);
 	assert(f->status == 0x010f, "%x", f->status);
-	f = sea_dp_fill(d, f, &s->afsec, &s->bfsec);
+	f = gaba_dp_fill(d, f, &s->afsec, &s->bfsec);
 	assert(f->status == 0x01f0, "%x", f->status);
-	f = sea_dp_fill(d, f, &s->afsec, &s->bfsec);
+	f = gaba_dp_fill(d, f, &s->afsec, &s->bfsec);
 	assert(f->status == 0x010f, "%x", f->status);
-	f = sea_dp_fill(d, f, &s->aftail, &s->bfsec);
+	f = gaba_dp_fill(d, f, &s->aftail, &s->bfsec);
 	assert(f->status == 0x01f0, "%x", f->status);
-	f = sea_dp_fill(d, f, &s->aftail, &s->bftail);
+	f = gaba_dp_fill(d, f, &s->aftail, &s->bftail);
 	assert(f->status == 0x010f, "%x", f->status);
 	assert(check_tail(f, 22, 35, 41, 5), print_tail(f));
 
-	sea_dp_clean(d);
+	gaba_dp_clean(d);
 }
 
 /* with deletions */
@@ -3490,17 +3490,17 @@ unittest(with_seq_pair("GACGTACGT", "ACGTACGT"))
 {
 	omajinai();
 
-	struct sea_fill_s *f = sea_dp_fill_root(d, &s->afsec, 0, &s->bfsec, 0);
+	struct gaba_fill_s *f = gaba_dp_fill_root(d, &s->afsec, 0, &s->bfsec, 0);
 	assert(f->status == 0x01ff, "%x", f->status);
-	f = sea_dp_fill(d, f, &s->afsec, &s->bfsec);
+	f = gaba_dp_fill(d, f, &s->afsec, &s->bfsec);
 	assert(f->status == 0x01f0, "%x", f->status);
-	f = sea_dp_fill(d, f, &s->afsec, &s->bftail);
+	f = gaba_dp_fill(d, f, &s->afsec, &s->bftail);
 	assert(f->status == 0x010f, "%x", f->status);
-	f = sea_dp_fill(d, f, &s->aftail, &s->bftail);
+	f = gaba_dp_fill(d, f, &s->aftail, &s->bftail);
 	assert(f->status == 0x01ff, "%x", f->status);
 	assert(check_tail(f, 20, 38, 43, 4), print_tail(f));
 
-	sea_dp_clean(d);
+	gaba_dp_clean(d);
 }
 
 /* with insertions */
@@ -3508,23 +3508,23 @@ unittest(with_seq_pair("ACGTACGT", "GACGTACGT"))
 {
 	omajinai();
 
-	struct sea_fill_s *f = sea_dp_fill_root(d, &s->afsec, 0, &s->bfsec, 0);
+	struct gaba_fill_s *f = gaba_dp_fill_root(d, &s->afsec, 0, &s->bfsec, 0);
 	assert(f->status == 0x010f, "%x", f->status);
-	f = sea_dp_fill(d, f, &s->afsec, &s->bfsec);
+	f = gaba_dp_fill(d, f, &s->afsec, &s->bfsec);
 	assert(f->status == 0x01f0, "%x", f->status);
-	f = sea_dp_fill(d, f, &s->afsec, &s->bfsec);
+	f = gaba_dp_fill(d, f, &s->afsec, &s->bfsec);
 	assert(f->status == 0x010f, "%x", f->status);
-	f = sea_dp_fill(d, f, &s->aftail, &s->bfsec);
+	f = gaba_dp_fill(d, f, &s->aftail, &s->bfsec);
 	assert(f->status == 0x01f0, "%x", f->status);
-	f = sea_dp_fill(d, f, &s->aftail, &s->bftail);
+	f = gaba_dp_fill(d, f, &s->aftail, &s->bftail);
 	assert(f->status == 0x010f, "%x", f->status);
 	assert(check_tail(f, 20, 36, 42, 5), print_tail(f));
 
-	sea_dp_clean(d);
+	gaba_dp_clean(d);
 }
 
 /**
- * check if sea_dp_trace returns a correct path
+ * check if gaba_dp_trace returns a correct path
  */
 /* with empty sequences */
 unittest(with_seq_pair("A", "A"))
@@ -3532,25 +3532,25 @@ unittest(with_seq_pair("A", "A"))
 	omajinai();
 
 	/* fill sections */
-	struct sea_fill_s *f = sea_dp_fill_root(d, &s->afsec, 0, &s->bfsec, 0);
+	struct gaba_fill_s *f = gaba_dp_fill_root(d, &s->afsec, 0, &s->bfsec, 0);
 
 	/* forward-only traceback */
-	struct sea_result_s *r = sea_dp_trace(d, f, NULL, NULL);
+	struct gaba_result_s *r = gaba_dp_trace(d, f, NULL, NULL);
 	assert(check_result(r, 0, 0, 0, 0), print_result(r));
 
 	/* forward-reverse traceback */
-	r = sea_dp_trace(d, f, f, NULL);
+	r = gaba_dp_trace(d, f, f, NULL);
 	assert(check_result(r, 0, 0, 0, 0), print_result(r));
 
 	/* section added */
-	f = sea_dp_fill(d, f, &s->afsec, &s->bfsec);
+	f = gaba_dp_fill(d, f, &s->afsec, &s->bfsec);
 
 	/* forward-only traceback */
-	r = sea_dp_trace(d, f, NULL, NULL);
+	r = gaba_dp_trace(d, f, NULL, NULL);
 	assert(check_result(r, 0, 0, 0, 0), print_result(r));
 
 	/* forward-reverse traceback */
-	r = sea_dp_trace(d, f, f, NULL);
+	r = gaba_dp_trace(d, f, f, NULL);
 	assert(check_result(r, 0, 0, 0, 0), print_result(r));
 }
 
@@ -3560,26 +3560,26 @@ unittest(with_seq_pair("A", "A"))
 	omajinai();
 
 	/* fill sections */
-	struct sea_fill_s *f = sea_dp_fill_root(d, &s->afsec, 0, &s->bfsec, 0);
-	f = sea_dp_fill(d, f, &s->afsec, &s->bfsec);
-	f = sea_dp_fill(d, f, &s->aftail, &s->bftail);
+	struct gaba_fill_s *f = gaba_dp_fill_root(d, &s->afsec, 0, &s->bfsec, 0);
+	f = gaba_dp_fill(d, f, &s->afsec, &s->bfsec);
+	f = gaba_dp_fill(d, f, &s->aftail, &s->bftail);
 
 	/* forward-only traceback */
-	struct sea_result_s *r = sea_dp_trace(d, f, NULL, NULL);
+	struct gaba_result_s *r = gaba_dp_trace(d, f, NULL, NULL);
 	assert(check_result(r, 4, 4, 4, 2), print_result(r));
 	assert(check_path(r, "DRDR"), print_path(r));
 	assert(check_section(r->sec[0], s->afsec, 0, 1, s->bfsec, 0, 1), print_section(r->sec[0]));
 	assert(check_section(r->sec[1], s->afsec, 0, 1, s->bfsec, 0, 1), print_section(r->sec[1]));
 
 	/* reverse-only traceback */
-	r = sea_dp_trace(d, NULL, f, NULL);
+	r = gaba_dp_trace(d, NULL, f, NULL);
 	assert(check_result(r, 4, 4, 4, 2), print_result(r));
 	assert(check_path(r, "DRDR"), print_path(r));
 	assert(check_section(r->sec[0], s->arsec, 0, 1, s->brsec, 0, 1), print_section(r->sec[0]));
 	assert(check_section(r->sec[1], s->arsec, 0, 1, s->brsec, 0, 1), print_section(r->sec[1]));
 
 	/* forward-reverse traceback */
-	r = sea_dp_trace(d, f, f, NULL);
+	r = gaba_dp_trace(d, f, f, NULL);
 	assert(check_result(r, 8, 8, 8, 4), print_result(r));
 	assert(check_path(r, "DRDRDRDR"), print_path(r));
 	assert(check_section(r->sec[0], s->arsec, 0, 1, s->brsec, 0, 1), print_section(r->sec[0]));
@@ -3587,7 +3587,7 @@ unittest(with_seq_pair("A", "A"))
 	assert(check_section(r->sec[2], s->afsec, 0, 1, s->bfsec, 0, 1), print_section(r->sec[2]));
 	assert(check_section(r->sec[3], s->afsec, 0, 1, s->bfsec, 0, 1), print_section(r->sec[3]));
 
-	sea_dp_clean(d);
+	gaba_dp_clean(d);
 }
 
 /* with longer sequences */
@@ -3596,26 +3596,26 @@ unittest(with_seq_pair("ACGTACGTACGT", "ACGTACGTACGT"))
 	omajinai();
 
 	/* fill sections */
-	struct sea_fill_s *f = sea_dp_fill_root(d, &s->afsec, 0, &s->bfsec, 0);
-	f = sea_dp_fill(d, f, &s->afsec, &s->bfsec);
-	f = sea_dp_fill(d, f, &s->aftail, &s->bftail);
+	struct gaba_fill_s *f = gaba_dp_fill_root(d, &s->afsec, 0, &s->bfsec, 0);
+	f = gaba_dp_fill(d, f, &s->afsec, &s->bfsec);
+	f = gaba_dp_fill(d, f, &s->aftail, &s->bftail);
 
 	/* fw */
-	struct sea_result_s *r = sea_dp_trace(d, f, NULL, NULL);
+	struct gaba_result_s *r = gaba_dp_trace(d, f, NULL, NULL);
 	assert(check_result(r, 48, 48, 16, 2), print_result(r));
 	assert(check_path(r, "DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"), print_path(r));
 	assert(check_section(r->sec[0], s->afsec, 0, 12, s->bfsec, 0, 12), print_section(r->sec[0]));
 	assert(check_section(r->sec[1], s->afsec, 0, 12, s->bfsec, 0, 12), print_section(r->sec[1]));
 
 	/* rv */
-	r = sea_dp_trace(d, NULL, f, NULL);
+	r = gaba_dp_trace(d, NULL, f, NULL);
 	assert(check_result(r, 48, 48, 16, 2), print_result(r));
 	assert(check_path(r, "DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"), print_path(r));
 	assert(check_section(r->sec[0], s->arsec, 0, 12, s->brsec, 0, 12), print_section(r->sec[0]));
 	assert(check_section(r->sec[1], s->arsec, 0, 12, s->brsec, 0, 12), print_section(r->sec[1]));
 
 	/* fw-rv */
-	r = sea_dp_trace(d, f, f, NULL);
+	r = gaba_dp_trace(d, f, f, NULL);
 	assert(check_result(r, 96, 96, 0, 4), print_result(r));
 	assert(check_path(r,
 		"DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"
@@ -3626,7 +3626,7 @@ unittest(with_seq_pair("ACGTACGTACGT", "ACGTACGTACGT"))
 	assert(check_section(r->sec[2], s->afsec, 0, 12, s->bfsec, 0, 12), print_section(r->sec[2]));
 	assert(check_section(r->sec[3], s->afsec, 0, 12, s->bfsec, 0, 12), print_section(r->sec[3]));
 
-	sea_dp_clean(d);
+	gaba_dp_clean(d);
 }
 
 /* sequences with different lengths (consumed as mismatches) */
@@ -3634,13 +3634,13 @@ unittest(with_seq_pair("GAAAAAAAA", "AAAAAAAA"))
 {
 	omajinai();
 
-	struct sea_fill_s *f = sea_dp_fill_root(d, &s->afsec, 0, &s->bfsec, 0);
-	f = sea_dp_fill(d, f, &s->afsec, &s->bfsec);
-	f = sea_dp_fill(d, f, &s->afsec, &s->bftail);
-	f = sea_dp_fill(d, f, &s->aftail, &s->bftail);
+	struct gaba_fill_s *f = gaba_dp_fill_root(d, &s->afsec, 0, &s->bfsec, 0);
+	f = gaba_dp_fill(d, f, &s->afsec, &s->bfsec);
+	f = gaba_dp_fill(d, f, &s->afsec, &s->bftail);
+	f = gaba_dp_fill(d, f, &s->aftail, &s->bftail);
 
 	/* fw */	
-	struct sea_result_s *r = sea_dp_trace(d, f, NULL, NULL);
+	struct gaba_result_s *r = gaba_dp_trace(d, f, NULL, NULL);
 	assert(check_result(r, 22, 32, 0, 3), print_result(r));
 	assert(check_path(r, "DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"), print_path(r));
 	assert(check_section(r->sec[0], s->afsec, 0, 8, s->bfsec, 0, 8), print_section(r->sec[0]));
@@ -3648,7 +3648,7 @@ unittest(with_seq_pair("GAAAAAAAA", "AAAAAAAA"))
 	assert(check_section(r->sec[2], s->afsec, 0, 7, s->bfsec, 1, 7), print_section(r->sec[2]));
 
 	/* rv */
-	r = sea_dp_trace(d, NULL, f, NULL);
+	r = gaba_dp_trace(d, NULL, f, NULL);
 	assert(check_result(r, 22, 32, 0, 3), print_result(r));
 	assert(check_path(r, "DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"), print_path(r));
 	assert(check_section(r->sec[0], s->arsec, 2, 7, s->brsec, 0, 7), print_section(r->sec[0]));
@@ -3656,7 +3656,7 @@ unittest(with_seq_pair("GAAAAAAAA", "AAAAAAAA"))
 	assert(check_section(r->sec[2], s->arsec, 1, 8, s->brsec, 0, 8), print_section(r->sec[2]));
 
 	/* fw-rv */
-	r = sea_dp_trace(d, f, f, NULL);
+	r = gaba_dp_trace(d, f, f, NULL);
 	assert(check_result(r, 44, 64, 0, 6), print_result(r));
 	assert(check_path(r,
 		"DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"
@@ -3669,7 +3669,7 @@ unittest(with_seq_pair("GAAAAAAAA", "AAAAAAAA"))
 	assert(check_section(r->sec[4], s->afsec, 8, 1, s->bfsec, 0, 1), print_section(r->sec[4]));
 	assert(check_section(r->sec[5], s->afsec, 0, 7, s->bfsec, 1, 7), print_section(r->sec[5]));
 
-	sea_dp_clean(d);
+	gaba_dp_clean(d);
 }
 
 /* another pair with different lengths */
@@ -3677,14 +3677,14 @@ unittest(with_seq_pair("TTTTTTTT", "CTTTTTTTT"))
 {
 	omajinai();
 
-	struct sea_fill_s *f = sea_dp_fill_root(d, &s->afsec, 0, &s->bfsec, 0);
-	f = sea_dp_fill(d, f, &s->afsec, &s->bfsec);
-	f = sea_dp_fill(d, f, &s->afsec, &s->bfsec);
-	f = sea_dp_fill(d, f, &s->aftail, &s->bfsec);
-	f = sea_dp_fill(d, f, &s->aftail, &s->bftail);
+	struct gaba_fill_s *f = gaba_dp_fill_root(d, &s->afsec, 0, &s->bfsec, 0);
+	f = gaba_dp_fill(d, f, &s->afsec, &s->bfsec);
+	f = gaba_dp_fill(d, f, &s->afsec, &s->bfsec);
+	f = gaba_dp_fill(d, f, &s->aftail, &s->bfsec);
+	f = gaba_dp_fill(d, f, &s->aftail, &s->bftail);
 
 	/* fw */
-	struct sea_result_s *r = sea_dp_trace(d, f, NULL, NULL);
+	struct gaba_result_s *r = gaba_dp_trace(d, f, NULL, NULL);
 	assert(check_result(r, 22, 32, 0, 3), print_result(r));
 	assert(check_path(r, "DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"), print_path(r));
 	assert(check_section(r->sec[0], s->afsec, 0, 8, s->bfsec, 0, 8), print_section(r->sec[0]));
@@ -3692,7 +3692,7 @@ unittest(with_seq_pair("TTTTTTTT", "CTTTTTTTT"))
 	assert(check_section(r->sec[2], s->afsec, 1, 7, s->bfsec, 0, 7), print_section(r->sec[2]));
 
 	/* rv */
-	r = sea_dp_trace(d, NULL, f, NULL);
+	r = gaba_dp_trace(d, NULL, f, NULL);
 	assert(check_result(r, 22, 32, 0, 3), print_result(r));
 	assert(check_path(r, "DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"), print_path(r));
 	assert(check_section(r->sec[0], s->arsec, 0, 7, s->brsec, 2, 7), print_section(r->sec[0]));
@@ -3700,7 +3700,7 @@ unittest(with_seq_pair("TTTTTTTT", "CTTTTTTTT"))
 	assert(check_section(r->sec[2], s->arsec, 0, 8, s->brsec, 1, 8), print_section(r->sec[2]));
 
 	/* fw-rv */
-	r = sea_dp_trace(d, f, f, NULL);
+	r = gaba_dp_trace(d, f, f, NULL);
 	assert(check_result(r, 44, 64, 0, 6), print_result(r));
 	assert(check_path(r,
 		"DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"
@@ -3712,7 +3712,7 @@ unittest(with_seq_pair("TTTTTTTT", "CTTTTTTTT"))
 	assert(check_section(r->sec[4], s->afsec, 0, 1, s->bfsec, 8, 1), print_section(r->sec[4]));
 	assert(check_section(r->sec[5], s->afsec, 1, 7, s->bfsec, 0, 7), print_section(r->sec[5]));
 
-	sea_dp_clean(d);
+	gaba_dp_clean(d);
 }
 
 /* with deletions */
@@ -3720,27 +3720,27 @@ unittest(with_seq_pair("GACGTACGT", "ACGTACGT"))
 {
 	omajinai();
 
-	struct sea_fill_s *f = sea_dp_fill_root(d, &s->afsec, 0, &s->bfsec, 0);
-	f = sea_dp_fill(d, f, &s->afsec, &s->bfsec);
-	f = sea_dp_fill(d, f, &s->afsec, &s->bftail);
-	f = sea_dp_fill(d, f, &s->aftail, &s->bftail);
+	struct gaba_fill_s *f = gaba_dp_fill_root(d, &s->afsec, 0, &s->bfsec, 0);
+	f = gaba_dp_fill(d, f, &s->afsec, &s->bfsec);
+	f = gaba_dp_fill(d, f, &s->afsec, &s->bftail);
+	f = gaba_dp_fill(d, f, &s->aftail, &s->bftail);
 
 	/* fw */
-	struct sea_result_s *r = sea_dp_trace(d, f, NULL, NULL);
+	struct gaba_result_s *r = gaba_dp_trace(d, f, NULL, NULL);
 	assert(check_result(r, 20, 34, 2, 2), print_result(r));
 	assert(check_path(r, "RDRDRDRDRDRDRDRDRRDRDRDRDRDRDRDRDR"), print_path(r));
 	assert(check_section(r->sec[0], s->afsec, 0, 9, s->bfsec, 0, 8), print_section(r->sec[0]));
 	assert(check_section(r->sec[1], s->afsec, 0, 9, s->bfsec, 0, 8), print_section(r->sec[1]));
 
 	/* rv */
-	r = sea_dp_trace(d, NULL, f, NULL);
+	r = gaba_dp_trace(d, NULL, f, NULL);
 	assert(check_result(r, 20, 34, 2, 2), print_result(r));
 	assert(check_path(r, "DRDRDRDRDRDRDRDRRDRDRDRDRDRDRDRDRR"), print_path(r));
 	assert(check_section(r->sec[0], s->arsec, 0, 9, s->brsec, 0, 8), print_section(r->sec[0]));
 	assert(check_section(r->sec[1], s->arsec, 0, 9, s->brsec, 0, 8), print_section(r->sec[1]));
 
 	/* fw-rv */
-	r = sea_dp_trace(d, f, f, NULL);
+	r = gaba_dp_trace(d, f, f, NULL);
 	/* fixme!! continuous gaps at the root must be concatenated! */
 	assert(check_result(r, 40, 68, 4, 4), print_result(r));
 	assert(check_path(r,
@@ -3751,7 +3751,7 @@ unittest(with_seq_pair("GACGTACGT", "ACGTACGT"))
 	assert(check_section(r->sec[2], s->afsec, 0, 9, s->bfsec, 0, 8), print_section(r->sec[2]));
 	assert(check_section(r->sec[3], s->afsec, 0, 9, s->bfsec, 0, 8), print_section(r->sec[3]));
 
-	sea_dp_clean(d);
+	gaba_dp_clean(d);
 }
 
 /* with insertions */
@@ -3759,28 +3759,28 @@ unittest(with_seq_pair("ACGTACGT", "GACGTACGT"))
 {
 	omajinai();
 
-	struct sea_fill_s *f = sea_dp_fill_root(d, &s->afsec, 0, &s->bfsec, 0);
-	f = sea_dp_fill(d, f, &s->afsec, &s->bfsec);
-	f = sea_dp_fill(d, f, &s->afsec, &s->bfsec);
-	f = sea_dp_fill(d, f, &s->aftail, &s->bfsec);
-	f = sea_dp_fill(d, f, &s->aftail, &s->bftail);
+	struct gaba_fill_s *f = gaba_dp_fill_root(d, &s->afsec, 0, &s->bfsec, 0);
+	f = gaba_dp_fill(d, f, &s->afsec, &s->bfsec);
+	f = gaba_dp_fill(d, f, &s->afsec, &s->bfsec);
+	f = gaba_dp_fill(d, f, &s->aftail, &s->bfsec);
+	f = gaba_dp_fill(d, f, &s->aftail, &s->bftail);
 
 	/* fw */
-	struct sea_result_s *r = sea_dp_trace(d, f, NULL, NULL);
+	struct gaba_result_s *r = gaba_dp_trace(d, f, NULL, NULL);
 	assert(check_result(r, 20, 34, 2, 2), print_result(r));
 	assert(check_path(r, "DDRDRDRDRDRDRDRDRDDRDRDRDRDRDRDRDR"), print_path(r));
 	assert(check_section(r->sec[0], s->afsec, 0, 8, s->bfsec, 0, 9), print_section(r->sec[0]));
 	assert(check_section(r->sec[1], s->afsec, 0, 8, s->bfsec, 0, 9), print_section(r->sec[1]));
 
 	/* rv */
-	r = sea_dp_trace(d, NULL, f, NULL);
+	r = gaba_dp_trace(d, NULL, f, NULL);
 	assert(check_result(r, 20, 34, 2, 2), print_result(r));
 	assert(check_path(r, "DRDRDRDRDRDRDRDRDDRDRDRDRDRDRDRDRD"), print_path(r));
 	assert(check_section(r->sec[0], s->arsec, 0, 8, s->brsec, 0, 9), print_section(r->sec[0]));
 	assert(check_section(r->sec[1], s->arsec, 0, 8, s->brsec, 0, 9), print_section(r->sec[1]));
 
 	/* fw-rv */
-	r = sea_dp_trace(d, f, f, NULL);
+	r = gaba_dp_trace(d, f, f, NULL);
 	assert(check_result(r, 40, 68, 4, 4), print_result(r));
 	assert(check_path(r,
 		"DRDRDRDRDRDRDRDRDDRDRDRDRDRDRDRDRD"
@@ -3790,7 +3790,7 @@ unittest(with_seq_pair("ACGTACGT", "GACGTACGT"))
 	assert(check_section(r->sec[2], s->afsec, 0, 8, s->bfsec, 0, 9), print_section(r->sec[2]));
 	assert(check_section(r->sec[3], s->afsec, 0, 8, s->bfsec, 0, 9), print_section(r->sec[3]));
 
-	sea_dp_clean(d);
+	gaba_dp_clean(d);
 }
 
 /* cross tests */
@@ -3824,7 +3824,7 @@ int8_t unittest_naive_encode(char a)
  */
 static
 struct unittest_naive_result_s unittest_naive(
-	struct sea_score_s const *sc,
+	struct gaba_score_s const *sc,
 	char const *a,
 	char const *b)
 {
@@ -4095,8 +4095,8 @@ char *string_pair_diff(
 
 unittest()
 {
-	struct sea_context_s const *c = (struct sea_context_s const *)gctx;
-	struct sea_score_s const *p = c->params.score_matrix;
+	struct gaba_context_s const *c = (struct gaba_context_s const *)gctx;
+	struct gaba_score_s const *p = c->params.score_matrix;
 	struct unittest_naive_result_s n;
 
 	/* all matches */
@@ -4118,8 +4118,8 @@ unittest()
 /* cross test */
 unittest()
 {
-	struct sea_context_s const *c = (struct sea_context_s const *)gctx;
-	struct sea_score_s const *p = c->params.score_matrix;
+	struct gaba_context_s const *c = (struct gaba_context_s const *)gctx;
+	struct gaba_score_s const *p = c->params.score_matrix;
 
 	/* seed rand */
 	#ifndef SEED
@@ -4129,7 +4129,8 @@ unittest()
 	#endif
 	srand(seed);
 
-	int64_t cross_test_count = 10000000;
+	// int64_t cross_test_count = 10000000;
+	int64_t cross_test_count = 1000;
 	for(int64_t i = 0; i < cross_test_count; i++) {
 		/* generate sequences */
 		char *a = unittest_generate_random_sequence(1000);
@@ -4150,27 +4151,27 @@ unittest()
 		debug("seed(%d)\n%s", seed, format_string_pair_diff(a, b));
 
 		/* generate dp context */
-		struct sea_dp_context_s *d = sea_dp_init(c, &sec->seq);
+		struct gaba_dp_context_s *d = gaba_dp_init(c, &sec->seq);
 
 		/* fill section */
-		struct sea_section_s const *as = &sec->afsec;
-		struct sea_section_s const *bs = &sec->bfsec;
-		struct sea_fill_s *f = sea_dp_fill_root(d, as, 0, bs, 0);
+		struct gaba_section_s const *as = &sec->afsec;
+		struct gaba_section_s const *bs = &sec->bfsec;
+		struct gaba_fill_s *f = gaba_dp_fill_root(d, as, 0, bs, 0);
 		
 		/* fill tail (1) */
 		as = (f->status & 0x0f) ? &sec->aftail : as;
 		bs = (f->status & 0xf0) ? &sec->bftail : bs;
-		struct sea_fill_s *t1 = sea_dp_fill(d, f, as, bs);
+		struct gaba_fill_s *t1 = gaba_dp_fill(d, f, as, bs);
 		f = (t1->max > f->max) ? t1 : f;
 
 		/* fill tail (2) */
 		as = (f->status & 0x0f) ? &sec->aftail : as;
 		bs = (f->status & 0xf0) ? &sec->bftail : bs;
-		struct sea_fill_s *t2 = sea_dp_fill(d, t1, as, bs);
+		struct gaba_fill_s *t2 = gaba_dp_fill(d, t1, as, bs);
 		f = (t2->max > f->max) ? t2 : f;
 
 		/* trace */
-		struct sea_result_s *r = sea_dp_trace(d, f, NULL, NULL);
+		struct gaba_result_s *r = gaba_dp_trace(d, f, NULL, NULL);
 
 		/* naive */
 		struct unittest_naive_result_s n = unittest_naive(p, a, b);
@@ -4187,7 +4188,7 @@ unittest()
 			format_string_pair_diff(decode_path(r), n.path));
 
 		/* cleanup */
-		sea_dp_clean(d);
+		gaba_dp_clean(d);
 		free(sec);
 		free(n.path);
 		free(a);
@@ -4206,25 +4207,25 @@ unittest(with_seq_pair(
 ))
 {
 	omajinai();
-	struct sea_score_s const *p = c->params.score_matrix;
+	struct gaba_score_s const *p = c->params.score_matrix;
 
 	/* fill section */
-	struct sea_section_s const *as = &s->afsec;
-	struct sea_section_s const *bs = &s->bfsec;
-	struct sea_fill_s *f = sea_dp_fill_root(d, as, 0, bs, 0);
+	struct gaba_section_s const *as = &s->afsec;
+	struct gaba_section_s const *bs = &s->bfsec;
+	struct gaba_fill_s *f = gaba_dp_fill_root(d, as, 0, bs, 0);
 	
 	/* fill tail (1) */
 	as = (f->status & 0x0f) ? &s->aftail : as;
 	bs = (f->status & 0xf0) ? &s->bftail : bs;
-	struct sea_fill_s *t1 = sea_dp_fill(d, f, as, bs);
+	struct gaba_fill_s *t1 = gaba_dp_fill(d, f, as, bs);
 	f = (t1->max > f->max) ? t1 : f;
 
 	/* fill tail (2) */
 	as = (f->status & 0x0f) ? &s->aftail : as;
 	bs = (f->status & 0xf0) ? &s->bftail : bs;
-	struct sea_fill_s *t2 = sea_dp_fill(d, t1, as, bs);
+	struct gaba_fill_s *t2 = gaba_dp_fill(d, t1, as, bs);
 	f = (t2->max > f->max) ? t2 : f;
-	struct sea_result_s *r = sea_dp_trace(d, f, NULL, NULL);
+	struct gaba_result_s *r = gaba_dp_trace(d, f, NULL, NULL);
 
 	/* naive */
 	char const *a = s->seq.a;
@@ -4243,11 +4244,11 @@ unittest(with_seq_pair(
 		format_string_pair_diff(decode_path(r), n.path));
 
 	/* cleanup */
-	sea_dp_clean(d);
+	gaba_dp_clean(d);
 }
 #endif
 #endif
 
 /**
- * end of sea.c
+ * end of gaba.c
  */
