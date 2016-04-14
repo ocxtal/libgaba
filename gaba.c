@@ -2629,7 +2629,6 @@ void gaba_init_restore_default_params(
 	restore(seq_a_direction, 	GABA_FW_ONLY);
 	restore(seq_b_format, 		GABA_ASCII);
 	restore(seq_b_direction, 	GABA_FW_ONLY);
-	restore(aln_format, 		GABA_ASCII);
 	restore(head_margin, 		0);
 	restore(tail_margin, 		0);
 	restore(xdrop, 				100);
@@ -3120,7 +3119,6 @@ void *unittest_build_context(void *params)
 		.seq_a_direction = GABA_FW_ONLY,
 		.seq_b_format = GABA_ASCII,
 		.seq_b_direction = GABA_FW_ONLY,
-		.aln_format = GABA_ASCII,
 		.xdrop = 100,
 		.score_matrix = score));
 	return((void *)ctx);

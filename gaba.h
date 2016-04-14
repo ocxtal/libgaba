@@ -153,7 +153,7 @@ struct gaba_params_s {
 	/** dp options */
 	// uint8_t band_width;			/** wide (32) or narrow (16) */
 	// uint8_t band_type;			/** dynamic or guided */
-	uint8_t _pad[3];
+	uint8_t _pad[4];
 
 	/** input options */
 	uint8_t seq_a_format;
@@ -162,7 +162,6 @@ struct gaba_params_s {
 	uint8_t seq_b_direction;
 
 	/** output options */
-	uint8_t aln_format;
 	int16_t head_margin;		/** margin at the head of gaba_res_t */
 	int16_t tail_margin;		/** margin at the tail of gaba_res_t */
 

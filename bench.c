@@ -164,7 +164,6 @@ int main(int argc, char *argv[])
 		.seq_a_direction = GABA_FW_ONLY,
 		.seq_b_format = GABA_ASCII,
 		.seq_b_direction = GABA_FW_ONLY,
-		.aln_format = GABA_ASCII,
 		.xdrop = 100,
 		.score_matrix = GABA_SCORE_SIMPLE(2, 3, 5, 1)));
 	gaba_seq_pair_t seq = gaba_build_seq_pair(a, strlen(a), b, strlen(b));
