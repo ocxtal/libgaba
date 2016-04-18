@@ -273,8 +273,11 @@ typedef struct gaba_fill_s gaba_fill_t;
  * @enum gaba_status
  */
 enum gaba_status {
+	GABA_STATUS_CONT 		= 0,
+	GABA_STATUS_UPDATE		= 0x100,
 	GABA_STATUS_UPDATE_A 	= 0x0f,
-	GABA_STATUS_UPDATE_B 	= 0xf0
+	GABA_STATUS_UPDATE_B 	= 0xf0,
+	GABA_STATUS_TERM		= 0x200
 };
 
 /**
