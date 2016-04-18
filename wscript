@@ -67,18 +67,21 @@ def build(bld):
 #		use = bld.env.OBJ)
 
 	bld.stlib(
-		source = 'gaba.c',
+		source = ['gaba.c', 'arch/io.s'],
 		target = 'gaba',
 		includes = 'util')
 
 	bld.program(
-		source = ['gaba.c', 'arch/io.s'],
+		source = ['unittest.c'],
 		target = 'unittest',
-		includes = 'util',
+		linkflags = ['-all_load'],
+		use = ['gaba'],
+		includes = ['util'],
 		defines = ['TEST'])
 
 	bld.program(
-		source = ['bench.c', 'gaba.c', 'arch/io.s'],
+		source = ['bench.c'],
 		target = 'bench',
-		includes = 'util',
+		use = ['gaba'],
+		includes = ['util'],
 		defines = ['BENCH'])

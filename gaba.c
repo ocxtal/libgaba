@@ -21,12 +21,7 @@
 
 /* import unittest */
 #define UNITTEST_UNIQUE_ID			33
-
-#ifdef TEST
-/* use auto-generated main function to run tests */
 #define UNITTEST 					1
-#define UNITTEST_ALIAS_MAIN			1
-#endif
 
 #include  "util/unittest.h"
 
@@ -3095,7 +3090,6 @@ void gaba_dp_clean(
 }
 
 /* unittests */
-#ifdef TEST
 #include <string.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -4244,7 +4238,6 @@ unittest(with_seq_pair(
 	/* cleanup */
 	gaba_dp_clean(d);
 }
-#endif
 #endif
 
 /**
