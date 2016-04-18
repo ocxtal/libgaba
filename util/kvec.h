@@ -39,6 +39,17 @@ int main() {
 */
 
 /*
+  
+  2016-0410
+    * add kv_pushm
+
+  2016-0401
+
+    * modify kv_init to return object
+    * add kv_pusha to append arbitrary type element
+    * add kv_roundup
+    * change init size to 256
+
   2015-0307
 
     * add packed vector. (Hajime Suzuki)
@@ -57,14 +68,16 @@ int main() {
 #include <stdint.h>
 
 #define kv_roundup32(x) (--(x), (x)|=(x)>>1, (x)|=(x)>>2, (x)|=(x)>>4, (x)|=(x)>>8, (x)|=(x)>>16, ++(x))
+#define kv_roundup(x, base)			( (((x) + (base) - 1) / (base)) * (base) )
 
-#define _INIT 			( 64 )
+
+#define _INIT 			( 256 )
 
 /**
  * basic vectors (kv_*)
  */
 #define kvec_t(type)    struct { uint64_t n, m; type *a; }
-#define kv_init(v)      ( (v).n = 0, (v).m = _INIT, (v).a = calloc((v).m, sizeof(*(v).a)) )
+#define kv_init(v)      ({ (v).n = 0; (v).m = _INIT; (v).a = calloc((v).m, sizeof(*(v).a)); (v); })
 #define kv_destroy(v)   { free((v).a); (v).a = NULL; }
 // #define kv_A(v, i)      ( (v).a[(i)] )
 #define kv_pop(v)       ( (v).a[--(v).n] )
@@ -82,7 +95,7 @@ int main() {
 		if ((v1).m < (v0).n) kv_resize(v1, (v0).n);			\
 		(v1).n = (v0).n;									\
 		memcpy((v1).a, (v0).a, sizeof(*(v).a) * (v0).n);	\
-	} while (0)												\
+	} while (0)
 
 #define kv_push(v, x) do {									\
 		if ((v).n == (v).m) {								\
@@ -98,6 +111,28 @@ int main() {
 	 (v).a = realloc((v).a, sizeof(*(v).a) * (v).m), 0)	\
 	: 0), ( (v).a + ((v).n++) )
 
+/* kv_pusha will not check the alignment of elem_t */
+#define kv_pusha(elem_t, v, x) do { \
+		uint64_t size = kv_roundup(sizeof(elem_t), sizeof(*(v).a)); \
+		if(sizeof(*(v).a) * ((v).m - (v).n) < size) { \
+			(v).m = (v).m * 2;								\
+			(v).a = realloc((v).a, sizeof(*(v).a) * (v).m);	\
+		} \
+		*((elem_t *)&((v).a[(v).n])) = (x); \
+		(v).n += size / sizeof(*(v).a); \
+	} while(0)
+
+#define kv_pushm(v, arr, size) do { \
+		if(sizeof(*(v).a) * ((v).m - (v).n) < (uint64_t)(size)) { \
+			(v).m = (v).m * 2;								\
+			(v).a = realloc((v).a, sizeof(*(v).a) * (v).m);	\
+		} \
+		for(uint64_t _i = 0; _i < (uint64_t)(size); _i++) { \
+			(v).a[(v).n + _i] = (arr)[_i]; \
+		} \
+		(v).n += (uint64_t)(size); \
+	} while(0)
+
 #define kv_a(v, i) ( \
 	((v).m <= (size_t)(i) ? \
 	((v).m = (v).n = (i) + 1, kv_roundup32((v).m), \
@@ -108,6 +143,47 @@ int main() {
 /** bound-unchecked accessor */
 #define kv_at(v, i) ( (v).a[(i)] )
 #define kv_ptr(v)  ( (v).a )
+
+/** heap queue : elements in v must be orderd in heap */
+#define kv_hq_init(v)		{ kv_init(v); (void)kv_pushp(v); }
+#define kv_hq_destroy(v)	kv_destroy(v)
+#define kv_hq_size(v)		( kv_size(v) - 1 )
+#define kv_hq_max(v)		( kv_max(v) - 1 )
+#define kv_hq_clear(v)		{ kv_clear(v); }
+
+#define kv_hq_resize(v, s)	( kv_resize(v, (s) + 1) )
+#define kv_hq_reserve(v, s)	( kv_reserve(v, (s) + 1) )
+
+#define kv_hq_copy(v1, v0)	kv_copy(v1, v0)
+
+#define kv_hq_n(v, i) ( *((int64_t *)&v.a[i]) )
+#define kv_hq_push(v, x) { \
+	kv_push(v, x); \
+	uint64_t i = v.n - 1; \
+	while(i > 1 && (kv_hq_n(v, i>>1) > kv_hq_n(v, i))) { \
+		v.a[0] = v.a[i>>1]; \
+		v.a[i>>1] = v.a[i]; \
+		v.a[i] = v.a[0]; \
+		i >>= 1; \
+	} \
+}
+#define kv_hq_pop(v) ({ \
+	uint64_t i = 1, j = 2; \
+	v.a[0] = v.a[i]; \
+	v.a[i] = v.a[--v.n]; \
+	v.a[v.n] = v.a[0]; \
+	while(j < v.n) { \
+		uint64_t k; \
+		k = (j + 1 < v.n && kv_hq_n(v, j + 1) < kv_hq_n(v, j)) ? (j + 1) : j; \
+		k = (kv_hq_n(v, k) < kv_hq_n(v, i)) ? k : 0; \
+		if(k == 0) { break; } \
+		v.a[0] = v.a[k]; \
+		v.a[k] = v.a[i]; \
+		v.a[i] = v.a[0]; \
+		i = k; j = k<<1; \
+	} \
+	v.a[v.n]; \
+})
 
 /**
  * 2-bit packed vectors (kpv_*)
