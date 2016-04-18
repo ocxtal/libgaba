@@ -3300,7 +3300,7 @@ int check_path(
 
 /* global configuration of the tests */
 unittest_config(
-	.name = "sea",
+	.name = "gaba",
 	.init = unittest_build_context,
 	.clean = unittest_clean_context
 );
