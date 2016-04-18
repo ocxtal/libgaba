@@ -53,7 +53,7 @@ static inline
 void gaba_aligned_free(
 	void *ptr)
 {
-	if(ptr != NULL) { free(ptr); }
+	free(ptr);
 	return;
 }
 

@@ -2949,7 +2949,7 @@ gaba_t *gaba_init(
 void gaba_clean(
 	struct gaba_context_s *ctx)
 {
-	if(ctx != NULL) { gaba_aligned_free(ctx); }
+	gaba_aligned_free(ctx);
 	return;
 }
 
@@ -3088,7 +3088,7 @@ void gaba_dp_clean(
 	}
 
 	for(uint64_t i = 0; i < GABA_MEM_ARRAY_SIZE; i++) {
-		gaba_aligned_free(this->mem_array[i]);
+		gaba_aligned_free(this->mem_array[i]); this->mem_array[i] = NULL;
 	}
 	gaba_aligned_free(this);
 	return;
