@@ -4157,14 +4157,14 @@ unittest()
 		struct gaba_fill_s *f = gaba_dp_fill_root(d, as, 0, bs, 0);
 		
 		/* fill tail (1) */
-		as = (f->status & 0x0f) ? &sec->aftail : as;
-		bs = (f->status & 0xf0) ? &sec->bftail : bs;
+		as = (f->status & GABA_STATUS_UPDATE_A) ? &sec->aftail : as;
+		bs = (f->status & GABA_STATUS_UPDATE_B) ? &sec->bftail : bs;
 		struct gaba_fill_s *t1 = gaba_dp_fill(d, f, as, bs);
 		f = (t1->max > f->max) ? t1 : f;
 
 		/* fill tail (2) */
-		as = (f->status & 0x0f) ? &sec->aftail : as;
-		bs = (f->status & 0xf0) ? &sec->bftail : bs;
+		as = (f->status & GABA_STATUS_UPDATE_A) ? &sec->aftail : as;
+		bs = (f->status & GABA_STATUS_UPDATE_B) ? &sec->bftail : bs;
 		struct gaba_fill_s *t2 = gaba_dp_fill(d, t1, as, bs);
 		f = (t2->max > f->max) ? t2 : f;
 
@@ -4213,14 +4213,14 @@ unittest(with_seq_pair(
 	struct gaba_fill_s *f = gaba_dp_fill_root(d, as, 0, bs, 0);
 	
 	/* fill tail (1) */
-	as = (f->status & 0x0f) ? &s->aftail : as;
-	bs = (f->status & 0xf0) ? &s->bftail : bs;
+	as = (f->status & GABA_STATUS_UPDATE_A) ? &s->aftail : as;
+	bs = (f->status & GABA_STATUS_UPDATE_B) ? &s->bftail : bs;
 	struct gaba_fill_s *t1 = gaba_dp_fill(d, f, as, bs);
 	f = (t1->max > f->max) ? t1 : f;
 
 	/* fill tail (2) */
-	as = (f->status & 0x0f) ? &s->aftail : as;
-	bs = (f->status & 0xf0) ? &s->bftail : bs;
+	as = (f->status & GABA_STATUS_UPDATE_A) ? &s->aftail : as;
+	bs = (f->status & GABA_STATUS_UPDATE_B) ? &s->bftail : bs;
 	struct gaba_fill_s *t2 = gaba_dp_fill(d, t1, as, bs);
 	f = (t2->max > f->max) ? t2 : f;
 	struct gaba_result_s *r = gaba_dp_trace(d, f, NULL, NULL);

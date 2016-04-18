@@ -270,6 +270,14 @@ struct gaba_fill_s {
 typedef struct gaba_fill_s gaba_fill_t;
 
 /**
+ * @enum gaba_status
+ */
+enum gaba_status {
+	GABA_STATUS_UPDATE_A 	= 0x0f,
+	GABA_STATUS_UPDATE_B 	= 0xf0
+};
+
+/**
  * @struct gaba_path_section_s
  */
 struct gaba_path_section_s {
