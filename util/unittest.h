@@ -1037,22 +1037,23 @@ void ut_print_results(
 	int64_t succ = 0;
 	int64_t fail = 0;
 
-	for(int64_t i = 0; i < file_cnt; i++) {
+	for(int64_t i = 0, j = 0; i < file_cnt; i++) {
 
 		if(config[i].exec == 0) { continue; }
 
 		fprintf(stderr, "%sGroup %s: %" PRId64 " succeeded, %" PRId64 " failed in total %" PRId64 " assertions in %" PRId64 " tests.%s\n",
-			(result[i].fail == 0) ? UT_GREEN : UT_RED,
+			(result[j].fail == 0) ? UT_GREEN : UT_RED,
 			ut_null_replace(config[i].name, "(no name)"),
-			result[i].succ,
-			result[i].fail,
-			result[i].succ + result[i].fail,
-			result[i].cnt,
+			result[j].succ,
+			result[j].fail,
+			result[j].succ + result[j].fail,
+			result[j].cnt,
 			UT_DEFAULT_COLOR);
 		
-		cnt += result[i].cnt;
-		succ += result[i].succ;
-		fail += result[i].fail;
+		cnt += result[j].cnt;
+		succ += result[j].succ;
+		fail += result[j].fail;
+		j++;
 	}
 
 	fprintf(stderr, "%sSummary: %" PRId64 " succeeded, %" PRId64 " failed in total %" PRId64 " assertions in %" PRId64 " tests.%s\n",
