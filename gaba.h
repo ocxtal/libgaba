@@ -178,7 +178,7 @@ typedef struct gaba_params_s gaba_params_t;
  * @macro GABA_PARAMS
  * @brief utility macro for gaba_init, see example on header.
  */
-#define GABA_PARAMS(...)			( &((struct gaba_params_s) { __VA_ARGS__ }) )
+#define GABA_PARAMS(...)			( &((struct gaba_params_s const) { __VA_ARGS__ }) )
 
 /**
  * @macro GABA_SCORE_SIMPLE
@@ -396,7 +396,7 @@ typedef struct gaba_clip_params_s gaba_clip_params_t;
 /**
  * @macro GABA_CLIP_PARAMS
  */
-#define GABA_CLIP_PARAMS(...)		( &((struct gaba_clip_params_s) { __VA_ARGS__ }) )
+#define GABA_CLIP_PARAMS(...)		( &((struct gaba_clip_params_s const) { __VA_ARGS__ }) )
 #define GABA_CLIP_NONE				( NULL )
 
 /**
