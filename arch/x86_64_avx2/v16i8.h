@@ -74,6 +74,18 @@ typedef struct v16i8_s {
 #define _set_v16i8(...)		_a_v16i8(set1, _e_i, __VA_ARGS__)
 #define _zero_v16i8()		_a_v16i8x(setzero, _e_x, _unused)
 
+/* swap (reverse) */
+#define _swap_idx_v16i8() ( \
+	_mm_set_epi8( \
+		0, 1, 2, 3, 4, 5, 6, 7, \
+		8, 9, 10, 11, 12, 13, 14, 15) \
+)
+#define _swap_v16i8(a) ( \
+	(v16i8_t) { \
+		_mm_shuffle_epi8((a).v1, _swap_idx_v16i8()) \
+	} \
+)
+
 /* logics */
 #define _not_v16i8(...)		_a_v16i8x(not, _e_v, __VA_ARGS__)
 #define _and_v16i8(...)		_a_v16i8x(and, _e_vv, __VA_ARGS__)

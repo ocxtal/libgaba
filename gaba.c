@@ -26,6 +26,15 @@
 #include  "util/unittest.h"
 
 
+/* input sequence bitwidth option (2bit or 4bit) */
+#ifdef BIT
+#  if !(BIT == 2 || BIT == 4)
+#    error "BIT must be 2 or 4."
+#  endif
+#else
+#  define BIT 						4
+#endif
+
 /* constants */
 #define BW 							( 32 )
 #define BLK 						( 32 )
@@ -43,16 +52,6 @@ static void *gaba_dp_smalloc(struct gaba_dp_context_s *this, uint64_t size);
 
 
 /**
- * @macro _match
- * @brief alias to sequence matcher macro
- */
-#ifndef _match
-// #define _match			_eq 		/* for ASCII encoded sequence */
-#define _match		_or 		/* for 2bit encoded */
-// #define _match		_and		/* for 4bit encoded */
-#endif /* _match */
-
-/**
  * @macro _likely, _unlikely
  * @brief branch prediction hint for gcc-compatible compilers
  */
@@ -66,11 +65,6 @@ static void *gaba_dp_smalloc(struct gaba_dp_context_s *this, uint64_t size);
 #define _force_inline	inline
 // #define _force_inline
 
-/**
- * @macro _load_sc
- * @brief load constant vectors from gaba_dp_context_s
- */
-#define _load_sc(this, name)	( _bc_v16i8(_load_v16i8((this)->scv.name)) )
 
 /* direction macros */
 #define DYNAMIC 		( 1 )
@@ -278,6 +272,68 @@ struct gaba_joint_block_s {
 };
 
 /**
+ * @fn fill_load_seq_a
+ */
+static _force_inline
+void fill_load_seq_a(
+	struct gaba_dp_context_s *this,
+	uint64_t pos,
+	uint64_t len)
+{
+	if(pos < this->rr.alim) {
+		debug("reverse fetch a");
+		/* reverse fetch: 2 * alen - (2 * alen - pos) + (len - 32) */
+		vec_t a = _loadu(this->rr.p.a + pos + (len - BW));
+		_print(a);
+		_print(_swap(a));
+		_storeu(_rd_bufa(this, BW, len), _swap(a));
+	} else {
+		debug("forward fetch a");
+		/* forward fetch: 2 * alen - pos */
+		vec_t a = _loadu(this->rr.p.a + rev(pos, this->rr.p.alen));
+		_storeu(_rd_bufa(this, BW, len), a);
+	}
+	return;
+}
+
+/**
+ * @fn fill_load_seq_b
+ */
+static _force_inline
+void fill_load_seq_b(
+	struct gaba_dp_context_s *this,
+	uint64_t pos,
+	uint64_t len)
+{
+	#if BIT == 2
+		if(pos < this->rr.blim) {
+			debug("forward fetch b");
+			/* forward fetch: pos */
+			vec_t b = _loadu(this->rr.p.b + pos);
+			_storeu(_rd_bufb(this, BW, len), _shl(b, 2));
+		} else {
+			debug("reverse fetch b");
+			/* reverse fetch: 2 * blen - pos + (len - 32) */
+			vec_t b = _loadu(this->rr.p.b + rev(pos, this->rr.p.blen) + (len - BW));
+			_print(b);
+			_print(_shl(_swap(b), 2));
+			_storeu(_rd_bufb(this, BW, len), _shl(_swap(b), 2));
+		}
+	#else /* BIT == 4 */
+		if(pos < this->rr.blim) {
+			/* forward fetch: pos */
+			vec_t b = _loadu(this->rr.p.b + pos);
+			_storeu(_rd_bufb(this, BW, len), b);
+		} else {
+			/* reverse fetch: 2 * blen - pos + (len - 32) */
+			vec_t b = _loadu(this->rr.p.b + rev(pos, this->rr.p.blen) + (len - BW));
+			_storeu(_rd_bufb(this, BW, len), _swap(b));
+		}
+	#endif
+	return;
+}
+
+/**
  * @fn fill_bulk_fetch
  *
  * @brief fetch 32bases from current section
@@ -301,6 +357,7 @@ void fill_bulk_fetch(
 	debug("btail(%lld), bridx(%d)", this->rr.btail, (blk-1)->bridx);
 
 	/* fetch seq a */
+	#if 0
 	#define _ra(x)		( rev((x), this->rr.p.alen) )
 	rd_load(this->r.loada,
 		_rd_bufa(this, BW, BLK),			/* dst */
@@ -309,18 +366,21 @@ void fill_bulk_fetch(
 		this->rr.p.alen,					/* lim */
 		BLK);								/* len */
 	#undef _ra
+	#endif
+	fill_load_seq_a(this, this->rr.atail - (blk - 1)->aridx, BLK);
 	_store(_rd_bufa(this, 0, BW), a);
 
 	/* fetch seq b */
 	_store(_rd_bufb(this, 0, BW), b);
+	fill_load_seq_b(this, this->rr.btail - (blk - 1)->bridx, BLK);
+	#if 0
 	rd_load(this->r.loadb,
 		_rd_bufb(this, BW, BLK),			/* dst */
 		this->rr.p.b,						/* src */
 		this->rr.btail - (blk - 1)->bridx,	/* pos */
 		this->rr.p.blen,					/* lim */
 		BLK);								/* len */
-
-	// return(_seta_v2i32(BLK, BLK));
+	#endif
 	return;
 }
 
@@ -355,6 +415,7 @@ void fill_cap_fetch(
 	_print(b);
 
 	/* fetch seq a */
+	#if 0
 	#define _ra(x)		( rev((x), this->rr.p.alen) )
 	rd_load(this->r.loada,
 		_rd_bufa(this, BW, _lo32(len)),		/* dst */
@@ -363,18 +424,21 @@ void fill_cap_fetch(
 		this->rr.p.alen,					/* lim */
 		_lo32(len));						/* len */
 	#undef _ra
+	#endif
+	fill_load_seq_a(this, this->rr.atail - _lo32(ridx), _lo32(len));
 	_store(_rd_bufa(this, 0, BW), a);
 
 	/* fetch seq b */
 	_store(_rd_bufb(this, 0, BW), b);
+	fill_load_seq_b(this, this->rr.btail - _hi32(ridx), _hi32(len));
+	#if 0
 	rd_load(this->r.loadb,
 		_rd_bufb(this, BW, _hi32(len)),		/* dst */
 		this->rr.p.b,						/* src */
 		this->rr.btail - _hi32(ridx),		/* pos */
 		this->rr.p.blen,					/* lim */
 		_hi32(len));						/* len */
-
-	// return(len);
+	#endif
 	return;
 }
 
@@ -419,6 +483,7 @@ struct gaba_joint_block_s fill_init_fetch(
 		_print(b);
 
 		/* fetch seq a */
+		#if 0
 		#define _ra(x)		( rev((x), this->rr.p.alen) )
 		rd_load(this->r.loada,
 			_rd_bufa(this, BW, _lo32(len)),		/* dst */
@@ -427,16 +492,21 @@ struct gaba_joint_block_s fill_init_fetch(
 			this->rr.p.alen,					/* lim */
 			_lo32(len));						/* len */
 		#undef _ra
+		#endif
+		fill_load_seq_a(this, this->rr.atail - _lo32(ridx), _lo32(len));
 		_store(_rd_bufa(this, 0, BW), a);
 
 		/* fetch seq b */
 		_store(_rd_bufb(this, 0, BW), b);
+		fill_load_seq_b(this, this->rr.btail - _hi32(ridx), _hi32(len));
+		#if 0
 		rd_load(this->r.loadb,
 			_rd_bufb(this, BW, _hi32(len)),		/* dst */
 			this->rr.p.b,						/* src */
 			this->rr.btail - _hi32(ridx),		/* pos */
 			this->rr.p.blen,					/* lim */
 			_hi32(len));						/* len */
+		#endif
 	}
 
 	/* store char vector to the current block */ {
@@ -643,6 +713,24 @@ struct gaba_joint_tail_s *fill_create_tail(
 	tail->stat = stat | _mask_v2i32(_eq_v2i32(ridx, z));
 	return(tail);
 }
+
+/**
+ * @macro _match
+ * @brief alias to sequence matcher macro
+ */
+#ifndef _match
+#  if BIT == 2
+#    define _match		_or 		/* for 2bit encoded */
+#  else
+#    define _match		_and		/* for 4bit encoded */
+#  endif
+#endif /* _match */
+
+/**
+ * @macro _load_sc
+ * @brief load constant vectors from gaba_dp_context_s
+ */
+#define _load_sc(this, name)	( _bc_v16i8(_load_v16i8((this)->scv.name)) )
 
 /**
  * @macro _fill_load_contexts
@@ -2620,9 +2708,7 @@ void gaba_init_restore_default_params(
 	#define restore(_name, _default) { \
 		params->_name = ((uint64_t)(params->_name) == 0) ? (_default) : (params->_name); \
 	}
-	restore(seq_a_format, 		GABA_ASCII);
 	restore(seq_a_direction, 	GABA_FW_ONLY);
-	restore(seq_b_format, 		GABA_ASCII);
 	restore(seq_b_direction, 	GABA_FW_ONLY);
 	restore(head_margin, 		0);
 	restore(tail_margin, 		0);
@@ -2644,13 +2730,17 @@ struct gaba_score_vec_s gaba_init_create_score_vector(
 	int8_t gih = -score_matrix->score_gi_a;
 	int8_t giv = -score_matrix->score_gi_b;
 	struct gaba_score_vec_s sc;
-	for(int i = 0; i < 16; i++) {
-		sc.sb[i] = v[i] - (geh + gih + gev + giv);
-		sc.adjh[i] = -gih;
-		sc.adjv[i] = -giv;
-		sc.ofsh[i] = -(geh + gih);
-		sc.ofsv[i] = gev + giv;
-	}
+	#if BIT == 2
+		_store(sc.sb, _sub(_loadu(v), _set(geh + gih + gev + giv)));
+	#else /* BIT == 4 */
+		_store(sc.sb, _set(v[0] - (geh + gih + gev + giv)));
+		sc.sb[0] = v[1] - (geh + gih + gev + giv);
+	#endif	
+
+	_store(sc.adjh, _set(-gih));
+	_store(sc.adjv, _set(-giv));
+	_store(sc.ofsh, _set(-(geh + gih)));
+	_store(sc.ofsv, _set(gev + giv));
 	return(sc);
 }
 
@@ -2836,6 +2926,7 @@ struct gaba_char_vec_s gaba_init_create_char_vector(
 gaba_t *gaba_init(
 	struct gaba_params_s const *params)
 {
+	#if 0
 	/* sequence reader table */
 	void (*const rd_seq_a_table[3][7])(
 		uint8_t *dst,
@@ -2863,6 +2954,7 @@ gaba_t *gaba_init(
 			[GABA_ASCII] = _loadb_ascii_2bit_fr
 		}
 	};
+	#endif
 
 	if(params == NULL) {
 		debug("params must not be NULL");
@@ -2890,6 +2982,7 @@ gaba_t *gaba_init(
 			.stack_top = NULL,						/* stored on init */
 			.stack_end = NULL,						/* stored on init */
 
+			#if 0
 			.r = (struct gaba_reader_s) {
 				.loada = rd_seq_a_table
 					[params_intl.seq_a_direction]
@@ -2898,6 +2991,7 @@ gaba_t *gaba_init(
 					[params_intl.seq_b_direction]
 					[params_intl.seq_b_format]		/* seq b reader */
 			},
+			#endif
 
 			.scv = gaba_init_create_score_vector(params_intl.score_matrix),
 			.tx = params_intl.xdrop,
@@ -2963,6 +3057,10 @@ struct gaba_dp_context_s *gaba_dp_init(
 		debug("failed to malloc memory");
 		return(NULL);
 	}
+
+	/* init seq lims */
+	this->rr.alim = (ctx->params.seq_a_direction == GABA_FW_ONLY) ? p->alen : 2 * p->alen;
+	this->rr.blim = (ctx->params.seq_b_direction == GABA_FW_ONLY) ? p->blen : 2 * p->blen;
 
 	/* init seq pointers */
 	_memcpy_blk_au(
@@ -3109,9 +3207,7 @@ void *unittest_build_context(void *params)
 
 	/* build context */
 	gaba_t *ctx = gaba_init(GABA_PARAMS(
-		.seq_a_format = GABA_ASCII,
 		.seq_a_direction = GABA_FW_ONLY,
-		.seq_b_format = GABA_ASCII,
 		.seq_b_direction = GABA_FW_ONLY,
 		.xdrop = 100,
 		.score_matrix = score));
@@ -3154,6 +3250,56 @@ struct unittest_sections_s {
 };
 
 /**
+ * @fn unittest_encode_base
+ * @brief mapping IUPAC amb. to 2bit / 4bit encoding
+ */
+static _force_inline
+uint8_t unittest_encode_base(
+	char c)
+{
+	/* convert to upper case and subtract offset by 0x40 */
+	#define _b(x)	( (x) & 0x1f )
+
+	/* conversion tables */
+	#if BIT == 2
+		enum bases { A = 0x00, C = 0x01, G = 0x02, T = 0x03 };
+		uint8_t const table[] = {
+			[_b('A')] = A,
+			[_b('C')] = C,
+			[_b('G')] = G,
+			[_b('T')] = T,
+			[_b('U')] = T,
+			[_b('N')] = A,		/* treat 'N' as 'A' */
+			[_b('_')] = 0		/* sentinel */
+		};
+	#else /* BIT == 4 */
+		enum bases { A = 0x01, C = 0x02, G = 0x04, T = 0x08 };
+		uint8_t const table[] = {
+			[_b('A')] = A,
+			[_b('C')] = C,
+			[_b('G')] = G,
+			[_b('T')] = T,
+			[_b('U')] = T,
+			[_b('R')] = A | G,
+			[_b('Y')] = C | T,
+			[_b('S')] = G | C,
+			[_b('W')] = A | T,
+			[_b('K')] = G | T,
+			[_b('M')] = A | C,
+			[_b('B')] = C | G | T,
+			[_b('D')] = A | G | T,
+			[_b('H')] = A | C | T,
+			[_b('V')] = A | C | G,
+			[_b('N')] = 0,		/* treat 'N' as a gap */
+			[_b('_')] = 0		/* sentinel */
+		};
+	#endif /* BIT */
+	return(table[_b((uint8_t)c)]);
+
+	#undef _b
+}
+
+/**
  * @fn unittest_build_seqs
  * @brief build seq_pair and sections
  */
@@ -3174,11 +3320,19 @@ void *unittest_build_seqs(void *params)
 		sizeof(struct unittest_sections_s) + (alim + 1) + (blim + 1) + margin);
 
 	/* copy sequences */
-	char *ca = (char *)(sec + 1);
-	char *cb = ca + alim + 1;
-	char *cm = cb + blim + 1;
-	strcpy(ca, a);
-	strcpy(cb, b);
+	uint8_t *ca = (uint8_t *)(sec + 1);
+	uint8_t *cb = ca + alim + 1;
+	uint8_t *cm = cb + blim + 1;
+
+	for(int64_t i = 0; i < alim; i++) {
+		ca[i] = unittest_encode_base(a[i]);
+	}
+	for(int64_t i = 0; i < blim; i++) {
+		cb[i] = unittest_encode_base(b[i]);
+	}
+	ca[alim] = cb[blim] = '\0';
+	// strcpy(ca, a);
+	// strcpy(cb, b);
 	memset(cm, 0, margin);
 
 	/* build context */
@@ -3229,7 +3383,7 @@ void unittest_clean_seqs(void *ctx)
 	&& (_t)->ssum == (_ssum) \
 )
 #define print_tail(_t) \
-	"tail(%p), max(%lld), p(%d), psum(%lld), ssum(%lld)", \
+	"tail(%p), max(%lld), p(%d), psum(%lld), ssum(%u)", \
 	(_t), (_t)->max, (_t)->p, (_t)->psum, (_t)->ssum
 #define check_result(_r, _score, _plen, _rem, _slen) ( \
 	   (_r) != NULL \
@@ -3310,7 +3464,7 @@ unittest_config(
  */
 unittest()
 {
-	struct gaba_context_s *c = (struct gaba_context_s *)gctx;
+	struct gaba_context_s const *c = (struct gaba_context_s const *)gctx;
 	assert(c != NULL, "%p", c);
 }
 
@@ -3319,14 +3473,29 @@ unittest()
  */
 unittest(with_seq_pair("A", "A"))
 {
-	struct unittest_sections_s *s = (struct unittest_sections_s *)ctx;
+	struct unittest_sections_s const *s = (struct unittest_sections_s const *)ctx;
 
 	/* check pointer */
 	assert(s != NULL, "%p", s);
 
 	/* check sequences */
-	assert(strcmp(s->seq.a, "AGGGGGGGGGGGGGGGGGGGG") == 0, "%s", s->seq.a);
-	assert(strcmp(s->seq.b, "ACCCCCCCCCCCCCCCCCCCC") == 0, "%s", s->seq.b);
+	#if BIT == 2
+		assert(strncmp(s->seq.a,
+			(char const [22]){ 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, '\0' },
+			22) == 0, "%s", s->seq.a);
+		assert(strncmp(s->seq.b,
+			(char const [22]){ 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, '\0' },
+			22) == 0, "%s", s->seq.b);
+	#else /* BIT == 4 */
+		assert(strncmp(s->seq.a,
+			(char const [22]){ 1, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, '\0' },
+			22) == 0, "%s", s->seq.a);
+		assert(strncmp(s->seq.b,
+			(char const [22]){ 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, '\0' },
+			22) == 0, "%s", s->seq.b);
+	#endif
+	// assert(strcmp(s->seq.a, "AGGGGGGGGGGGGGGGGGGGG") == 0, "%s", s->seq.a);
+	// assert(strcmp(s->seq.b, "ACCCCCCCCCCCCCCCCCCCC") == 0, "%s", s->seq.b);
 	assert(s->seq.alen == 21, "%llu", s->seq.alen);
 	assert(s->seq.blen == 21, "%llu", s->seq.blen);
 
@@ -3370,7 +3539,7 @@ unittest(with_seq_pair("A", "A"))
  */
 #define omajinai() \
 	struct gaba_context_s const *c = (struct gaba_context_s const *)gctx; \
-	struct unittest_sections_s *s = (struct unittest_sections_s *)ctx; \
+	struct unittest_sections_s const *s = (struct unittest_sections_s const *)ctx; \
 	struct gaba_dp_context_s *d = gaba_dp_init(c, &s->seq);
 
 unittest(with_seq_pair("A", "A"))

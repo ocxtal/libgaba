@@ -235,6 +235,7 @@ _static_assert(sizeof(struct gaba_merge_tail_s) == 160);
  * sizeof(struct gaba_reader_s) == 16
  * sizeof(struct gaba_reader_work_s) == 384
  */
+#if 0
 struct gaba_reader_s {
 	void (*loada)(				/** (8) */
 		uint8_t *dst,
@@ -250,12 +251,14 @@ struct gaba_reader_s {
 		uint64_t copy_len);
 };
 _static_assert(sizeof(struct gaba_reader_s) == 16);
+#endif
 struct gaba_reader_work_s {
 	/** 64byte alidned */
 	uint64_t atail, btail;				/** (16) tail of the current section */
 	int32_t alen, blen;					/** (8) length from the tail of the current section */
 	uint64_t plim;						/** (8) p limit coordinate */
-	uint8_t _pad2[32];					/** (64) */
+	uint8_t _pad2[16];					/** (16) */
+	uint64_t alim, blim;				/** (16) max index of seq array */
 	/** 64, 64 */
 
 	/** 64byte aligned */
@@ -355,7 +358,7 @@ struct gaba_dp_context_s {
 
 	/** loaded on init */
 	/** 64byte aligned */
-	struct gaba_reader_s r;		/** (16) sequence readers */
+	// struct gaba_reader_s r;		/** (16) sequence readers */
 
 	struct gaba_score_vec_s scv;/** (80) substitution matrix and gaps */
 	int32_t tx;					/** (4) xdrop threshold */
@@ -363,13 +366,13 @@ struct gaba_dp_context_s {
 	uint64_t mem_size;			/** (8) malloc size */
 	struct gaba_joint_tail_s *tail;	/** (8) template of the root tail */
 
-	#define GABA_MEM_ARRAY_SIZE		( 17 )
+	#define GABA_MEM_ARRAY_SIZE		( 19 )
 	uint8_t *mem_array[GABA_MEM_ARRAY_SIZE];		/** (128) */
 
 	/** 256, 704 */
 };
 _static_assert(sizeof(struct gaba_dp_context_s) == 704);
-#define GABA_DP_CONTEXT_LOAD_OFFSET	( offsetof(struct gaba_dp_context_s, r) )
+#define GABA_DP_CONTEXT_LOAD_OFFSET	( offsetof(struct gaba_dp_context_s, scv) )
 #define GABA_DP_CONTEXT_LOAD_SIZE	( sizeof(struct gaba_dp_context_s) - GABA_DP_CONTEXT_LOAD_OFFSET )
 _static_assert(GABA_DP_CONTEXT_LOAD_OFFSET == 448);
 _static_assert(GABA_DP_CONTEXT_LOAD_SIZE == 256);

@@ -156,9 +156,11 @@ struct gaba_params_s {
 	uint8_t _pad[4];
 
 	/** input options */
-	uint8_t seq_a_format;
+	// uint8_t seq_a_format;
+	uint8_t _reserved1;
 	uint8_t seq_a_direction;
-	uint8_t seq_b_format;
+	// uint8_t seq_b_format;
+	uint8_t _reserved2;
 	uint8_t seq_b_direction;
 
 	/** output options */
@@ -170,7 +172,7 @@ struct gaba_params_s {
 	gaba_score_t const *score_matrix;
 
 	/** reserved */
-	uint8_t _reserved[8];
+	uint8_t _reserved3[8];
 };
 typedef struct gaba_params_s gaba_params_t;
 

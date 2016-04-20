@@ -65,6 +65,21 @@ typedef struct v32i8_s {
 #define _set_v32i8(...)		_a_v32i8(set1, _e_i, __VA_ARGS__)
 #define _zero_v32i8()		_a_v32i8x(setzero, _e_x, _unused)
 
+/* swap (reverse) */
+#define _swap_idx_v32i8() ( \
+	_mm256_broadcastsi128_si256(_mm_set_epi8( \
+		0, 1, 2, 3, 4, 5, 6, 7, \
+		8, 9, 10, 11, 12, 13, 14, 15)) \
+)
+#define _swap_v32i8(a) ( \
+	(v32i8_t) { \
+		_mm256_permute2x128_si256( \
+			_mm256_shuffle_epi8((a).v1, _swap_idx_v32i8()), \
+			_mm256_shuffle_epi8((a).v1, _swap_idx_v32i8()), \
+			0x01) \
+	} \
+)
+
 /* logics */
 #define _not_v32i8(...)		_a_v32i8x(not, _e_v, __VA_ARGS__)
 #define _and_v32i8(...)		_a_v32i8x(and, _e_vv, __VA_ARGS__)

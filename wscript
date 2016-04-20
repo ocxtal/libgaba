@@ -58,16 +58,10 @@ def configure(conf):
 
 def build(bld):
 
-	# bld.recurse('util')
 	bld.recurse('arch')
 
-#	bld.shlib(
-#		source = 'gaba.c',
-#		target = 'gaba',
-#		use = bld.env.OBJ)
-
 	bld.stlib(
-		source = ['gaba.c', 'arch/io.s'],
+		source = ['gaba.c'],
 		target = 'gaba',
 		includes = 'util')
 

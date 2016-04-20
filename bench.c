@@ -160,9 +160,7 @@ int main(int argc, char *argv[])
 
 	/** init context */
 	gaba_t *ctx = gaba_init(GABA_PARAMS(
-		.seq_a_format = GABA_ASCII,
 		.seq_a_direction = GABA_FW_ONLY,
-		.seq_b_format = GABA_ASCII,
 		.seq_b_direction = GABA_FW_ONLY,
 		.xdrop = 100,
 		.score_matrix = GABA_SCORE_SIMPLE(2, 3, 5, 1)));
