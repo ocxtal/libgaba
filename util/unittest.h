@@ -1075,7 +1075,7 @@ char *ut_build_short_option_string(struct option const *opts)
 	struct option const *po = NULL;
 
 	for(po = opts; po->name != NULL; po++) { len++; }
-	str = ps = (char *)malloc(2 * len);
+	str = ps = (char *)malloc(2 * len + 1);
 	for(po = opts; po->name != NULL; po++) {
 		*ps++ = (char)po->val;
 		if(po->has_arg != no_argument) {

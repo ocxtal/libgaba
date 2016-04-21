@@ -290,7 +290,7 @@ void fill_load_seq_a(
 	} else {
 		debug("forward fetch a");
 		/* forward fetch: 2 * alen - pos */
-		vec_t a = _loadu(this->rr.p.a + rev(pos, this->rr.p.alen));
+		vec_t a = _loadu(this->rr.p.a + rev(pos, this->rr.alim));
 		_storeu(_rd_bufa(this, BW, len), a);
 	}
 	return;
@@ -314,7 +314,7 @@ void fill_load_seq_b(
 		} else {
 			debug("reverse fetch b");
 			/* reverse fetch: 2 * blen - pos + (len - 32) */
-			vec_t b = _loadu(this->rr.p.b + rev(pos, this->rr.p.blen) + (len - BW));
+			vec_t b = _loadu(this->rr.p.b + rev(pos, this->rr.blim) + (len - BW));
 			_print(b);
 			_print(_shl(_swap(b), 2));
 			_storeu(_rd_bufb(this, BW, len), _shl(_swap(b), 2));
@@ -326,7 +326,7 @@ void fill_load_seq_b(
 			_storeu(_rd_bufb(this, BW, len), b);
 		} else {
 			/* reverse fetch: 2 * blen - pos + (len - 32) */
-			vec_t b = _loadu(this->rr.p.b + rev(pos, this->rr.p.blen) + (len - BW));
+			vec_t b = _loadu(this->rr.p.b + rev(pos, this->rr.blim) + (len - BW));
 			_storeu(_rd_bufb(this, BW, len), _swap(b));
 		}
 	#endif
@@ -2426,12 +2426,12 @@ void trace_reverse_push(
 {
 	/* push current (revcomped) section info */
 	this->ll.rv_sec->a = (struct gaba_section_s){
-		.id = -this->ll.asec.id,
+		.id = 0x01 ^ this->ll.asec.id,
 		.len = this->ll.asec.len,
 		.base = 2 * this->rr.p.alen - this->ll.asec.base - this->ll.asec.len
 	};
 	this->ll.rv_sec->b = (struct gaba_section_s){
-		.id = -this->ll.bsec.id,
+		.id = 0x01 ^ this->ll.bsec.id,
 		.len = this->ll.bsec.len,
 		.base = 2 * this->rr.p.blen - this->ll.bsec.base - this->ll.bsec.len
 	};
@@ -2731,16 +2731,22 @@ struct gaba_score_vec_s gaba_init_create_score_vector(
 	int8_t giv = -score_matrix->score_gi_b;
 	struct gaba_score_vec_s sc;
 	#if BIT == 2
-		_store(sc.sb, _sub(_loadu(v), _set(geh + gih + gev + giv)));
+		for(int i = 0; i < 16; i++) {
+			sc.sb[i] = v[i] - (geh + gih + gev + giv);
+		}
 	#else /* BIT == 4 */
-		_store(sc.sb, _set(v[0] - (geh + gih + gev + giv)));
 		sc.sb[0] = v[1] - (geh + gih + gev + giv);
+		for(int i = 1; i < 16; i++) {
+			sc.sb[i] = v[0] - (geh + gih + gev + giv);
+		}
 	#endif	
 
-	_store(sc.adjh, _set(-gih));
-	_store(sc.adjv, _set(-giv));
-	_store(sc.ofsh, _set(-(geh + gih)));
-	_store(sc.ofsv, _set(gev + giv));
+	for(int i = 0; i < 16; i++) {
+		sc.adjh[i] = -gih;
+		sc.adjv[i] = -giv;
+		sc.ofsh[i] = -(geh + gih);
+		sc.ofsv[i] = gev + giv;
+	}
 	return(sc);
 }
 
@@ -2926,36 +2932,6 @@ struct gaba_char_vec_s gaba_init_create_char_vector(
 gaba_t *gaba_init(
 	struct gaba_params_s const *params)
 {
-	#if 0
-	/* sequence reader table */
-	void (*const rd_seq_a_table[3][7])(
-		uint8_t *dst,
-		uint8_t const *src,
-		uint64_t idx,
-		uint64_t src_len,
-		uint64_t copy_len) = {
-		[GABA_FW_ONLY] = {
-			[GABA_ASCII] = _loada_ascii_2bit_fw
-		},
-		[GABA_FW_RV] = {
-			[GABA_ASCII] = _loada_ascii_2bit_fr
-		}
-	};
-	void (*const rd_seq_b_table[3][7])(
-		uint8_t *dst,
-		uint8_t const *src,
-		uint64_t idx,
-		uint64_t src_len,
-		uint64_t copy_len) = {
-		[GABA_FW_ONLY] = {
-			[GABA_ASCII] = _loadb_ascii_2bit_fw
-		},
-		[GABA_FW_RV] = {
-			[GABA_ASCII] = _loadb_ascii_2bit_fr
-		}
-	};
-	#endif
-
 	if(params == NULL) {
 		debug("params must not be NULL");
 		return(NULL);
@@ -2982,17 +2958,7 @@ gaba_t *gaba_init(
 			.stack_top = NULL,						/* stored on init */
 			.stack_end = NULL,						/* stored on init */
 
-			#if 0
-			.r = (struct gaba_reader_s) {
-				.loada = rd_seq_a_table
-					[params_intl.seq_a_direction]
-					[params_intl.seq_a_format],		/* seq a reader */
-				.loadb = rd_seq_b_table
-					[params_intl.seq_b_direction]
-					[params_intl.seq_b_format]		/* seq b reader */
-			},
-			#endif
-
+			/* score vectors */
 			.scv = gaba_init_create_score_vector(params_intl.score_matrix),
 			.tx = params_intl.xdrop,
 
@@ -3340,16 +3306,16 @@ void *unittest_build_seqs(void *params)
 		.seq = gaba_build_seq_pair(ca, alim, cb, blim),
 		
 		/* forward */
-		.afsec = gaba_build_section(1, 0, alen),
+		.afsec = gaba_build_section(0, 0, alen),
 		.aftail = gaba_build_section(2, alen, 20),
-		.bfsec = gaba_build_section(3, 0, blen),
-		.bftail = gaba_build_section(4, blen, 20),
+		.bfsec = gaba_build_section(4, 0, blen),
+		.bftail = gaba_build_section(6, blen, 20),
 
 		/* reverse */
-		.arsec = gaba_build_section(-1, 2 * alim - alen, alen),
-		.artail = gaba_build_section(-2, alim, 20),
-		.brsec = gaba_build_section(-3, 2 * blim - blen, blen),
-		.brtail = gaba_build_section(-4, blim, 20)
+		.arsec = gaba_build_section(1, 2 * alim - alen, alen),
+		.artail = gaba_build_section(3, alim, 20),
+		.brsec = gaba_build_section(5, 2 * blim - blen, blen),
+		.brtail = gaba_build_section(7, blim, 20)
 	};
 	return((void *)sec);
 }
@@ -3500,7 +3466,7 @@ unittest(with_seq_pair("A", "A"))
 	assert(s->seq.blen == 21, "%llu", s->seq.blen);
 
 	/* check fowrard sections */
-	assert(s->afsec.id == 1, "%d", s->afsec.id);
+	assert(s->afsec.id == 0, "%d", s->afsec.id);
 	assert(s->afsec.base == 0, "%llu", s->afsec.base);
 	assert(s->afsec.len == 1, "%u", s->afsec.len);
 
@@ -3508,28 +3474,28 @@ unittest(with_seq_pair("A", "A"))
 	assert(s->aftail.base == 1, "%llu", s->aftail.base);
 	assert(s->aftail.len == 20, "%u", s->aftail.len);
 
-	assert(s->bfsec.id == 3, "%d", s->bfsec.id);
+	assert(s->bfsec.id == 4, "%d", s->bfsec.id);
 	assert(s->bfsec.base == 0, "%llu", s->bfsec.base);
 	assert(s->bfsec.len == 1, "%u", s->bfsec.len);
 
-	assert(s->bftail.id == 4, "%d", s->bftail.id);
+	assert(s->bftail.id == 6, "%d", s->bftail.id);
 	assert(s->bftail.base == 1, "%llu", s->bftail.base);
 	assert(s->bftail.len == 20, "%u", s->bftail.len);
 
 	/* check reverse sections */
-	assert(s->arsec.id == -1, "%d", s->arsec.id);
+	assert(s->arsec.id == 1, "%d", s->arsec.id);
 	assert(s->arsec.base == 41, "%llu", s->arsec.base);
 	assert(s->arsec.len == 1, "%u", s->arsec.len);
 
-	assert(s->artail.id == -2, "%d", s->artail.id);
+	assert(s->artail.id == 3, "%d", s->artail.id);
 	assert(s->artail.base == 21, "%llu", s->artail.base);
 	assert(s->artail.len == 20, "%u", s->artail.len);
 
-	assert(s->brsec.id == -3, "%d", s->brsec.id);
+	assert(s->brsec.id == 5, "%d", s->brsec.id);
 	assert(s->brsec.base == 41, "%llu", s->brsec.base);
 	assert(s->brsec.len == 1, "%u", s->brsec.len);
 
-	assert(s->brtail.id == -4, "%d", s->brtail.id);
+	assert(s->brtail.id == 7, "%d", s->brtail.id);
 	assert(s->brtail.base == 21, "%llu", s->brtail.base);
 	assert(s->brtail.len == 20, "%u", s->brtail.len);
 }

@@ -64,7 +64,7 @@ enum gaba_flags_format {
  * @enum gaba_flags_dir
  */
 enum gaba_flags_dir {
-	GABA_FW_ONLY			= 1,
+	GABA_FW_ONLY		= 1,
 	GABA_FW_RV		 	= 2
 };
 
@@ -232,7 +232,7 @@ typedef struct gaba_context_s gaba_t;
  * @brief section container, a tuple of (id, length, head position).
  */
 struct gaba_section_s {
-	int32_t id;					/** (4) section id */
+	uint32_t id;				/** (4) section id */
 	uint32_t len;				/** (4) length of the  seq */
 	uint64_t base;				/** (8) base position of the head of the seq */
 };

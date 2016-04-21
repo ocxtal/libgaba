@@ -5,7 +5,44 @@ def options(opt):
 	pass
 
 def configure(conf):
-	pass
+	# first check if AVX2 instructions are available
+	if(conf.check_cc(fragment='''
+		#include <stdio.h>
+		#include <immintrin.h>
+		int main(void) {
+			volatile __m256i a = _mm256_add_epi8(
+				_mm256_setzero_si256(),
+				_mm256_setzero_si256());
+			return 0;
+		}
+		''',
+		execute = True,
+		cflags = '-mcore-avx2',
+		mandatory = False,
+		msg = 'Checking for AVX2 instructions')):
+
+		# sse4.1 instructions are also available on the avx2 enabled machines.
+		conf.env.append_value('CFLAGS',
+			'-axcore-avx2' if conf.env.CC_NAME == 'icc' else '-mcore-avx2')
+
+	# next, check if SSE4 instructions are availavle.
+	elif(conf.check_cc(fragment='''
+		#include <stdio.h>
+		#include <smmintrin.h>
+		int main(void) {
+			volatile __m128i a = _mm_add_epi8(
+				_mm_setzero_si128(),
+				_mm_insert_epi8(a, 1, 0));
+			return 0;
+		}
+		''',
+		execute = True,
+		cflags = '-msse4.1',
+		mandatory = False,
+		msg = 'Checking for SSE4.1 instructions')):
+
+		conf.env.append_value('CFLAGS',
+			'-axsse4.1' if conf.env.CC_NAME == 'icc' else '-msse4.1')
 
 def build(bld):
 	pass
