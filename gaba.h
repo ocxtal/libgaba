@@ -149,18 +149,8 @@ typedef struct gaba_score_s gaba_score_t;
  * @brief input parameters of gaba_init
  */
 struct gaba_params_s {
-
-	/** dp options */
-	// uint8_t band_width;			/** wide (32) or narrow (16) */
-	// uint8_t band_type;			/** dynamic or guided */
-	uint8_t _pad[4];
-
 	/** input options */
-	// uint8_t seq_a_format;
-	uint8_t _reserved1;
 	uint8_t seq_a_direction;
-	// uint8_t seq_b_format;
-	uint8_t _reserved2;
 	uint8_t seq_b_direction;
 
 	/** output options */
@@ -168,11 +158,8 @@ struct gaba_params_s {
 	int16_t tail_margin;		/** margin at the tail of gaba_res_t */
 
 	/** score parameters */
-	int32_t xdrop;
+	int16_t xdrop;
 	gaba_score_t const *score_matrix;
-
-	/** reserved */
-	uint8_t _reserved3[8];
 };
 typedef struct gaba_params_s gaba_params_t;
 
@@ -244,6 +231,7 @@ typedef struct gaba_section_s gaba_section_t;
 		.len = (_len) \
 	} \
 )
+#define gaba_rev(pos, len)		( 2 * (len) - (pos) )
 
 /**
  * @type gaba_dp_t

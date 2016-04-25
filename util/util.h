@@ -22,7 +22,7 @@ _static_assert(sizeof(void *) == 8);
 
 /** check size of structs declared in sea.h */
 _static_assert(sizeof(struct gaba_score_s) == 20);
-_static_assert(sizeof(struct gaba_params_s) == 32);
+_static_assert(sizeof(struct gaba_params_s) == 16);
 _static_assert(sizeof(struct gaba_seq_pair_s) == 32);
 _static_assert(sizeof(struct gaba_section_s) == 16);
 _static_assert(sizeof(struct gaba_fill_s) == 96);
@@ -143,7 +143,7 @@ struct gaba_block_s {
 	struct gaba_small_delta_s sd;		/** (64) */
 	union gaba_dir_u dir;				/** (8) */
 	int64_t offset;						/** (8) */
-	int32_t aridx, bridx;				/** (8) reverse index on the current section */
+	int32_t aridx, bridx;				/** (8) reverse index in the current section */
 	uint64_t reserved;					/** (8) */
 	struct gaba_char_vec_s ch;			/** (32) char vector */
 };
@@ -152,7 +152,7 @@ struct gaba_phantom_block_s {
 	struct gaba_small_delta_s sd;		/** (64) */
 	union gaba_dir_u dir;				/** (8) */
 	int64_t offset;						/** (8) */
-	int32_t aridx, bridx;				/** (8) reverse index on the current section */
+	int32_t aridx, bridx;				/** (8) reverse index in the current section */
 	uint64_t reserved;					/** (8) */
 	struct gaba_char_vec_s ch;			/** (32) char vector */
 };
@@ -358,15 +358,22 @@ struct gaba_dp_context_s {
 
 	/** loaded on init */
 	/** 64byte aligned */
-	// struct gaba_reader_s r;		/** (16) sequence readers */
-
 	struct gaba_score_vec_s scv;/** (80) substitution matrix and gaps */
 	int32_t tx;					/** (4) xdrop threshold */
 	int32_t mem_cnt;			/** (4) */
 	uint64_t mem_size;			/** (8) malloc size */
 	struct gaba_joint_tail_s *tail;	/** (8) template of the root tail */
 
-	#define GABA_MEM_ARRAY_SIZE		( 19 )
+	/** input options */
+	uint8_t seq_a_direction;	/** (1) */
+	uint8_t seq_b_direction;	/** (1) */
+
+	/** output options */
+	int16_t head_margin;		/** (2) margin at the head of gaba_res_t */
+	int16_t tail_margin;		/** (2) margin at the tail of gaba_res_t */
+	uint16_t _pad;				/** (2) */
+
+	#define GABA_MEM_ARRAY_SIZE		( 18 )
 	uint8_t *mem_array[GABA_MEM_ARRAY_SIZE];		/** (128) */
 
 	/** 256, 704 */
@@ -403,7 +410,8 @@ struct gaba_context_s {
 
 	/** 64byte aligned */
 	/** params */
-	struct gaba_params_s params;	/** (32) */
+	struct gaba_params_s params;	/** (16) */
+	uint64_t _pad[2];				/** (16) */
 	/** 32, 1088 */
 
 	/** 64byte aligned */

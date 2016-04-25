@@ -280,19 +280,45 @@ void fill_load_seq_a(
 	uint64_t pos,
 	uint64_t len)
 {
-	if(pos < this->rr.alim) {
-		debug("reverse fetch a");
-		/* reverse fetch: 2 * alen - (2 * alen - pos) + (len - 32) */
-		vec_t a = _loadu(this->rr.p.a + pos + (len - BW));
-		_print(a);
-		_print(_swap(a));
-		_storeu(_rd_bufa(this, BW, len), _swap(a));
-	} else {
-		debug("forward fetch a");
-		/* forward fetch: 2 * alen - pos */
-		vec_t a = _loadu(this->rr.p.a + rev(pos, this->rr.alim));
-		_storeu(_rd_bufa(this, BW, len), a);
-	}
+	#if BIT == 2
+		if(pos < this->rr.alim) {
+			debug("reverse fetch a: pos(%llu), len(%llu)", pos, len);
+			/* reverse fetch: 2 * alen - (2 * alen - pos) + (len - 32) */
+			vec_t a = _loadu(this->rr.p.a + pos + (len - BW));
+			_print(a);
+			_print(_swap(a));
+			_storeu(_rd_bufa(this, BW, len), _swap(a));
+		} else {
+			debug("forward fetch a: pos(%llu), len(%llu)", pos, len);
+			/* take complement */
+			vec_t const mask = _set(0x03);
+
+			/* forward fetch: 2 * alen - pos */
+			vec_t a = _loadu(this->rr.p.a + rev(pos, this->rr.alim));
+			_storeu(_rd_bufa(this, BW, len), _xor(a, mask));
+		}
+	#else /* BIT == 4 */
+		if(pos < this->rr.alim) {
+			debug("reverse fetch a: pos(%llu), len(%llu)", pos, len);
+			/* reverse fetch: 2 * alen - (2 * alen - pos) + (len - 32) */
+			vec_t a = _loadu(this->rr.p.a + pos + (len - BW));
+			_print(a);
+			_print(_swap(a));
+			_storeu(_rd_bufa(this, BW, len), _swap(a));
+		} else {
+			debug("forward fetch a: pos(%llu), len(%llu)", pos, len);
+			/* take complement */
+			uint8_t const comp[16] __attribute__(( aligned(16) )) = {
+				0x00, 0x08, 0x04, 0x0c, 0x02, 0x0a, 0x06, 0x0e,
+				0x01, 0x09, 0x05, 0x0d, 0x03, 0x0b, 0x07, 0x0f
+			};
+			vec_t const cv = _bc_v16i8(_load_v16i8(comp));
+
+			/* forward fetch: 2 * alen - pos */
+			vec_t a = _loadu(this->rr.p.a + rev(pos, this->rr.alim));
+			_storeu(_rd_bufa(this, BW, len), _shuf(a, cv));
+		}
+	#endif
 	return;
 }
 
@@ -307,12 +333,15 @@ void fill_load_seq_b(
 {
 	#if BIT == 2
 		if(pos < this->rr.blim) {
-			debug("forward fetch b");
+			debug("forward fetch b: pos(%llu), len(%llu)", pos, len);
+			/* take complement */
+			vec_t const mask = _set(0x03);
+
 			/* forward fetch: pos */
 			vec_t b = _loadu(this->rr.p.b + pos);
-			_storeu(_rd_bufb(this, BW, len), _shl(b, 2));
+			_storeu(_rd_bufb(this, BW, len), _xor(_shl(b, 2), mask));
 		} else {
-			debug("reverse fetch b");
+			debug("reverse fetch b: pos(%llu), len(%llu)", pos, len);
 			/* reverse fetch: 2 * blen - pos + (len - 32) */
 			vec_t b = _loadu(this->rr.p.b + rev(pos, this->rr.blim) + (len - BW));
 			_print(b);
@@ -321,13 +350,22 @@ void fill_load_seq_b(
 		}
 	#else /* BIT == 4 */
 		if(pos < this->rr.blim) {
+			debug("forward fetch b: pos(%llu), len(%llu)", pos, len);
 			/* forward fetch: pos */
 			vec_t b = _loadu(this->rr.p.b + pos);
 			_storeu(_rd_bufb(this, BW, len), b);
 		} else {
+			debug("reverse fetch b: pos(%llu), len(%llu)", pos, len);
+			/* take complement */
+			uint8_t const comp[16] __attribute__(( aligned(16) )) = {
+				0x00, 0x08, 0x04, 0x0c, 0x02, 0x0a, 0x06, 0x0e,
+				0x01, 0x09, 0x05, 0x0d, 0x03, 0x0b, 0x07, 0x0f
+			};
+			vec_t const cv = _bc_v16i8(_load_v16i8(comp));
+
 			/* reverse fetch: 2 * blen - pos + (len - 32) */
 			vec_t b = _loadu(this->rr.p.b + rev(pos, this->rr.blim) + (len - BW));
-			_storeu(_rd_bufb(this, BW, len), _swap(b));
+			_storeu(_rd_bufb(this, BW, len), _shuf(_swap(b), cv));
 		}
 	#endif
 	return;
@@ -2962,6 +3000,12 @@ gaba_t *gaba_init(
 			.scv = gaba_init_create_score_vector(params_intl.score_matrix),
 			.tx = params_intl.xdrop,
 
+			/* input and output options */
+			.seq_a_direction = params_intl.seq_a_direction,
+			.seq_b_direction = params_intl.seq_b_direction,
+			.head_margin = params_intl.head_margin,
+			.tail_margin = params_intl.tail_margin,
+
 			.tail = &ctx->tail,
 
 			.mem_cnt = 0,
@@ -3029,10 +3073,7 @@ struct gaba_dp_context_s *gaba_dp_init(
 	this->rr.blim = (ctx->params.seq_b_direction == GABA_FW_ONLY) ? p->blen : 2 * p->blen;
 
 	/* init seq pointers */
-	_memcpy_blk_au(
-		&this->rr.p,
-		p,
-		sizeof(struct gaba_seq_pair_s));
+	_memcpy_blk_au(&this->rr.p, p, sizeof(struct gaba_seq_pair_s));
 
 	/* copy template */
 	_memcpy_blk_aa(
@@ -3084,10 +3125,12 @@ void gaba_dp_flush(
 	uint64_t const ph_sz = sizeof(struct gaba_phantom_block_s);
 	uint64_t const tl_sz = sizeof(struct gaba_joint_tail_s);
 
-	_memcpy_blk_au(
-		&this->rr.p,
-		p,
-		sizeof(struct gaba_seq_pair_s));
+	/* init seq lims */
+	this->rr.alim = (this->seq_a_direction == GABA_FW_ONLY) ? p->alen : 2 * p->alen;
+	this->rr.blim = (this->seq_b_direction == GABA_FW_ONLY) ? p->blen : 2 * p->blen;
+
+	/* init seq pointers */
+	_memcpy_blk_au(&this->rr.p, p, sizeof(struct gaba_seq_pair_s));
 
 	this->stack_top = (uint8_t *)this + (dp_sz + ph_sz + tl_sz);
 	this->stack_end = (uint8_t *)this + this->mem_size - MEM_MARGIN_SIZE;
