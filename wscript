@@ -12,7 +12,6 @@ def configure(conf):
 
 	conf.recurse('arch')
 
-	conf.env.append_value('CFLAGS', '-g')
 	conf.env.append_value('CFLAGS', '-O3')
 	conf.env.append_value('CFLAGS', '-Wall')
 	conf.env.append_value('CFLAGS', '-std=c99')
