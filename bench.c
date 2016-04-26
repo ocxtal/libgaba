@@ -7,8 +7,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <getopt.h>
-#include "util/kvec.h"
-#include "util/bench.h"
+#include "kvec.h"
+#include "bench.h"
 #include "gaba.h"
 
 /**

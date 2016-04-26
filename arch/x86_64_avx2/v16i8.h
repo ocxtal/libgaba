@@ -9,6 +9,7 @@
 
 /* include header for intel / amd sse2 instruction sets */
 #include <smmintrin.h>
+#include "log.h"
 
 /* 8bit 32cell */
 typedef struct v16i8_s {
