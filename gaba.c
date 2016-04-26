@@ -283,7 +283,7 @@ void fill_load_seq_a(
 {
 	#if BIT == 2
 		if(pos < this->rr.alim) {
-			debug("reverse fetch a: pos(%llu), len(%llu)", pos, len);
+			debug("reverse fetch a: pos(%p), len(%llu)", pos, len);
 			/* reverse fetch: 2 * alen - (2 * alen - pos) + (len - 32) */
 			// vec_t a = _loadu(this->rr.p.a + pos + (len - BW));
 			vec_t a = _loadu(pos + (len - BW));
@@ -291,7 +291,7 @@ void fill_load_seq_a(
 			_print(_swap(a));
 			_storeu(_rd_bufa(this, BW, len), _swap(a));
 		} else {
-			debug("forward fetch a: pos(%llu), len(%llu)", pos, len);
+			debug("forward fetch a: pos(%p), len(%llu)", pos, len);
 			/* take complement */
 			vec_t const mask = _set(0x03);
 
@@ -302,7 +302,7 @@ void fill_load_seq_a(
 		}
 	#else /* BIT == 4 */
 		if(pos < this->rr.alim) {
-			debug("reverse fetch a: pos(%llu), len(%llu)", pos, len);
+			debug("reverse fetch a: pos(%p), len(%llu)", pos, len);
 			/* reverse fetch: 2 * alen - (2 * alen - pos) + (len - 32) */
 			// vec_t a = _loadu(this->rr.p.a + pos + (len - BW));
 			vec_t a = _loadu(pos + (len - BW));
@@ -310,7 +310,7 @@ void fill_load_seq_a(
 			_print(_swap(a));
 			_storeu(_rd_bufa(this, BW, len), _swap(a));
 		} else {
-			debug("forward fetch a: pos(%llu), len(%llu)", pos, len);
+			debug("forward fetch a: pos(%p), len(%llu)", pos, len);
 			/* take complement */
 			uint8_t const comp[16] __attribute__(( aligned(16) )) = {
 				0x00, 0x08, 0x04, 0x0c, 0x02, 0x0a, 0x06, 0x0e,
@@ -338,7 +338,7 @@ void fill_load_seq_b(
 {
 	#if BIT == 2
 		if(pos < this->rr.blim) {
-			debug("forward fetch b: pos(%llu), len(%llu)", pos, len);
+			debug("forward fetch b: pos(%p), len(%llu)", pos, len);
 			/* take complement */
 			vec_t const mask = _set(0x03);
 
@@ -347,7 +347,7 @@ void fill_load_seq_b(
 			vec_t b = _loadu(pos);
 			_storeu(_rd_bufb(this, BW, len), _xor(_shl(b, 2), mask));
 		} else {
-			debug("reverse fetch b: pos(%llu), len(%llu)", pos, len);
+			debug("reverse fetch b: pos(%p), len(%llu)", pos, len);
 			/* reverse fetch: 2 * blen - pos + (len - 32) */
 			// vec_t b = _loadu(this->rr.p.b + rev(pos, this->rr.blim) + (len - BW));
 			vec_t b = _loadu(rev(pos, this->rr.blim) + (len - BW));
@@ -357,13 +357,13 @@ void fill_load_seq_b(
 		}
 	#else /* BIT == 4 */
 		if(pos < this->rr.blim) {
-			debug("forward fetch b: pos(%llu), len(%llu)", pos, len);
+			debug("forward fetch b: pos(%p), len(%llu)", pos, len);
 			/* forward fetch: pos */
 			// vec_t b = _loadu(this->rr.p.b + pos);
 			vec_t b = _loadu(pos);
 			_storeu(_rd_bufb(this, BW, len), b);
 		} else {
-			debug("reverse fetch b: pos(%llu), len(%llu)", pos, len);
+			debug("reverse fetch b: pos(%p), len(%llu)", pos, len);
 			/* take complement */
 			uint8_t const comp[16] __attribute__(( aligned(16) )) = {
 				0x00, 0x08, 0x04, 0x0c, 0x02, 0x0a, 0x06, 0x0e,
@@ -400,8 +400,8 @@ void fill_bulk_fetch(
 	_print(a);
 	_print(b);
 
-	debug("atail(%lld), aridx(%d)", this->rr.atail, (blk-1)->aridx);
-	debug("btail(%lld), bridx(%d)", this->rr.btail, (blk-1)->bridx);
+	debug("atail(%p), aridx(%d)", this->rr.atail, (blk-1)->aridx);
+	debug("btail(%p), bridx(%d)", this->rr.btail, (blk-1)->bridx);
 
 	/* fetch seq a */
 	fill_load_seq_a(this, this->rr.atail - (blk - 1)->aridx, BLK);
