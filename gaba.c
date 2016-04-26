@@ -2387,9 +2387,8 @@ void trace_forward_push(
 	this->ll.fw_sec->aid = this->ll.asec.id;
 	this->ll.fw_sec->bid = this->ll.bsec.id;
 
-	debug("push current section info");
-	_print_v2i64(_load_v2i64(&this->ll.asec));
-	_print_v2i64(_load_v2i64(&this->ll.bsec));
+	debug("push current section info a(%u), b'%u)",
+		this->ll.fw_sec->aid, this->ll.fw_sec->bid);
 
 	/* store segment info */
 	v2i32_t idx = _load_v2i32(&this->ll.aidx);
@@ -2419,26 +2418,11 @@ void trace_reverse_push(
 	struct gaba_dp_context_s *this)
 {
 	/* push current (revcomped) section info */
-	#if 0
-	this->ll.rv_sec->a = (struct gaba_section_s){
-		.id = 0x01 ^ this->ll.asec.id,
-		.len = this->ll.asec.len,
-		.base = NULL
-		// .base = 2 * this->rr.p.alen - this->ll.asec.base - this->ll.asec.len
-	};
-	this->ll.rv_sec->b = (struct gaba_section_s){
-		.id = 0x01 ^ this->ll.bsec.id,
-		.len = this->ll.bsec.len,
-		.base = NULL
-		// .base = 2 * this->rr.p.blen - this->ll.bsec.base - this->ll.bsec.len
-	};
-	#endif
 	this->ll.rv_sec->aid = 0x01 ^ this->ll.asec.id;
 	this->ll.rv_sec->bid = 0x01 ^ this->ll.bsec.id;
 
-	debug("push current section info");
-	_print_v2i64(_load_v2i64(&this->ll.rv_sec->a));
-	_print_v2i64(_load_v2i64(&this->ll.rv_sec->b));
+	debug("push current section info a(%u), b'%u)",
+		this->ll.rv_sec->aid, this->ll.rv_sec->bid);
 
 	/* store segment info */
 	v2i32_t len = _load_v2i32(&this->ll.alen);
