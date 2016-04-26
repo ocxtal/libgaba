@@ -8,6 +8,13 @@
  * @date 2016/1/11
  * @license Apache v2
  */
+
+/* import unittest */
+#define UNITTEST_UNIQUE_ID			33
+#define UNITTEST 					1
+
+#include  "unittest.h"
+
 #include <stdint.h>
 #include "gaba.h"
 #include "arch/arch.h"
@@ -17,13 +24,7 @@
 #include "arch/vector_alias.h"
 
 /* import utils */
-#include "util/util.h"
-
-/* import unittest */
-#define UNITTEST_UNIQUE_ID			33
-#define UNITTEST 					1
-
-#include  "util/unittest.h"
+#include "util.h"
 
 
 /* input sequence bitwidth option (2bit or 4bit) */
@@ -777,10 +778,9 @@ struct gaba_joint_tail_s *fill_create_tail(
 #define _fill_load_contexts(_blk) \
 	debug("blk(%p)", (_blk)); \
 	/* load sequence buffer offset */ \
-	uint8_t *aptr = _rd_bufa(this, 0, BW); \
-	uint8_t *bptr = _rd_bufb(this, 0, BW); \
+	uint8_t const *aptr = _rd_bufa(this, 0, BW); \
+	uint8_t const *bptr = _rd_bufb(this, 0, BW); \
 	/* load mask pointer */ \
-	/*union gaba_mask_pair_u *mask_ptr = (_blk)->mask;*/ \
 	union gaba_mask_pair_u *mask_ptr = (_blk)->mask; \
 	/* load vector registers */ \
 	vec_t const mask = _set(0x07); \
@@ -1611,7 +1611,7 @@ struct gaba_fill_s *gaba_dp_fill(
 {
 	struct gaba_joint_tail_s const *tail = _tail(prev_sec);
 
-	dump(tail, sizeof(struct gaba_joint_tail_s));
+	debug("%s", dump(tail, sizeof(struct gaba_joint_tail_s)));
 
 	/* check if the tail is merge_tail */
 	if(tail->v == NULL) {
@@ -3490,17 +3490,17 @@ unittest(with_seq_pair("A", "A"))
 	/* check sequences */
 	#if BIT == 2
 		assert(strncmp(s->seq.a,
-			(char const [22]){ 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, '\0' },
+			((char const [22]){ 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, '\0' }),
 			22) == 0, "%s", s->seq.a);
 		assert(strncmp(s->seq.b,
-			(char const [22]){ 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, '\0' },
+			((char const [22]){ 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, '\0' }),
 			22) == 0, "%s", s->seq.b);
 	#else /* BIT == 4 */
 		assert(strncmp(s->seq.a,
-			(char const [22]){ 1, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, '\0' },
+			((char const [22]){ 1, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, '\0' }),
 			22) == 0, "%s", s->seq.a);
 		assert(strncmp(s->seq.b,
-			(char const [22]){ 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, '\0' },
+			((char const [22]){ 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, '\0' }),
 			22) == 0, "%s", s->seq.b);
 	#endif
 	// assert(strcmp(s->seq.a, "AGGGGGGGGGGGGGGGGGGGG") == 0, "%s", s->seq.a);

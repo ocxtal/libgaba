@@ -433,9 +433,9 @@ enum _STATE {
 	UPDATE  = 0x0100,
 	TERM 	= 0x0200
 };
-_static_assert(CONT == GABA_STATUS_CONT);
-_static_assert(UPDATE == GABA_STATUS_UPDATE);
-_static_assert(TERM == GABA_STATUS_TERM);
+_static_assert((int32_t)CONT == (int32_t)GABA_STATUS_CONT);
+_static_assert((int32_t)UPDATE == (int32_t)GABA_STATUS_UPDATE);
+_static_assert((int32_t)TERM == (int32_t)GABA_STATUS_TERM);
 
 /**
  * direction determiner constants
