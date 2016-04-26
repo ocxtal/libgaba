@@ -45,7 +45,10 @@ void *gaba_aligned_malloc(
 	size_t align)
 {
 	void *ptr = NULL;
-	posix_memalign(&ptr, align, size);
+	if(posix_memalign(&ptr, align, size) != 0) {
+		debug("posix_memalign failed");
+		return(NULL);
+	}
 	debug("posix_memalign(%p)", ptr);
 	return(ptr);
 }
