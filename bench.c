@@ -160,11 +160,11 @@ int main(int argc, char *argv[])
 
 	/** init context */
 	gaba_t *ctx = gaba_init(GABA_PARAMS(
-		.seq_a_direction = GABA_FW_ONLY,
-		.seq_b_direction = GABA_FW_ONLY,
+		// .seq_a_direction = GABA_FW_ONLY,
+		// .seq_b_direction = GABA_FW_ONLY,
 		.xdrop = 100,
 		.score_matrix = GABA_SCORE_SIMPLE(2, 3, 5, 1)));
-	gaba_seq_pair_t seq = gaba_build_seq_pair(a, strlen(a), b, strlen(b));
+	// gaba_seq_pair_t seq = gaba_build_seq_pair(a, strlen(a), b, strlen(b));
 	struct gaba_section_s asec = gaba_build_section(1, 0, strlen(a));
 	struct gaba_section_s bsec = gaba_build_section(2, 0, strlen(b));
 
@@ -173,9 +173,11 @@ int main(int argc, char *argv[])
 	/**
 	 * run benchmark.
 	 */
+	void const *lim = (void const *)0x800000000000;
 	int64_t score = 0;
 	for(i = 0; i < p.cnt; i++) {
-		gaba_dp_t *dp = gaba_dp_init(ctx, &seq);
+
+		gaba_dp_t *dp = gaba_dp_init(ctx, lim, lim);
 
 		bench_start(total);
 

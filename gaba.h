@@ -28,57 +28,6 @@
 #include <stdlib.h>		/** NULL and size_t */
 #include <stdint.h>		/** uint8_t, int32_t, int64_t */
 
-#if 0
-/**
- * @enum gaba_flags_band_width
- */
-enum gaba_flags_band_width {
-	GABA_NARROW 			= 16,
-	GABA_WIDE			= 32
-};
-
-/**
- * @enum gaba_flags_band_type
- */
-enum gaba_flags_band_type {
-	GABA_DYNAMIC 		= 1,
-	GABA_GUIDED			= 2
-};
-#endif
-
-/**
- * @enum gaba_flags_format
- *
- * @brief (API) constants of the sequence format option.
- */
-enum gaba_flags_format {
-	GABA_ASCII 			= 1,
-	GABA_4BIT 			= 2,
-	GABA_2BIT 			= 3,
-	GABA_4BIT8PACKED 	= 4,
-	GABA_2BIT8PACKED 	= 5,
-	GABA_1BIT64PACKED 	= 6
-};
-
-/**
- * @enum gaba_flags_dir
- */
-enum gaba_flags_dir {
-	GABA_FW_ONLY		= 1,
-	GABA_FW_RV		 	= 2
-};
-
-/**
- * @enum gaba_flags_aln_format
- *
- * @brief (API) constants of the alignment format option.
- */
-enum gaba_flags_aln_format {
-	GABA_STR 			= 1,
-	GABA_CIGAR			= 2,
-	GABA_DIR 			= 3
-};
-
 /**
  * @enum gaba_error
  *
@@ -150,8 +99,7 @@ typedef struct gaba_score_s gaba_score_t;
  */
 struct gaba_params_s {
 	/** input options */
-	uint8_t seq_a_direction;
-	uint8_t seq_b_direction;
+	uint8_t reserved[2];
 
 	/** output options */
 	int16_t head_margin;		/** margin at the head of gaba_res_t */
@@ -189,24 +137,6 @@ typedef struct gaba_params_s gaba_params_t;
 )
 
 /**
- * @struct gaba_seq_pair_s
- * @brief ref-read pair
- */
-struct gaba_seq_pair_s {
-	void const *a, *b;			/** (16) */
-	uint64_t alen, blen;		/** (16) */
-};
-typedef struct gaba_seq_pair_s gaba_seq_pair_t;
-#define gaba_build_seq_pair(_a, _alen, _b, _blen) ( \
-	(struct gaba_seq_pair_s){ \
-		.a = (_a), \
-		.b = (_b), \
-		.alen = (_alen), \
-		.blen = (_blen) \
-	} \
-)
-
-/**
  * @type gaba_t
  *
  * @brief (API) an alias to `struct gaba_context_s'.
@@ -221,7 +151,7 @@ typedef struct gaba_context_s gaba_t;
 struct gaba_section_s {
 	uint32_t id;				/** (4) section id */
 	uint32_t len;				/** (4) length of the  seq */
-	uint64_t base;				/** (8) base position of the head of the seq */
+	uint8_t const *base;		/** (8) pointer to the head of the sequence */
 };
 typedef struct gaba_section_s gaba_section_t;
 #define gaba_build_section(_id, _base, _len) ( \
@@ -274,10 +204,9 @@ enum gaba_status {
  * @struct gaba_path_section_s
  */
 struct gaba_path_section_s {
-	struct gaba_section_s a;		/** (16) base section a */
-	struct gaba_section_s b;		/** (16) base section b */
-	uint32_t apos, bpos;		/** (8) pos in the section */
-	uint32_t alen, blen;		/** (8) length of the segment */
+	uint32_t aid, bid;			/** (8) id of the sections */
+	uint32_t apos, bpos;		/** (8) pos in the sections */
+	uint32_t alen, blen;		/** (8) length of the segments */
 };
 typedef struct gaba_path_section_s gaba_path_section_t;
 
@@ -327,7 +256,8 @@ void gaba_clean(
  */
 struct gaba_dp_context_s *gaba_dp_init(
 	gaba_t const *ctx,
-	gaba_seq_pair_t const *p);
+	uint8_t const *alim,
+	uint8_t const *blim);
 
 /**
  * @fn gaba_dp_flush
@@ -336,7 +266,8 @@ struct gaba_dp_context_s *gaba_dp_init(
  */
 void gaba_dp_flush(
 	gaba_dp_t *this,
-	gaba_seq_pair_t const *p);
+	uint8_t const *alim,
+	uint8_t const *blim);
 
 /**
  * @fn gaba_dp_clean
@@ -406,58 +337,6 @@ gaba_result_t *gaba_dp_trace(
 	gaba_fill_t const *rv_tail,
 	gaba_clip_params_t const *clip);
 
-#if 0
-/**
- * @fn gaba_align_semi_global
- */
-gaba_res_t *gaba_align_semi_global(
-	gaba_t const *ctx,
-	gaba_seq_pair_t const *p,
-	gaba_checkpoint_t const *cp,
-	uint64_t cplen,
-	uint8_t const *guide,
-	uint64_t glen);
-
-/**
- * @fn gaba_align_global
- */
-gaba_res_t *gaba_align_global(
-	gaba_t const *ctx,
-	gaba_seq_pair_t const *p,
-	gaba_checkpoint_t const *cp,
-	uint64_t cplen,
-	uint8_t const *guide,
-	uint64_t glen);
-
-/**
- * @fn gaba_get_error_num
- *
- * @brief (API) extract error number from a context or a result
- *
- * @param[ref] ctx : a pointer to an alignment context structure. can be NULL.
- * @param[ref] aln : a pointer to a result structure. can be NULL.
- *
- * @return error number, defined in gaba_error
- */
-int32_t gaba_get_error_num(
-	gaba_t const *ctx,
-	gaba_res_t const *aln);
-
-/**
- * @fn gaba_aln_free
- *
- * @brief (API) clean up gaba_result structure
- *
- * @param[in] aln : an pointer to gaba_result structure.
- *
- * @return none.
- *
- * @sa gaba_sea
- */
-void gaba_aln_free(
-	gaba_t const *ctx,
-	gaba_res_t *aln);
-#endif
 
 #endif  /* #ifndef _GABA_H_INCLUDED */
 

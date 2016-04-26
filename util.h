@@ -23,10 +23,9 @@ _static_assert(sizeof(void *) == 8);
 /** check size of structs declared in sea.h */
 _static_assert(sizeof(struct gaba_score_s) == 20);
 _static_assert(sizeof(struct gaba_params_s) == 16);
-_static_assert(sizeof(struct gaba_seq_pair_s) == 32);
 _static_assert(sizeof(struct gaba_section_s) == 16);
 _static_assert(sizeof(struct gaba_fill_s) == 96);
-_static_assert(sizeof(struct gaba_path_section_s) == 48);
+_static_assert(sizeof(struct gaba_path_section_s) == 24);
 _static_assert(sizeof(struct gaba_result_s) == 32);
 
 /**
@@ -232,42 +231,24 @@ struct gaba_merge_tail_s {
 _static_assert(sizeof(struct gaba_merge_tail_s) == 160);
 
 /**
- * @struct gaba_reader_s
+ * @struct gaba_reader_work_s
  *
  * @brief (internal) abstract sequence reader
  * sizeof(struct gaba_reader_s) == 16
  * sizeof(struct gaba_reader_work_s) == 384
  */
-#if 0
-struct gaba_reader_s {
-	void (*loada)(				/** (8) */
-		uint8_t *dst,
-		uint8_t const *src,
-		uint64_t pos,
-		uint64_t src_len,
-		uint64_t copy_len);
-	void (*loadb)(				/** (8) */
-		uint8_t *dst,
-		uint8_t const *src,
-		uint64_t pos,
-		uint64_t src_len,
-		uint64_t copy_len);
-};
-_static_assert(sizeof(struct gaba_reader_s) == 16);
-#endif
 struct gaba_reader_work_s {
 	/** 64byte alidned */
-	uint64_t atail, btail;				/** (16) tail of the current section */
+	uint8_t const *alim, *blim;			/** (16) max index of seq array */
+	uint8_t const *atail, *btail;		/** (16) tail of the current section */
 	int32_t alen, blen;					/** (8) length from the tail of the current section */
 	uint64_t plim;						/** (8) p limit coordinate */
 	uint8_t _pad2[16];					/** (16) */
-	uint64_t alim, blim;				/** (16) max index of seq array */
 	/** 64, 64 */
 
 	/** 64byte aligned */
-	struct gaba_seq_pair_s p;			/** (32) */
 	uint8_t bufb[MAX_BW + MAX_BLK];		/** (64) */
-	uint8_t _pad[MAX_BLK];				/** (32) */
+	uint8_t _pad[2 * MAX_BLK];				/** (32) */
 	uint8_t bufa[MAX_BW + MAX_BLK];		/** (64) */
 	/** 192, 256 */
 };
@@ -424,8 +405,7 @@ _static_assert(sizeof(struct gaba_context_s) == 1088);
 /**
  * coordinate conversion macros
  */
-#define rev(pos, len)				( 2 * (len) - (pos) )
-// #define rev(pos, len)				( (len) - (pos) )		/* len must be twiced on load */
+#define rev(pos, len)				( (len) + (uint64_t)(len) - (uint64_t)(pos) )
 #define roundup(x, base)			( ((x) + (base) - 1) & ~((base) - 1) )
 
 /**
