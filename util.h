@@ -8,7 +8,7 @@
 #ifndef _UTIL_H_INCLUDED
 #define _UTIL_H_INCLUDED
 
-#include "../gaba.h"
+#include "gaba.h"
 #include "log.h"
 #include "bench.h"
 #include "sassert.h"
