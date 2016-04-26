@@ -3722,6 +3722,8 @@ unittest(with_seq_pair("A", "A"))
 	/* forward-reverse traceback */
 	r = gaba_dp_trace(d, f, f, NULL);
 	assert(check_result(r, 0, 0, 0, 0), print_result(r));
+
+	gaba_dp_clean(d);
 }
 
 /* with short sequences */
