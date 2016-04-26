@@ -163,34 +163,44 @@
 /**
  * @macro dump
  */
+#ifndef dump
+
 #if DEBUG
-
-	#define dump(ptr, len) { \
-		void *_p = (void *)(ptr); \
-		int64_t _l = (int64_t)(len); \
-		int64_t _i = 0; \
-		/** header */ \
-		fprintf(stderr, "                "); \
-		for(_i = 0; _i < 16; _i++) { \
-			fprintf(stderr, " %02x", (uint8_t)_i); \
+	/* compatible with dump in unittest.h */
+	#define ut_dump(ptr, len) ({ \
+		uint64_t size = (((len) + 15) / 16 + 1) * \
+			(strlen("0x0123456789abcdef:") + 16 * strlen(" 00a") + strlen("  \n+ margin")) \
+			+ strlen(#ptr) + strlen("\n`' len: 100000000"); \
+		uint8_t *_ptr = (uint8_t *)(ptr); \
+		char *_str = alloca(size); \
+		char *_s = _str; \
+		/* make header */ \
+		_s += sprintf(_s, "\n`%s' len: %" PRId64 "\n", #ptr, (int64_t)len); \
+		_s += sprintf(_s, "                   "); \
+		for(int64_t i = 0; i < 16; i++) { \
+			_s += sprintf(_s, " %02x", (uint8_t)i); \
 		} \
-		/** dump */ \
-		_i = 0; \
-		while(_i < _l) { \
-			if((_i % 16) == 0) { \
-				fprintf(stderr, "\n%016llx", (uint64_t)_p + _i); \
+		_s += sprintf(_s, "\n"); \
+		for(int64_t i = 0; i < ((len) + 15) / 16; i++) { \
+			_s += sprintf(_s, "0x%016" PRIx64 ":", (uint64_t)_ptr); \
+			for(int64_t j = 0; j < 16; j++) { \
+				_s += sprintf(_s, " %02x", (uint8_t)_ptr[j]); \
 			} \
-			fprintf(stderr, " %02x", ((uint8_t *)_p)[_i]); \
-			_i++; \
+			_s += sprintf(_s, "  "); \
+			for(int64_t j = 0; j < 16; j++) { \
+				_s += sprintf(_s, "%c", isprint(_ptr[j]) ? _ptr[j] : ' '); \
+			} \
+			_s += sprintf(_s, "\n"); \
+			_ptr += 16; \
 		} \
-		fprintf(stderr, "\n"); \
-	}
-
+		(char const *)_str; \
+	})
 #else
 
 	#define dump(ptr, len) ;
 
 #endif
+#endif /* #ifndef dump */
 
 #endif /* #ifndef _LOG_H_INCLUDED */
 /**

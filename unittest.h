@@ -22,7 +22,15 @@
 #define UNITTEST_ALIAS_MAIN		0
 #endif
 
-#define _POSIX_C_SOURCE		2
+/* for compatibility with -std=c99 (2016/4/26 by Hajime Suzuki) */
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE		200112L
+#endif
+
+#ifndef _BSD_SOURCE
+#define _BSD_SOURCE
+#endif
+/* end */
 
 #include <alloca.h>
 #include <ctype.h>
@@ -434,6 +442,7 @@ char *ut_dump_nm_output(
 	if(pclose(fp) != 0) {
 		goto _ut_nm_error_handler;
 	}
+	free(cmd); cmd = NULL;
 	return(res);
 
 _ut_nm_error_handler:
