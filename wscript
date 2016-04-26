@@ -1,44 +1,22 @@
 #! /usr/bin/env python
 # encoding: utf-8
 
-variants = ['twig', 'branch'] #, 'trunk'] #, 'naive', 'balloon', 'cap']
-costs = ['linear'] #, 'affine']
-dps = ['dynamic', 'guided']
-
-def suffix(c, d):
-	return('_' + c + '_' + d)
-
 def options(opt):
 	opt.load('compiler_c')
 
-	opt.add_option('', '--debug',
-		action = 'store_true',
-		dest = 'debug',
-		help = 'debug build')
-
+	opt.recurse('arch')
 
 def configure(conf):
 	conf.load('ar')
 	conf.load('compiler_c')
 
-	# conf.recurse('util')
 	conf.recurse('arch')
 
-	# debug options
-	if conf.options.debug is True:
-		conf.env.append_value('CFLAGS', '-fmacro-backtrace-limit=0')
-		conf.env.append_value('CFLAGS', '-g')
-		conf.env.append_value('CFLAGS', '-DDEBUG')
-	else:
-		# conf.env.append_value('CFLAGS', '-g')
-		# conf.env.append_value('CFLAGS', '-DDEBUG')
-		conf.env.append_value('CFLAGS', '-O3')
-
-	# conf.env.append_value('CFLAGS', '-DBENCH')
+	conf.env.append_value('CFLAGS', '-g')
+	conf.env.append_value('CFLAGS', '-O3')
 	conf.env.append_value('CFLAGS', '-Wall')
 	conf.env.append_value('CFLAGS', '-std=c99')
-	# conf.env.append_value('CFLAGS', '-D_POSIX_C_SOURCE=200112L')	# for posix_memalign and clock_gettime
-	conf.env.append_value('CFLAGS', '-fPIC')
+	# conf.env.append_value('CFLAGS', '-fPIC')
 
 	if conf.env.CC_NAME == 'icc':
 		# FIXME: dirty hack to pass '-diag-disable remark', current waf does not support space-separated options
@@ -55,27 +33,31 @@ def configure(conf):
 	else:
 		pass
 
+	conf.env.append_value('OBJ_GABA', ['gaba.o'])
+
 
 def build(bld):
 
 	bld.recurse('arch')
 
+	bld.objects(source = 'gaba.c', target = 'gaba.o', includes = ['.'])
+
 	bld.stlib(
-		source = ['gaba.c'],
+		source = ['unittest.c'],
 		target = 'gaba',
-		includes = 'util')
+		includes = '.',
+		use = bld.env.OBJ_GABA)
 
 	bld.program(
 		source = ['unittest.c'],
 		target = 'unittest',
-		linkflags = ['-all_load'],
-		use = ['gaba'],
-		includes = ['util'],
+		includes = ['.'],
+		use = bld.env.OBJ_GABA,
 		defines = ['TEST'])
 
 	bld.program(
 		source = ['bench.c'],
 		target = 'bench',
-		use = ['gaba'],
-		includes = ['util'],
+		includes = ['.'],
+		use = bld.env.OBJ_GABA,
 		defines = ['BENCH'])
