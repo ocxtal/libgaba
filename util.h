@@ -24,7 +24,7 @@ _static_assert(sizeof(void *) == 8);
 _static_assert(sizeof(struct gaba_score_s) == 20);
 _static_assert(sizeof(struct gaba_params_s) == 16);
 _static_assert(sizeof(struct gaba_section_s) == 16);
-_static_assert(sizeof(struct gaba_fill_s) == 96);
+_static_assert(sizeof(struct gaba_fill_s) == 64);
 _static_assert(sizeof(struct gaba_path_section_s) == 24);
 _static_assert(sizeof(struct gaba_result_s) == 32);
 
@@ -146,7 +146,7 @@ struct gaba_block_s {
 	union gaba_dir_u dir;				/** (8) */
 	int64_t offset;						/** (8) */
 	int32_t aridx, bridx;				/** (8) reverse index in the current section */
-	uint64_t reserved;					/** (8) */
+	struct gaba_middle_delta_s const *md;/** (8) pointer to the middle delta vectors */
 	struct gaba_char_vec_s ch;			/** (32) char vector */
 };
 struct gaba_phantom_block_s {
@@ -155,7 +155,7 @@ struct gaba_phantom_block_s {
 	union gaba_dir_u dir;				/** (8) */
 	int64_t offset;						/** (8) */
 	int32_t aridx, bridx;				/** (8) reverse index in the current section */
-	uint64_t reserved;					/** (8) */
+	struct gaba_middle_delta_s const *md;/** (8) pointer to the middle delta vectors */
 	struct gaba_char_vec_s ch;			/** (32) char vector */
 };
 _static_assert(sizeof(struct gaba_block_s) == 448);
@@ -166,12 +166,9 @@ _static_assert(sizeof(struct gaba_phantom_block_s) == 192);
  * @struct gaba_joint_tail_s
  *
  * @brief (internal) init vector container.
- * sizeof(struct gaba_joint_tail_s) == 96
+ * sizeof(struct gaba_joint_tail_s) == 64
  */
 struct gaba_joint_tail_s {
-	/* middle delta */
-	struct gaba_middle_delta_s const *v;	/** (8) pointer to the middle delta vectors */
-
 	/* coordinates */
 	int64_t psum;				/** (8) global p-coordinate of the tail */
 	int32_t p;					/** (4) local p-coordinate of the tail */
@@ -186,12 +183,11 @@ struct gaba_joint_tail_s {
 
 	/* section info */
 	struct gaba_joint_tail_s const *tail;/** (8) */
-	uint64_t _unused;			/** (8) */
 	uint32_t apos, bpos;		/** (8) pos */
-	struct gaba_section_s a;	/** (16) section a */
-	struct gaba_section_s b;	/** (16) section b */
+	uint32_t alen, blen;		/** (8) len */
+	uint32_t aid, bid;			/** (8) id */
 };
-_static_assert(sizeof(struct gaba_joint_tail_s) == 96);
+_static_assert(sizeof(struct gaba_joint_tail_s) == 64);
 _static_assert(offsetof(struct gaba_joint_tail_s, psum) == offsetof(struct gaba_fill_s, psum));
 _static_assert(offsetof(struct gaba_joint_tail_s, p) == offsetof(struct gaba_fill_s, p));
 _static_assert(offsetof(struct gaba_joint_tail_s, max) == offsetof(struct gaba_fill_s, max));
@@ -202,10 +198,6 @@ _static_assert(offsetof(struct gaba_joint_tail_s, max) == offsetof(struct gaba_f
  * @struct gaba_merge_tail_s
  */
 struct gaba_merge_tail_s {
-	/* middle delta */
-	void *null;					/** (8) must be NULL */
-	// struct gaba_middle_delta_s const *v;	/** (8) pointer to the middle delta vectors */
-
 	/* coordinates */
 	int64_t psum;				/** (8) global p-coordinate of the tail */
 	int32_t p;					/** (4) local p-coordinate of the tail */
@@ -220,15 +212,14 @@ struct gaba_merge_tail_s {
 
 	/* section info */
 	struct gaba_joint_tail_s const *tail;/** (8) */
-	uint64_t _unused;			/** (8) */
 	uint32_t apos, bpos;		/** (8) pos */
-	struct gaba_section_s a;	/** (16) section a */
-	struct gaba_section_s b;	/** (16) section b */
+	uint32_t alen, blen;		/** (8) len */
+	uint32_t aid, bid;			/** (8) id */
 
 	/* tail array */
 	uint8_t tail_idx[2][MAX_BW];	/** (64) array of index of joint_tail */
 };
-_static_assert(sizeof(struct gaba_merge_tail_s) == 160);
+_static_assert(sizeof(struct gaba_merge_tail_s) == 128);
 
 /**
  * @struct gaba_reader_work_s
@@ -241,66 +232,63 @@ struct gaba_reader_work_s {
 	/** 64byte alidned */
 	uint8_t const *alim, *blim;			/** (16) max index of seq array */
 	uint8_t const *atail, *btail;		/** (16) tail of the current section */
-	int32_t alen, blen;					/** (8) length from the tail of the current section */
+	int32_t alen, blen;					/** (8) lengths of the current section */
+	uint32_t aid, bid;					/** (8) ids */
 	uint64_t plim;						/** (8) p limit coordinate */
-	uint8_t _pad2[16];					/** (16) */
+	uint64_t _pad;						/** (8) */
 	/** 64, 64 */
 
 	/** 64byte aligned */
-	uint8_t bufb[MAX_BW + MAX_BLK];		/** (64) */
-	uint8_t _pad[2 * MAX_BLK];				/** (32) */
 	uint8_t bufa[MAX_BW + MAX_BLK];		/** (64) */
-	/** 192, 256 */
+	uint8_t bufb[MAX_BW + MAX_BLK];		/** (64) */
+	/** 128, 192 */
 };
-_static_assert(sizeof(struct gaba_reader_work_s) == 256);
+_static_assert(sizeof(struct gaba_reader_work_s) == 192);
 
 /**
  * @struct gaba_writer_work_s
  */
 struct gaba_writer_work_s {
-	/** 64byte aligned */
+	/* path string info */
+	uint32_t *fw_path;					/** (8) */
+	uint32_t *rv_path;					/** (8) */	
+	int32_t fw_rem;						/** (4) */
+	int32_t rv_rem;						/** (4) */
 
 	/* section information */
-	struct gaba_section_s asec;		/** (16) */
-	struct gaba_section_s bsec;		/** (16) */
+	struct gaba_path_section_s *fw_sec;	/** (8) */
+	struct gaba_path_section_s *rv_sec;	/** (8) */
+	int32_t fw_scnt;					/** (4) */
+	int32_t rv_scnt;					/** (4) */
+
+	/* memory management */
+	uint8_t *ptr;						/** (8) */
+	uint64_t _pad1;						/** (8) */
+
+	/** block pointers */
+	struct gaba_joint_tail_s const *tail;/** (8) current tail */
+	struct gaba_block_s const *blk;		/** (8) current block */
+
+	/** section info */
 	struct gaba_joint_tail_s const *atail;/** (8) */
 	struct gaba_joint_tail_s const *btail;/** (8) */
 
-	/** block information */
-	struct gaba_joint_tail_s const *tail;/** (8) */
-	struct gaba_block_s const *blk;	/** (8) */
-	/** 64, 64 */
+	/** lengths and ids */
+	int32_t alen, blen;					/** (8) section lengths */
+	uint32_t aid, bid;					/** (8) */
 
-	/** 64byte aligned */
-	int32_t alen, blen;				/** (8) lengths of the current section */
-	int32_t aidx, bidx;				/** (8) current ridx pair */
-	int32_t asidx, bsidx;			/** (8) start ridx pair */
+	/* p-coordinates */
+	int64_t psum;						/** (8) */
+	int32_t p;							/** (4) */
+	int32_t q;							/** (4) */
 
-	int64_t psum;					/** (8) */
-	int32_t p;						/** (4) */
-	uint32_t mask_max;				/** (4) */
-	int16_t q;						/** (2) */
-	int16_t len;					/** (2) */
+	/* indices */
+	int32_t aidx, bidx;					/** (8) indices of the current trace */
+	int32_t asidx, bsidx;				/** (8) base indices of the current trace */
 
-	/* path string information */
-	int16_t fw_rem;					/** (2) */
-	int16_t rv_rem;					/** (2) */
-	uint32_t *fw_path;				/** (8) */
-	uint32_t *rv_path;				/** (8) */
-	/** 64, 128 */
-
-	/** 64byte aligned */
-	/* section information */
-	struct gaba_path_section_s *fw_sec;/** (8) */
-	struct gaba_path_section_s *rv_sec;/** (8) */
-	int32_t fw_scnt;				/** (4) */
-	int32_t rv_scnt;				/** (4) */
-
-	/* memory management */
-	uint8_t *ptr;					/** (8) */
-	/** 32, 160 */
+	uint64_t _pad2[6];					/** (48) */
 };
-_static_assert(sizeof(struct gaba_writer_work_s) == 160);
+_static_assert(sizeof(struct gaba_writer_work_s) == 192);
 
 /**
  * @struct gaba_score_vec_s
@@ -327,46 +315,46 @@ struct gaba_dp_context_s {
 	/** individually stored on init */
 
 	/** 64byte aligned */
-	uint8_t *stack_top;			/** (8) dynamic programming matrix */
-	uint8_t *stack_end;			/** (8) the end of dp matrix */
-	uint8_t const *pdr;			/** (8) direction array */
-	uint8_t const *tdr;			/** (8) the end of direction array */
-	/** 32, 32 */
-
-	struct gaba_writer_work_s ll;	/** (160) */
-	/** 160, 192 */
+	union {
+		struct gaba_writer_work_s ll;	/** (192) */
+		struct gaba_reader_work_s rr;	/** (192) */
+	};
+	/** 192, 192 */
 
 	/** 64byte aligned */
-	struct gaba_reader_work_s rr;	/** (256) */
-	/** 256, 448 */
+	uint8_t *stack_top;					/** (8) dynamic programming matrix */
+	uint8_t *stack_end;					/** (8) the end of dp matrix */
+	/** 16, 208 */
 
 	/** loaded on init */
-	/** 64byte aligned */
 	struct gaba_score_vec_s scv;/** (80) substitution matrix and gaps */
-	int32_t tx;					/** (4) xdrop threshold */
-	int32_t mem_cnt;			/** (4) */
-	uint64_t mem_size;			/** (8) malloc size */
-	struct gaba_joint_tail_s *tail;	/** (8) template of the root tail */
+	/** 80, 288 */
 
-	/** input options */
-	uint8_t seq_a_direction;	/** (1) */
-	uint8_t seq_b_direction;	/** (1) */
+	int16_t tx;							/** (2) xdrop threshold */
+	uint16_t mem_cnt;					/** (2) */
 
 	/** output options */
-	int16_t head_margin;		/** (2) margin at the head of gaba_res_t */
-	int16_t tail_margin;		/** (2) margin at the tail of gaba_res_t */
-	uint16_t _pad;				/** (2) */
+	int16_t head_margin;				/** (2) margin at the head of gaba_res_t */
+	int16_t tail_margin;				/** (2) margin at the tail of gaba_res_t */
 
-	#define GABA_MEM_ARRAY_SIZE		( 18 )
-	uint8_t *mem_array[GABA_MEM_ARRAY_SIZE];		/** (128) */
+	#define GABA_MEM_ARRAY_SIZE		( 11 )
+	uint8_t *mem_array[GABA_MEM_ARRAY_SIZE];/** (88) */
+	/** 96, 384 */
 
-	/** 256, 704 */
+	/** phantom vectors */
+	/** 64byte aligned */
+	struct gaba_phantom_block_s blk;	/** (192) */
+	/** 192, 576 */
+
+	/** 64byte aligned */
+	struct gaba_joint_tail_s tail;		/** (64) */
+	/** 64, 640 */
 };
-_static_assert(sizeof(struct gaba_dp_context_s) == 704);
+_static_assert(sizeof(struct gaba_dp_context_s) == 640);
 #define GABA_DP_CONTEXT_LOAD_OFFSET	( offsetof(struct gaba_dp_context_s, scv) )
 #define GABA_DP_CONTEXT_LOAD_SIZE	( sizeof(struct gaba_dp_context_s) - GABA_DP_CONTEXT_LOAD_OFFSET )
-_static_assert(GABA_DP_CONTEXT_LOAD_OFFSET == 448);
-_static_assert(GABA_DP_CONTEXT_LOAD_SIZE == 256);
+_static_assert(GABA_DP_CONTEXT_LOAD_OFFSET == 208);
+_static_assert(GABA_DP_CONTEXT_LOAD_SIZE == 432);
 
 /**
  * @struct gaba_context_s
@@ -383,24 +371,15 @@ struct gaba_context_s {
 	/** 64, 64 */
 	
 	/** 64byte aligned */
-	struct gaba_dp_context_s k;		/** (704) */
-	/** 704, 768 */
+	struct gaba_dp_context_s k;		/** (640) */
+	/** 640, 704 */
 
 	/** 64byte aligned */
-	/** phantom vectors */
-	struct gaba_phantom_block_s blk;/** (192) */
-	struct gaba_joint_tail_s tail;	/** (96) */
-	/** 288, 1056 */
-
-	/** 64byte aligned */
-	/** params */
 	struct gaba_params_s params;	/** (16) */
-	uint64_t _pad[2];				/** (16) */
-	/** 32, 1088 */
-
+	uint64_t _pad[6];				/** (48) */
 	/** 64byte aligned */
 };
-_static_assert(sizeof(struct gaba_context_s) == 1088);
+_static_assert(sizeof(struct gaba_context_s) == 768);
 
 /**
  * coordinate conversion macros

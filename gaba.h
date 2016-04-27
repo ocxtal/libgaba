@@ -174,8 +174,6 @@ typedef struct gaba_dp_context_s gaba_dp_t;
  * @struct gaba_fill_s
  */
 struct gaba_fill_s {
-	uint8_t _pad1[8];
-
 	/* coordinates */
 	int64_t psum;				/** (8) global p-coordinate of the tail of the section */
 	int32_t p;					/** (4) local p-coordinate of the tail of the section */
@@ -185,7 +183,7 @@ struct gaba_fill_s {
 	int64_t max;				/** (8) max */
 	uint32_t status;			/** (4) */
 
-	uint8_t _pad2[60];
+	uint8_t _pad[36];
 };
 typedef struct gaba_fill_s gaba_fill_t;
 
