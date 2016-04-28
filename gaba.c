@@ -37,15 +37,11 @@
 #endif
 
 /* constants */
-#if 0
 #define BW_BASE						( 5 )
 #define BW 							( 0x01<<BW_BASE )
 #define BLK_BASE					( 5 )
 #define BLK 						( 0x01<<BLK_BASE )
-#else
-#define BW 							( 32 )
-#define BLK 						( 32 )
-#endif
+
 #define MIN_BULK_BLOCKS				( 32 )
 #define MEM_ALIGN_SIZE				( 32 )		/* 32byte aligned for AVX2 environments */
 #define MEM_INIT_SIZE				( (uint64_t)32 * 1024 * 1024 )
@@ -1682,7 +1678,9 @@ struct trace_max_block_s trace_detect_max_block(
 	/* scan blocks backward */
 	struct gaba_block_s *blk = _last_block(tail);
 	int32_t p = tail->p;
-	for(int32_t b = (p - 1) / BLK; b >= 0; b--, blk--) {
+
+	/* b must be sined integer, in order to detect negative index. */
+	for(int32_t b = (p - 1)>>BLK_BASE; b >= 0; b--, blk--) {
 
 		/* load the previous max vector and offset */
 		vec_t prev_max = _load(&(blk - 1)->sd.max);
@@ -2395,10 +2393,6 @@ void trace_forward_push(
 	_store_v2i32(&this->ll.sec[this->ll.fw_sec_idx].apos, idx);
 	_store_v2i32(&this->ll.sec[this->ll.fw_sec_idx].alen, _sub_v2i32(sidx, idx));
 
-	// _store_v2i32(&this->ll.fw_sec->aid, id);
-	// _store_v2i32(&this->ll.fw_sec->apos, idx);
-	// _store_v2i32(&this->ll.fw_sec->alen, _sub_v2i32(sidx, idx));
-
 	debug("push current section info a(%u, %u, %u), b(%u, %u, %u)",
 		this->ll.sec[this->ll.fw_sec_idx].aid,
 		this->ll.sec[this->ll.fw_sec_idx].apos,
@@ -2447,24 +2441,6 @@ void trace_reverse_push(
 
 	/* windback pointer */
 	this->ll.rv_sec_idx++;
-
-	#if 0
-	/* push current (revcomped) section info */
-	v2i32_t id = _load_v2i32(&this->ll.aid);
-	v2i32_t const mask = _set_v2i32(0x01);
-	_store_v2i32(&this->ll.rv_sec->aid, _xor_v2i32(id, mask));
-
-	debug("push current section info a(%u), b'%u)",
-		this->ll.rv_sec->aid, this->ll.rv_sec->bid);
-
-	/* store segment info */
-	v2i32_t len = _load_v2i32(&this->ll.alen);
-	v2i32_t idx = _load_v2i32(&this->ll.aidx);
-	v2i32_t sidx = _load_v2i32(&this->ll.asidx);
-
-	_store_v2i32(&this->ll.rv_sec->apos, _sub_v2i32(len, sidx));
-	_store_v2i32(&this->ll.rv_sec->alen, _sub_v2i32(sidx, idx));
-	#endif
 	return;
 }
 
@@ -2482,7 +2458,8 @@ void trace_generate_path(
 	debug("trace_init_start_pos tail(%p), p(%d), psum(%lld), ssum(%d)",
 		tail, tail->p, tail->psum, tail->ssum);
 
-	if(tail->psum < 0) {
+	// if(tail->psum < 0) {
+	if(tail->psum < 2) {
 		debug("valid block not found, psum(%lld)", tail->psum);
 		return;
 	}
@@ -2605,9 +2582,8 @@ struct gaba_result_s *trace_concatenate_path(
 	path->rem = fw_rem;
 	res->path = path;
 
-
-	debug("sec(%p), path(%p), path_array(%x, %x, %x, %x), rem(%llu), slen(%lld), plen(%lld)",
-		fw_sec, fw_path, fw_path[0], fw_path[1], fw_path[2], fw_path[3], fw_rem, sec_len, path_len);
+	debug("sec(%p), path(%p), path_array(%x, %x, %x, %x), rem(%llu), slen(%u), plen(%lld)",
+		fw_sec, fw_path, fw_path[0], fw_path[1], fw_path[2], fw_path[3], fw_rem, res->slen, path_len);
 	return(res);
 }
 #if 0
