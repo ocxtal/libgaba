@@ -249,21 +249,18 @@ _static_assert(sizeof(struct gaba_reader_work_s) == 192);
  * @struct gaba_writer_work_s
  */
 struct gaba_writer_work_s {
+	/* reserved to avoid collision with alim and blim */
+	uint8_t const *alim, *blim;			/** (16) unused in writer */
+
+	/* section info */
+	struct gaba_path_section_s *sec;	/** (8) section base pointer */
+	uint32_t fw_sec_idx, rv_sec_idx;	/** (8) current section indices */
+	uint32_t tail_sec_idx;				/** (4) tail index */
+
 	/* path string info */
-	uint32_t *fw_path;					/** (8) */
-	uint32_t *rv_path;					/** (8) */	
-	int32_t fw_rem;						/** (4) */
-	int32_t rv_rem;						/** (4) */
-
-	/* section information */
-	struct gaba_path_section_s *fw_sec;	/** (8) */
-	struct gaba_path_section_s *rv_sec;	/** (8) */
-	int32_t fw_scnt;					/** (4) */
-	int32_t rv_scnt;					/** (4) */
-
-	/* memory management */
-	uint8_t *ptr;						/** (8) */
-	uint64_t _pad1;						/** (8) */
+	int16_t fw_rem, rv_rem;				/** (4) */
+	uint32_t *fw_path, *rv_path;		/** (16) */
+	uint32_t *tail_path;				/** (8) */
 
 	/** block pointers */
 	struct gaba_joint_tail_s const *tail;/** (8) current tail */
@@ -277,14 +274,14 @@ struct gaba_writer_work_s {
 	int32_t alen, blen;					/** (8) section lengths */
 	uint32_t aid, bid;					/** (8) */
 
+	/* indices */
+	int32_t aidx, bidx;					/** (8) indices of the current trace */
+	int32_t asidx, bsidx;				/** (8) base indices of the current trace */
+
 	/* p-coordinates */
 	int64_t psum;						/** (8) */
 	int32_t p;							/** (4) */
 	int32_t q;							/** (4) */
-
-	/* indices */
-	int32_t aidx, bidx;					/** (8) indices of the current trace */
-	int32_t asidx, bsidx;				/** (8) base indices of the current trace */
 
 	uint64_t _pad2[6];					/** (48) */
 };
@@ -309,7 +306,7 @@ _static_assert_offset(struct gaba_score_s, score_gi_a, struct gaba_score_vec_s, 
  * @struct gaba_dp_context_s
  *
  * @brief (internal) container for dp implementations
- * sizeof(struct gaba_dp_context_s) == 704
+ * sizeof(struct gaba_dp_context_s) == 640
  */
 struct gaba_dp_context_s {
 	/** individually stored on init */
@@ -327,7 +324,7 @@ struct gaba_dp_context_s {
 	/** 16, 208 */
 
 	/** loaded on init */
-	struct gaba_score_vec_s scv;/** (80) substitution matrix and gaps */
+	struct gaba_score_vec_s scv;		/** (80) substitution matrix and gaps */
 	/** 80, 288 */
 
 	int16_t tx;							/** (2) xdrop threshold */
