@@ -359,26 +359,6 @@ int ut_strcmp(
 }
 
 static inline
-int ut_strncmp(
-	char const *a,
-	char const *b,
-	uint64_t len)
-{
-	/* if both are NULL */
-	if(a == NULL && b == NULL) {
-		return(0);
-	}
-
-	if(b == NULL) {
-		return(1);
-	}
-	if(a == NULL) {
-		return(-1);
-	}
-	return(strncmp(a, b, len));
-}
-
-static inline
 char *ut_build_nm_cmd(
 	char const *filename)
 {
@@ -1110,11 +1090,20 @@ int ut_modify_test_config_mark(
 		/* parse with comma */
 		while(*p != '\0' && *p != ',') { p++; }
 
+		/* copy string */
+		char buf[p - b + 1];
+		memcpy(buf, b, p - b);
+		buf[p - b] = '\0';
+
 		/* linear search among tests */
+		int marked = 0;
 		for(int64_t i = 0; i < cnt; i++) {
-			if(ut_strncmp(test[i].name, b, p - b) == 0) {
-				test[i].exec = 1;
+			if(ut_strcmp(test[i].name, buf) == 0) {
+				test[i].exec = 1; marked = 1;
 			}
+		}
+		if(marked == 0) {
+			fprintf(stderr, ut_color(UT_YELLOW, "Warning") ": group `%s' not found.\n", buf);
 		}
 
 		if(*p == '\0') { break; }
