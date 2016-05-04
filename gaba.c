@@ -2535,14 +2535,9 @@ struct gaba_result_s *trace_concatenate_path(
 
 		/* store array */
 		fw_path[0] = prev_array;
-		// fw_path += fw_rem == 0;
 	}
 
 	/* create path info container */
-	/*
-	struct gaba_path_s *path = (struct gaba_path_s *)(
-		(uint8_t *)(fw_path + (fw_rem == 0)) - sizeof(struct gaba_path_s));
-	*/
 	struct gaba_path_s *path = (struct gaba_path_s *)(fw_path + (fw_rem == 0)) - 1;
 
 	/* calc path length */
@@ -2551,7 +2546,6 @@ struct gaba_result_s *trace_concatenate_path(
 
 	/* store path info */
 	path->len = path_len;
-	// path->rem = fw_rem;
 	path->offset = (32 - fw_rem) & 31;
 	res->path = path;
 
