@@ -2609,7 +2609,7 @@ struct gaba_result_s *gaba_dp_trace(
 
 	/* clear path array */
 	this->ll.fw_path[0] = 0;
-	this->ll.fw_path[1] = 0x01;
+	this->ll.fw_path[1] = 0x01;			/* terminator */
 	this->ll.fw_path[2] = 0;
 	this->ll.rv_path[0] = 0;
 
