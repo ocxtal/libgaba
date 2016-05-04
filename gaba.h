@@ -205,6 +205,7 @@ struct gaba_path_section_s {
 	uint32_t aid, bid;			/** (8) id of the sections */
 	uint32_t apos, bpos;		/** (8) pos in the sections */
 	uint32_t alen, blen;		/** (8) length of the segments */
+	uint32_t plen, ppos;		/** (8) path string position (offset) and length */
 };
 typedef struct gaba_path_section_s gaba_path_section_t;
 

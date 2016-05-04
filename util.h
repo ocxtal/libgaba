@@ -25,7 +25,7 @@ _static_assert(sizeof(struct gaba_score_s) == 20);
 _static_assert(sizeof(struct gaba_params_s) == 16);
 _static_assert(sizeof(struct gaba_section_s) == 16);
 _static_assert(sizeof(struct gaba_fill_s) == 64);
-_static_assert(sizeof(struct gaba_path_section_s) == 24);
+_static_assert(sizeof(struct gaba_path_section_s) == 32);
 _static_assert(sizeof(struct gaba_result_s) == 32);
 
 /**
@@ -261,7 +261,9 @@ struct gaba_writer_work_s {
 	int16_t fw_rem, rv_rem;				/** (4) */
 	uint32_t *fw_path, *rv_path;		/** (16) */
 	uint32_t *tail_path;				/** (8) */
+	/** 64, 64 */
 
+	/** 64byte aligned */
 	/** block pointers */
 	struct gaba_joint_tail_s const *tail;/** (8) current tail */
 	struct gaba_block_s const *blk;		/** (8) current block */
@@ -277,13 +279,20 @@ struct gaba_writer_work_s {
 	/* indices */
 	int32_t aidx, bidx;					/** (8) indices of the current trace */
 	int32_t asidx, bsidx;				/** (8) base indices of the current trace */
+	/** 64, 128 */
 
+	/** 64byte aligned */
 	/* p-coordinates */
 	int64_t psum;						/** (8) */
 	int32_t p;							/** (4) */
 	int32_t q;							/** (4) */
 
-	uint64_t _pad2[6];					/** (48) */
+	/* path length info */
+	uint32_t *spath;					/** (8) */
+	uint32_t srem;						/** (4) */
+	uint32_t pspos;						/** (4) */
+
+	uint64_t _pad2[4];					/** (32) */
 };
 _static_assert(sizeof(struct gaba_writer_work_s) == 192);
 

@@ -2353,24 +2353,39 @@ static
 void trace_forward_push(
 	struct gaba_dp_context_s *this)
 {
-	/* push section info to section array */
+	/* load section info */
 	v2i32_t id = _load_v2i32(&this->ll.aid);
 	v2i32_t idx = _load_v2i32(&this->ll.aidx);
 	v2i32_t sidx = _load_v2i32(&this->ll.asidx);
+
+	/* calc path length */
+	int64_t plen = 32 * (this->ll.spath - this->ll.fw_path)
+		+ (this->ll.fw_rem - this->ll.srem);
+
+	/* store section info */	
 	_store_v2i32(&this->ll.sec[this->ll.fw_sec_idx].aid, id);
 	_store_v2i32(&this->ll.sec[this->ll.fw_sec_idx].apos, idx);
 	_store_v2i32(&this->ll.sec[this->ll.fw_sec_idx].alen, _sub_v2i32(sidx, idx));
 
-	debug("push current section info a(%u, %u, %u), b(%u, %u, %u)",
+	/* store path length */
+	this->ll.sec[this->ll.fw_sec_idx].plen = plen;
+	this->ll.sec[this->ll.fw_sec_idx].ppos = 0;
+
+	debug("push current section info a(%u, %u, %u), b(%u, %u, %u), len(%lld)",
 		this->ll.sec[this->ll.fw_sec_idx].aid,
 		this->ll.sec[this->ll.fw_sec_idx].apos,
 		this->ll.sec[this->ll.fw_sec_idx].alen,
 		this->ll.sec[this->ll.fw_sec_idx].bid,
 		this->ll.sec[this->ll.fw_sec_idx].bpos,
-		this->ll.sec[this->ll.fw_sec_idx].blen);
+		this->ll.sec[this->ll.fw_sec_idx].blen,
+		plen);
 
 	/* update rsidx */
 	_store_v2i32(&this->ll.asidx, idx);
+
+	/* update path and rem */
+	this->ll.spath = this->ll.fw_path;
+	this->ll.srem = this->ll.fw_rem;
 
 	/* windback pointer */
 	this->ll.fw_sec_idx--;
@@ -2391,21 +2406,36 @@ void trace_reverse_push(
 	v2i32_t idx = _load_v2i32(&this->ll.aidx);
 	v2i32_t sidx = _load_v2i32(&this->ll.asidx);
 
+	/* calc path pos and len */
+	int64_t plen = 32 * (this->ll.rv_path - this->ll.spath)
+		+ (this->ll.rv_rem - this->ll.srem);
+	int64_t ppos = this->ll.pspos;
+
 	/* store revcomped section */
 	_store_v2i32(&this->ll.sec[this->ll.rv_sec_idx].aid, _xor_v2i32(id, mask));
 	_store_v2i32(&this->ll.sec[this->ll.rv_sec_idx].apos, _sub_v2i32(len, sidx));
 	_store_v2i32(&this->ll.sec[this->ll.rv_sec_idx].alen, _sub_v2i32(sidx, idx));
 
-	debug("push current section info a(%u, %u, %u), b(%u, %u, %u)",
+	/* store path length */
+	this->ll.sec[this->ll.rv_sec_idx].plen = plen;
+	this->ll.sec[this->ll.rv_sec_idx].ppos = ppos;
+
+	debug("push current section info a(%u, %u, %u), b(%u, %u, %u), pos(%lld), len(%lld)",
 		this->ll.sec[this->ll.rv_sec_idx].aid,
 		this->ll.sec[this->ll.rv_sec_idx].apos,
 		this->ll.sec[this->ll.rv_sec_idx].alen,
 		this->ll.sec[this->ll.rv_sec_idx].bid,
 		this->ll.sec[this->ll.rv_sec_idx].bpos,
-		this->ll.sec[this->ll.rv_sec_idx].blen);
+		this->ll.sec[this->ll.rv_sec_idx].blen,
+		ppos, plen);
 
 	/* update rsidx */
 	_store_v2i32(&this->ll.asidx, idx);
+
+	/* update path, rem, and pspos */
+	this->ll.spath = this->ll.rv_path;
+	this->ll.srem = this->ll.rv_rem;
+	this->ll.pspos = ppos + plen;
 
 	/* windback pointer */
 	this->ll.rv_sec_idx++;
@@ -2443,6 +2473,11 @@ void trace_generate_path(
 		(dir == TRACE_FORWARD) ? trace_forward_push : trace_reverse_push
 	);
 
+	/* initialize path length info */
+	this->ll.spath = (dir == TRACE_FORWARD) ? this->ll.fw_path : this->ll.rv_path;
+	this->ll.srem = 0;
+	this->ll.pspos = 0;
+
 	/* until the pointer reaches the root of the matrix */
 	while(this->ll.psum >= 0) {
 		/* update section info */
@@ -2460,6 +2495,59 @@ void trace_generate_path(
 		/* push section info to section array */
 		push(this);
 	}
+	return;
+}
+
+/**
+ * @fn trace_init_work
+ */
+static _force_inline
+void trace_init_work(
+	struct gaba_dp_context_s *this,
+	struct gaba_fill_s const *fw_tail,
+	struct gaba_fill_s const *rv_tail,
+	struct gaba_clip_params_s const *clip)
+{
+	/* calculate array lengths */
+	uint64_t ssum = _tail(fw_tail)->ssum + _tail(rv_tail)->ssum;
+	uint64_t psum = roundup(_tail(fw_tail)->psum + BLK, 32)
+				  + roundup(_tail(rv_tail)->psum + BLK, 32);
+
+	/* malloc trace working area */
+	uint64_t sec_len = 2 * ssum;
+	uint64_t path_len = roundup(psum / 32, sizeof(uint32_t));
+	debug("psum(%lld), path_len(%llu), sec_len(%llu)", psum, path_len, sec_len);
+
+	/* malloc pointer */
+	uint64_t path_size = sizeof(uint32_t) * path_len;
+	uint64_t sec_size = sizeof(struct gaba_path_section_s) * sec_len;
+	struct gaba_result_s *res = (struct gaba_result_s *)(gaba_dp_malloc(this,
+		  sizeof(struct gaba_result_s) + path_size + sec_size
+		+ this->head_margin + this->tail_margin) + this->head_margin
+		+ sizeof(uint64_t));
+
+	/* set section array info */
+	struct gaba_path_section_s *sec_base = (struct gaba_path_section_s *)(res + 1);
+	this->ll.sec = sec_base;
+	this->ll.fw_sec_idx = sec_len - 1;
+	this->ll.rv_sec_idx = 0;
+	this->ll.tail_sec_idx = sec_len - 1;
+
+	/* set path array info */
+	this->ll.fw_rem = 0;
+	this->ll.rv_rem = 0;
+
+	uint32_t *path_base = (uint32_t *)&sec_base[sec_len];
+	this->ll.fw_path = path_base + path_len - 1;
+	this->ll.rv_path = path_base;
+	this->ll.tail_path = path_base + path_len - 1;
+
+	/* clear path array */
+	this->ll.fw_path[0] = 0;
+	this->ll.fw_path[1] = 0x01;			/* terminator */
+	this->ll.fw_path[2] = 0;
+	this->ll.rv_path[0] = 0;
+
 	return;
 }
 
@@ -2489,13 +2577,22 @@ struct gaba_result_s *trace_concatenate_path(
 	res->slen = this->ll.rv_sec_idx + (this->ll.tail_sec_idx - this->ll.fw_sec_idx);
 	res->reserved = this->head_margin;		/* use reserved */
 
-	/* copy forward section */
+	/* load section pointers */
 	struct gaba_path_section_s *fw_sec = this->ll.sec + this->ll.fw_sec_idx;
 	struct gaba_path_section_s *rv_sec = this->ll.sec + this->ll.rv_sec_idx;
 	struct gaba_path_section_s *tail_sec = this->ll.sec + this->ll.tail_sec_idx;
+	
+	/* load base path pos */
+	uint32_t ppos = this->ll.pspos;
+
+	/* copy forward section */
 	while(fw_sec < tail_sec) {
-		*rv_sec++ = *++fw_sec;
-		debug("copy forward section");
+		*rv_sec = *++fw_sec;
+
+		/* update pos */
+		rv_sec++->ppos = ppos;
+		ppos += fw_sec->plen;
+		debug("copy forward section, ppos(%u)", ppos);
 	}
 
 	/* push forward path and update rem */
@@ -2567,45 +2664,8 @@ struct gaba_result_s *gaba_dp_trace(
 	fw_tail = (fw_tail == NULL) ? _fill(&this->tail) : fw_tail;
 	rv_tail = (rv_tail == NULL) ? _fill(&this->tail) : rv_tail;
 
-	/* calculate array lengths */
-	uint64_t ssum = _tail(fw_tail)->ssum + _tail(rv_tail)->ssum;
-	uint64_t psum = roundup(_tail(fw_tail)->psum + BLK, 32)
-				  + roundup(_tail(rv_tail)->psum + BLK, 32);
-
-	/* malloc trace working area */
-	uint64_t sec_len = 2 * ssum;
-	uint64_t path_len = roundup(psum / 32, sizeof(uint32_t));
-	debug("psum(%lld), path_len(%llu), sec_len(%llu)", psum, path_len, sec_len);
-
-	/* malloc pointer */
-	uint64_t path_size = sizeof(uint32_t) * path_len;
-	uint64_t sec_size = sizeof(struct gaba_path_section_s) * sec_len;
-	struct gaba_result_s *res = (struct gaba_result_s *)(gaba_dp_malloc(this,
-		  sizeof(struct gaba_result_s) + path_size + sec_size
-		+ this->head_margin + this->tail_margin) + this->head_margin
-		+ sizeof(uint64_t));
-
-	/* set section array info */
-	struct gaba_path_section_s *sec_base = (struct gaba_path_section_s *)(res + 1);
-	this->ll.sec = sec_base;
-	this->ll.fw_sec_idx = sec_len - 1;
-	this->ll.rv_sec_idx = 0;
-	this->ll.tail_sec_idx = sec_len - 1;
-
-	/* set path array info */
-	this->ll.fw_rem = 0;
-	this->ll.rv_rem = 0;
-
-	uint32_t *path_base = (uint32_t *)&sec_base[sec_len];
-	this->ll.fw_path = path_base + path_len - 1;
-	this->ll.rv_path = path_base;
-	this->ll.tail_path = path_base + path_len - 1;
-
-	/* clear path array */
-	this->ll.fw_path[0] = 0;
-	this->ll.fw_path[1] = 0x01;			/* terminator */
-	this->ll.fw_path[2] = 0;
-	this->ll.rv_path[0] = 0;
+	/* init */
+	trace_init_work(this, fw_tail, rv_tail, clip);
 
 	/* forward trace */
 	trace_generate_path(this, _tail(fw_tail), TRACE_FORWARD);
@@ -3581,18 +3641,21 @@ int check_cigar(
 	(p + 1); \
 })
 #define print_path(_r)			"%s", decode_path(_r)
-#define check_section(_s, _a, _apos, _alen, _b, _bpos, _blen) ( \
+#define check_section(_s, _a, _apos, _alen, _b, _bpos, _blen, _ppos, _plen) ( \
 	   (_s).aid == (_a).id \
 	&& (_s).apos == (_apos) \
 	&& (_s).alen == (_alen) \
 	&& (_s).bid == (_b).id \
 	&& (_s).bpos == (_bpos) \
 	&& (_s).blen == (_blen) \
+	&& (_s).ppos == (_ppos) \
+	&& (_s).plen == (_plen) \
 )
 #define print_section(_s) \
-	"a(%u), apos(%u), alen(%u), b(%u), bpos(%u), blen(%u)", \
+	"a(%u), apos(%u), alen(%u), b(%u), bpos(%u), blen(%u), ppos(%u), plen(%u)", \
 	(_s).aid, (_s).apos, (_s).alen, \
-	(_s).bid, (_s).bpos, (_s).blen
+	(_s).bid, (_s).bpos, (_s).blen, \
+	(_s).ppos, (_s).plen
 
 /* global configuration of the tests */
 unittest_config(
@@ -3923,26 +3986,26 @@ unittest(with_seq_pair("A", "A"))
 	assert(check_result(r, 4, 4, 28, 2), print_result(r));
 	assert(check_path(r, "DRDR"), print_path(r));
 	assert(check_cigar(r, "2M"), print_path(r));
-	assert(check_section(r->sec[0], s->afsec, 0, 1, s->bfsec, 0, 1), print_section(r->sec[0]));
-	assert(check_section(r->sec[1], s->afsec, 0, 1, s->bfsec, 0, 1), print_section(r->sec[1]));
+	assert(check_section(r->sec[0], s->afsec, 0, 1, s->bfsec, 0, 1, 0, 2), print_section(r->sec[0]));
+	assert(check_section(r->sec[1], s->afsec, 0, 1, s->bfsec, 0, 1, 2, 2), print_section(r->sec[1]));
 
 	/* reverse-only traceback */
 	r = gaba_dp_trace(d, NULL, f, NULL);
 	assert(check_result(r, 4, 4, 28, 2), print_result(r));
 	assert(check_path(r, "DRDR"), print_path(r));
 	assert(check_cigar(r, "2M"), print_path(r));
-	assert(check_section(r->sec[0], s->arsec, 0, 1, s->brsec, 0, 1), print_section(r->sec[0]));
-	assert(check_section(r->sec[1], s->arsec, 0, 1, s->brsec, 0, 1), print_section(r->sec[1]));
+	assert(check_section(r->sec[0], s->arsec, 0, 1, s->brsec, 0, 1, 0, 2), print_section(r->sec[0]));
+	assert(check_section(r->sec[1], s->arsec, 0, 1, s->brsec, 0, 1, 2, 2), print_section(r->sec[1]));
 
 	/* forward-reverse traceback */
 	r = gaba_dp_trace(d, f, f, NULL);
 	assert(check_result(r, 8, 8, 24, 4), print_result(r));
 	assert(check_path(r, "DRDRDRDR"), print_path(r));
 	assert(check_cigar(r, "4M"), print_path(r));
-	assert(check_section(r->sec[0], s->arsec, 0, 1, s->brsec, 0, 1), print_section(r->sec[0]));
-	assert(check_section(r->sec[1], s->arsec, 0, 1, s->brsec, 0, 1), print_section(r->sec[1]));
-	assert(check_section(r->sec[2], s->afsec, 0, 1, s->bfsec, 0, 1), print_section(r->sec[2]));
-	assert(check_section(r->sec[3], s->afsec, 0, 1, s->bfsec, 0, 1), print_section(r->sec[3]));
+	assert(check_section(r->sec[0], s->arsec, 0, 1, s->brsec, 0, 1, 0, 2), print_section(r->sec[0]));
+	assert(check_section(r->sec[1], s->arsec, 0, 1, s->brsec, 0, 1, 2, 2), print_section(r->sec[1]));
+	assert(check_section(r->sec[2], s->afsec, 0, 1, s->bfsec, 0, 1, 4, 2), print_section(r->sec[2]));
+	assert(check_section(r->sec[3], s->afsec, 0, 1, s->bfsec, 0, 1, 6, 2), print_section(r->sec[3]));
 
 	gaba_dp_clean(d);
 }
@@ -3962,16 +4025,16 @@ unittest(with_seq_pair("ACGTACGTACGT", "ACGTACGTACGT"))
 	assert(check_result(r, 48, 48, 16, 2), print_result(r));
 	assert(check_path(r, "DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"), print_path(r));
 	assert(check_cigar(r, "24M"), print_path(r));
-	assert(check_section(r->sec[0], s->afsec, 0, 12, s->bfsec, 0, 12), print_section(r->sec[0]));
-	assert(check_section(r->sec[1], s->afsec, 0, 12, s->bfsec, 0, 12), print_section(r->sec[1]));
+	assert(check_section(r->sec[0], s->afsec, 0, 12, s->bfsec, 0, 12, 0, 24), print_section(r->sec[0]));
+	assert(check_section(r->sec[1], s->afsec, 0, 12, s->bfsec, 0, 12, 24, 24), print_section(r->sec[1]));
 
 	/* rv */
 	r = gaba_dp_trace(d, NULL, f, NULL);
 	assert(check_result(r, 48, 48, 16, 2), print_result(r));
 	assert(check_path(r, "DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"), print_path(r));
 	assert(check_cigar(r, "24M"), print_path(r));
-	assert(check_section(r->sec[0], s->arsec, 0, 12, s->brsec, 0, 12), print_section(r->sec[0]));
-	assert(check_section(r->sec[1], s->arsec, 0, 12, s->brsec, 0, 12), print_section(r->sec[1]));
+	assert(check_section(r->sec[0], s->arsec, 0, 12, s->brsec, 0, 12, 0, 24), print_section(r->sec[0]));
+	assert(check_section(r->sec[1], s->arsec, 0, 12, s->brsec, 0, 12, 24, 24), print_section(r->sec[1]));
 
 	/* fw-rv */
 	r = gaba_dp_trace(d, f, f, NULL);
@@ -3981,10 +4044,10 @@ unittest(with_seq_pair("ACGTACGTACGT", "ACGTACGTACGT"))
 		"DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"),
 		print_path(r));
 	assert(check_cigar(r, "48M"), print_path(r));
-	assert(check_section(r->sec[0], s->arsec, 0, 12, s->brsec, 0, 12), print_section(r->sec[0]));
-	assert(check_section(r->sec[1], s->arsec, 0, 12, s->brsec, 0, 12), print_section(r->sec[1]));
-	assert(check_section(r->sec[2], s->afsec, 0, 12, s->bfsec, 0, 12), print_section(r->sec[2]));
-	assert(check_section(r->sec[3], s->afsec, 0, 12, s->bfsec, 0, 12), print_section(r->sec[3]));
+	assert(check_section(r->sec[0], s->arsec, 0, 12, s->brsec, 0, 12, 0, 24), print_section(r->sec[0]));
+	assert(check_section(r->sec[1], s->arsec, 0, 12, s->brsec, 0, 12, 24, 24), print_section(r->sec[1]));
+	assert(check_section(r->sec[2], s->afsec, 0, 12, s->bfsec, 0, 12, 48, 24), print_section(r->sec[2]));
+	assert(check_section(r->sec[3], s->afsec, 0, 12, s->bfsec, 0, 12, 72, 24), print_section(r->sec[3]));
 
 	gaba_dp_clean(d);
 }
@@ -4004,18 +4067,18 @@ unittest(with_seq_pair("GAAAAAAAA", "AAAAAAAA"))
 	assert(check_result(r, 22, 32, 0, 3), print_result(r));
 	assert(check_path(r, "DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"), print_path(r));
 	assert(check_cigar(r, "16M"), print_path(r));
-	assert(check_section(r->sec[0], s->afsec, 0, 8, s->bfsec, 0, 8), print_section(r->sec[0]));
-	assert(check_section(r->sec[1], s->afsec, 8, 1, s->bfsec, 0, 1), print_section(r->sec[1]));
-	assert(check_section(r->sec[2], s->afsec, 0, 7, s->bfsec, 1, 7), print_section(r->sec[2]));
+	assert(check_section(r->sec[0], s->afsec, 0, 8, s->bfsec, 0, 8, 0, 16), print_section(r->sec[0]));
+	assert(check_section(r->sec[1], s->afsec, 8, 1, s->bfsec, 0, 1, 16, 2), print_section(r->sec[1]));
+	assert(check_section(r->sec[2], s->afsec, 0, 7, s->bfsec, 1, 7, 18, 14), print_section(r->sec[2]));
 
 	/* rv */
 	r = gaba_dp_trace(d, NULL, f, NULL);
 	assert(check_result(r, 22, 32, 0, 3), print_result(r));
 	assert(check_path(r, "DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"), print_path(r));
 	assert(check_cigar(r, "16M"), print_path(r));
-	assert(check_section(r->sec[0], s->arsec, 2, 7, s->brsec, 0, 7), print_section(r->sec[0]));
-	assert(check_section(r->sec[1], s->arsec, 0, 1, s->brsec, 7, 1), print_section(r->sec[1]));
-	assert(check_section(r->sec[2], s->arsec, 1, 8, s->brsec, 0, 8), print_section(r->sec[2]));
+	assert(check_section(r->sec[0], s->arsec, 2, 7, s->brsec, 0, 7, 0, 14), print_section(r->sec[0]));
+	assert(check_section(r->sec[1], s->arsec, 0, 1, s->brsec, 7, 1, 14, 2), print_section(r->sec[1]));
+	assert(check_section(r->sec[2], s->arsec, 1, 8, s->brsec, 0, 8, 16, 16), print_section(r->sec[2]));
 
 	/* fw-rv */
 	r = gaba_dp_trace(d, f, f, NULL);
@@ -4025,12 +4088,12 @@ unittest(with_seq_pair("GAAAAAAAA", "AAAAAAAA"))
 		"DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"),
 		print_path(r));
 	assert(check_cigar(r, "32M"), print_path(r));
-	assert(check_section(r->sec[0], s->arsec, 2, 7, s->brsec, 0, 7), print_section(r->sec[0]));
-	assert(check_section(r->sec[1], s->arsec, 0, 1, s->brsec, 7, 1), print_section(r->sec[1]));
-	assert(check_section(r->sec[2], s->arsec, 1, 8, s->brsec, 0, 8), print_section(r->sec[2]));
-	assert(check_section(r->sec[3], s->afsec, 0, 8, s->bfsec, 0, 8), print_section(r->sec[3]));
-	assert(check_section(r->sec[4], s->afsec, 8, 1, s->bfsec, 0, 1), print_section(r->sec[4]));
-	assert(check_section(r->sec[5], s->afsec, 0, 7, s->bfsec, 1, 7), print_section(r->sec[5]));
+	assert(check_section(r->sec[0], s->arsec, 2, 7, s->brsec, 0, 7, 0, 14), print_section(r->sec[0]));
+	assert(check_section(r->sec[1], s->arsec, 0, 1, s->brsec, 7, 1, 14, 2), print_section(r->sec[1]));
+	assert(check_section(r->sec[2], s->arsec, 1, 8, s->brsec, 0, 8, 16, 16), print_section(r->sec[2]));
+	assert(check_section(r->sec[3], s->afsec, 0, 8, s->bfsec, 0, 8, 32, 16), print_section(r->sec[3]));
+	assert(check_section(r->sec[4], s->afsec, 8, 1, s->bfsec, 0, 1, 48, 2), print_section(r->sec[4]));
+	assert(check_section(r->sec[5], s->afsec, 0, 7, s->bfsec, 1, 7, 50, 14), print_section(r->sec[5]));
 
 	gaba_dp_clean(d);
 }
@@ -4051,18 +4114,18 @@ unittest(with_seq_pair("TTTTTTTT", "CTTTTTTTT"))
 	assert(check_result(r, 22, 32, 0, 3), print_result(r));
 	assert(check_path(r, "DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"), print_path(r));
 	assert(check_cigar(r, "16M"), print_path(r));
-	assert(check_section(r->sec[0], s->afsec, 0, 8, s->bfsec, 0, 8), print_section(r->sec[0]));
-	assert(check_section(r->sec[1], s->afsec, 0, 1, s->bfsec, 8, 1), print_section(r->sec[1]));
-	assert(check_section(r->sec[2], s->afsec, 1, 7, s->bfsec, 0, 7), print_section(r->sec[2]));
+	assert(check_section(r->sec[0], s->afsec, 0, 8, s->bfsec, 0, 8, 0, 16), print_section(r->sec[0]));
+	assert(check_section(r->sec[1], s->afsec, 0, 1, s->bfsec, 8, 1, 16, 2), print_section(r->sec[1]));
+	assert(check_section(r->sec[2], s->afsec, 1, 7, s->bfsec, 0, 7, 18, 14), print_section(r->sec[2]));
 
 	/* rv */
 	r = gaba_dp_trace(d, NULL, f, NULL);
 	assert(check_result(r, 22, 32, 0, 3), print_result(r));
 	assert(check_path(r, "DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"), print_path(r));
 	assert(check_cigar(r, "16M"), print_path(r));
-	assert(check_section(r->sec[0], s->arsec, 0, 7, s->brsec, 2, 7), print_section(r->sec[0]));
-	assert(check_section(r->sec[1], s->arsec, 7, 1, s->brsec, 0, 1), print_section(r->sec[1]));
-	assert(check_section(r->sec[2], s->arsec, 0, 8, s->brsec, 1, 8), print_section(r->sec[2]));
+	assert(check_section(r->sec[0], s->arsec, 0, 7, s->brsec, 2, 7, 0, 14), print_section(r->sec[0]));
+	assert(check_section(r->sec[1], s->arsec, 7, 1, s->brsec, 0, 1, 14, 2), print_section(r->sec[1]));
+	assert(check_section(r->sec[2], s->arsec, 0, 8, s->brsec, 1, 8, 16, 16), print_section(r->sec[2]));
 
 	/* fw-rv */
 	r = gaba_dp_trace(d, f, f, NULL);
@@ -4071,12 +4134,12 @@ unittest(with_seq_pair("TTTTTTTT", "CTTTTTTTT"))
 		"DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"
 		"DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"), print_path(r));
 	assert(check_cigar(r, "32M"), print_path(r));
-	assert(check_section(r->sec[0], s->arsec, 0, 7, s->brsec, 2, 7), print_section(r->sec[0]));
-	assert(check_section(r->sec[1], s->arsec, 7, 1, s->brsec, 0, 1), print_section(r->sec[1]));
-	assert(check_section(r->sec[2], s->arsec, 0, 8, s->brsec, 1, 8), print_section(r->sec[2]));
-	assert(check_section(r->sec[3], s->afsec, 0, 8, s->bfsec, 0, 8), print_section(r->sec[3]));
-	assert(check_section(r->sec[4], s->afsec, 0, 1, s->bfsec, 8, 1), print_section(r->sec[4]));
-	assert(check_section(r->sec[5], s->afsec, 1, 7, s->bfsec, 0, 7), print_section(r->sec[5]));
+	assert(check_section(r->sec[0], s->arsec, 0, 7, s->brsec, 2, 7, 0, 14), print_section(r->sec[0]));
+	assert(check_section(r->sec[1], s->arsec, 7, 1, s->brsec, 0, 1, 14, 2), print_section(r->sec[1]));
+	assert(check_section(r->sec[2], s->arsec, 0, 8, s->brsec, 1, 8, 16, 16), print_section(r->sec[2]));
+	assert(check_section(r->sec[3], s->afsec, 0, 8, s->bfsec, 0, 8, 32, 16), print_section(r->sec[3]));
+	assert(check_section(r->sec[4], s->afsec, 0, 1, s->bfsec, 8, 1, 48, 2), print_section(r->sec[4]));
+	assert(check_section(r->sec[5], s->afsec, 1, 7, s->bfsec, 0, 7, 50, 14), print_section(r->sec[5]));
 
 	gaba_dp_clean(d);
 }
@@ -4096,16 +4159,16 @@ unittest(with_seq_pair("GACGTACGT", "ACGTACGT"))
 	assert(check_result(r, 20, 34, 30, 2), print_result(r));
 	assert(check_path(r, "RDRDRDRDRDRDRDRDRRDRDRDRDRDRDRDRDR"), print_path(r));
 	assert(check_cigar(r, "1D8M1D8M"), print_path(r));
-	assert(check_section(r->sec[0], s->afsec, 0, 9, s->bfsec, 0, 8), print_section(r->sec[0]));
-	assert(check_section(r->sec[1], s->afsec, 0, 9, s->bfsec, 0, 8), print_section(r->sec[1]));
+	assert(check_section(r->sec[0], s->afsec, 0, 9, s->bfsec, 0, 8, 0, 17), print_section(r->sec[0]));
+	assert(check_section(r->sec[1], s->afsec, 0, 9, s->bfsec, 0, 8, 17, 17), print_section(r->sec[1]));
 
 	/* rv */
 	r = gaba_dp_trace(d, NULL, f, NULL);
 	assert(check_result(r, 20, 34, 30, 2), print_result(r));
 	assert(check_path(r, "DRDRDRDRDRDRDRDRRDRDRDRDRDRDRDRDRR"), print_path(r));
 	assert(check_cigar(r, "8M1D8M1D"), print_path(r));
-	assert(check_section(r->sec[0], s->arsec, 0, 9, s->brsec, 0, 8), print_section(r->sec[0]));
-	assert(check_section(r->sec[1], s->arsec, 0, 9, s->brsec, 0, 8), print_section(r->sec[1]));
+	assert(check_section(r->sec[0], s->arsec, 0, 9, s->brsec, 0, 8, 0, 17), print_section(r->sec[0]));
+	assert(check_section(r->sec[1], s->arsec, 0, 9, s->brsec, 0, 8, 17, 17), print_section(r->sec[1]));
 
 	/* fw-rv */
 	r = gaba_dp_trace(d, f, f, NULL);
@@ -4115,10 +4178,10 @@ unittest(with_seq_pair("GACGTACGT", "ACGTACGT"))
 		"DRDRDRDRDRDRDRDRRDRDRDRDRDRDRDRDRR"
 		"RDRDRDRDRDRDRDRDRRDRDRDRDRDRDRDRDR"), print_path(r));
 	assert(check_cigar(r, "8M1D8M2D8M1D8M"), print_path(r));
-	assert(check_section(r->sec[0], s->arsec, 0, 9, s->brsec, 0, 8), print_section(r->sec[0]));
-	assert(check_section(r->sec[1], s->arsec, 0, 9, s->brsec, 0, 8), print_section(r->sec[1]));
-	assert(check_section(r->sec[2], s->afsec, 0, 9, s->bfsec, 0, 8), print_section(r->sec[2]));
-	assert(check_section(r->sec[3], s->afsec, 0, 9, s->bfsec, 0, 8), print_section(r->sec[3]));
+	assert(check_section(r->sec[0], s->arsec, 0, 9, s->brsec, 0, 8, 0, 17), print_section(r->sec[0]));
+	assert(check_section(r->sec[1], s->arsec, 0, 9, s->brsec, 0, 8, 17, 17), print_section(r->sec[1]));
+	assert(check_section(r->sec[2], s->afsec, 0, 9, s->bfsec, 0, 8, 34, 17), print_section(r->sec[2]));
+	assert(check_section(r->sec[3], s->afsec, 0, 9, s->bfsec, 0, 8, 51, 17), print_section(r->sec[3]));
 
 	gaba_dp_clean(d);
 }
@@ -4139,16 +4202,16 @@ unittest(with_seq_pair("ACGTACGT", "GACGTACGT"))
 	assert(check_result(r, 20, 34, 30, 2), print_result(r));
 	assert(check_path(r, "DDRDRDRDRDRDRDRDRDDRDRDRDRDRDRDRDR"), print_path(r));
 	assert(check_cigar(r, "1I8M1I8M"), print_path(r));
-	assert(check_section(r->sec[0], s->afsec, 0, 8, s->bfsec, 0, 9), print_section(r->sec[0]));
-	assert(check_section(r->sec[1], s->afsec, 0, 8, s->bfsec, 0, 9), print_section(r->sec[1]));
+	assert(check_section(r->sec[0], s->afsec, 0, 8, s->bfsec, 0, 9, 0, 17), print_section(r->sec[0]));
+	assert(check_section(r->sec[1], s->afsec, 0, 8, s->bfsec, 0, 9, 17, 17), print_section(r->sec[1]));
 
 	/* rv */
 	r = gaba_dp_trace(d, NULL, f, NULL);
 	assert(check_result(r, 20, 34, 30, 2), print_result(r));
 	assert(check_path(r, "DRDRDRDRDRDRDRDRDDRDRDRDRDRDRDRDRD"), print_path(r));
 	assert(check_cigar(r, "8M1I8M1I"), print_path(r));
-	assert(check_section(r->sec[0], s->arsec, 0, 8, s->brsec, 0, 9), print_section(r->sec[0]));
-	assert(check_section(r->sec[1], s->arsec, 0, 8, s->brsec, 0, 9), print_section(r->sec[1]));
+	assert(check_section(r->sec[0], s->arsec, 0, 8, s->brsec, 0, 9, 0, 17), print_section(r->sec[0]));
+	assert(check_section(r->sec[1], s->arsec, 0, 8, s->brsec, 0, 9, 17, 17), print_section(r->sec[1]));
 
 	/* fw-rv */
 	r = gaba_dp_trace(d, f, f, NULL);
@@ -4157,10 +4220,10 @@ unittest(with_seq_pair("ACGTACGT", "GACGTACGT"))
 		"DRDRDRDRDRDRDRDRDDRDRDRDRDRDRDRDRD"
 		"DDRDRDRDRDRDRDRDRDDRDRDRDRDRDRDRDR"), print_path(r));
 	assert(check_cigar(r, "8M1I8M2I8M1I8M"), print_path(r));
-	assert(check_section(r->sec[0], s->arsec, 0, 8, s->brsec, 0, 9), print_section(r->sec[0]));
-	assert(check_section(r->sec[1], s->arsec, 0, 8, s->brsec, 0, 9), print_section(r->sec[1]));
-	assert(check_section(r->sec[2], s->afsec, 0, 8, s->bfsec, 0, 9), print_section(r->sec[2]));
-	assert(check_section(r->sec[3], s->afsec, 0, 8, s->bfsec, 0, 9), print_section(r->sec[3]));
+	assert(check_section(r->sec[0], s->arsec, 0, 8, s->brsec, 0, 9, 0, 17), print_section(r->sec[0]));
+	assert(check_section(r->sec[1], s->arsec, 0, 8, s->brsec, 0, 9, 17, 17), print_section(r->sec[1]));
+	assert(check_section(r->sec[2], s->afsec, 0, 8, s->bfsec, 0, 9, 34, 17), print_section(r->sec[2]));
+	assert(check_section(r->sec[3], s->afsec, 0, 8, s->bfsec, 0, 9, 51, 17), print_section(r->sec[3]));
 
 	gaba_dp_clean(d);
 }
