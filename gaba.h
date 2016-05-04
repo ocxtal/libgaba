@@ -213,7 +213,7 @@ typedef struct gaba_path_section_s gaba_path_section_t;
  */
 struct gaba_path_s {
 	uint32_t len;				/** (4) path length (= array bit length) */
-	uint32_t rem;				/** (4) remainder at the head of the path */
+	uint32_t offset;			/** (4) offset at the head of the path */
 	uint32_t array[];			/** () path array */
 };
 typedef struct gaba_path_s gaba_path_t;
