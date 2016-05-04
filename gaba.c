@@ -244,22 +244,6 @@ void fill_load_section(
 	return;
 }
 
-#if 0
-/**
- * @fn fill_store_section
- */
-static _force_inline
-struct gaba_joint_tail_s *fill_store_section(
-	struct gaba_joint_tail_s *tail,
-	struct gaba_section_s const *a,
-	struct gaba_section_s const *b)
-{
-	_store_v2i64(&tail->a, _loadu_v2i64(a));
-	_store_v2i64(&tail->b, _loadu_v2i64(b));
-	return(tail);
-}
-#endif
-
 /**
  * @struct gaba_joint_block_s
  * @brief result container for block fill functions
@@ -283,7 +267,6 @@ void fill_load_seq_a(
 		if(pos < this->rr.alim) {
 			debug("reverse fetch a: pos(%p), len(%llu)", pos, len);
 			/* reverse fetch: 2 * alen - (2 * alen - pos) + (len - 32) */
-			// vec_t a = _loadu(this->rr.p.a + pos + (len - BW));
 			vec_t a = _loadu(pos + (len - BW));
 			_print(a);
 			_print(_swap(a));
@@ -294,7 +277,6 @@ void fill_load_seq_a(
 			vec_t const mask = _set(0x03);
 
 			/* forward fetch: 2 * alen - pos */
-			// vec_t a = _loadu(this->rr.p.a + rev(pos, this->rr.alim));
 			vec_t a = _loadu(rev(pos, this->rr.alim));
 			_storeu(_rd_bufa(this, BW, len), _xor(a, mask));
 		}
@@ -302,7 +284,6 @@ void fill_load_seq_a(
 		if(pos < this->rr.alim) {
 			debug("reverse fetch a: pos(%p), len(%llu)", pos, len);
 			/* reverse fetch: 2 * alen - (2 * alen - pos) + (len - 32) */
-			// vec_t a = _loadu(this->rr.p.a + pos + (len - BW));
 			vec_t a = _loadu(pos + (len - BW));
 			_print(a);
 			_print(_swap(a));
@@ -317,7 +298,6 @@ void fill_load_seq_a(
 			vec_t const cv = _bc_v16i8(_load_v16i8(comp));
 
 			/* forward fetch: 2 * alen - pos */
-			// vec_t a = _loadu(this->rr.p.a + rev(pos, this->rr.alim));
 			vec_t a = _loadu(rev(pos, this->rr.alim));
 			_storeu(_rd_bufa(this, BW, len), _shuf(a, cv));
 		}
@@ -341,13 +321,11 @@ void fill_load_seq_b(
 			vec_t const mask = _set(0x03);
 
 			/* forward fetch: pos */
-			// vec_t b = _loadu(this->rr.p.b + pos);
 			vec_t b = _loadu(pos);
 			_storeu(_rd_bufb(this, BW, len), _xor(_shl(b, 2), mask));
 		} else {
 			debug("reverse fetch b: pos(%p), len(%llu)", pos, len);
 			/* reverse fetch: 2 * blen - pos + (len - 32) */
-			// vec_t b = _loadu(this->rr.p.b + rev(pos, this->rr.blim) + (len - BW));
 			vec_t b = _loadu(rev(pos, this->rr.blim) + (len - BW));
 			_print(b);
 			_print(_shl(_swap(b), 2));
@@ -357,7 +335,6 @@ void fill_load_seq_b(
 		if(pos < this->rr.blim) {
 			debug("forward fetch b: pos(%p), len(%llu)", pos, len);
 			/* forward fetch: pos */
-			// vec_t b = _loadu(this->rr.p.b + pos);
 			vec_t b = _loadu(pos);
 			_storeu(_rd_bufb(this, BW, len), b);
 		} else {
@@ -370,7 +347,6 @@ void fill_load_seq_b(
 			vec_t const cv = _bc_v16i8(_load_v16i8(comp));
 
 			/* reverse fetch: 2 * blen - pos + (len - 32) */
-			// vec_t b = _loadu(this->rr.p.b + rev(pos, this->rr.blim) + (len - BW));
 			vec_t b = _loadu(rev(pos, this->rr.blim) + (len - BW));
 			_storeu(_rd_bufb(this, BW, len), _shuf(_swap(b), cv));
 		}
@@ -797,9 +773,7 @@ struct gaba_joint_tail_s *fill_create_tail(
  */
 #define _fill_update_delta(_op, _vector, _offset, _sign) { \
 	delta = _op(delta, _add(_vector, _offset)); \
-	/*_print(delta);*/ \
 	max = _max(max, delta); \
-	/*_print(max);*/ \
 	_dir_update(dir, _vector, _sign); \
 	_print_v32i16(_add_v32i16(_set_v32i16(offset), _add_v32i16(_cvt_v32i8_v32i16(delta), _load_v32i16(_last_block(&this->tail)->md)))); \
 	_print_v32i16(_add_v32i16(_set_v32i16(offset), _add_v32i16(_cvt_v32i8_v32i16(max), _load_v32i16(_last_block(&this->tail)->md)))); \
@@ -1542,9 +1516,6 @@ struct gaba_fill_s *gaba_dp_fill_root(
 	/* store section info */
 	this->tail.apos = apos;
 	this->tail.bpos = bpos;
-	// _store_v2i64(&this->tail->a, _loadu_v2i64(a));
-	// _store_v2i64(&this->tail->b, _loadu_v2i64(b));
-
 	return(_fill(fill_section_seq_bounded(this, &this->tail, a, b)));
 }
 
@@ -2065,9 +2036,6 @@ void trace_load_section_b(
  */
 #define _trace_bulk_update_index() { \
 	int32_t bcnt = popcnt(path_array); \
-	/*idx = _sub_v2i32(idx, _sub_v2i32(*/ \
-		/*_load_v2i32(&(blk - 1)->aridx),*/ \
-		/*_load_v2i32(&blk->aridx)));*/ \
 	idx = _sub_v2i32(idx, _seta_v2i32(bcnt, BLK - bcnt)); \
 	debug("bulk update index p(%lld)", p); \
 	_print_v2i32(idx); \
@@ -2789,7 +2757,6 @@ int64_t parse_cigar_print_file(
 	/* convert path to uint64_t pointer */
 	uint64_t const *p = (uint64_t const *)((uint64_t)path & ~(sizeof(uint64_t) - 1));
 	int64_t lim = offset + (((uint64_t)path & sizeof(uint32_t)) ? 32 : 0) + len;
-	// int64_t lim = roundup(len, 64);
 	int64_t ridx = len;
 
 	debug("path(%p), lim(%lld), ridx(%lld)", p, lim, ridx);
@@ -2827,7 +2794,6 @@ int64_t parse_cigar_print_buf(
 	/* convert path to uint64_t pointer */
 	uint64_t const *p = (uint64_t const *)((uint64_t)path & ~(sizeof(uint64_t) - 1));
 	int64_t lim = offset + (((uint64_t)path & sizeof(uint32_t)) ? 32 : 0) + len;
-	// int64_t lim = roundup(len, 64);
 	int64_t ridx = len;
 
 	debug("path(%p), lim(%lld), ridx(%lld)", p, lim, ridx);
@@ -3037,8 +3003,6 @@ struct gaba_diff_vec_s gaba_init_create_diff_vectors(
 		dv[i] = raise_dv;
 		dv[BW/2 + i] = drop_dv;
 	}
- 	// dh[BW/2-1] += gih;
- 	// dv[BW/2] += giv;
  	dh[BW/2] = raise_dh - gih;
  	dv[BW/2] = raise_dv - giv;
 
@@ -3051,13 +3015,6 @@ struct gaba_diff_vec_s gaba_init_create_diff_vectors(
  	}
  	de[BW/2] = drop_de;
  	df[BW/2] = drop_df;
-
- 	/* negate dh */
- 	#if 0
- 	for(int i = 0; i < BW; i++) {
- 		dh[i] = -dh[i];
- 	}
- 	#endif
 
  	vec_t _dh = _load(dh);
  	vec_t _dv = _load(dv);
@@ -3365,8 +3322,6 @@ void *unittest_build_context(void *params)
 
 	/* build context */
 	gaba_t *ctx = gaba_init(GABA_PARAMS(
-		// .seq_a_direction = GABA_FW_ONLY,
-		// .seq_b_direction = GABA_FW_ONLY,
 		.xdrop = 100,
 		.score_matrix = score));
 	return((void *)ctx);
@@ -3688,8 +3643,6 @@ unittest(with_seq_pair("A", "A"))
 			((char const [22]){ 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, '\0' }),
 			22) == 0, "%s", (char const *)s->b);
 	#endif
-	// assert(strcmp(s->a, "AGGGGGGGGGGGGGGGGGGGG") == 0, "%s", s->a);
-	// assert(strcmp(s->b, "ACCCCCCCCCCCCCCCCCCCC") == 0, "%s", s->b);
 	assert(s->alen == 21, "%llu", s->alen);
 	assert(s->blen == 21, "%llu", s->blen);
 
@@ -4259,7 +4212,6 @@ struct unittest_naive_result_s unittest_naive(
 	#define s(p, q)		_a(p, 3*(q), alen)
 	#define e(p, q)		_a(p, 3*(q)+1, alen)
 	#define f(p, q)		_a(p, 3*(q)+2, alen)
-	// #define s(p, q)		( (a[(p) - 1] == b[(q) - 1]) ? m : x )
 	#define m(p, q)		( \
 		sc->score_sub \
 			[unittest_naive_encode(a[(p) - 1])] \
