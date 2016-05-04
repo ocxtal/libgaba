@@ -2641,7 +2641,7 @@ struct gaba_result_s *gaba_dp_trace(
 
 	/* clear path array */
 	this->ll.fw_path[0] = 0;
-	this->ll.fw_path[1] = 0;
+	this->ll.fw_path[1] = 0x01;
 	this->ll.fw_path[2] = 0;
 	this->ll.rv_path[0] = 0;
 
@@ -2681,11 +2681,11 @@ union parse_cigar_table_u {
 };
 
 /**
- * @fn parse_get_cigar
+ * @fn parse_get_cigar_elem
  * @brief get cigar element of length i
  */
 static _force_inline
-union parse_cigar_table_u parse_get_cigar(
+union parse_cigar_table_u parse_get_cigar_elem(
 	uint8_t i)
 {
 	#define e(_str) { \
@@ -2722,7 +2722,7 @@ int64_t parse_print_match_string(
 	int64_t len)
 {
 	if(len < 64) {
-		union parse_cigar_table_u c = parse_get_cigar(len);
+		union parse_cigar_table_u c = parse_get_cigar_elem(len);
 		*((uint32_t *)buf) = c.all;
 		*((uint16_t *)(buf + c.table.len - 1)) = 'M';
 		return(c.table.len);
@@ -2745,7 +2745,7 @@ int64_t parse_print_gap_string(
 	uint16_t gap_ch = 'D' + ((uint16_t)mask & ('I' - 'D'));
 
 	if(len < 64) {
-		union parse_cigar_table_u c = parse_get_cigar(len);
+		union parse_cigar_table_u c = parse_get_cigar_elem(len);
 		*((uint32_t *)buf) = c.all;
 		*((uint16_t *)(buf + c.table.len - 1)) = gap_ch;
 		return(c.table.len);
@@ -2770,6 +2770,7 @@ int64_t parse_print_gap_string(
 	uint64_t _a = (_arr); \
 	uint64_t mask = 0ULL - (_a & 0x01); \
 	int64_t gc = tzcnt(_a ^ mask) + (int64_t)mask; \
+	debug("arr(%llx), mask(%llx), gc(%lld)", _a, mask, gc); \
 	gc; \
 })
 
@@ -2780,15 +2781,15 @@ int64_t parse_print_gap_string(
 int64_t parse_cigar_print_file(
 	FILE *fp,
 	uint32_t const *path,
-	uint32_t rem,
+	uint32_t offset,
 	int64_t len)
 {
 	int64_t clen = 0;
 
 	/* convert path to uint64_t pointer */
 	uint64_t const *p = (uint64_t const *)((uint64_t)path & ~(sizeof(uint64_t) - 1));
-	// int64_t lim = rem + (((uint64_t)path & sizeof(uint32_t)) ? 32 : 0) + len;
-	int64_t lim = roundup(len, 64);
+	int64_t lim = offset + (((uint64_t)path & sizeof(uint32_t)) ? 32 : 0) + len;
+	// int64_t lim = roundup(len, 64);
 	int64_t ridx = len;
 
 	debug("path(%p), lim(%lld), ridx(%lld)", p, lim, ridx);
@@ -2835,6 +2836,7 @@ int64_t parse_cigar_print_buf(
 		int64_t rsidx = ridx;
 		while(1) {
 			int64_t a = MIN2(_parse_count_match(parse_load_uint64(p, lim - ridx)), ridx & ~0x01);
+			debug("a(%lld), ridx(%lld), ridx&~0x01(%lld)", a, ridx, ridx & ~0x01);
 			if(a < 64) { ridx -= a; break; }
 			ridx -= 64;
 		}
@@ -3600,8 +3602,10 @@ int check_cigar(
 	char buf[1024];
 
 	debug("path(%x), rem(%u), len(%u)", res->path->array[0], res->path->offset, res->path->len);
+
 	int64_t l = parse_cigar_print_buf(buf,
 		res->path->array, res->path->offset, res->path->len);
+
 	debug("cigar(%s)", buf);
 
 	/* first check length */
