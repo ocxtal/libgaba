@@ -2696,8 +2696,9 @@ uint64_t parse_load_uint64(
  */
 union parse_cigar_table_u {
 	struct parse_cigar_table_s {
-		char str[3];
+		char str[2];
 		uint8_t len;
+		uint8_t adv;
 	} table;
 	uint32_t all;
 };
@@ -2713,14 +2714,14 @@ union parse_cigar_table_u parse_get_cigar_elem(
 	#define e(_str) { \
 		.str = { \
 			[0] = (_str)[0], \
-			[1] = (strlen(_str) > 0) ? (_str)[1] : '\0', \
-			[2] = (strlen(_str) > 1) ? (_str)[2] : '\0', \
+			[1] = (_str)[1], \
 		}, \
-		.len = strlen(_str) + 1 \
+		.len = strlen(_str), \
+		.adv = strlen(_str) + 1 \
 	}
 	
 	struct parse_cigar_table_s const conv_table[64] = {
-		{ .str = { 0 }, .len = 0 },
+		{ .str = { 0 }, .len = 0, .adv = 0 },
 		/*e(""),*/ e("1"), e("2"), e("3"), e("4"), e("5"), e("6"), e("7"),
 		e("8"), e("9"), e("10"), e("11"), e("12"), e("13"), e("14"), e("15"),
 		e("16"), e("17"), e("18"), e("19"), e("20"), e("21"), e("22"), e("23"),
@@ -2746,8 +2747,8 @@ int64_t parse_print_match_string(
 	if(len < 64) {
 		union parse_cigar_table_u c = parse_get_cigar_elem(len);
 		*((uint32_t *)buf) = c.all;
-		*((uint16_t *)(buf + c.table.len - 1)) = 'M';
-		return(c.table.len);
+		*((uint16_t *)(buf + c.table.len)) = 'M';
+		return(c.table.adv);
 	} else {
 		int64_t l = sprintf(buf, "%lldM", len);
 		return(l);
@@ -2769,8 +2770,8 @@ int64_t parse_print_gap_string(
 	if(len < 64) {
 		union parse_cigar_table_u c = parse_get_cigar_elem(len);
 		*((uint32_t *)buf) = c.all;
-		*((uint16_t *)(buf + c.table.len - 1)) = gap_ch;
-		return(c.table.len);
+		*((uint16_t *)(buf + c.table.len)) = gap_ch;
+		return(c.table.adv);
 	} else {
 		int64_t l = sprintf(buf, "%lld%c", len, gap_ch);
 		return(l);
