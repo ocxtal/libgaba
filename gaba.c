@@ -2805,7 +2805,7 @@ int64_t gaba_dp_print_cigar(
 	FILE *fp,
 	uint32_t const *path,
 	uint32_t offset,
-	int64_t len)
+	uint32_t len)
 {
 	int64_t clen = 0;
 
@@ -2842,7 +2842,7 @@ int64_t gaba_dp_dump_cigar(
 	char *buf,
 	uint32_t const *path,
 	uint32_t offset,
-	int64_t len)
+	uint32_t len)
 {
 	char *sbuf = buf;
 
