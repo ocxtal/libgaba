@@ -336,6 +336,25 @@ gaba_result_t *gaba_dp_trace(
 	gaba_fill_t const *rv_tail,
 	gaba_clip_params_t const *clip);
 
+/**
+ * @fn gaba_dp_print_cigar
+ *
+ * @brief convert path string to cigar.
+ */
+int64_t gaba_dp_print_cigar(
+	FILE *fp,
+	uint32_t const *path,
+	uint32_t offset,
+	int64_t len);
+
+/**
+ * @fn gaba_dp_dump_cigar
+ */
+int64_t gaba_dp_dump_cigar(
+	char *buf,
+	uint32_t const *path,
+	uint32_t offset,
+	int64_t len);
 
 #endif  /* #ifndef _GABA_H_INCLUDED */
 
