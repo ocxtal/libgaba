@@ -130,12 +130,54 @@ struct ut_result_s {
 	int64_t fail;
 };
 
+struct ut_global_config_s;
+struct ut_group_config_s;
+struct ut_s;
+struct ut_result_s;
+struct ut_printer_s {
+	/* printers */
+	void (*global_header)(
+		struct ut_global_config_s const *gconf);
+	void (*global_footer)(
+		struct ut_global_config_s const *gconf);
+	void (*header)(
+		struct ut_global_config_s const *gconf,
+		struct ut_group_config_s const *config);
+	void (*footer)(
+		struct ut_global_config_s const *gconf,
+		struct ut_group_config_s const *config);
+
+	void (*failed)(
+		struct ut_global_config_s const *gconf,
+		struct ut_s const *info,
+		struct ut_group_config_s const *config,
+		int64_t line,
+		char const *func,
+		char const *expr,
+		char const *fmt,
+		...);
+
+	void (*result)(
+		struct ut_global_config_s const *gconf,
+		struct ut_group_config_s const *config,
+		struct ut_result_s const *result,
+		int64_t file_cnt);
+};
+
 /**
- * @struct ut_config_s
+ * @struct ut_global_config_s
+ */
+struct ut_global_config_s {
+	FILE *fp;
+	struct ut_printer_s printer;
+};
+
+/**
+ * @struct ut_group_config_s
  *
  * @brief unittest scope config
  */
-struct ut_config_s {
+struct ut_group_config_s {
 	/* internal use */
 	char const *file;
 	int64_t unique_id;
@@ -175,8 +217,9 @@ struct ut_s {
 	void (*fn)(
 		void *ctx,
 		void *gctx,
+		struct ut_global_config_s const *ut_gconf,
 		struct ut_s const *info,
-		struct ut_config_s const *config,
+		struct ut_group_config_s const *config,
 		struct ut_result_s *result);
 
 	/* environment setup and cleanup */
@@ -208,8 +251,9 @@ struct ut_s {
 	static void ut_build_name(ut_body_, UNITTEST_UNIQUE_ID, __LINE__)( \
 		void *ctx, \
 		void *gctx, \
+		struct ut_global_config_s const *ut_gconf, \
 		struct ut_s const *ut_info, \
-		struct ut_config_s const *ut_config, \
+		struct ut_group_config_s const *ut_config, \
 		struct ut_result_s *ut_result); \
 	static struct ut_s const ut_build_name(ut_info_, UNITTEST_UNIQUE_ID, __LINE__) = { \
 		.file = __FILE__, \
@@ -225,8 +269,9 @@ struct ut_s {
 	static void ut_build_name(ut_body_, UNITTEST_UNIQUE_ID, __LINE__)( \
 		void *ctx, \
 		void *gctx, \
+		struct ut_global_config_s const *ut_gconf, \
 		struct ut_s const *ut_info, \
-		struct ut_config_s const *ut_config, \
+		struct ut_group_config_s const *ut_config, \
 		struct ut_result_s *ut_result)
 
 /**
@@ -235,24 +280,23 @@ struct ut_s {
  * @brief scope configuration
  */
 #define unittest_config(...) \
-	static struct ut_config_s const ut_build_name(ut_config_, UNITTEST_UNIQUE_ID, __LINE__) = { \
+	static struct ut_group_config_s const ut_build_name(ut_config_, UNITTEST_UNIQUE_ID, __LINE__) = { \
 		.file = __FILE__, \
 		.line = __LINE__, \
 		.unique_id = UNITTEST_UNIQUE_ID, \
 		__VA_ARGS__ \
 	}; \
-	struct ut_config_s ut_build_name(ut_get_config_, UNITTEST_UNIQUE_ID, 0)(void) \
+	struct ut_group_config_s ut_build_name(ut_get_config_, UNITTEST_UNIQUE_ID, 0)(void) \
 	{ \
 		return(ut_build_name(ut_config_, UNITTEST_UNIQUE_ID, __LINE__)); \
 	}
 
-/**
- * assertion failed message printer
- */
-static inline
+/* assertion failed message printers */
+static
 void ut_print_assertion_failed(
+	struct ut_global_config_s const *gconf,
 	struct ut_s const *info,
-	struct ut_config_s const *config,
+	struct ut_group_config_s const *config,
 	int64_t line,
 	char const *func,
 	char const *expr,
@@ -262,7 +306,7 @@ void ut_print_assertion_failed(
 	va_list l;
 	va_start(l, fmt);
 
-	fprintf(stderr,
+	fprintf(gconf->fp,
 		ut_color(UT_YELLOW, "assertion failed") ": [%s] %s:" ut_color(UT_BLUE, "%" PRId64 "") " (%s) `" ut_color(UT_MAGENTA, "%s") "'",
 		ut_null_replace(config->name, "no name"),
 		ut_null_replace(info->file, "(unknown filename)"),
@@ -270,13 +314,190 @@ void ut_print_assertion_failed(
 		ut_null_replace(info->name, "no name"),
 		expr);
 	if(strlen(fmt) != 0) {
-		fprintf(stderr, ", ");
-		vfprintf(stderr, fmt, l);
+		fprintf(gconf->fp, ", ");
+		vfprintf(gconf->fp, fmt, l);
 	}
-	fprintf(stderr, "\n");
+	fprintf(gconf->fp, "\n");
 	va_end(l);
 	return;
 }
+
+static
+void ut_print_global_header_json(
+	struct ut_global_config_s const *gconf)
+{
+	fprintf(gconf->fp, "\"fails\": [\n");
+	return;
+}
+
+static
+void ut_print_header_json(
+	struct ut_global_config_s const *gconf,
+	struct ut_group_config_s const *config)
+{
+	if(config->name != NULL) {
+		fprintf(gconf->fp, "\t\"group\": \"%s\",\n", config->name);
+	}
+	if(config->file != NULL) {
+		fprintf(gconf->fp, "\t\"filename\": \"%s\",\n", config->file);
+	}
+	fprintf(gconf->fp, "\t\"fails\": [\n");
+	return;
+}
+
+static
+void ut_print_assertion_failed_json(
+	struct ut_global_config_s const *gconf,
+	struct ut_s const *info,
+	struct ut_group_config_s const *config,
+	int64_t line,
+	char const *func,
+	char const *expr,
+	char const *fmt,
+	...)
+{
+	va_list l;
+	va_start(l, fmt);
+
+	fprintf(gconf->fp, "\t\t{\n");
+	fprintf(gconf->fp, "\t\t\t\"line\": %" PRId64 ",\n", line);
+	if(info->name != NULL) {
+		fprintf(gconf->fp, "\t\t\t\"name\": \"%s\",\n", info->name);
+	}
+	fprintf(gconf->fp, "\t\t\t\"expr\": \"%s\"", expr);
+	if(strlen(fmt) != 0) {
+		fprintf(gconf->fp, ",\n\t\t\t\"debugprint\": \"");
+		vfprintf(gconf->fp, fmt, l);
+		fprintf(gconf->fp, "\",\n");
+	}
+	fprintf(gconf->fp, "\t\t},\n");
+	va_end(l);
+	return;
+}
+
+static
+void ut_print_footer_json(
+	struct ut_global_config_s const *gconf,
+	struct ut_group_config_s const *config)
+{
+	fprintf(gconf->fp, "\t],\n");
+	return;
+}
+
+static
+void ut_print_global_footer_json(
+	struct ut_global_config_s const *gconf)
+{
+	fprintf(gconf->fp, "],\n");
+	return;
+}
+
+/* summary printers */
+static
+void ut_print_results(
+	struct ut_global_config_s const *gconf,
+	struct ut_group_config_s const *config,
+	struct ut_result_s const *result,
+	int64_t file_cnt)
+{
+	int64_t cnt = 0;
+	int64_t succ = 0;
+	int64_t fail = 0;
+
+	for(int64_t i = 0, j = 0; i < file_cnt; i++) {
+
+		if(config[i].exec == 0) { continue; }
+
+		fprintf(gconf->fp, "%sGroup %s: %" PRId64 " succeeded, %" PRId64 " failed in total %" PRId64 " assertions in %" PRId64 " tests.%s\n",
+			(result[j].fail == 0) ? UT_GREEN : UT_RED,
+			ut_null_replace(config[i].name, "(no name)"),
+			result[j].succ,
+			result[j].fail,
+			result[j].succ + result[j].fail,
+			result[j].cnt,
+			UT_DEFAULT_COLOR);
+		
+		cnt += result[j].cnt;
+		succ += result[j].succ;
+		fail += result[j].fail;
+		j++;
+	}
+
+	fprintf(gconf->fp, "%sSummary: %" PRId64 " succeeded, %" PRId64 " failed in total %" PRId64 " assertions in %" PRId64 " tests.%s\n",
+		(fail == 0) ? UT_GREEN : UT_RED,
+		succ, fail, succ + fail, cnt,
+		UT_DEFAULT_COLOR);
+	return;
+}
+
+static
+void ut_print_results_json(
+	struct ut_global_config_s const *gconf,
+	struct ut_group_config_s const *config,
+	struct ut_result_s const *result,
+	int64_t file_cnt)
+{
+	int64_t cnt = 0;
+	int64_t succ = 0;
+	int64_t fail = 0;
+
+	fprintf(gconf->fp, "\"results\": [\n");
+
+	for(int64_t i = 0, j = 0; i < file_cnt; i++) {
+
+		if(config[i].exec == 0) { continue; }
+
+		fprintf(gconf->fp, "\t{\n");
+		if(config[i].name != NULL) {
+			fprintf(gconf->fp, "\t\t\"group\": \"%s\",\n", config[i].name);
+		}
+		if(config[i].file != NULL) {
+			fprintf(gconf->fp, "\t\t\"filename\": \"%s\",\n", config[i].file);
+		}
+		fprintf(gconf->fp, "\t\t\"succeeded\": %" PRId64 ",\n", result[j].succ);
+		fprintf(gconf->fp, "\t\t\"failed\": %" PRId64 ",\n", result[j].fail);
+		fprintf(gconf->fp, "\t\t\"assertioncount\": %" PRId64 ",\n", result[j].succ + result[j].fail);
+		fprintf(gconf->fp, "\t\t\"testcount\": %" PRId64 ",\n", result[j].cnt);
+		fprintf(gconf->fp, "\t},\n");
+		
+		cnt += result[j].cnt;
+		succ += result[j].succ;
+		fail += result[j].fail;
+		j++;
+	}
+
+	fprintf(gconf->fp, "],\n");
+
+
+	fprintf(gconf->fp, "\"summary\": {\n");
+	fprintf(gconf->fp, "\t\"succeeded\": %" PRId64 ",\n", succ);
+	fprintf(gconf->fp, "\t\"failed\": %" PRId64 ",\n", fail);
+	fprintf(gconf->fp, "\t\"assertioncount\": %" PRId64 ",\n", succ + fail);
+	fprintf(gconf->fp, "\t\"testcount\": %" PRId64 ",\n", cnt);
+	fprintf(gconf->fp, "}\n");
+
+	return;
+}
+
+static
+struct ut_printer_s ut_default_printer = {
+	.global_header = NULL,
+	.global_footer = NULL,
+	.header = NULL,
+	.footer = NULL,
+	.failed = ut_print_assertion_failed,
+	.result = ut_print_results
+};
+
+static
+struct ut_printer_s ut_json_printer = {
+	.global_header = ut_print_global_header_json,
+	.global_footer = ut_print_global_footer_json,
+	.header = ut_print_header_json,
+	.footer = ut_print_footer_json,
+	.failed = ut_print_assertion_failed_json,
+	.result = ut_print_results_json
+};
 
 /**
  * memory dump macro
@@ -322,7 +543,7 @@ void ut_print_assertion_failed(
 	} else { \
 		ut_result->fail++; \
 		/* dump debug information */ \
-		ut_print_assertion_failed(ut_info, ut_config, __LINE__, __func__, #expr, "" __VA_ARGS__); \
+		ut_gconf->printer.failed(ut_gconf, ut_info, ut_config, __LINE__, __func__, #expr, "" __VA_ARGS__); \
 	} \
 }
 #ifndef assert
@@ -559,7 +780,7 @@ struct ut_s *ut_get_unittest(
 }
 
 static inline
-struct ut_config_s *ut_get_ut_config(
+struct ut_group_config_s *ut_get_ut_config(
 	struct ut_nm_result_s const *res)
 {
 	/* extract offset */
@@ -577,24 +798,24 @@ struct ut_config_s *ut_get_ut_config(
 	}
 
 	#define ut_get_config_call_func(_ptr, _offset) ( \
-		(struct ut_config_s (*)(void))((uint64_t)(_ptr) + (uint64_t)(_offset)) \
+		(struct ut_group_config_s (*)(void))((uint64_t)(_ptr) + (uint64_t)(_offset)) \
 	)
 
 	/* get info */
-	utkvec_t(struct ut_config_s) buf;
+	utkvec_t(struct ut_group_config_s) buf;
 	
 	r = res;
 	utkv_init(buf);
 	while(r->type != (char)0) {
 		if(ut_startswith(r->name, "ut_get_config_") == 0) {
-			struct ut_config_s i = ut_get_config_call_func(r->ptr, offset)();
+			struct ut_group_config_s i = ut_get_config_call_func(r->ptr, offset)();
 			utkv_push(buf, i);
 		}
 		r++;
 	}
 
 	/* push terminator */
-	utkv_push(buf, (struct ut_config_s){ 0 });
+	utkv_push(buf, (struct ut_group_config_s){ 0 });
 	return(utkv_ptr(buf));
 }
 
@@ -619,9 +840,9 @@ void ut_dump_test(
 
 static inline
 void ut_dump_config(
-	struct ut_config_s const *config)
+	struct ut_group_config_s const *config)
 {
-	struct ut_config_s const *c = config;
+	struct ut_group_config_s const *c = config;
 	while(c->file != NULL) {
 		printf("%s, %" PRId64 ", %s, %s, %p, %p\n",
 			c->file,
@@ -688,10 +909,10 @@ int64_t ut_get_total_test_count(
 
 static inline
 int64_t ut_get_total_config_count(
-	struct ut_config_s const *config)
+	struct ut_group_config_s const *config)
 {
 	int64_t cnt = 0;
-	struct ut_config_s const *c = config;
+	struct ut_group_config_s const *c = config;
 	while(c->file != NULL) { c++; cnt++; }
 	return(cnt);
 }
@@ -720,7 +941,7 @@ int64_t ut_get_total_file_count(
 static inline
 void ut_sort(
 	struct ut_s *test,
-	struct ut_config_s *config)
+	struct ut_group_config_s *config)
 {
 	// ut_dump_test(test);
 	qsort(test,
@@ -729,7 +950,7 @@ void ut_sort(
 		ut_compare);
 	qsort(config,
 		ut_get_total_config_count(config),
-		sizeof(struct ut_config_s),
+		sizeof(struct ut_group_config_s),
 		ut_compare);
 	// ut_dump_test(test);
 	// printf("%" PRId64 "\n", ut_get_total_file_count(test));
@@ -767,27 +988,27 @@ int64_t *ut_build_file_index(
 }
 
 static inline
-struct ut_config_s *ut_compensate_config(
+struct ut_group_config_s *ut_compensate_config(
 	struct ut_s *sorted_test,
-	struct ut_config_s *sorted_config)
+	struct ut_group_config_s *sorted_config)
 {
 	// printf("compensate config\n");
 	// ut_dump_test(sorted_test);
 	// ut_dump_config(sorted_config);
 
 	int64_t *file_idx = ut_build_file_index(sorted_test);
-	utkvec_t(struct ut_config_s) compd_config;
+	utkvec_t(struct ut_group_config_s) compd_config;
 	utkv_init(compd_config);
 
 	int64_t i = 0;
 	// printf("%" PRId64 "\n", file_idx[i]);
 	struct ut_s const *t = &sorted_test[file_idx[i]];
-	struct ut_config_s const *c = sorted_config;
+	struct ut_group_config_s const *c = sorted_config;
 
 	while(c->file != NULL && t->file != NULL) {
 		while(ut_match((void *)t, (void *)c) != 0) {
 			// printf("filename does not match %s, %s\n", c->file, t->file);
-			utkv_push(compd_config, (struct ut_config_s){ .file = t->file });
+			utkv_push(compd_config, (struct ut_group_config_s){ .file = t->file });
 			t = &sorted_test[file_idx[++i]];
 		}
 		// printf("matched %s, %s\n", c->file, t->file);
@@ -906,7 +1127,7 @@ static inline
 int ut_toposort_by_group(
 	struct ut_s *sorted_test,
 	int64_t test_cnt,
-	struct ut_config_s *sorted_config,
+	struct ut_group_config_s *sorted_config,
 	int64_t *file_idx,
 	int64_t file_cnt)
 {
@@ -945,7 +1166,7 @@ int ut_toposort_by_group(
 
 	/* sort */
 	utkvec_t(struct ut_s) test_buf;
-	utkvec_t(struct ut_config_s) config_buf;
+	utkvec_t(struct ut_group_config_s) config_buf;
 	utkv_init(test_buf);
 	utkv_init(config_buf);
 	// utkvec_t(uint64_t) res;
@@ -1014,42 +1235,6 @@ int ut_toposort_by_group(
 	utkv_destroy(config_buf);
 
 	return(0);
-}
-
-static inline
-void ut_print_results(
-	struct ut_config_s const *config,
-	struct ut_result_s const *result,
-	int64_t file_cnt)
-{
-	int64_t cnt = 0;
-	int64_t succ = 0;
-	int64_t fail = 0;
-
-	for(int64_t i = 0, j = 0; i < file_cnt; i++) {
-
-		if(config[i].exec == 0) { continue; }
-
-		fprintf(stderr, "%sGroup %s: %" PRId64 " succeeded, %" PRId64 " failed in total %" PRId64 " assertions in %" PRId64 " tests.%s\n",
-			(result[j].fail == 0) ? UT_GREEN : UT_RED,
-			ut_null_replace(config[i].name, "(no name)"),
-			result[j].succ,
-			result[j].fail,
-			result[j].succ + result[j].fail,
-			result[j].cnt,
-			UT_DEFAULT_COLOR);
-		
-		cnt += result[j].cnt;
-		succ += result[j].succ;
-		fail += result[j].fail;
-		j++;
-	}
-
-	fprintf(stderr, "%sSummary: %" PRId64 " succeeded, %" PRId64 " failed in total %" PRId64 " assertions in %" PRId64 " tests.%s\n",
-		(fail == 0) ? UT_GREEN : UT_RED,
-		succ, fail, succ + fail, cnt,
-		UT_DEFAULT_COLOR);
-	return;
 }
 
 /**
@@ -1134,14 +1319,17 @@ static inline
 int ut_modify_test_config(
 	int argc,
 	char *const argv[],
+	struct ut_global_config_s *params,
 	struct ut_s *sorted_test,
 	int64_t test_cnt,
-	struct ut_config_s *sorted_config,
+	struct ut_group_config_s *sorted_config,
 	int64_t file_cnt)
 {
 	struct option const opts_long[] = {
 		{ "group", required_argument, NULL, 'g' },
 		{ "test", required_argument, NULL, 't' },
+		{ "stdout", no_argument, NULL, 'o' },
+		{ "json", no_argument, NULL, 'j' },
 		{ NULL, 0, NULL, 0 }
 	};
 	char *opts_short = ut_build_short_option_string(opts_long);
@@ -1152,6 +1340,8 @@ int ut_modify_test_config(
 		switch(c) {
 			case 'g': group_arg = optarg; break;
 			case 't': test_arg = optarg; break;
+			case 'j': params->printer = ut_json_printer; break;
+			case 'o': params->fp = stdout; break;
 			default: break;
 		}
 	}
@@ -1183,11 +1373,11 @@ int ut_main_impl(int argc, char *argv[])
 
 	/* dump tests and configs */
 	struct ut_s *test = ut_get_unittest(nm);
-	struct ut_config_s *config = ut_get_ut_config(nm);
+	struct ut_group_config_s *config = ut_get_ut_config(nm);
 
 	/* sort by group, tag, line */
 	ut_sort(test, config);
-	struct ut_config_s *compd_config = ut_compensate_config(test, config);
+	struct ut_group_config_s *compd_config = ut_compensate_config(test, config);
 
 	int64_t test_cnt = ut_get_total_test_count(test);
 	int64_t *file_idx = ut_build_file_index(test);
@@ -1215,8 +1405,19 @@ int ut_main_impl(int argc, char *argv[])
 	/* rebuild file idx */
 	int64_t *sorted_file_idx = ut_build_file_index(test);
 
+	/* init default params */
+	struct ut_global_config_s gconf = {
+		.fp = stderr,
+		.printer = ut_default_printer
+	};
+
 	/* modify config */
-	ut_modify_test_config(argc, argv, test, test_cnt, compd_config, file_cnt);
+	ut_modify_test_config(argc, argv, &gconf, test, test_cnt, compd_config, file_cnt);
+
+	/* print global header */
+	if(gconf.printer.global_header != NULL) {
+		gconf.printer.global_header(&gconf);
+	}
 
 	/* run tests */
 	utkvec_t(struct ut_result_s) res;
@@ -1225,6 +1426,10 @@ int ut_main_impl(int argc, char *argv[])
 		struct ut_result_s r = { 0 };
 
 		if(compd_config[i].exec == 0) { continue; }
+
+		if(gconf.printer.header != NULL) {
+			gconf.printer.header(&gconf, &compd_config[i]);
+		}
 
 		for(int64_t j = sorted_file_idx[i]; j < sorted_file_idx[i + 1]; j++) {
 
@@ -1245,7 +1450,7 @@ int ut_main_impl(int argc, char *argv[])
 			}
 
 			/* run a test */
-			test[j].fn(ctx, gctx, &test[j], &compd_config[i], &r);
+			test[j].fn(ctx, gctx, &gconf, &test[j], &compd_config[i], &r);
 
 			/* cleanup contexts */
 			if(test[j].init != NULL && test[j].clean != NULL) {
@@ -1256,10 +1461,19 @@ int ut_main_impl(int argc, char *argv[])
 			}
 		}
 		utkv_push(res, r);
+
+		if(gconf.printer.footer != NULL) {
+			gconf.printer.footer(&gconf, &compd_config[i]);
+		}
+	}
+
+	/* print global footer */
+	if(gconf.printer.global_footer != NULL) {
+		gconf.printer.global_footer(&gconf);
 	}
 
 	/* print results */
-	ut_print_results(compd_config, utkv_ptr(res), file_cnt);
+	gconf.printer.result(&gconf, compd_config, utkv_ptr(res), file_cnt);
 
 	utkv_destroy(res);
 	free(sorted_file_idx);
