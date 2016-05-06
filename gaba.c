@@ -2828,7 +2828,7 @@ int64_t gaba_dp_print_cigar(
 
 		uint64_t arr;
 		int64_t g = MIN2(_parse_count_gap(arr = parse_load_uint64(p, lim - ridx)), ridx);
-		clen += fprintf(fp, "%lld%c", len, 'D' + ((char)(0ULL - (arr & 0x01)) & ('I' - 'D')));
+		clen += fprintf(fp, "%u%c", len, 'D' + ((char)(0ULL - (arr & 0x01)) & ('I' - 'D')));
 		if((ridx -= g) <= 0) { break; }
 	}
 	return(clen);
