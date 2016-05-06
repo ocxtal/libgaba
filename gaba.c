@@ -11,8 +11,6 @@
 
 /* import unittest */
 #define UNITTEST_UNIQUE_ID			33
-#define UNITTEST 					1
-
 #include  "unittest.h"
 
 #include <stdint.h>
