@@ -49,7 +49,7 @@
 /* forward declarations */
 static int32_t gaba_dp_add_stack(struct gaba_dp_context_s *this, uint64_t size);
 static void *gaba_dp_malloc(struct gaba_dp_context_s *this, uint64_t size);
-static void *gaba_dp_smalloc(struct gaba_dp_context_s *this, uint64_t size);
+// static void *gaba_dp_smalloc(struct gaba_dp_context_s *this, uint64_t size);
 // static void gaba_dp_free(struct gaba_dp_context_s *this, void *ptr);
 
 
@@ -3334,6 +3334,7 @@ void *gaba_dp_malloc(
 	return((void *)(this->stack_top - size));
 }
 
+#if 0
 /**
  * @fn gaba_dp_smalloc
  * @brief small malloc without boundary check, for joint_head, joint_tail, merge_tail, and delta vectors.
@@ -3348,6 +3349,7 @@ void *gaba_dp_smalloc(
 	this->stack_top += roundup(size, MEM_ALIGN_SIZE);
 	return(ptr);
 }
+#endif
 
 /**
  * @fn gaba_dp_clean
