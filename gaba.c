@@ -2573,7 +2573,7 @@ struct gaba_result_s *trace_concatenate_path(
 	/* store section pointer and section length */
 	res->sec = this->ll.sec;
 	res->slen = this->ll.rv_sec_idx + (this->ll.tail_sec_idx - this->ll.fw_sec_idx);
-	res->reserved = this->head_margin;		/* use reserved */
+	// res->reserved = this->head_margin;		/* use reserved */
 
 	/* load section pointers */
 	struct gaba_path_section_s *fw_sec = this->ll.sec + this->ll.fw_sec_idx;
@@ -2868,6 +2868,17 @@ int64_t gaba_dp_dump_cigar(
 		if((ridx -= g) <= 0) { break; }
 	}
 	return(buf - sbuf);
+}
+
+/**
+ * @fn gaba_dp_set_qual
+ */
+void gaba_dp_set_qual(
+	gaba_result_t *res,
+	int32_t qual)
+{
+	res->qual = qual;
+	return;
 }
 
 /**

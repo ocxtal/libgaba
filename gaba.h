@@ -226,7 +226,8 @@ struct gaba_result_s {
 	struct gaba_path_section_s const *sec;
 	struct gaba_path_s const *path;
 	int64_t score;
-	uint32_t slen, reserved;
+	uint32_t slen;
+	int32_t qual;
 };
 typedef struct gaba_result_s gaba_result_t;
 
@@ -355,6 +356,13 @@ int64_t gaba_dp_dump_cigar(
 	uint32_t const *path,
 	uint32_t offset,
 	uint32_t len);
+
+/**
+ * @fn gaba_dp_set_qual
+ */
+void gaba_dp_set_qual(
+	gaba_result_t *res,
+	int32_t qual);
 
 #endif  /* #ifndef _GABA_H_INCLUDED */
 
