@@ -2800,7 +2800,7 @@ int64_t parse_dump_gap_string(
  * @brief parse path string and print cigar to file
  */
 int64_t gaba_dp_print_cigar(
-	int (*_fprintf)(void *, char const *, ...),
+	gaba_dp_fprintf_t _fprintf,
 	void *fp,
 	uint32_t const *path,
 	uint32_t offset,

@@ -342,8 +342,9 @@ gaba_result_t *gaba_dp_trace(
  *
  * @brief convert path string to cigar.
  */
+typedef int (*gaba_dp_fprintf_t)(void *, char const *, ...);
 int64_t gaba_dp_print_cigar(
-	int (*fprintf)(void *, char const *, ...),
+	gaba_dp_fprintf_t fprintf,
 	void *fp,
 	uint32_t const *path,
 	uint32_t offset,
