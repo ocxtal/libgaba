@@ -2800,7 +2800,8 @@ int64_t parse_dump_gap_string(
  * @brief parse path string and print cigar to file
  */
 int64_t gaba_dp_print_cigar(
-	FILE *fp,
+	int (*_fprintf)(void *, char const *, ...),
+	void *fp,
 	uint32_t const *path,
 	uint32_t offset,
 	uint32_t len)
@@ -2821,12 +2822,17 @@ int64_t gaba_dp_print_cigar(
 			if(a < 64) { ridx -= a; break; }
 			ridx -= 64;
 		}
-		clen += fprintf(fp, "%lldM", (rsidx - ridx)>>1);
+		int64_t m = (rsidx - ridx)>>1;
+		if(m > 0) {
+			clen += _fprintf(fp, "%lldM", m);
+		}
 		if(ridx <= 0) { break; }
 
 		uint64_t arr;
 		int64_t g = MIN2(_parse_count_gap(arr = parse_load_uint64(p, lim - ridx)), ridx);
-		clen += fprintf(fp, "%u%c", len, 'D' + ((char)(0ULL - (arr & 0x01)) & ('I' - 'D')));
+		if(g > 0) {
+			clen += _fprintf(fp, "%u%c", g, 'D' + ((char)(0ULL - (arr & 0x01)) & ('I' - 'D')));
+		}
 		if((ridx -= g) <= 0) { break; }
 	}
 	return(clen);
@@ -3900,14 +3906,93 @@ unittest(with_seq_pair("ACGTACGT", "GACGTACGT"))
 	gaba_dp_clean(d);
 }
 
-/* path string parser test */
+/* print_cigar test */
+static
+int ut_sprintf(
+	void *pbuf,
+	char const *fmt,
+	...)
+{
+	va_list l;
+	va_start(l, fmt);
+
+	char *buf = *((char **)pbuf);
+	int len = vsprintf(buf, fmt, l);
+	*((char **)pbuf) += len;
+	va_end(l);
+	return(len);
+}
+
+unittest()
+{
+	char *buf = (char *)malloc(16384);
+	char *p = buf;
+	gaba_dp_print_cigar(ut_sprintf, (void *)&p, (uint32_t const []){ 0x55555555, 0, 0 }, 0, 32);
+	assert(strcmp(buf, "16M") == 0, "%s", buf);
+
+	p = buf;
+	gaba_dp_print_cigar(ut_sprintf, (void *)&p, (uint32_t const []){ 0x55555555, 0x55555555, 0, 0 }, 0, 64);
+	assert(strcmp(buf, "32M") == 0, "%s", buf);
+
+	p = buf;
+	gaba_dp_print_cigar(ut_sprintf, (void *)&p, (uint32_t const []){ 0x55555555, 0x55555555, 0x55555555, 0x55555555, 0, 0 }, 0, 128);
+	assert(strcmp(buf, "64M") == 0, "%s", buf);
+
+	p = buf;
+	gaba_dp_print_cigar(ut_sprintf, (void *)&p, (uint32_t const []){ 0x55550000, 0x55555555, 0x55555555, 0x55555555, 0, 0 }, 16, 112);
+	assert(strcmp(buf, "56M") == 0, "%s", buf);
+
+	p = buf;
+	gaba_dp_print_cigar(ut_sprintf, (void *)&p, (uint32_t const []){ 0x55555000, 0x55555555, 0x55555555, 0x55555555, 0, 0 }, 12, 116);
+	assert(strcmp(buf, "58M") == 0, "%s", buf);
+
+	p = buf;
+	gaba_dp_print_cigar(ut_sprintf, (void *)&p, (uint32_t const []){ 0x55, 0, 0 }, 0, 8);
+	assert(strcmp(buf, "4M") == 0, "%s", buf);
+
+	p = buf;
+	gaba_dp_print_cigar(ut_sprintf, (void *)&p, (uint32_t const []){ 0x55555000, 0x55555555, 0x55555555, 0x55 }, 12, 92);
+	assert(strcmp(buf, "46M") == 0, "%s", buf);
+
+	p = buf;
+	gaba_dp_print_cigar(ut_sprintf, (void *)&p, (uint32_t const []){ 0x55550555, 0, 0 }, 0, 32);
+	assert(strcmp(buf, "6M4D8M") == 0, "%s", buf);
+
+	p = buf;
+	gaba_dp_print_cigar(ut_sprintf, (void *)&p, (uint32_t const []){ 0x5555f555, 0, 0 }, 0, 32);
+	assert(strcmp(buf, "6M4I8M") == 0, "%s", buf);
+
+	p = buf;
+	gaba_dp_print_cigar(ut_sprintf, (void *)&p, (uint32_t const []){ 0xaaaa0555, 0, 0 }, 0, 33);
+	assert(strcmp(buf, "6M5D8M") == 0, "%s", buf);
+
+	p = buf;
+	gaba_dp_print_cigar(ut_sprintf, (void *)&p, (uint32_t const []){ 0xaaabf555, 0, 0 }, 0, 33);
+	assert(strcmp(buf, "6M5I8M") == 0, "%s", buf);
+
+	p = buf;
+	gaba_dp_print_cigar(ut_sprintf, (void *)&p, (uint32_t const []){ 0xaaabf555, 0xaaaa0556, 0, 0 }, 0, 65);
+	assert(strcmp(buf, "6M5I8M1I5M5D8M") == 0, "%s", buf);
+
+	p = buf;
+	gaba_dp_print_cigar(ut_sprintf, (void *)&p, (uint32_t const []){ 0xaaabf555, 0xaaaa0556, 0xaaaaaaaa, 0 }, 0, 65);
+	assert(strcmp(buf, "6M5I8M1I5M5D8M") == 0, "%s", buf);
+
+	p = buf;
+	gaba_dp_print_cigar(ut_sprintf, (void *)&p, (uint32_t const []){ 0xaaabf554, 0xaaaa0556, 0xaaaaaaaa, 0 }, 0, 65);
+	assert(strcmp(buf, "2D5M5I8M1I5M5D8M") == 0, "%s", buf);
+
+	free(buf);
+}
+
+/* dump_cigar test */
 unittest()
 {
 	char *buf = (char *)malloc(16384);
 
 	gaba_dp_dump_cigar(buf, (uint32_t const []){ 0x55555555, 0, 0 }, 0, 32);
 	assert(strcmp(buf, "16M") == 0, "%s", buf);
-	
+
 	gaba_dp_dump_cigar(buf, (uint32_t const []){ 0x55555555, 0x55555555, 0, 0 }, 0, 64);
 	assert(strcmp(buf, "32M") == 0, "%s", buf);
 
