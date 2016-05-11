@@ -275,7 +275,7 @@ void fill_load_seq_a(
 			vec_t const mask = _set(0x03);
 
 			/* forward fetch: 2 * alen - pos */
-			vec_t a = _loadu(rev(pos, this->rr.alim));
+			vec_t a = _loadu(_rev(pos, this->rr.alim));
 			_storeu(_rd_bufa(this, BW, len), _xor(a, mask));
 		}
 	#else /* BIT == 4 */
@@ -296,7 +296,7 @@ void fill_load_seq_a(
 			vec_t const cv = _bc_v16i8(_load_v16i8(comp));
 
 			/* forward fetch: 2 * alen - pos */
-			vec_t a = _loadu(rev(pos, this->rr.alim));
+			vec_t a = _loadu(_rev(pos, this->rr.alim));
 			_storeu(_rd_bufa(this, BW, len), _shuf(a, cv));
 		}
 	#endif
@@ -324,7 +324,7 @@ void fill_load_seq_b(
 		} else {
 			debug("reverse fetch b: pos(%p), len(%llu)", pos, len);
 			/* reverse fetch: 2 * blen - pos + (len - 32) */
-			vec_t b = _loadu(rev(pos, this->rr.blim) + (len - BW));
+			vec_t b = _loadu(_rev(pos, this->rr.blim) + (len - BW));
 			_print(b);
 			_print(_shl(_swap(b), 2));
 			_storeu(_rd_bufb(this, BW, len), _shl(_swap(b), 2));
@@ -345,7 +345,7 @@ void fill_load_seq_b(
 			vec_t const cv = _bc_v16i8(_load_v16i8(comp));
 
 			/* reverse fetch: 2 * blen - pos + (len - 32) */
-			vec_t b = _loadu(rev(pos, this->rr.blim) + (len - BW));
+			vec_t b = _loadu(_rev(pos, this->rr.blim) + (len - BW));
 			_storeu(_rd_bufb(this, BW, len), _shuf(_swap(b), cv));
 		}
 	#endif
@@ -2508,12 +2508,12 @@ void trace_init_work(
 {
 	/* calculate array lengths */
 	uint64_t ssum = _tail(fw_tail)->ssum + _tail(rv_tail)->ssum;
-	uint64_t psum = roundup(_tail(fw_tail)->psum + BLK, 32)
-				  + roundup(_tail(rv_tail)->psum + BLK, 32);
+	uint64_t psum = _roundup(_tail(fw_tail)->psum + BLK, 32)
+				  + _roundup(_tail(rv_tail)->psum + BLK, 32);
 
 	/* malloc trace working area */
 	uint64_t sec_len = 2 * ssum;
-	uint64_t path_len = roundup(psum / 32, sizeof(uint32_t));
+	uint64_t path_len = _roundup(psum / 32, sizeof(uint32_t));
 	debug("psum(%lld), path_len(%llu), sec_len(%llu)", psum, path_len, sec_len);
 
 	/* malloc pointer */
@@ -3161,8 +3161,8 @@ gaba_t *gaba_init(
 			.tx = params_intl.xdrop,
 
 			/* input and output options */
-			.head_margin = roundup(params_intl.head_margin, MEM_ALIGN_SIZE),
-			.tail_margin = roundup(params_intl.tail_margin, MEM_ALIGN_SIZE),
+			.head_margin = _roundup(params_intl.head_margin, MEM_ALIGN_SIZE),
+			.tail_margin = _roundup(params_intl.tail_margin, MEM_ALIGN_SIZE),
 
 			/* memory management */
 			.mem_cnt = 0,
@@ -3326,7 +3326,7 @@ void *gaba_dp_malloc(
 	uint64_t size)
 {
 	/* roundup */
-	size = roundup(size, MEM_ALIGN_SIZE);
+	size = _roundup(size, MEM_ALIGN_SIZE);
 
 	/* malloc */
 	debug("this(%p), stack_top(%p), size(%llu)", this, this->stack_top, size);
@@ -3352,7 +3352,7 @@ void *gaba_dp_smalloc(
 {
 	debug("this(%p), stack_top(%p)", this, this->stack_top);
 	void *ptr = (void *)this->stack_top;
-	this->stack_top += roundup(size, MEM_ALIGN_SIZE);
+	this->stack_top += _roundup(size, MEM_ALIGN_SIZE);
 	return(ptr);
 }
 #endif
@@ -3538,10 +3538,10 @@ void *unittest_build_seqs(void *params)
 		.bftail = gaba_build_section(6, cb + blen, 20),
 
 		/* reverse */
-		.arsec = gaba_build_section(1, rev(ca + alen, alim), alen),
-		.artail = gaba_build_section(3, rev(ca + atot, alim), 20),
-		.brsec = gaba_build_section(5, rev(cb + blen, blim), blen),
-		.brtail = gaba_build_section(7, rev(cb + btot, blim), 20)
+		.arsec = gaba_build_section(1, _rev(ca + alen, alim), alen),
+		.artail = gaba_build_section(3, _rev(ca + atot, alim), 20),
+		.brsec = gaba_build_section(5, _rev(cb + blen, blim), blen),
+		.brtail = gaba_build_section(7, _rev(cb + btot, blim), 20)
 	};
 	return((void *)sec);
 }
@@ -3596,7 +3596,7 @@ int check_path(
 	char const *str)
 {
 	int64_t plen = res->path->len, slen = strlen(str);
-	uint32_t const *p = &res->path->array[roundup(plen, 32) / 32 - 1];
+	uint32_t const *p = &res->path->array[_roundup(plen, 32) / 32 - 1];
 	char const *s = &str[slen - 1];
 	debug("%s", str);
 
@@ -3644,7 +3644,7 @@ int check_cigar(
 
 #define decode_path(_r) ({ \
 	int64_t plen = (_r)->path->len, cnt = 0; \
-	uint32_t const *path = &(_r)->path->array[roundup(plen, 32) / 32 - 1]; \
+	uint32_t const *path = &(_r)->path->array[_roundup(plen, 32) / 32 - 1]; \
 	uint32_t path_array = *path; \
 	char *p = alloca(plen) + plen; \
 	*p-- = '\0'; \

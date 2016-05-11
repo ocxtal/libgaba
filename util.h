@@ -390,8 +390,8 @@ _static_assert(sizeof(struct gaba_context_s) == 768);
 /**
  * coordinate conversion macros
  */
-#define rev(pos, len)				( (len) + (uint64_t)(len) - (uint64_t)(pos) )
-#define roundup(x, base)			( ((x) + (base) - 1) & ~((base) - 1) )
+#define _rev(pos, len)				( (len) + (uint64_t)(len) - (uint64_t)(pos) )
+#define _roundup(x, base)			( ((x) + (base) - 1) & ~((base) - 1) )
 
 /**
  * @enum _STATE
