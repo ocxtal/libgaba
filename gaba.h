@@ -355,6 +355,7 @@ int64_t gaba_dp_print_cigar(
  */
 int64_t gaba_dp_dump_cigar(
 	char *buf,
+	uint64_t buf_size,
 	uint32_t const *path,
 	uint32_t offset,
 	uint32_t len);
