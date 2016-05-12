@@ -4,6 +4,83 @@ GABA provides affine-gap penalty adaptive semi-global banded alignment on nucleo
 
 ## Usage
 
+```
+/* init context */
+gaba_t *ctx = gaba_init(GABA_PARAMS(
+	.xdrop = 100,
+	.score_matrix = GABA_SCORE_SIMPLE(2, 3, 5, 1)));
+
+/* create section info (gaba_build_section is a macro) */
+struct gaba_section_s asec = gaba_build_section(1, 0, strlen(a));
+struct gaba_section_s bsec = gaba_build_section(2, 0, strlen(b));
+
+/*
+ * lim points the end of memory region of forward
+ * sequences. If the reverse sequences are not provided,
+ * lim should be 0x800000000000 (the tail address
+ * of the user space)
+ */
+void const *lim = (void const *)0x800000000000;
+
+/* init dp context */
+gaba_dp_t *dp = gaba_dp_init(ctx, lim, lim);
+
+/* fill root with asec and bsec from (0, 0) */
+struct gaba_section_s *ap = &asec, *bp = &bsec;
+struct gaba_fill_s *f = gaba_dp_fill_root(dp, ap, 0, bp, 0);
+
+/*
+ * f->status & GABA_STATUS_UPDATE_A indicates section a
+ * reached the end.
+ */
+if(f->status & GABA_STATUS_UPDATE_A) {
+	ap = /* pointer to the next section of a */
+}
+if(f->status & GABA_STATUS_UPDATE_B) {
+	bp = /* pointer to the next section of b */
+}
+
+/* sections are filled from head to tail */
+f = gaba_dp_fill(dp, fill, ap, bp);
+
+/*
+ * Each fill object (f) contains the max score of the
+ * section (f->max). All the fill objects are allocated
+ * from the dp context so you do not have to (must not)
+ * free them even though you want to discard them.
+ */
+
+/*
+ * Traces (alignment paths) are calculated from
+ * arbitrary sections to the root. Traces are stored
+ * in r->path in the array of 1-bit direction
+ * (0: RIGHT / 1: DOWN). The generated path and the
+ * reversed path of the third argument (reverse section)
+ * are concatenated at the root.
+ */
+struct gaba_result_s *r = gaba_dp_trace(dp,
+	f,			/* forward section */
+	NULL,		/* reverse section */
+	NULL);
+
+/*
+ * 1-bit direction string can be converted to CIGAR
+ * string (defined in the SAM format) with dump_cigar
+ * or print_cigar function.
+ */
+gaba_dp_print_cigar(
+	(gaba_dp_fprintf_t)fprintf,
+	(void *)stdout,
+	r->path->array,
+	r->path->offset,
+	r->path->len);
+
+/* destroy the dp context */
+gaba_dp_clean(dp);
+
+/* destroy the global context */
+gaba_clean(ctx);
+```
 
 
 ## Functions
@@ -101,6 +178,35 @@ gaba_result_t *gaba_dp_trace(
 	gaba_fill_t const *fw_tail,
 	gaba_fill_t const *rv_tail,
 	gaba_clip_params_t const *clip);
+```
+
+### Utils
+
+#### gaba\_dp\_print\_cigar
+
+Convert path string and dump to `FILE *`.
+
+```
+typedef int (*gaba_dp_fprintf_t)(void *, char const *, ...);
+int64_t gaba_dp_print_cigar(
+	gaba_dp_fprintf_t fprintf,
+	void *fp,
+	uint32_t const *path,
+	uint32_t offset,
+	uint32_t len);
+```
+
+#### gaba\_dp\_dump\_cigar
+
+Convert path string and dump to a `buf`. `buf` must have enough room to store the cigar string.
+
+```
+int64_t gaba_dp_dump_cigar(
+	char *buf,
+	uint64_t buf_size,
+	uint32_t const *path,
+	uint32_t offset,
+	uint32_t len);
 ```
 
 ## License
