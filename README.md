@@ -7,36 +7,79 @@ Older version of the library (libsea) is available at
 
 ## Usage
 
+### Example
+
 ```
-/* init context */
+#include "gaba.h"
+
+/*
+ * Initialize a global context. The global context can be
+ * shared between threads. gaba_init function actually takes
+ * a pointer to a const gaba_params_s struct, and GABA_PARAMS
+ * is a macro to create a pointer with given parameters
+ * (C99-style struct initializer is used in this example).
+ * GABA_SCORE_SIMPLE(M, X, Gi, Ge) creates a substitution
+ * matrix with match award = M, mismatch penalty = X,
+ * and gap open cost = Gi and gap extension cost = Ge where
+ * gap penalty function is g(k) = Gi + k * Ge (k is the length
+ * of a contiguous gap). Note that current implementation
+ * can't handle scores with M + 2 * (Gi + Ge) >= 32 (the
+ * value must fit in a unsigned 5-bit variable).
+ */
 gaba_t *ctx = gaba_init(GABA_PARAMS(
 	.xdrop = 100,
 	.score_matrix = GABA_SCORE_SIMPLE(2, 3, 5, 1)));
 
-/* create section info (gaba_build_section is a macro) */
-char const *a = "ATATAT";
-char const *b = "ATGTAT";
+/*
+ * Create section info (gaba_build_section is a macro).
+ * Each section consists of a 2-bit or 4-bit encoded
+ * nucleotide array (array of 8-bit char) and its length,
+ * and unique ID to identify the section.
+ */
+char const *a = "\x01\x08\x01\x08\x01\x08";	/* 4-bit encoded "ATATAT" */
+char const *b = "\x01\x08\x01\x02\x01\x08";	/* 4-bit encoded "ATACAT" */
 struct gaba_section_s asec = gaba_build_section(1, a, strlen(a));
 struct gaba_section_s bsec = gaba_build_section(2, b, strlen(b));
 
 /*
  * lim points the end of memory region of forward
  * sequences. If the reverse sequences are not provided,
- * lim should be 0x800000000000 (the tail address
- * of the user space)
+ * lim should be 0x800000000000 (the tail address of the
+ * user space on major unix-like operating systems on
+ * x86_64 processors). When concatenated reverse-complemented
+ * sequence is available after the forward sequences
+ * (when the sequnces are stored like ->->->...-><-<-<-...<-
+ * way, or if you are familiar with the implementation
+ * of the BWA software it is the unpacked version of the
+ * BWA reference sequence object), a pointer to the tail
+ * of the forward section should be passed to lim then
+ * the dp functions will properly use the reverse-complemented
+ * sequence to make the sequence fetching faster.
  */
 void const *lim = (void const *)0x800000000000;
 
-/* init dp context */
+/*
+ * initialize a dp context (thread-local context)
+ */
 gaba_dp_t *dp = gaba_dp_init(ctx, lim, lim);
 
-/* fill root with asec and bsec from (0, 0) */
+/*
+ * Fill root with section A and section B from (0, 0).
+ * dp_fill_root function creates the root of the dp matrix
+ * and fill it until either sequence pointer reaches the end
+ * of the sequence.
+ */
 struct gaba_section_s *ap = &asec, *bp = &bsec;
 struct gaba_fill_s *f = gaba_dp_fill_root(dp, ap, 0, bp, 0);
 
 /*
- * f->status & GABA_STATUS_UPDATE_A indicates section a
- * reached the end.
+ * f->status & GABA_STATUS_UPDATE_A indicates section A
+ * reached the end. If you want to continue with another
+ * section, you should call gaba_dp_fill with f and the
+ * section A pointer replaced with the next section (and
+ * section B pointer unchanged if f->status indicates
+ * that sequence pointer on section B didn't reach the
+ * end in the first fill).
  */
 if(f->status & GABA_STATUS_UPDATE_A) {
 	ap = /* pointer to the next section of a */
@@ -44,9 +87,7 @@ if(f->status & GABA_STATUS_UPDATE_A) {
 if(f->status & GABA_STATUS_UPDATE_B) {
 	bp = /* pointer to the next section of b */
 }
-
-/* sections are filled from head to tail */
-f = gaba_dp_fill(dp, fill, ap, bp);
+f = gaba_dp_fill(dp, f, ap, bp);
 
 /*
  * ...you can fill sequence trees in arbitrary order
@@ -56,8 +97,13 @@ f = gaba_dp_fill(dp, fill, ap, bp);
 /*
  * Each fill object (f) contains the max score of the
  * section (f->max). All the fill objects are allocated
- * from the dp context so you do not have to (must not)
+ * in the dp context so you do not have to (must not)
  * free them even though you want to discard them.
+ * Alternatively, you can flush the previous results
+ * (and garbages stacked in the dp context) with
+ * gaba_dp_flush function. It will destroy all the
+ * previous results so it should be called when all the
+ * tasks on current sequences (or current read) is done.
  */
 
 /*
@@ -91,6 +137,58 @@ gaba_dp_clean(dp);
 /* destroy the global context */
 gaba_clean(ctx);
 ```
+
+### Scoring schemes
+
+The library can perform affine-gap penalty alignment (Gotoh's algorithm: Gotoh, 1982) in an adaptive banded way. The gap penalty function used in the library is g(k) = Gi + k * Ge where k is the length of the coutiguous gap and Gi and Ge are positive (or zero) integer penalties. The library can't handle scoreing schemes with M + 2 * (Gi + Ge) > 31 due to the limitation of the diff algorithm used in the library. Setting gap extension penalty zero (Ge = 0) may also result in an incorrect alignment. The scoring parameters (M, X, Gi, Ge) (all parameters are represented in positive integers) must be passed to the `gaba_init` function.
+
+
+### Input sequence formats
+
+Current implementation accept 2-bit encoded (A = 0x00, C = 0x01, G = 0x02, T = 0x03) bases or 4-bit encoded bases with ambiguity (stored in uint8_t array). When the input sequence is 2-bit encoded, gaba.c must be compiled with the macro BIT is defined to 2 (-DBIT=2 must be passed to the compiler). The 2-bit format enables the library to handle 4 x 4-sized substitution matrix (where match  award of ('A', 'A') pair can be different from match award of ('C', 'C') pair). The 4-bit format (the default input format) accepts the ambiguity of bases (SNPs), treating any overlapping between two ambiguous bases as a match while dropping capability of full-sized matrix. If you want to use the 4 x 4-sized matrix you should investigate `struct gaba_score_s` and `GABA_PARAMS` macro in gaba.h.
+
+
+### Sections
+
+All the input sequences are passed to the functions stored in the `gaba_section_s` object. The section object consists of a unique ID of the sequence fragment, a pointer to the head of the sequece fragment, and its length (see `struct gaba_section_s` in gaba.h).
+
+
+#### IDs
+
+IDs are 32-bit positive integer unique to sections. Even and odd numbers (e.g. 0 and 1) are paired to represent forward and reverse-complemented sequences of the same segment. It means you can get the reverse-complemented section of any section inverting the bit 0 of its ID.
+
+
+#### Sequences
+
+The sequence fragments can be stored adjacently in the memory or separately, since section is only aware of  where the sequence starts and how long it is. That is, concatenated reference sequences structure (used in many major alignment tools) can be used to feed its reference sequences to the fill functions with additional set of `gaba_section_s`. The extension will be terminated with a X-drop test, or continued to the end of the section. So it will be a good choice to hold each choromosome in a single section. You must aware that the functions will not fill the triangular region at the tail of the band (see fig below) even though it is inside the area defined by the two sections (that is because the band is calculated in the anti-diagonal way and the sequences at the head of the next section is needed to fill the tail triangular area). In order to extend alignment to the end of the sequences, dummy section with random or zero 32-bases should be passed after the end of the terminal segment or margin with dummy sequence should be added to the both terminals when building reference sequence structrure.
+
+```
+      section A   ...
+     +---------+------
+     |    \    |
+     |\    \   |
+     | \    \  |
+  B  |  \    \ |
+     |   \    \| margin
+     |    \   /|<-->
+     |     \ /*|
+     +---------+------
+     |         |
+DP cells in the triangular area (*) will not be
+calculated in a call of fill(A, B). Margin is needed
+after the sections if you want to fill matrix to the 
+end of the (terminal) section.
+```
+
+
+#### Pointers to the reverse-complemented sequences
+
+Sections of reverse-complemented sequences are little bit complecated. They must have IDs  with its bit 0 reversed from its corresponding forward section as described above. Pointers to the reverse-complemented sequences must be mirrored with a constant (void *) lim. For example, when a forward sequence is stored at address `0x10000` having length `0x200` and lim is `0x800000000000` (the default value of lim), the sequence pointer in a reverse-complemented section must be `0xfffffffefdff`, or 2 * lim - ptr - len. The fill functions check the pointer and if it points out of valid region (the default is `0` to `0x7fffffffffff`, which is exactly overlaps with the user space of the major unix-like operating systems on x86\_64 processors), they calculate the mirrored pointer and read sequences in the reverse-complemented way. You can tell the fill functions to use actual array of reverse-complemented sequences on memory when concatenated reverse-complement sequences are stored just after the concatenated forward sequences passing the head address of the reverse-complemented section as the lim.
+
+
+### Margins after sequences
+
+When the fill functions fetch sequences from array, they use vector load instruction to parallelize sequence handling thus may invade tail boundary of the array. To keep the implementation fast, adding invasion checking in the fill functions are not planned so users must add 32-bytes margin after sequence arrays to avoid segfaults in the fill functions.
 
 
 ## Functions
