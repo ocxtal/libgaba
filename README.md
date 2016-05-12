@@ -44,6 +44,11 @@ if(f->status & GABA_STATUS_UPDATE_B) {
 f = gaba_dp_fill(dp, fill, ap, bp);
 
 /*
+ * ...you can fill sequence trees in arbitrary order
+ * with gaba_dp_fill function.
+ */
+
+/*
  * Each fill object (f) contains the max score of the
  * section (f->max). All the fill objects are allocated
  * from the dp context so you do not have to (must not)
