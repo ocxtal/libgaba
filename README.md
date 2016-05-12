@@ -1,6 +1,6 @@
 # libgaba
 
-GABA provides affine-gap penalty adaptive semi-global banded alignment on nucleotide string graphs. It uses fixed-width adaptive banded semi-global (a variant of Smith-Waterman and Gotoh) algorithm combined with difference DP (an acceleration technique similar to the Myers' bit-parallel editdist algorithm) and X-drop termination.
+GABA provides affine-gap penalty adaptive semi-global banded alignment on nucleotide ~~string graphs~~ (current implementation only supports trees). It uses fixed-width adaptive banded semi-global (a variant of Smith-Waterman and Gotoh) algorithm combined with difference DP (an acceleration technique similar to the Myers' bit-parallel editdist algorithm) and X-drop termination.
 
 ## Usage
 
