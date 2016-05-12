@@ -335,13 +335,14 @@ void ut_print_header_json(
 	struct ut_global_config_s const *gconf,
 	struct ut_group_config_s const *config)
 {
+	fprintf(gconf->fp, "\t{\n");
 	if(config->name != NULL) {
-		fprintf(gconf->fp, "\t\"group\": \"%s\",\n", config->name);
+		fprintf(gconf->fp, "\t\t\"group\": \"%s\",\n", config->name);
 	}
 	if(config->file != NULL) {
-		fprintf(gconf->fp, "\t\"filename\": \"%s\",\n", config->file);
+		fprintf(gconf->fp, "\t\t\"filename\": \"%s\",\n", config->file);
 	}
-	fprintf(gconf->fp, "\t\"fails\": [\n");
+	fprintf(gconf->fp, "\t\t\"fails\": [\n");
 	return;
 }
 
@@ -380,7 +381,8 @@ void ut_print_footer_json(
 	struct ut_global_config_s const *gconf,
 	struct ut_group_config_s const *config)
 {
-	fprintf(gconf->fp, "\t],\n");
+	fprintf(gconf->fp, "\t\t],\n");
+	fprintf(gconf->fp, "\t},\n");
 	return;
 }
 
@@ -503,11 +505,11 @@ struct ut_printer_s ut_json_printer = {
  * memory dump macro
  */
 #define ut_dump(ptr, len) ({ \
-	uint64_t size = (((len) + 15) / 16 + 1) * \
+	uint64_t _size = (((len) + 15) / 16 + 1) * \
 		(strlen("0x0123456789abcdef:") + 16 * strlen(" 00a") + strlen("  \n+ margin")) \
 		+ strlen(#ptr) + strlen("\n`' len: 100000000"); \
 	uint8_t *_ptr = (uint8_t *)(ptr); \
-	char *_str = alloca(size); \
+	char *_str = alloca(_size); \
 	char *_s = _str; \
 	/* make header */ \
 	_s += sprintf(_s, "\n`%s' len: %" PRId64 "\n", #ptr, (int64_t)len); \
@@ -631,16 +633,19 @@ char *ut_dump_nm_output(
 
 	/* open */
 	if((fp = popen(cmd, "r")) == NULL) {
+		fprintf(stderr, ut_color(UT_RED, "ERROR") ": failed to open pipe.\n");
 		goto _ut_nm_error_handler;
 	}
 
 	/* dump */
 	if((res = ut_dump_file(fp)) == NULL) {
+		fprintf(stderr, ut_color(UT_RED, "ERROR") ": failed to read nm output.\n");
 		goto _ut_nm_error_handler;
 	}
 
 	/* close file */
 	if(pclose(fp) != 0) {
+		fprintf(stderr, ut_color(UT_RED, "ERROR") ": failed to close pipe.\n");
 		goto _ut_nm_error_handler;
 	}
 	free(cmd); cmd = NULL;
@@ -1192,7 +1197,7 @@ int ut_toposort_by_group(
 		utkv_push(config_buf, sorted_config[file_id]);
 		for(int64_t j = file_idx[file_id]; j < file_idx[file_id + 1]; j++) {
 			utkv_push(test_buf, sorted_test[j]);
-		}		
+		}
 
 		/* mark pushed */
 		utkv_at(mark, file_id) = -1;
@@ -1370,6 +1375,10 @@ int ut_main_impl(int argc, char *argv[])
 {
 	/* dump symbol table */
 	struct ut_nm_result_s *nm = ut_nm(argv[0]);
+
+	if(nm == NULL) {
+		return(1);
+	}
 
 	/* dump tests and configs */
 	struct ut_s *test = ut_get_unittest(nm);
