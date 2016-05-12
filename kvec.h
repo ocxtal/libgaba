@@ -67,17 +67,17 @@ int main() {
 #include <string.h>
 #include <stdint.h>
 
-#define kv_roundup32(x) (--(x), (x)|=(x)>>1, (x)|=(x)>>2, (x)|=(x)>>4, (x)|=(x)>>8, (x)|=(x)>>16, ++(x))
+// #define kv_roundup32(x) (--(x), (x)|=(x)>>1, (x)|=(x)>>2, (x)|=(x)>>4, (x)|=(x)>>8, (x)|=(x)>>16, ++(x))
 #define kv_roundup(x, base)			( (((x) + (base) - 1) / (base)) * (base) )
 
 
-#define _INIT 			( 256 )
+#define KVEC_INIT_SIZE 			( 256 )
 
 /**
  * basic vectors (kv_*)
  */
 #define kvec_t(type)    struct { uint64_t n, m; type *a; }
-#define kv_init(v)      ({ (v).n = 0; (v).m = _INIT; (v).a = calloc((v).m, sizeof(*(v).a)); (v); })
+#define kv_init(v)      ({ (v).n = 0; (v).m = KVEC_INIT_SIZE; (v).a = calloc((v).m, sizeof(*(v).a)); (v); })
 #define kv_destroy(v)   { free((v).a); (v).a = NULL; }
 // #define kv_A(v, i)      ( (v).a[(i)] )
 #define kv_pop(v)       ( (v).a[--(v).n] )
@@ -135,7 +135,7 @@ int main() {
 
 #define kv_a(v, i) ( \
 	((v).m <= (size_t)(i) ? \
-	((v).m = (v).n = (i) + 1, kv_roundup32((v).m), \
+	((v).m = (v).n = (i) + 1, kv_roundup((v).m, 32), \
 	 (v).a = realloc((v).a, sizeof(*(v).a) * (v).m), 0) \
 	: (v).n <= (size_t)(i) ? (v).n = (i) + 1 \
 	: 0), (v).a[(i)])
@@ -145,11 +145,11 @@ int main() {
 #define kv_ptr(v)  ( (v).a )
 
 /** heap queue : elements in v must be orderd in heap */
-#define kv_hq_init(v)		{ kv_init(v); (void)kv_pushp(v); }
+#define kv_hq_init(v)		{ kv_init(v); (v).n = 1; }
 #define kv_hq_destroy(v)	kv_destroy(v)
 #define kv_hq_size(v)		( kv_size(v) - 1 )
 #define kv_hq_max(v)		( kv_max(v) - 1 )
-#define kv_hq_clear(v)		{ kv_clear(v); }
+#define kv_hq_clear(v)		( (v).n = 1 )
 
 #define kv_hq_resize(v, s)	( kv_resize(v, (s) + 1) )
 #define kv_hq_reserve(v, s)	( kv_reserve(v, (s) + 1) )
@@ -158,28 +158,30 @@ int main() {
 
 #define kv_hq_n(v, i) ( *((int64_t *)&v.a[i]) )
 #define kv_hq_push(v, x) { \
+	debug("push, n(%llu), m(%llu)", (v).n, (v).m); \
 	kv_push(v, x); \
-	uint64_t i = v.n - 1; \
+	uint64_t i = (v).n - 1; \
 	while(i > 1 && (kv_hq_n(v, i>>1) > kv_hq_n(v, i))) { \
-		v.a[0] = v.a[i>>1]; \
-		v.a[i>>1] = v.a[i]; \
-		v.a[i] = v.a[0]; \
+		(v).a[0] = (v).a[i>>1]; \
+		(v).a[i>>1] = (v).a[i]; \
+		(v).a[i] = (v).a[0]; \
 		i >>= 1; \
 	} \
 }
 #define kv_hq_pop(v) ({ \
+	debug("push, n(%llu), m(%llu)", (v).n, (v).m); \
 	uint64_t i = 1, j = 2; \
-	v.a[0] = v.a[i]; \
-	v.a[i] = v.a[--v.n]; \
-	v.a[v.n] = v.a[0]; \
-	while(j < v.n) { \
+	(v).a[0] = (v).a[i]; \
+	(v).a[i] = (v).a[--(v).n]; \
+	(v).a[(v).n] = (v).a[0]; \
+	while(j < (v).n) { \
 		uint64_t k; \
-		k = (j + 1 < v.n && kv_hq_n(v, j + 1) < kv_hq_n(v, j)) ? (j + 1) : j; \
+		k = (j + 1 < (v).n && kv_hq_n(v, j + 1) < kv_hq_n(v, j)) ? (j + 1) : j; \
 		k = (kv_hq_n(v, k) < kv_hq_n(v, i)) ? k : 0; \
 		if(k == 0) { break; } \
-		v.a[0] = v.a[k]; \
-		v.a[k] = v.a[i]; \
-		v.a[i] = v.a[0]; \
+		(v).a[0] = (v).a[k]; \
+		(v).a[k] = (v).a[i]; \
+		(v).a[i] = (v).a[0]; \
 		i = k; j = k<<1; \
 	} \
 	v.a[v.n]; \
@@ -199,7 +201,7 @@ int main() {
 #define kpv_mask(v, e)  ( (e) & ((1<<_BITS) - 1) )
 
 #define kpvec_t(type)       struct { uint64_t n, m; type *a; }
-#define kpv_init(v)         ( (v).n = 0, (v).m = _INIT * kpv_elems(v), (v).a = calloc((v).m, sizeof(*(v).a)) )
+#define kpv_init(v)         ( (v).n = 0, (v).m = KVEC_INIT_SIZE * kpv_elems(v), (v).a = calloc((v).m, sizeof(*(v).a)) )
 #define kpv_destroy(v)      { free((v).a); (v).a = NULL; }
 
 // #define kpv_A(v, i) ( kpv_mask(v, (v).a[(i) / kpv_elems(v)]>>kpv_base(v, i)) )
@@ -224,7 +226,7 @@ int main() {
 		if ((v1).m < (v0).n) kpv_resize(v1, (v0).n);	\
 		(v1).n = (v0).n;								\
 		memcpy((v1).a, (v0).a, kpv_amax(v));				\
-	} while (0)											\
+	} while (0)
 /*
 #define kpv_push(v, x) do {								\
 		if ((v).n == (v).m) {							\
@@ -252,7 +254,7 @@ int main() {
 		(v).n++; \
 	} while (0)
 
-/* *
+/*
  * kpv_pushp is not supported
  */
 #if 0
@@ -265,7 +267,7 @@ int main() {
 
 #define kpv_a(v, i) ( \
 	((v).m <= (size_t)(i)? \
-	((v).m = (v).n = (i) + 1, kv_roundup32((v).m), \
+	((v).m = (v).n = (i) + 1, kv_roundup((v).m, 32), \
 	 (v).a = realloc((v).a, sizeof(*(v).a) * (v).m), 0) \
 	: (v).n <= (size_t)(i)? (v).n = (i) + 1 \
 	: 0), kpv_mask(v, (v).a[(i) / kpv_elems(v)]>>kpv_base(v, i)) )
