@@ -11,8 +11,10 @@ gaba_t *ctx = gaba_init(GABA_PARAMS(
 	.score_matrix = GABA_SCORE_SIMPLE(2, 3, 5, 1)));
 
 /* create section info (gaba_build_section is a macro) */
-struct gaba_section_s asec = gaba_build_section(1, 0, strlen(a));
-struct gaba_section_s bsec = gaba_build_section(2, 0, strlen(b));
+char const *a = "ATATAT";
+char const *b = "ATGTAT";
+struct gaba_section_s asec = gaba_build_section(1, a, strlen(a));
+struct gaba_section_s bsec = gaba_build_section(2, b, strlen(b));
 
 /*
  * lim points the end of memory region of forward
