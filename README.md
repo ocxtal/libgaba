@@ -321,4 +321,4 @@ int64_t gaba_dp_dump_cigar(
 
 Apache v2.
 
-Copyright (c) 2016 Hajime Suzuki
+Copyright (c) 2015-2016 Hajime Suzuki
