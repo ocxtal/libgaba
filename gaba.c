@@ -2985,8 +2985,8 @@ void gaba_dp_set_qual(
 }
 
 /**
- * @fn extract_max
- * @brief extract max value from 8-bit 16-cell vector
+ * @fn extract_max, extract_min
+ * @brief extract max /min value from 8-bit 16-cell vector
  */
 static _force_inline
 int8_t extract_max(int8_t const vector[][4])
@@ -2997,6 +2997,16 @@ int8_t extract_max(int8_t const vector[][4])
 		max = (v[i] > max) ? v[i] : max;
 	}
 	return(max);
+}
+static _force_inline
+int8_t extract_min(int8_t const vector[][4])
+{
+	int8_t *v = (int8_t *)vector;
+	int8_t min = 127;
+	for(int i = 0; i < 16; i++) {
+		min = (v[i] < min) ? v[i] : min;
+	}
+	return(min);
 }
 
 /**
@@ -3036,7 +3046,8 @@ struct gaba_score_vec_s gaba_init_create_score_vector(
 			sc.sb[i] = v[i] - (geh + gih + gev + giv);
 		}
 	#else /* BIT == 4 */
-		sc.sb[0] = v[1] - (geh + gih + gev + giv);
+		int8_t min = extract_min(score_matrix->score_sub);
+		sc.sb[0] = min - (geh + gih + gev + giv);
 		for(int i = 1; i < 16; i++) {
 			sc.sb[i] = v[0] - (geh + gih + gev + giv);
 		}
@@ -4997,7 +5008,7 @@ unittest()
 	srand(seed);
 
 	// int64_t cross_test_count = 10000000;
-	int64_t cross_test_count = 100000g;
+	int64_t cross_test_count = 1000;
 	for(int64_t i = 0; i < cross_test_count; i++) {
 		/* generate sequences */
 		char *a = unittest_generate_random_sequence(1000);
