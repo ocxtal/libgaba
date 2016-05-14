@@ -150,7 +150,7 @@ typedef struct gaba_context_s gaba_t;
  */
 struct gaba_section_s {
 	uint32_t id;				/** (4) section id */
-	uint32_t len;				/** (4) length of the  seq */
+	uint32_t len;				/** (4) length of the seq */
 	uint8_t const *base;		/** (8) pointer to the head of the sequence */
 };
 typedef struct gaba_section_s gaba_section_t;
