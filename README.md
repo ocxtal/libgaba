@@ -1,6 +1,6 @@
 # libgaba
 
-GABA provides affine-gap penalty adaptive semi-global banded alignment on nucleotide ~~string graphs~~ (current implementation only supports trees). It uses fixed-width adaptive banded semi-global (a variant of Smith-Waterman and Gotoh) algorithm combined with difference DP (an acceleration technique similar to the Myers' bit-parallel editdist algorithm) and X-drop termination.
+GABA provides linear-gap and affine-gap penalty adaptive semi-global banded alignment on nucleotide ~~string graphs~~ (current implementation only supports trees). It uses fixed-width adaptive banded semi-global (a variant of Smith-Waterman and Gotoh) algorithm combined with difference DP (an acceleration technique similar to the Myers' bit-parallel edit distance algorithm) and X-drop termination.
 
 Older version of the library (libsea) is available at
 [https://bitbucket.org/suzukihajime/libsea/](https://bitbucket.org/suzukihajime/libsea/).
@@ -15,15 +15,15 @@ Older version of the library (libsea) is available at
 /*
  * Initialize a global context. The global context can be
  * shared between threads. gaba_init function actually takes
- * a pointer to a const gaba_params_s struct, and GABA_PARAMS
+ * a pointer to a const struct gaba_params_s, and GABA_PARAMS
  * is a macro to create a pointer with given parameters
  * (C99-style struct initializer is used in this example).
  * GABA_SCORE_SIMPLE(M, X, Gi, Ge) creates a substitution
  * matrix with match award = M, mismatch penalty = X,
- * and gap open cost = Gi and gap extension cost = Ge where
- * gap penalty function is g(k) = Gi + k * Ge (k is the length
- * of a contiguous gap). Note that current implementation
- * can't handle scores with M + 2 * (Gi + Ge) >= 32 (the
+ * and gap open penalty = Gi and gap extension penalty = Ge
+ * where gap penalty function is g(k) = Gi + k * Ge (k is the
+ * length of a contiguous gap). Note that current implementation
+ * cannot handle scores with M + 2 * (Gi + Ge) >= 32 (the
  * value must fit in a unsigned 5-bit variable).
  */
 gaba_t *ctx = gaba_init(GABA_PARAMS(
@@ -33,39 +33,39 @@ gaba_t *ctx = gaba_init(GABA_PARAMS(
 /*
  * Create section info (gaba_build_section is a macro).
  * Each section consists of a 2-bit or 4-bit encoded
- * nucleotide array (array of 8-bit char) and its length,
- * and unique ID to identify the section.
+ * nucleotide array (an array of uint8_t) and its length,
+ * and an unique ID to identify the section.
  */
 char const *a = "\x01\x08\x01\x08\x01\x08";	/* 4-bit encoded "ATATAT" */
 char const *b = "\x01\x08\x01\x02\x01\x08";	/* 4-bit encoded "ATACAT" */
-struct gaba_section_s asec = gaba_build_section(1, a, strlen(a));
+struct gaba_section_s asec = gaba_build_section(0, a, strlen(a));
 struct gaba_section_s bsec = gaba_build_section(2, b, strlen(b));
 
 /*
  * lim points the end of memory region of forward
- * sequences. If the reverse sequences are not provided,
- * lim should be 0x800000000000 (the tail address of the
- * user space on major unix-like operating systems on
+ * sequences. If reverse-complemented sequences are not
+ * available, lim should be 0x800000000000 (the tail address
+ * of the user space on major Unix-like operating systems on
  * x86_64 processors). When concatenated reverse-complemented
- * sequence is available after the forward sequences
+ * sequence is available after concatenated forward sequence
  * (when the sequnces are stored like ->->->...-><-<-<-...<-
  * way, or if you are familiar with the implementation
  * of the BWA software it is the unpacked version of the
- * BWA reference sequence object), a pointer to the tail
- * of the forward section should be passed to lim then
- * the dp functions will properly use the reverse-complemented
- * sequence to make the sequence fetching faster.
+ * BWA reference sequence object), a pointer to the head
+ * of the reverse-complemented section should be passed to
+ * lim then the dp functions will properly use the reverse-
+ * -complemented sequence to make the sequence fetching faster.
  */
 void const *lim = (void const *)0x800000000000;
 
 /*
- * initialize a dp context (thread-local context)
+ * Initialize a DP context (thread-local context)
  */
 gaba_dp_t *dp = gaba_dp_init(ctx, lim, lim);
 
 /*
  * Fill root with section A and section B from (0, 0).
- * dp_fill_root function creates the root of the dp matrix
+ * dp_fill_root function creates a root of a DP matrix
  * and fill it until either sequence pointer reaches the end
  * of the sequence.
  */
@@ -78,7 +78,7 @@ struct gaba_fill_s *f = gaba_dp_fill_root(dp, ap, 0, bp, 0);
  * section, you should call gaba_dp_fill with f and the
  * section A pointer replaced with the next section (and
  * section B pointer unchanged if f->status indicates
- * that sequence pointer on section B didn't reach the
+ * that sequence pointer on section B did not reach the
  * end in the first fill).
  */
 if(f->status & GABA_STATUS_UPDATE_A) {
@@ -109,9 +109,10 @@ f = gaba_dp_fill(dp, f, ap, bp);
 /*
  * Traces (alignment paths) are calculated from
  * arbitrary sections to the root. Traces are stored
- * in r->path in the array of 1-bit direction
- * (0: RIGHT / 1: DOWN). The generated path and the
- * reversed path of the third argument (reverse section)
+ * in r->path in a 1-bit packed direction array.
+ * (0: RIGHT / 1: DOWN). The generated path of the
+ * forward section (second argument) and the reversed
+ * path generated from the reverse section (third argument)
  * are concatenated at the root.
  */
 struct gaba_result_s *r = gaba_dp_trace(dp,
@@ -120,7 +121,7 @@ struct gaba_result_s *r = gaba_dp_trace(dp,
 	NULL);
 
 /*
- * 1-bit direction string can be converted to CIGAR
+ * 1-bit packed direction string can be converted to CIGAR
  * string (defined in the SAM format) with dump_cigar
  * or print_cigar function.
  */
@@ -131,31 +132,53 @@ gaba_dp_print_cigar(
 	r->path->offset,
 	r->path->len);
 
-/* destroy the dp context */
+/* destroy the DP context */
 gaba_dp_clean(dp);
 
 /* destroy the global context */
 gaba_clean(ctx);
 ```
 
-### Scoring schemes
-
-The library can perform affine-gap penalty alignment (Gotoh's algorithm: Gotoh, 1982) in an adaptive banded way. The gap penalty function used in the library is g(k) = Gi + k * Ge where k is the length of the coutiguous gap and Gi and Ge are positive (or zero) integer penalties. The library can't handle scoreing schemes with M + 2 * (Gi + Ge) > 31 due to the limitation of the diff algorithm used in the library. Setting gap extension penalty zero (Ge = 0) may also result in an incorrect alignment. The scoring parameters (M, X, Gi, Ge) (all parameters are represented in positive integers) must be passed to the `gaba_init` function.
-
-
 ### Input sequence formats
 
-Current implementation accept 2-bit encoded (A = 0x00, C = 0x01, G = 0x02, T = 0x03) bases or 4-bit encoded bases with ambiguity (stored in uint8_t array). When the input sequence is 2-bit encoded, gaba.c must be compiled with the macro BIT is defined to 2 (-DBIT=2 must be passed to the compiler). The 2-bit format enables the library to handle 4 x 4-sized substitution matrix (where match  award of ('A', 'A') pair can be different from match award of ('C', 'C') pair). The 4-bit format (the default input format) accepts the ambiguity of bases (SNPs), treating any overlapping between two ambiguous bases as a match while dropping capability of full-sized matrix. If you want to use the 4 x 4-sized matrix you should investigate `struct gaba_score_s` and `GABA_PARAMS` macro in gaba.h.
+Current implementation accept 2-bit encoded (A = 0x00, C = 0x01, G = 0x02, T = 0x03) sequences or 4-bit encoded (A = 0x01, C = 0x02, G = 0x04, T = 0x08) sequences with ambiguity, stored in uint8\_t arrays. The format must be determined at the compile time of gaba.c and can be switched with -DBIT=2 or -DBIT=4 (default) flags.
+
+
+### Substitution matrix
+
+If you selected the 2-bit format, the fill-in functions will calculate DP cells with a 4 x 4-sized substitution matrix. The matrix is represented in a 4 x 4-sized two-dimensional int8\_t array (`score_sub` member in `struct gaba_score_s`), with element at [0][0] corresponding to a score of ('A', 'A') pair, [0][1] to ('A', 'C'), ... and [3][3] to ('T', 'T'), respectively. The functions cannot handle 4 x 4-sized matrix in the default 4-bit format setting and use match-mismatch model instead, interpreting the maximum value on the diagonal of the substitution matrix as a match award and minimum value among the other 12 cells as a mismatch penalty.
+
+
+```
+struct gaba_score_s {
+	int8_t score_sub[4][4];	
+	int8_t score_gi_a, score_ge_a;
+	int8_t score_gi_b, score_ge_b;
+};
+```
+
+
+### Gap penalty functions
+
+In the default setting it uses the affine-gap penalty function represented in g(k) = Gi + k * Ge form where k is the length of a contiguous gap and Gi and Ge are positive (or zero) integer penalties. Different coefficients on two sequences (query and sequences) are allowed, with setting different values to `score_gi_a` and `score_gi_b` pair, or `score_ge_a` and `score_ge_b` pair in `struct gaba_score_s`. When the library is compiled in the linear-gap penalty setting (when gaba.c is compiled with -DMODEL=LINEAR), it uses a gap penalty function of g(k) = k * (Gi + Ge) form. The library cannot handle scoreing schemes with M + 2 * (Gi + Ge) > 31 due to the limitation of the diff algorithm used in the library. Setting gap extension penalty zero (Ge = 0 in the affine-gap setting or Gi + Ge = 0 in the linear-gap setting) may also result in an incorrect alignment.
 
 
 ### Sections
 
-All the input sequences are passed to the functions stored in the `gaba_section_s` object. The section object consists of a unique ID of the sequence fragment, a pointer to the head of the sequece fragment, and its length (see `struct gaba_section_s` in gaba.h).
+All the input sequences are passed to the functions stored in the `gaba_section_s` object. The section object consists of a unique ID of the sequence fragment, a pointer to the head of the sequece fragment, and its length.
+
+```
+struct gaba_section_s {
+	uint32_t id;
+	uint32_t len;
+	uint8_t const *base;
+};
+```
 
 
-#### IDs
+#### Unique IDs
 
-IDs are 32-bit positive integer unique to sections. Even and odd numbers (e.g. 0 and 1) are paired to represent forward and reverse-complemented sequences of the same segment. It means you can get the reverse-complemented section of any section inverting the bit 0 of its ID.
+Unique IDs are 32-bit positive integer. Even and odd numbers (e.g. 0 and 1) are paired to represent forward and reverse-complemented sequences of the same segment. The traceback function uses this correspondence between forward and reverse-complemented sections to express chains of reversed sections in the reverse traceback (see third argument of `gaba_dp_trace`).
 
 
 #### Sequences
