@@ -32,6 +32,20 @@
 #  endif
 #else
 #  define BIT 						4
+// #  define BIT 						2
+#endif
+
+/* gap penalty model (linear or affine) */
+#define LINEAR 						1
+#define AFFINE						2
+
+#ifdef MODEL
+#  if !(MODEL == LINEAR || MODEL == AFFINE)
+#    error "MODEL must be LINEAR (1) or AFFINE (2)."
+#  endif
+#else
+#  define MODEL 					AFFINE
+// #  define MODEL 					LINEAR
 #endif
 
 /* constants */
@@ -705,6 +719,30 @@ struct gaba_joint_tail_s *fill_create_tail(
  * @macro _fill_load_contexts
  * @brief load vectors onto registers
  */
+#if MODEL == LINEAR
+#define _fill_load_contexts(_blk) \
+	debug("blk(%p)", (_blk)); \
+	/* load sequence buffer offset */ \
+	uint8_t const *aptr = _rd_bufa(this, 0, BW); \
+	uint8_t const *bptr = _rd_bufb(this, 0, BW); \
+	/* load mask pointer */ \
+	union gaba_mask_pair_u *mask_ptr = (_blk)->mask; \
+	/* load vector registers */ \
+	vec_t register dh = _load(_pv(((_blk) - 1)->diff.dh)); \
+	vec_t register dv = _load(_pv(((_blk) - 1)->diff.dv)); \
+	_print(_add(dh, _load_sc(this, ofsh))); \
+	_print(_add(dv, _load_sc(this, ofsv))); \
+	/* load delta vectors */ \
+	vec_t register delta = _load(_pv(((_blk) - 1)->sd.delta)); \
+	vec_t register max = _load(_pv(((_blk) - 1)->sd.max)); \
+	_print(max); \
+	_print_v32i16(_add_v32i16(_cvt_v32i8_v32i16(delta), _load_v32i16(_last_block(&this->tail)->md))); \
+	/* load direction determiner */ \
+	union gaba_dir_u dir = ((_blk) - 1)->dir; \
+	/* load large offset */ \
+	int64_t offset = ((_blk) - 1)->offset; \
+	debug("offset(%lld)", offset);
+#else
 #define _fill_load_contexts(_blk) \
 	debug("blk(%p)", (_blk)); \
 	/* load sequence buffer offset */ \
@@ -737,11 +775,30 @@ struct gaba_joint_tail_s *fill_create_tail(
 	/* load large offset */ \
 	int64_t offset = ((_blk) - 1)->offset; \
 	debug("offset(%lld)", offset);
+#endif
 
 /**
  * @macro _fill_body
  * @brief update vectors
  */
+#if MODEL == LINEAR
+#define _fill_body() { \
+	vec_t register t = _match(_loadu(aptr), _loadu(bptr)); \
+	t = _shuf(_load_sc(this, sb), t); \
+	_print(t); \
+	t = _max(dh, t); \
+	t = _max(dv, t); \
+	mask_ptr->pair.h.mask = _mask(_eq(t, dv)); \
+	mask_ptr->pair.v.mask = _mask(_eq(t, dh)); \
+	debug("mask(%llx)", mask_ptr->all); \
+	mask_ptr++; \
+	vec_t _dv = _sub(t, dh); \
+	dh = _sub(t, dv); \
+	dv = _dv; \
+	_print(_add(dh, _load_sc(this, ofsh))); \
+	_print(_add(dv, _load_sc(this, ofsv))); \
+}
+#else
 #define _fill_body() { \
 	vec_t register t = _match(_loadu(aptr), _loadu(bptr)); \
 	_print(_loadu(aptr)); \
@@ -764,6 +821,7 @@ struct gaba_joint_tail_s *fill_create_tail(
 	_print(_sub(_sub(de, dv), _load_sc(this, adjh))); \
 	_print(_sub(_add(df, dh), _load_sc(this, adjv))); \
 }
+#endif /* MODEL */
 
 /**
  * @macro _fill_update_delta
@@ -787,24 +845,40 @@ struct gaba_joint_tail_s *fill_create_tail(
 #define _fill_right_windback_ptr() { \
 	aptr++; \
 }
+#if MODEL == LINEAR
+#define _fill_right() { \
+	dh = _bsl(dh, 1);	/* shift left dh */ \
+	_fill_body();		/* update vectors */ \
+	_fill_update_delta(_add, dh, _load_sc(this, ofsh), 1); \
+}
+#else
 #define _fill_right() { \
 	dh = _bsl(dh, 1);	/* shift left dh */ \
 	df = _bsl(df, 1);	/* shift left df */ \
 	_fill_body();		/* update vectors */ \
 	_fill_update_delta(_sub, dh, _load_sc(this, ofsh), -1); \
 }
+#endif /* MODEL */
 #define _fill_down_update_ptr() { \
 	bptr++;				/* increment sequence buffer pointer */ \
 }
 #define _fill_down_windback_ptr() { \
 	bptr--; \
 }
+#if MODEL == LINEAR
+#define _fill_down() { \
+	dv = _bsr(dv, 1);	/* shift right dv */ \
+	_fill_body();		/* update vectors */ \
+	_fill_update_delta(_add, dv, _load_sc(this, ofsv), 1); \
+}
+#else
 #define _fill_down() { \
 	dv = _bsr(dv, 1);	/* shift right dv */ \
 	de = _bsr(de, 1);	/* shift right de */ \
 	_fill_body();		/* update vectors */ \
 	_fill_update_delta(_add, dv, _load_sc(this, ofsv), 1); \
 }
+#endif /* MODEL */
 
 /**
  * @macro _fill_update_offset
@@ -822,6 +896,26 @@ struct gaba_joint_tail_s *fill_create_tail(
  * @macro _fill_store_vectors
  * @brief store vectors at the end of the block
  */
+#if MODEL == LINEAR
+#define _fill_store_vectors(_blk) ({ \
+	/* store diff vectors */ \
+	_store(_pv((_blk)->diff.dh), dh); \
+	_store(_pv((_blk)->diff.dv), dv); \
+	_print(dh); \
+	_print(dv); \
+	/* store delta vectors */ \
+	_store(_pv((_blk)->sd.delta), delta); \
+	_store(_pv((_blk)->sd.max), max); \
+	/* store direction array */ \
+	(_blk)->dir = dir; \
+	/* store large offset */ \
+	(_blk)->offset = offset; \
+	/* calc cnt */ \
+	uint64_t acnt = _rd_bufa(this, 0, BW) - aptr; \
+	uint64_t bcnt = bptr - _rd_bufb(this, 0, BW); \
+	_seta_v2i32(bcnt, acnt); \
+})
+#else
 #define _fill_store_vectors(_blk) ({ \
 	/* store diff vectors */ \
 	de = _sub(de, dv); \
@@ -852,6 +946,7 @@ struct gaba_joint_tail_s *fill_create_tail(
 	/*_print_v2i32(_seta_v2i32(bcnt, acnt));*/ \
 	_seta_v2i32(bcnt, acnt); \
 })
+#endif
 
 /**
  * @fn fill_test_xdrop
@@ -2947,12 +3042,20 @@ struct gaba_score_vec_s gaba_init_create_score_vector(
 		}
 	#endif	
 
-	for(int i = 0; i < 16; i++) {
-		sc.adjh[i] = -gih;
-		sc.adjv[i] = -giv;
-		sc.ofsh[i] = -(geh + gih);
-		sc.ofsv[i] = gev + giv;
-	}
+	#if MODEL == LINEAR
+		for(int i = 0; i < 16; i++) {
+			sc.adjh[i] = sc.adjv[i] = 0;
+			sc.ofsh[i] = geh + gih;
+			sc.ofsv[i] = gev + giv;
+		}
+	#else
+		for(int i = 0; i < 16; i++) {
+			sc.adjh[i] = -gih;
+			sc.adjv[i] = -giv;
+			sc.ofsh[i] = -(geh + gih);
+			sc.ofsv[i] = gev + giv;
+		}
+	#endif
 	return(sc);
 }
 
@@ -2969,10 +3072,17 @@ union gaba_dir_u gaba_init_create_dir_dynamic(
 	int8_t gih = -score_matrix->score_gi_a;
 	int8_t giv = -score_matrix->score_gi_b;
 
-	int16_t coef_a = -max + 2*geh;
-	int16_t coef_b = -max + 2*gev;
-	int16_t ofs_a = gih;
-	int16_t ofs_b = giv;
+	#if MODEL == LINEAR
+		int16_t coef_a = -max + 2 * (geh + gih);
+		int16_t coef_b = -max + 2 * (gev + giv);
+		int16_t ofs_a = 0;
+		int16_t ofs_b = 0;
+	#else
+		int16_t coef_a = -max + 2 * geh;
+		int16_t coef_b = -max + 2 * gev;
+		int16_t ofs_a = gih;
+		int16_t ofs_b = giv;
+	#endif
 
 	int64_t acc = (ofs_a + coef_a * BW/2) - (ofs_b + coef_b * (BW/2 - 1));
 	return((union gaba_dir_u) {
@@ -3009,10 +3119,17 @@ struct gaba_middle_delta_s gaba_init_create_middle_delta(
 	int8_t gih = -score_matrix->score_gi_a;
 	int8_t giv = -score_matrix->score_gi_b;
 
-	int16_t coef_a = -max + 2*geh;
-	int16_t coef_b = -max + 2*gev;
-	int16_t ofs_a = gih;
-	int16_t ofs_b = giv;
+	#if MODEL == LINEAR
+		int16_t coef_a = -max + 2 * (geh + gih);
+		int16_t coef_b = -max + 2 * (gev + giv);
+		int16_t ofs_a = 0;
+		int16_t ofs_b = 0;
+	#else
+		int16_t coef_a = -max + 2*geh;
+		int16_t coef_b = -max + 2*gev;
+		int16_t ofs_a = gih;
+		int16_t ofs_b = giv;
+	#endif
 
 	struct gaba_middle_delta_s md;
 	for(int i = 0; i < BW/2; i++) {
@@ -3032,6 +3149,43 @@ struct gaba_middle_delta_s gaba_init_create_middle_delta(
  * dE[i, j] = E[i, j] - S[i, j]
  * dF[i, j] = F[i, j] - S[i, j]
  */
+#if MODEL == LINEAR
+static _force_inline
+struct gaba_diff_vec_s gaba_init_create_diff_vectors(
+	struct gaba_score_s const *score_matrix)
+{
+	int8_t max = extract_max(score_matrix->score_sub);
+	int8_t geh = -score_matrix->score_ge_a;
+	int8_t gev = -score_matrix->score_ge_b;
+	int8_t gih = -score_matrix->score_gi_a;
+	int8_t giv = -score_matrix->score_gi_b;
+
+	int8_t drop = 0;
+	int8_t raise = max - (geh + gih + gev + giv);
+
+	int8_t dh[BW] __attribute__(( aligned(16) ));
+	int8_t dv[BW] __attribute__(( aligned(16) ));
+
+	struct gaba_diff_vec_s diff __attribute__(( aligned(16) ));
+	/**
+	 * dh: dH[i, j] - gh
+	 * dv: dV[i, j] - gv
+	 */
+	/* calc dh and dv */
+	for(int i = 0; i < BW/2; i++) {
+		dh[i] = drop;
+		dh[BW/2 + i] = raise;
+		dv[i] = raise;
+		dv[BW/2 + i] = drop;
+	}
+ 	dh[BW/2] = raise;
+ 	dv[BW/2] = raise;
+
+	_store(&diff.dh, _load(dh));
+	_store(&diff.dv, _load(dv));
+	return(diff);
+}
+#else
 static _force_inline
 struct gaba_diff_vec_s gaba_init_create_diff_vectors(
 	struct gaba_score_s const *score_matrix)
@@ -3107,6 +3261,7 @@ struct gaba_diff_vec_s gaba_init_create_diff_vectors(
 
 	return(diff);
 }
+#endif
 
 /**
  * @fn gaba_init_create_char_vector
@@ -3798,8 +3953,13 @@ unittest(with_seq_pair("A", "A"))
 
 	/* fill tail section again */
 	f = gaba_dp_fill(d, f, &s->aftail, &s->bftail);
-	assert(f->status == 0x10f, "%x", f->status);
-	assert(check_tail(f, -11, 31, 44, 4), print_tail(f));
+	#if MODEL == LINEAR
+		assert(f->status == 0x1ff, "%x", f->status);
+		assert(check_tail(f, -11, 40, 53, 4), print_tail(f));
+	#else
+		assert(f->status == 0x10f, "%x", f->status);
+		assert(check_tail(f, -11, 31, 44, 4), print_tail(f));
+	#endif
 
 	gaba_dp_clean(d);
 }
@@ -3826,8 +3986,13 @@ unittest(with_seq_pair("ACGTACGTACGT", "ACGTACGTACGT"))
 
 	/* fill tail section again */
 	f = gaba_dp_fill(d, f, &s->aftail, &s->bftail);
-	assert(f->status == 0x10f, "%x", f->status);
-	assert(check_tail(f, 33, 31, 88, 4), print_tail(f));
+	#if MODEL == LINEAR
+		assert(f->status == 0x1ff, "%x", f->status);
+		assert(check_tail(f, 33, 40, 97, 4), print_tail(f));
+	#else
+		assert(f->status == 0x10f, "%x", f->status);
+		assert(check_tail(f, 33, 31, 88, 4), print_tail(f));
+	#endif
 
 	gaba_dp_clean(d);
 }
@@ -3863,9 +4028,15 @@ unittest(with_seq_pair("TTTTTTTT", "CTTTTTTTT"))
 	assert(f->status == 0x010f, "%x", f->status);
 	f = gaba_dp_fill(d, f, &s->aftail, &s->bfsec);
 	assert(f->status == 0x01f0, "%x", f->status);
+
 	f = gaba_dp_fill(d, f, &s->aftail, &s->bftail);
-	assert(f->status == 0x010f, "%x", f->status);
-	assert(check_tail(f, 22, 35, 41, 5), print_tail(f));
+	#if MODEL == LINEAR
+		assert(f->status == 0x010f, "%x", f->status);
+		assert(check_tail(f, 22, 36, 42, 5), print_tail(f));
+	#else
+		assert(f->status == 0x010f, "%x", f->status);
+		assert(check_tail(f, 22, 35, 41, 5), print_tail(f));
+	#endif
 
 	gaba_dp_clean(d);
 }
@@ -3881,9 +4052,15 @@ unittest(with_seq_pair("GACGTACGT", "ACGTACGT"))
 	assert(f->status == 0x01f0, "%x", f->status);
 	f = gaba_dp_fill(d, f, &s->afsec, &s->bftail);
 	assert(f->status == 0x010f, "%x", f->status);
+
 	f = gaba_dp_fill(d, f, &s->aftail, &s->bftail);
-	assert(f->status == 0x01ff, "%x", f->status);
-	assert(check_tail(f, 20, 38, 43, 4), print_tail(f));
+	#if MODEL == LINEAR
+		assert(f->status == 0x01f0, "%x", f->status);
+		assert(check_tail(f, 20, 37, 42, 4), print_tail(f));
+	#else
+		assert(f->status == 0x01ff, "%x", f->status);
+		assert(check_tail(f, 20, 38, 43, 4), print_tail(f));
+	#endif
 
 	gaba_dp_clean(d);
 }
@@ -3901,9 +4078,16 @@ unittest(with_seq_pair("ACGTACGT", "GACGTACGT"))
 	assert(f->status == 0x010f, "%x", f->status);
 	f = gaba_dp_fill(d, f, &s->aftail, &s->bfsec);
 	assert(f->status == 0x01f0, "%x", f->status);
+
+
 	f = gaba_dp_fill(d, f, &s->aftail, &s->bftail);
-	assert(f->status == 0x010f, "%x", f->status);
-	assert(check_tail(f, 20, 36, 42, 5), print_tail(f));
+	#if MODEL == LINEAR
+		assert(f->status == 0x010f, "%x", f->status);
+		assert(check_tail(f, 20, 35, 41, 5), print_tail(f));
+	#else
+		assert(f->status == 0x010f, "%x", f->status);
+		assert(check_tail(f, 20, 36, 42, 5), print_tail(f));
+	#endif
 
 	gaba_dp_clean(d);
 }
@@ -4338,8 +4522,8 @@ unittest(with_seq_pair("ACGTACGT", "GACGTACGT"))
 struct unittest_naive_result_s {
 	int32_t score;
 	uint32_t path_length;
-	uint64_t apos, bpos;
-	uint64_t alen, blen;
+	int64_t apos, bpos;
+	int64_t alen, blen;
 	char *path;
 };
 
@@ -4358,6 +4542,125 @@ int8_t unittest_naive_encode(char a)
  * @brief naive implementation of the forward semi-global alignment algorithm
  * left-aligned gap and left-aligned deletion
  */
+#if MODEL == LINEAR
+static
+struct unittest_naive_result_s unittest_naive(
+	struct gaba_score_s const *sc,
+	char const *a,
+	char const *b)
+{
+	/* utils */
+	#define _a(p, q, plen)		( (q) * ((plen) + 1) + (p) )
+	#define s(p, q)		_a(p, (q), alen)
+	#define m(p, q)		( \
+		sc->score_sub \
+			[unittest_naive_encode(a[(p) - 1])] \
+			[unittest_naive_encode(b[(q) - 1])] \
+	)
+
+	/* load gap penalties */
+	int8_t gia = -sc->score_gi_a;
+	int8_t gib = -sc->score_gi_b;
+	int8_t gea = -sc->score_ge_a;
+	int8_t geb = -sc->score_ge_a;
+
+	/* calc lengths */
+	int64_t alen = strlen(a);
+	int64_t blen = strlen(b);
+
+	/* calc min */
+	int8_t *v = (int8_t *)sc->score_sub;
+	int64_t min = 0;
+	for(int i = 0; i < 16; i++) {
+		min = (v[i] < min) ? v[i] : min;
+	}
+	min = INT16_MIN - min - gia - gib;
+
+	/* malloc matrix */
+	int16_t *mat = (int16_t *)malloc(
+		(alen + 1) * (blen + 1) * sizeof(int16_t));
+
+	/* init */
+	struct unittest_naive_maxpos_s {
+		int16_t score;
+		int64_t apos;
+		int64_t bpos;
+	};
+
+	struct unittest_naive_maxpos_s max = { 0, 0, 0 };
+
+	mat[s(0, 0)] = 0;
+	for(int64_t i = 1; i < alen+1; i++) {
+		mat[s(i, 0)] = MAX2(min, i * (gea + gia));
+	}
+	for(int64_t j = 1; j < blen+1; j++) {
+		mat[s(0, j)] = MAX2(min, j * (geb + gib));
+	}
+
+	for(int64_t j = 1; j < blen+1; j++) {
+		for(int64_t i = 1; i < alen+1; i++) {
+			int16_t score = mat[s(i, j)] = MAX4(min,
+				mat[s(i - 1, j - 1)] + m(i, j),
+				mat[s(i - 1, j)] + gia + gea,
+				mat[s(i, j - 1)] + gib + geb);
+			if(score > max.score
+			|| (score == max.score && (i + j) < (max.apos + max.bpos))) {
+				max = (struct unittest_naive_maxpos_s){
+					score, i, j
+				};
+			}
+		}
+	}
+	if(max.score == 0) {
+		max = (struct unittest_naive_maxpos_s){ 0, 0, 0 };
+	}
+
+	debug("max(%d), apos(%lld), bpos(%lld)", max.score, max.apos, max.bpos);
+
+	struct unittest_naive_result_s result = {
+		.score = max.score,
+		.apos = max.apos,
+		.bpos = max.bpos,
+		.path_length = max.apos + max.bpos + 1,
+		.path = (char *)malloc(max.apos + max.bpos + 1)
+	};
+	int64_t path_index = max.apos + max.bpos + 1;
+	while(max.apos > 0 || max.bpos > 0) {
+		debug("path_index(%llu), apos(%lld), bpos(%lld)", path_index, max.apos, max.bpos);
+		/* M > I > D > X */
+		if(max.bpos > 0
+		&& mat[s(max.apos, max.bpos)] == mat[s(max.apos, max.bpos - 1)] + (geb + gib)) {
+			max.bpos--;
+			result.path[--path_index] = 'D';
+		} else if(max.apos > 0
+		&& mat[s(max.apos, max.bpos)] == mat[s(max.apos - 1, max.bpos)] + (gea + gia)) {
+			max.apos--;
+			result.path[--path_index] = 'R';
+		} else {
+			result.path[--path_index] = 'R';
+			result.path[--path_index] = 'D';
+			max.apos--;
+			max.bpos--;
+		}
+	}
+
+	result.alen = result.apos - max.apos;
+	result.blen = result.bpos - max.bpos;
+
+	result.path_length -= path_index;
+	for(uint64_t i = 0; i < result.path_length; i++) {
+		result.path[i] = result.path[path_index++];
+	}
+	result.path[result.path_length] = '\0';
+
+	free(mat);
+
+	#undef _a
+	#undef s
+	#undef m
+	return(result);
+}
+#else /* MODEL == AFFINE */
 static
 struct unittest_naive_result_s unittest_naive(
 	struct gaba_score_s const *sc,
@@ -4382,12 +4685,12 @@ struct unittest_naive_result_s unittest_naive(
 	int8_t geb = -sc->score_ge_a;
 
 	/* calc lengths */
-	uint64_t alen = strlen(a);
-	uint64_t blen = strlen(b);
+	int64_t alen = strlen(a);
+	int64_t blen = strlen(b);
 
 	/* calc min */
 	int8_t *v = (int8_t *)sc->score_sub;
-	int16_t min = 0;
+	int64_t min = 0;
 	for(int i = 0; i < 16; i++) {
 		min = (v[i] < min) ? v[i] : min;
 	}
@@ -4400,23 +4703,24 @@ struct unittest_naive_result_s unittest_naive(
 	/* init */
 	struct unittest_naive_maxpos_s {
 		int16_t score;
-		uint64_t apos;
-		uint64_t bpos;
+		int64_t apos;
+		int64_t bpos;
 	};
 
 	struct unittest_naive_maxpos_s max = { 0, 0, 0 };
+
 	mat[s(0, 0)] = mat[e(0, 0)] = mat[f(0, 0)] = 0;
-	for(uint64_t i = 1; i < alen+1; i++) {
+	for(int64_t i = 1; i < alen+1; i++) {
 		mat[s(i, 0)] = mat[e(i, 0)] = MAX2(min, gia + i * gea);
 		mat[f(i, 0)] = MAX2(min, gia + i * gea + gib - 1);
 	}
-	for(uint64_t j = 1; j < blen+1; j++) {
+	for(int64_t j = 1; j < blen+1; j++) {
 		mat[s(0, j)] = mat[f(0, j)] = MAX2(min, gib + j * geb);
 		mat[e(0, j)] = MAX2(min, gib + j * geb + gia - 1);
 	}
 
-	for(uint64_t j = 1; j < blen+1; j++) {
-		for(uint64_t i = 1; i < alen+1; i++) {
+	for(int64_t j = 1; j < blen+1; j++) {
+		for(int64_t i = 1; i < alen+1; i++) {
 			int16_t score_e = mat[e(i, j)] = MAX2(
 				mat[s(i - 1, j)] + gia + gea,
 				mat[e(i - 1, j)] + gea);
@@ -4445,7 +4749,7 @@ struct unittest_naive_result_s unittest_naive(
 		.path_length = max.apos + max.bpos + 1,
 		.path = (char *)malloc(max.apos + max.bpos + 1)
 	};
-	uint32_t path_index = max.apos + max.bpos + 1;
+	int64_t path_index = max.apos + max.bpos + 1;
 	while(max.apos > 0 || max.bpos > 0) {
 		/* M > I > D > X */
 		if(mat[s(max.apos, max.bpos)] == mat[f(max.apos, max.bpos)]) {
@@ -4473,12 +4777,14 @@ struct unittest_naive_result_s unittest_naive(
 
 	free(mat);
 
-	#undef a
-	#undef f
-	#undef e
+	#undef _a
 	#undef s
+	#undef e
+	#undef f
+	#undef m
 	return(result);
 }
+#endif /* MODEL */
 
 /**
  * @fn unittest_random_base
@@ -4628,6 +4934,29 @@ char *string_pair_diff(
 })
 #define print_string_pair_diff(_a, _b)		"\n%s", format_string_pair_diff(_a, _b)
 
+#if MODEL == LINEAR
+unittest()
+{
+	struct gaba_context_s const *c = (struct gaba_context_s const *)gctx;
+	struct gaba_score_s const *p = c->params.score_matrix;
+	struct unittest_naive_result_s n;
+
+	/* all matches */
+	n = unittest_naive(p, "AAAA", "AAAA");
+	assert(check_naive_result(n, 8, "DRDRDRDR"), print_naive_result(n));
+	free(n.path);
+
+	/* with deletions */
+	n = unittest_naive(p, "TTTTACGTACGT", "TTACGTACGT");
+	assert(check_naive_result(n, 8, "DRDRRRDRDRDRDRDRDRDRDR"), print_naive_result(n));
+	free(n.path);
+
+	/* with insertions */
+	n = unittest_naive(p, "TTACGTACGT", "TTTTACGTACGT");
+	assert(check_naive_result(n, 8, "DRDRDDDRDRDRDRDRDRDRDR"), print_naive_result(n));
+	free(n.path);
+}
+#else /* MODEL == AFFINE */
 unittest()
 {
 	struct gaba_context_s const *c = (struct gaba_context_s const *)gctx;
@@ -4649,6 +4978,9 @@ unittest()
 	assert(check_naive_result(n, 13, "DRDRDDDRDRDRDRDRDRDRDR"), print_naive_result(n));
 	free(n.path);
 }
+#endif /* MODEL */
+
+
 #if 1
 /* cross test */
 unittest()
@@ -4665,7 +4997,7 @@ unittest()
 	srand(seed);
 
 	// int64_t cross_test_count = 10000000;
-	int64_t cross_test_count = 1000;
+	int64_t cross_test_count = 100000g;
 	for(int64_t i = 0; i < cross_test_count; i++) {
 		/* generate sequences */
 		char *a = unittest_generate_random_sequence(1000);
@@ -4734,11 +5066,15 @@ unittest()
 #if 0
 "GACGCCTAATAATGTAGAAGACGGATCGTAACTTGATTGCTCGTTTTACTCATTGAGCAGCCTACAGAAATCGTGCCCCCCGACGGGACTGTAAGCCGTTAGGACATCGTTCTAGTCCTTACTTGCTCCGCCCCCGACGGGCGATCCAGCTCGGTAACAACAAACATAGTTGTACCATCTGCGAGTTTGAGACTTAAGCCGGACGCGCAAGCGGCTGGGCGGTTTAGAAGGATTTACTGACGATTTATATTCTATTCCACCAGTGCTTCAGCACTGGGCGCGTGGGATACGAACATTCAAAGCGGATACTATCCATAGTGAAGGGGCCGTGCTGGTTTAAAGAGGAGGCGTACTATATGTAGCTTGCTTTGCCGCGGGGGCAGCCAGAGGGAACCATGACAGGATAGACACCGGAGTCCCGATCAAACGTCTTCATAGTTTGCATTATCGTCAGCGTCTCGGATAGTCACAGTAGTTAAGTTACTTTCTTAGCACAATGTGTTGGAGTTGGCAATTCTCCTCAGGCCCAGTGATATCCCGGTGTTGACTAAAAGCTTGGAAACCGACTCGAACTCGTGGCCCCTCTGATTAATTCCAGCTAAGGAACGGTTTAGATGCCAAAGGGAGGATCCGTTCCAACACTGGTATACAATATACCGTCGCGACGACCTCGCGAACGGCTGAAAATATGTAGCTATGAGTCCTACTTGGGAGGGACCCAGATCACGCTGACAATTGATAGGGCTGTTGCATTACTCCCCGTCTCGACCTTCGGGGGATCCACCAGAACGTCCCCAGGCCTGAATCTCCAGTCGCTCTGAAGTAGACCCAATAGGTGAATAGGCCCCATTAGACAATAGCTCGCGAAATTTGGGAAACTGGACTCCGCGAGAATATCCGACGGTGACATTCCTATACCCGGAAGCTACCTAAAGCGTTGAGTGGACGTGACGGGCCGTCGCAATCTAAGATCAACCCTCCCGGTTTACGGACTAAGGCTAAAGACGAGTGATACCTACATTGGCGTACCCGGGCTGTGCACAGCTTTACTCGACTATCATCGCCCCCCCCCCCCCCCCCCCCC",
 "GACGACCTAATAATGTACAAAACGGCTCGTATGCTAGATTCCCGTGTACTCATTGAAGCAGTCTACAGAAATCTTGCACCACCACGGGACTTACAAGCCGTCTAGGACATCGTTTCTAGTCCTTGACTTGCCCGCCCCCGACGAGCGATCAAGCTCGGTAACAACAAACATAGTTTCACCATCTAGCGACTTTGAGACTAATCCGGACGCGCAAGCGGCTGGGCGAGTTTAAGAGGATATACTGACGATTTATATTCCTTATTCCACCTAGTGATTCAGCACAGTGCGTGTGGGATCGAACATTCGAGCTTGATACTGTCCATAGTGAAGGGACCGTGACTCGTTTAAAGAGGAGGCGTACTATATGTTGCCTGTTGCCGCGGGGCAGCCAAGGGTCCCATGACACCATAAGACACGGAGTCCCGCCAAACGTCTTCATTGTTTGCATCTCGTCCGCGTCTCGGCATAGTCACTGTAGTTAAGTTACTTCTTAGCACATTTTGAGGTTGTGCAATTCTCCCTCGGCCCAGTGGTACCCGGGTTTGTGACTAATCAGCTTGGAAACCGACTCGAACTCGTGGCCCCTCTGATTAATTCCAGCTAAAGGAGACGGTTTAGATGCCCAAGGAGGATCCGTCCAACACTGGTATACAATAATACCGTAGCGACGACCCGCGACACGGATAAAATCTAGCTATGGTCCTACTTGGGAGGGACCCAATCACGGGACAATTGATAGGGCAGTTGCATTACTCCGCGTGACGCCTTCGGGGGATCCACCACAACTCCCCAGGCCTGAATCTCCAGTCGCTCTGAATTAGACCCAGTAGGCAATAGGCCCCGTTAGACAAATAGCTCGCGGAAAGTTTGGGATAACTGGAGCTCCGCGAGAATAACCGCGGTGACATTCCATATCCCGGAAGCTACCTTAAAGCCGCTGAGTGACTGTACGGGCCGTCGGCATCTGTACATCAACCCTCCCGGTTTACGGACTAAGGCTGAATGTCCCCGTAAGGCCTGTGCACTGCTCTTACTCTCCGGACTGTTTGCTCTTATAGTTGTTTGGGGGGGGGGGGGGGGGGGG"
+"AACACGGCACCCACACAGTAGGCGCCGGACACTGGCGGCCATCGACCGCTGGCACTCTGTTGTGTCCGAATGTTTAGTCCAACTAAGCAGTCCGAGGTATTACCGATAAACGAGAAGGCTACGCCGTTTTCGAATCCGATGCGTCCGTGATGTGGTTTATACACGATATAGTACCCCCTGGATAGATTCCCCTCTTGGTTTTTCAGATCCTAGTCTATCTCAAGGCCTGGCCGATAGTGGTGTAATACGTCGGTGATAGAAGACGTTACATGAGAGTGATAAACTTCTTCGAGCCGCATGAACCGGGACACCAAGATAGAGAAAACTTGGATGCCGTTCGCGAGTCGTTGACCGTTGGCTACAAAATGGAGATCGGCATGATAGACGTCAGTGGGTCTTGTTCGGGAGGCGTAAGATAATTAGATGCAGATGTCCTATTCACGTAGGAGGCTAATGTGGATGAGAGCTTAGCGATGGTAGGTATGGTAAATTTGGAGTACGAGCCCACGTGAGATCGGTAGACAGCTAACGGGTTATTCCGTACCTGATAGTACGAAAGGAAGGCACGGGTGTGACCAGCCACAACTTTTCTCGACGCAGTCCTAGCCTGTGGCATCCCTGTAGAGTCGGCTCGAATAGCTGGAGTTGGTGTGTTCGCACCTTTAGCAGTCATAGTGCAGATAGATCGTTCGCGGTGCTCCCCACTTGCCCGTTCAGACCTTGGAGCGCACTTTATCAGGTTCCTGTCTGATGAGCTTGAGGTGTTTAAGTATCGAGTCCATTATAATTTGCGGTTCTGATCACCAGCATGCTCGGCCAGTCCCGTTAGGTGCTTAGTTTCTTGGGATCCTGTGCTAGCTCTATGGTCTTACATGGATGTGGTTGTAGCTGACTCTAGAGAGTCGATACTTGTAAGGGGTGGCTGAGCCCTCATTCGTACTCTAAGTGTCGTGGTGGTTTGAGCACATATTAGTAATGTTTTTAACGTTTTATGAACTGGGGAAGCTTGTTGTGGAAGTGGAGAGAGAACCTAAATCGGTCAGAATCGATGACACTATACACCACCCCCCCCCCCCCCCCCCCC",
+"AACACGGCACACACACAGTAGGCGGCGGACACTATGGCGGCCCTCGACGGCTGGCACTCTGTTATGTCGGAATGTTTAGTCCAAACTAAGCAGTCCGAGGTATTCCGATCAACGCGAAGGGCTGCCCGTTTTCGAATCCGAGGCGTTCGTGATGTGTTTATACACGAATAGTACCCCTGGACAGTTCCCCTCTATGGTTTTCGGATCCTGTCTATCTACAAGGCCTGGGCCGTTGTGGTTATTACCTCGGTGATAGAAGACGTTACATGAGATGATAACACTCCTTCGCGCCGACAGGAACGGGGACAACAAGTAGATAAAACTTGGAAGCCGTTCGCGACGTCGTTGACCGTTGCCACAAAAATGGTAGATTGGCAGACAGACTCCGGGGTCTTGTTCGGGAGCGTAAGATAGTTAGATGTCAATTTTCCATTCACGAGGAGCCTAATGTGGATGAGAGTTTCGCGATGGTGGATGGTAAATTTGGCGTACGAGCCACGTGACATCGGTAGACAGCTAACATTTATTCCTACCGAAGTACGAAAGAGAAGGAGCGGTGTGACTCAGCCCAACTTTTCTCGAGCAGTCCTAGCTGTGGCATCTTGTAGAGTCGGATCCGAATAAGCTGGAGTTTGTGTGTTCGATCTTTCGCGCCAGTATTGCAGATAGAATCGTTCGACGGTGCTCCTCACTTGCCCGTCTCAACCTTGGAGCGCACTTTTTCAGGTTTGCTGTCTGATGAGCATGGAGGTGCTTAAGTATCAAGGCCTTATAATTTGCGGTGTCTAGTCACCGCAGGCTCAGTATCACCGTTAGGTGCTTGGTTTCTTGGATCTGGGCTAGCTCTAGGTCTTACACGGTTGTGGTTGTAGCTGAGCTCGATAGAGTCGATACTTGTACGGGGTGGCTGAGCCCTCATTCTTCTCTAGTGTCGTGGTGGTTTCAGCACATATTAGTAATGTTTTTAACGTCTTTAGTGAAATGTGTACCGAATCGAGCTGTGGATTCAATCCATATACAGTTTGGAGGAGATACCAGCCTCAGATTTTCAGGTATCTAAAGAAGGGGGGGGGGGGGGGGGGGG"
+"GTTCACGGATACCCAGAGGATACATTCGTTTAACCTGAAAGATCATGCGGATTTGAATCGGTCAATTCCCTGTCGCCCTATACACGCCGCGTGCTAATTAGCATCCTGTGATGTTTTGTCGGGCCAGTATTTGCATGAAAACTATGGCATGGTCCCGGAAAGCGAATAAGCGTATAGCTACATAGGGAATAGGCCTTGGATCCTCGTCGGTCATTGCACCAAGCCGCATACAGCGTGATCTTAAAAGACATTAGAGCCCTCTAACACCCGAACGGTCCAGAAAGTTCATACGTAGATTCATGCAATGGCTAAAGTCCTACCATAACGCGAAAGAACGTTTGCTAAGGGTGAGCAGCGCATGTTAGTCTCCGCTAGATGTAAGACTCATGTTTTGTCGAGCATCTGAAAACATGACCCCATCAACTTTTGTTGGATTAATCGGAGAAGGTCATAAGAGGGTAGTTCATACTTACCCTCACAATAACCTTTAAGACCATCCTTGGCCTGTGGAATTCAGAACCAATTGTCACGTGCGCTTGATTAACACGATGGGAGCCTATCACTCGATGTCGCTTCAGTTGGGAGCAGGCGGGGAGCCTATACCGCTTGAGGCATCTAATACTGGCGACACCATCACTCGTTGAAGTTGGCCTGGCGGCTTCTTGTAATACATCAAAACATCGCAATTCCCTTTAGCGTGGCATCGTACATGACTATAACAAGTGCCAGTCGGGCTTGATCTAATCGGATGACGAAAGGTCCCCTTGCTCGTTAAATCGCTATTCTGGTGGTGCTCTCGCTCGGGCAGAGTCCTCCGAACGGACCCGCGATACCGTTCATCTTTAACTGGTCGTAATCCGAGGAACGCTAGTAGCGTTAGTCAAGACGACGGACATACTGTACACAGTGGAATATCCCTAGCCAATGTGAAAAAGTTCTTCAGTAGGCGGGTAGAAGCAGTACTAAATGGGCCGACCTGGGATGTTGTTTTCGTTTACCTGAGCCGGTTTTGAAGGAACGTGAACGCCACTATGTGGACCATCGTATATCCCAACACGTTTCCTCCCCCCCCCCCCCCCCCCCC",
+"TTCAAAGGATACCAAGAAGATACAACCTTTAACCTGAAAGATCATGCGATTTGGATGGCTCAATTCCCTGTCCGCCCTATACACGCCCGCGTGCTATTAGCATCCTGTGAGGGTTTTGTACTCGGCCAGTATATGCATGAAAACTATGCATGGTACCGGACAAGCGAAGTAAGCGTTTGCTACTAGGAAGATTGGCCTTGGATCCTTGCTGTGACTGCACCATCCGCATGCAGCATGATCTCAATAAGACACTAGCCCCCTATAACACCCGAACGGCCAAAAGTTTCGTTAACGCAGATTCATGCCATGGTTAAAGCCTCCTACCAGAACGCGAAAGAACGTCTGCTAAGGGTGAGCAGCGCATGTTAGTCTCCGCTAGATGTAGTCTCATGTTTTGCGGAAGCATCGATACATGACCCCATAAACTTTTGTTGGATAATCGGAGAAGGTCAATAGAGGGTAGACTTAATTACCCACGACAATAACCTCTAAGACCATCCTTGGCCGTGGAATTCAAACAATTGTCACGTGCGCTTGATTAACACGATGGGAGCCGATACTCTATCGTGCCCTTCAGTTGGAGCGGGGGGGACCTATAGTCCCTTGAGGCATCTGAATAGTGGGACACCATCACTCTTGAAGTTGCCGTGGCGGGTTCCTTGTATACATAAAATCATCACAATTCCTTTAGCGTGGCTCGTACATGACTAAAAAAAGTAGCCAATCGCGGCTTGATCTAATCCGGATGACCAAACGTCCCCTTGCTCGTCTTAAATCGCTATTCGGTGGTGCCTCGCGTGCTGGCGAGTCCTCCTACACTGACCGCGATACCGTTCACTTTAACTAGTCGTATCGAGAGGAACGCTGTAGCGATTGTAAGACGAACGACATACTGTACCGTGAATATCCCGAAGCGTATCTGAAAAAGTTCTTCAGGAGCGGGTACGAACGCAGTACTAATCGCCCGACATGGGAGTTGTTTCAGTTTATCTTGTACGCCGAAGGAACAGGTCGTCGTGAAGTGTTGGAACTGCTAATCAATTAGGTACCGGGGAAGTGTAGTTGGGGGGGGGGGGGGGGGGGG"
 #endif
 /* for debugging */
 unittest(with_seq_pair(
-"AACACGGCACCCACACAGTAGGCGCCGGACACTGGCGGCCATCGACCGCTGGCACTCTGTTGTGTCCGAATGTTTAGTCCAACTAAGCAGTCCGAGGTATTACCGATAAACGAGAAGGCTACGCCGTTTTCGAATCCGATGCGTCCGTGATGTGGTTTATACACGATATAGTACCCCCTGGATAGATTCCCCTCTTGGTTTTTCAGATCCTAGTCTATCTCAAGGCCTGGCCGATAGTGGTGTAATACGTCGGTGATAGAAGACGTTACATGAGAGTGATAAACTTCTTCGAGCCGCATGAACCGGGACACCAAGATAGAGAAAACTTGGATGCCGTTCGCGAGTCGTTGACCGTTGGCTACAAAATGGAGATCGGCATGATAGACGTCAGTGGGTCTTGTTCGGGAGGCGTAAGATAATTAGATGCAGATGTCCTATTCACGTAGGAGGCTAATGTGGATGAGAGCTTAGCGATGGTAGGTATGGTAAATTTGGAGTACGAGCCCACGTGAGATCGGTAGACAGCTAACGGGTTATTCCGTACCTGATAGTACGAAAGGAAGGCACGGGTGTGACCAGCCACAACTTTTCTCGACGCAGTCCTAGCCTGTGGCATCCCTGTAGAGTCGGCTCGAATAGCTGGAGTTGGTGTGTTCGCACCTTTAGCAGTCATAGTGCAGATAGATCGTTCGCGGTGCTCCCCACTTGCCCGTTCAGACCTTGGAGCGCACTTTATCAGGTTCCTGTCTGATGAGCTTGAGGTGTTTAAGTATCGAGTCCATTATAATTTGCGGTTCTGATCACCAGCATGCTCGGCCAGTCCCGTTAGGTGCTTAGTTTCTTGGGATCCTGTGCTAGCTCTATGGTCTTACATGGATGTGGTTGTAGCTGACTCTAGAGAGTCGATACTTGTAAGGGGTGGCTGAGCCCTCATTCGTACTCTAAGTGTCGTGGTGGTTTGAGCACATATTAGTAATGTTTTTAACGTTTTATGAACTGGGGAAGCTTGTTGTGGAAGTGGAGAGAGAACCTAAATCGGTCAGAATCGATGACACTATACACCACCCCCCCCCCCCCCCCCCCC",
-"AACACGGCACACACACAGTAGGCGGCGGACACTATGGCGGCCCTCGACGGCTGGCACTCTGTTATGTCGGAATGTTTAGTCCAAACTAAGCAGTCCGAGGTATTCCGATCAACGCGAAGGGCTGCCCGTTTTCGAATCCGAGGCGTTCGTGATGTGTTTATACACGAATAGTACCCCTGGACAGTTCCCCTCTATGGTTTTCGGATCCTGTCTATCTACAAGGCCTGGGCCGTTGTGGTTATTACCTCGGTGATAGAAGACGTTACATGAGATGATAACACTCCTTCGCGCCGACAGGAACGGGGACAACAAGTAGATAAAACTTGGAAGCCGTTCGCGACGTCGTTGACCGTTGCCACAAAAATGGTAGATTGGCAGACAGACTCCGGGGTCTTGTTCGGGAGCGTAAGATAGTTAGATGTCAATTTTCCATTCACGAGGAGCCTAATGTGGATGAGAGTTTCGCGATGGTGGATGGTAAATTTGGCGTACGAGCCACGTGACATCGGTAGACAGCTAACATTTATTCCTACCGAAGTACGAAAGAGAAGGAGCGGTGTGACTCAGCCCAACTTTTCTCGAGCAGTCCTAGCTGTGGCATCTTGTAGAGTCGGATCCGAATAAGCTGGAGTTTGTGTGTTCGATCTTTCGCGCCAGTATTGCAGATAGAATCGTTCGACGGTGCTCCTCACTTGCCCGTCTCAACCTTGGAGCGCACTTTTTCAGGTTTGCTGTCTGATGAGCATGGAGGTGCTTAAGTATCAAGGCCTTATAATTTGCGGTGTCTAGTCACCGCAGGCTCAGTATCACCGTTAGGTGCTTGGTTTCTTGGATCTGGGCTAGCTCTAGGTCTTACACGGTTGTGGTTGTAGCTGAGCTCGATAGAGTCGATACTTGTACGGGGTGGCTGAGCCCTCATTCTTCTCTAGTGTCGTGGTGGTTTCAGCACATATTAGTAATGTTTTTAACGTCTTTAGTGAAATGTGTACCGAATCGAGCTGTGGATTCAATCCATATACAGTTTGGAGGAGATACCAGCCTCAGATTTTCAGGTATCTAAAGAAGGGGGGGGGGGGGGGGGGGG"
+"CCGCGTCTTCGCGGGCTTGGATCGCCAAGAGGCGTGTCCATGTTGAGCTGCTCCATAAGGGCGCGCGACTAGCCCACAGTTCTGCCCACCCCTGGGTTATTGCTGGCGTTCTGAATGTATAATGCTTAATCTCGCAGGGCCAACTGCAGAGGGCACTATCCTAATGGCGGTTGGTACCCTTTTTGTAGGTAGTGCAAACGCTTATTGAAGGTGAAAGTGTCGGGCTATATGCATTCGGGGAGATCCTCGTTCGGAGTGGTTTTCCGGGTCTGAAGAATCTCCCTATACCGACTTTCATTATTATCCTTATCACAGAGATTTGCAGCAAGTCTTGAGTTCGATCTATTGTCCGATATTTACCCTTTTAGATTTTGACGATTGAAGAGATTCCTTACAACAGTAGCCCGATCACACGACATAAAGAGATCCGAGTCGTGCGAGGTCGCCCTACGGATAACTGCTTCCATTCTCGCCCTCTCCGCCCCCATTTGCCGCTGTGGGAGCGAATTAGTAGTGTCGTCTGGGTATCCCAAATGTCTCAAGGTGCCGCGAATACCACAGAATGCAACAACGAGGTCGTGCGCGACCAAGAATTCCGACGTATTCCCGGACGTCCGCAAAATTCCATACCGAGCATCCCACACAGCCTGCCTCCGTATAAACCGATGTAGAAGCATTAAGTTCAGTGCGACCAGTTCTCTACTGGGGTCAGTGACCTGTCTGGGACTCTCCGAGCTCCCATAATAATTTCACCAATCTCTTCTGACTTGCAACCACTCTGGACAGTAGCTGAGCCAGCTTATTAGGTGCGATCTAACCTGGAAGGGTACTCCATGTGATATCCTACTCTAATTCAGGTTGGAGAGGGAATCTGGCGCTGCTCTTTTGTGCGCTCGTGGTGGACGGTCTTTAGACTATGTGCCTTATTCCGGGTGAAGACCCAGGGAAAAAACTAGGGCACGTGAGGGACCGCGAGGACCGTTATATACACACATAGGGGGAGCTGCTTATGGTAGTCCGCGATGTAAAGTTTCCGGATCTGTACCGCACCGACGGAATAGGTCCCCCCCCCCCCCCCCCCCCC",
+"CCGCGGTCTTCGCGGCTTGGAGCGCCAAGAGGCAGTGTCATGATGAGCTGCCCCATAAGTTCGCTGAGCGTAGCACACAGTTCTAGCCCACCCTTGGGTTATTCCTCTGGCGTATTTGATGTATAATCCTTAATCTCGCAGGTAGTCACTGCAGTGGGCACTATCCTAATGGGGTTGGGACCCTTTTTGTAGGTAGTGCAAACGCGCTCTGTGAAGGTGTATGCTGTCGGCGATATGTATTCACGCGAGATCCTCGTGTCGGAGTGGTTTTCCGGGTCTGCAGATTTCCCTCATACTGCTTTCATTATTTTGCCTTATCACAGAATTCTGCAGCGAGTCTTGTGTTGATCTTTTGTCCTACAGTTACGTTATTAGTTTTGACGATTGAGATATTCATGACAACACGAGCCCGATCGAACGACATAAAGAGAGCCGGTCGTGCGGAGGTCTGCCCAGGGGATAACTGCTTCCCTTCTCGCCCTCTCCGCCCCCATTTGCCGTCTGTGTAGCGAATGGAATGTGCAGTCTGTGTATCCCAAATGTTTCAAGGTTCCCCGAATACCACAGAATCAACAAAGAGGTCTGCGCGACCAAGAATTCCGACGTATACCGGACGTCCGCAAAATTCCATACCGAGCATCCACACAGGCTGGCTCCGTATAAACCGATGTATAAGCATTAAGTTCAGTGCGACCAATTCTCTAATGGGGGACATACCAGTCTGGGACTTTCCCGAGCTCCCATACATCATTTCACCTATCTCGTCTGAGTTGCAACCACTCGAACAGTAGTGATTAGCTTAGTTGTGCGATCTTACCTGAATGGTACTCCATGTGTTGTCTACTCTAATTGAGCTTGGAGCGGGAACGGCGCTGCTGCTTTTCGGCGCCGGGGTGGGAACGGTCTTTAGACTAATGTGCCTTAATCCGGAGGGAGACCCAGGGAAAACAACTAAGGACGTGTGGACTGGAGACCGTTAATACCAATAGGGGGTGGACAGACATCCTCAGCTGCTTGGGACAGACTTTACAAAGGATTATTTTGCTCCGCGCCGACGCAAGCCGGGGGGGGGGGGGGGGGGGGG"
 ))
 {
 	omajinai();
