@@ -180,8 +180,8 @@ static void *gaba_dp_malloc(struct gaba_dp_context_s *this, uint64_t size);
 /**
  * seqreader macros
  */
-#define _rd_bufa_base(k)		( (k)->rr.bufa + BLK + BW )
-#define _rd_bufb_base(k)		( (k)->rr.bufb )
+#define _rd_bufa_base(k)		( (k)->w.r.bufa + BLK + BW )
+#define _rd_bufb_base(k)		( (k)->w.r.bufb )
 #define _rd_bufa(k, pos, len)	( _rd_bufa_base(k) - (pos) - (len) )
 #define _rd_bufb(k, pos, len)	( _rd_bufb_base(k) + (pos) )
 #define _lo64(v)		_ext_v2i64(v, 0)
@@ -248,10 +248,10 @@ void fill_load_section(
 	_print_v2i64(c_tail);
 
 	/* store sections */
-	_store_v2i64(&this->rr.atail, c_tail);
-	_store_v2i32(&this->rr.alen, c.len);
-	_store_v2i32(&this->rr.aid, c.id);
-	this->rr.plim = plim;
+	_store_v2i64(&this->w.r.atail, c_tail);
+	_store_v2i32(&this->w.r.alen, c.len);
+	_store_v2i32(&this->w.r.aid, c.id);
+	this->w.r.plim = plim;
 
 	return;
 }
@@ -276,7 +276,7 @@ void fill_load_seq_a(
 	uint64_t len)
 {
 	#if BIT == 2
-		if(pos < this->rr.alim) {
+		if(pos < this->w.r.alim) {
 			debug("reverse fetch a: pos(%p), len(%llu)", pos, len);
 			/* reverse fetch: 2 * alen - (2 * alen - pos) + (len - 32) */
 			vec_t a = _loadu(pos + (len - BW));
@@ -289,11 +289,11 @@ void fill_load_seq_a(
 			vec_t const mask = _set(0x03);
 
 			/* forward fetch: 2 * alen - pos */
-			vec_t a = _loadu(_rev(pos, this->rr.alim));
+			vec_t a = _loadu(_rev(pos, this->w.r.alim));
 			_storeu(_rd_bufa(this, BW, len), _xor(a, mask));
 		}
 	#else /* BIT == 4 */
-		if(pos < this->rr.alim) {
+		if(pos < this->w.r.alim) {
 			debug("reverse fetch a: pos(%p), len(%llu)", pos, len);
 			/* reverse fetch: 2 * alen - (2 * alen - pos) + (len - 32) */
 			vec_t a = _loadu(pos + (len - BW));
@@ -310,7 +310,7 @@ void fill_load_seq_a(
 			vec_t const cv = _bc_v16i8(_load_v16i8(comp));
 
 			/* forward fetch: 2 * alen - pos */
-			vec_t a = _loadu(_rev(pos, this->rr.alim));
+			vec_t a = _loadu(_rev(pos, this->w.r.alim));
 			_storeu(_rd_bufa(this, BW, len), _shuf(a, cv));
 		}
 	#endif
@@ -327,7 +327,7 @@ void fill_load_seq_b(
 	uint64_t len)
 {
 	#if BIT == 2
-		if(pos < this->rr.blim) {
+		if(pos < this->w.r.blim) {
 			debug("forward fetch b: pos(%p), len(%llu)", pos, len);
 			/* take complement */
 			vec_t const mask = _set(0x03);
@@ -338,13 +338,13 @@ void fill_load_seq_b(
 		} else {
 			debug("reverse fetch b: pos(%p), len(%llu)", pos, len);
 			/* reverse fetch: 2 * blen - pos + (len - 32) */
-			vec_t b = _loadu(_rev(pos, this->rr.blim) + (len - BW));
+			vec_t b = _loadu(_rev(pos, this->w.r.blim) + (len - BW));
 			_print(b);
 			_print(_shl(_swap(b), 2));
 			_storeu(_rd_bufb(this, BW, len), _shl(_swap(b), 2));
 		}
 	#else /* BIT == 4 */
-		if(pos < this->rr.blim) {
+		if(pos < this->w.r.blim) {
 			debug("forward fetch b: pos(%p), len(%llu)", pos, len);
 			/* forward fetch: pos */
 			vec_t b = _loadu(pos);
@@ -359,7 +359,7 @@ void fill_load_seq_b(
 			vec_t const cv = _bc_v16i8(_load_v16i8(comp));
 
 			/* reverse fetch: 2 * blen - pos + (len - 32) */
-			vec_t b = _loadu(_rev(pos, this->rr.blim) + (len - BW));
+			vec_t b = _loadu(_rev(pos, this->w.r.blim) + (len - BW));
 			_storeu(_rd_bufb(this, BW, len), _shuf(_swap(b), cv));
 		}
 	#endif
@@ -386,16 +386,16 @@ void fill_bulk_fetch(
 	_print(a);
 	_print(b);
 
-	debug("atail(%p), aridx(%d)", this->rr.atail, (blk-1)->aridx);
-	debug("btail(%p), bridx(%d)", this->rr.btail, (blk-1)->bridx);
+	debug("atail(%p), aridx(%d)", this->w.r.atail, (blk-1)->aridx);
+	debug("btail(%p), bridx(%d)", this->w.r.btail, (blk-1)->bridx);
 
 	/* fetch seq a */
-	fill_load_seq_a(this, this->rr.atail - (blk - 1)->aridx, BLK);
+	fill_load_seq_a(this, this->w.r.atail - (blk - 1)->aridx, BLK);
 	_store(_rd_bufa(this, 0, BW), a);
 
 	/* fetch seq b */
 	_store(_rd_bufb(this, 0, BW), b);
-	fill_load_seq_b(this, this->rr.btail - (blk - 1)->bridx, BLK);
+	fill_load_seq_b(this, this->w.r.btail - (blk - 1)->bridx, BLK);
 	return;
 }
 
@@ -430,12 +430,12 @@ void fill_cap_fetch(
 	_print(b);
 
 	/* fetch seq a */
-	fill_load_seq_a(this, this->rr.atail - _lo32(ridx), _lo32(len));
+	fill_load_seq_a(this, this->w.r.atail - _lo32(ridx), _lo32(len));
 	_store(_rd_bufa(this, 0, BW), a);
 
 	/* fetch seq b */
 	_store(_rd_bufb(this, 0, BW), b);
-	fill_load_seq_b(this, this->rr.btail - _hi32(ridx), _hi32(len));
+	fill_load_seq_b(this, this->w.r.btail - _hi32(ridx), _hi32(len));
 	return;
 }
 
@@ -479,12 +479,12 @@ struct gaba_joint_block_s fill_init_fetch(
 		_print(b);
 
 		/* fetch seq a */
-		fill_load_seq_a(this, this->rr.atail - _lo32(ridx), _lo32(len));
+		fill_load_seq_a(this, this->w.r.atail - _lo32(ridx), _lo32(len));
 		_store(_rd_bufa(this, 0, BW), a);
 
 		/* fetch seq b */
 		_store(_rd_bufb(this, 0, BW), b);
-		fill_load_seq_b(this, this->rr.btail - _hi32(ridx), _hi32(len));
+		fill_load_seq_b(this, this->w.r.btail - _hi32(ridx), _hi32(len));
 	}
 
 	/* store char vector to the current block */ {
@@ -603,7 +603,7 @@ struct gaba_joint_block_s fill_create_phantom_block(
 
 	/* calc ridx */
 	v2i32_t ridx = _sub_v2i32(
-		_load_v2i32(&this->rr.alen),
+		_load_v2i32(&this->w.r.alen),
 		_load_v2i32(&prev_tail->apos));
 	_print_v2i32(ridx);
 
@@ -680,7 +680,7 @@ struct gaba_joint_tail_s *fill_create_tail(
 	/* store section lengths */
 	v2i32_t const z = _zero_v2i32();
 	v2i32_t ridx = _load_v2i32(&(blk - 1)->aridx);
-	v2i32_t len = _load_v2i32(&this->rr.alen);
+	v2i32_t len = _load_v2i32(&this->w.r.alen);
 	_print_v2i32(ridx);
 	_print_v2i32(len);
 	_print_v2i32(_sel_v2i32(
@@ -691,7 +691,7 @@ struct gaba_joint_tail_s *fill_create_tail(
 	_store_v2i32(&tail->alen, len);
 
 	/* store section ids */
-	v2i32_t id = _load_v2i32(&this->rr.aid);
+	v2i32_t id = _load_v2i32(&this->w.r.aid);
 	_store_v2i32(&tail->aid, id);
 
 	/* store status */
@@ -1000,14 +1000,14 @@ int64_t fill_bulk_test_p_bound(
 	struct gaba_dp_context_s const *this,
 	int64_t p)
 {
-	return(this->rr.plim - p - BW);
+	return(this->w.r.plim - p - BW);
 }
 static _force_inline
 int64_t fill_cap_test_p_bound(
 	struct gaba_dp_context_s const *this,
 	int64_t p)
 {
-	return(this->rr.plim - p);
+	return(this->w.r.plim - p);
 }
 
 /**
@@ -1373,8 +1373,8 @@ uint64_t calc_max_bulk_blocks_seq_tail(
 	struct gaba_joint_tail_s const *tail)
 {
 	uint64_t max_bulk_p = MIN2(
-		this->rr.alen - tail->apos,
-		this->rr.blen - tail->bpos);
+		this->w.r.alen - tail->apos,
+		this->w.r.blen - tail->bpos);
 	return(max_bulk_p / BLK);
 }
 
@@ -1391,7 +1391,7 @@ uint64_t calc_max_bulk_blocks_seq_p_blk(
 	uint64_t max_bulk_p = MIN3(
 		(blk - 1)->aridx,
 		(blk - 1)->bridx,
-		this->rr.plim - psum);
+		this->w.r.plim - psum);
 	return(max_bulk_p / BLK);
 }
 static _force_inline
@@ -1401,9 +1401,9 @@ uint64_t calc_max_bulk_blocks_seq_p_tail(
 	int64_t psum)
 {
 	uint64_t max_bulk_p = MIN3(
-		this->rr.alen - tail->apos,
-		this->rr.blen - tail->bpos,
-		this->rr.plim - psum);
+		this->w.r.alen - tail->apos,
+		this->w.r.blen - tail->bpos,
+		this->w.r.plim - psum);
 	return(max_bulk_p / BLK);
 }
 
@@ -1842,7 +1842,7 @@ struct trace_max_pos_s trace_detect_max_pos(
 		uint32_t mask_update = mask_max_ptr[i].all & mask_max;
 		if(mask_update != 0) {
 			debug("i(%lld), p(%lld), q(%d)",
-				i, this->ll.p + i, tzcnt(mask_update) - BW/2);
+				i, this->w.l.p + i, tzcnt(mask_update) - BW/2);
 
 			return((struct trace_max_pos_s){
 				.p = i,
@@ -1870,21 +1870,21 @@ void trace_save_coordinates(
 	int32_t q)
 {
 	/* store tail and block pointer */
-	this->ll.tail = tail;
-	this->ll.blk = blk;
-	this->ll.atail = tail;
-	this->ll.btail = tail;
+	this->w.l.tail = tail;
+	this->w.l.blk = blk;
+	this->w.l.atail = tail;
+	this->w.l.btail = tail;
 
 	#if 0
 	/* copy ids and lengths */
 	v2i32_t len = _load_v2i32(&tail->alen);
 	v2i32_t id = _load_v2i32(&tail->aid);
-	_store_v2i32(&this->ll.alen, len);
-	_store_v2i32(&this->ll.aid, id);
+	_store_v2i32(&this->w.l.alen, len);
+	_store_v2i32(&this->w.l.aid, id);
 	#else
 	/* init ids and lengths with invalid */
-	_store_v2i32(&this->ll.alen, _zero_v2i32());
-	_store_v2i32(&this->ll.aid, _set_v2i32(-1));
+	_store_v2i32(&this->w.l.alen, _zero_v2i32());
+	_store_v2i32(&this->w.l.aid, _set_v2i32(-1));
 	#endif
 
 	/* calc ridx */
@@ -1902,15 +1902,15 @@ void trace_save_coordinates(
 	_print_v2i32(ridx);
 
 	/* convert to idx */
-	v2i32_t len = _load_v2i32(&this->ll.alen);
-	_store_v2i32(&this->ll.aidx, _sub_v2i32(len, ridx));
-	_store_v2i32(&this->ll.asidx, _sub_v2i32(len, ridx));
+	v2i32_t len = _load_v2i32(&this->w.l.alen);
+	_store_v2i32(&this->w.l.aidx, _sub_v2i32(len, ridx));
+	_store_v2i32(&this->w.l.asidx, _sub_v2i32(len, ridx));
 
 	/* i \in [0 .. BLK) */
 	/* adjust global coordinates with local coordinate */
-	this->ll.psum = tail->psum - tail->p + p;
-	this->ll.p = p;
-	this->ll.q = q;
+	this->w.l.psum = tail->psum - tail->p + p;
+	this->w.l.p = p;
+	this->w.l.q = q;
 	return;
 }
 
@@ -1950,12 +1950,12 @@ static _force_inline
 void trace_load_section_a(
 	struct gaba_dp_context_s *this)
 {
-	debug("load section a, idx(%d), len(%d)", this->ll.aidx, this->ll.atail->alen);
+	debug("load section a, idx(%d), len(%d)", this->w.l.aidx, this->w.l.atail->alen);
 
 	/* load tail pointer (must be inited with leaf tail) */
-	struct gaba_joint_tail_s const *tail = this->ll.atail;
+	struct gaba_joint_tail_s const *tail = this->w.l.atail;
 	int32_t len = tail->alen;
-	int32_t idx = this->ll.aidx + len;
+	int32_t idx = this->w.l.aidx + len;
 
 	debug("adjust len(%d), idx(%d)", len, idx);
 	while(idx <= 0) {
@@ -1965,24 +1965,24 @@ void trace_load_section_a(
 	}
 
 	/* reload finished, store section info */
-	this->ll.atail = tail;
-	this->ll.alen = len;
-	this->ll.aid = tail->aid;
+	this->w.l.atail = tail;
+	this->w.l.alen = len;
+	this->w.l.aid = tail->aid;
 
-	this->ll.aidx = idx;
-	this->ll.asidx = idx;
+	this->w.l.aidx = idx;
+	this->w.l.asidx = idx;
 	return;
 }
 static _force_inline
 void trace_load_section_b(
 	struct gaba_dp_context_s *this)
 {
-	debug("load section b, idx(%d), len(%d)", this->ll.bidx, this->ll.btail->blen);
+	debug("load section b, idx(%d), len(%d)", this->w.l.bidx, this->w.l.btail->blen);
 
 	/* reload needed, load tail pointer (must be inited with leaf tail) */
-	struct gaba_joint_tail_s const *tail = this->ll.btail;
+	struct gaba_joint_tail_s const *tail = this->w.l.btail;
 	int32_t len = tail->blen;
-	int32_t idx = this->ll.bidx + len;
+	int32_t idx = this->w.l.bidx + len;
 
 	debug("adjust len(%d), idx(%d)", len, idx);
 	while(idx <= 0) {
@@ -1992,12 +1992,12 @@ void trace_load_section_b(
 	}
 
 	/* reload finished, store section info */
-	this->ll.btail = tail;
-	this->ll.blen = len;
-	this->ll.bid = tail->bid;
+	this->w.l.btail = tail;
+	this->w.l.blen = len;
+	this->w.l.bid = tail->bid;
 
-	this->ll.bidx = idx;
-	this->ll.bsidx = idx;
+	this->w.l.bidx = idx;
+	this->w.l.bsidx = idx;
 	return;
 }
 
@@ -2005,20 +2005,20 @@ void trace_load_section_b(
  * @macro _trace_load_context, _trace_forward_load_context
  */
 #define _trace_load_context(t) \
-	v2i32_t idx = _load_v2i32(&(t)->ll.aidx); \
-	struct gaba_block_s const *blk = (t)->ll.blk; \
-	int64_t p = (t)->ll.p; \
-	int64_t q = (t)->ll.q; \
+	v2i32_t idx = _load_v2i32(&(t)->w.l.aidx); \
+	struct gaba_block_s const *blk = (t)->w.l.blk; \
+	int64_t p = (t)->w.l.p; \
+	int64_t q = (t)->w.l.q; \
 	int64_t diff_q = 0; \
 	int64_t prev_c = 0;
 #define _trace_forward_load_context(t) \
 	_trace_load_context(t); \
-	uint32_t *path = (t)->ll.fw_path; \
-	int64_t rem = (t)->ll.fw_rem;
+	uint32_t *path = (t)->w.l.fw_path; \
+	int64_t rem = (t)->w.l.fw_rem;
 #define _trace_reverse_load_context(t) \
 	_trace_load_context(t); \
-	uint32_t *path = (t)->ll.rv_path; \
-	int64_t rem = (t)->ll.rv_rem; \
+	uint32_t *path = (t)->w.l.rv_path; \
+	int64_t rem = (t)->w.l.rv_rem; \
 	/* reverse q-coordinate in the reverse trace */ \
 	debug("reverse q-coordinate q(%lld), rq(%lld)", q, (BW - 1) - q); \
 	q = (BW - 1) - q;
@@ -2046,7 +2046,7 @@ void trace_load_section_b(
 	next_diff_q = _dir_is_down(dir) - _is_down; \
 	next_prev_c = 0x01 & ~(prev_c | _mask_h | _mask_v); \
 	debug("c(%lld), prev_c(%llu), p(%lld), psum(%lld), q(%lld), diff_q(%lld), down(%d), mask(%llx), path_array(%llx)", \
-		_is_down, prev_c, p, this->ll.psum - (this->ll.p - p), q, next_diff_q, _dir_is_down(dir), _mask, path_array); \
+		_is_down, prev_c, p, this->w.l.psum - (this->w.l.p - p), q, next_diff_q, _dir_is_down(dir), _mask, path_array); \
 	_is_down; \
 })
 #define _trace_reverse_determine_direction(_mask) ({ \
@@ -2057,7 +2057,7 @@ void trace_load_section_b(
 	next_diff_q = (int64_t)!_is_right - _dir_is_down(dir); \
 	next_prev_c = 0x80000000 & ~(prev_c | _mask_h | _mask_v); \
 	debug("c(%lld), prev_c(%llu), p(%lld), psum(%lld), q(%lld), diff_q(%lld), down(%d), mask(%llx), path_array(%llx)", \
-		_is_right>>31, prev_c>>31, p, this->ll.psum - (this->ll.p - p), q, next_diff_q, _dir_is_down(dir), _mask, path_array); \
+		_is_right>>31, prev_c>>31, p, this->w.l.psum - (this->w.l.p - p), q, next_diff_q, _dir_is_down(dir), _mask, path_array); \
 	_is_right; \
 })
 
@@ -2209,24 +2209,24 @@ void trace_load_section_b(
  * @macro _trace_forward_save_context
  */
 #define _trace_save_context(t) { \
-	(t)->ll.blk = blk; \
-	_store_v2i32(&(t)->ll.aidx, idx); \
-	(t)->ll.psum -= (t)->ll.p - p; \
-	(t)->ll.p = p; \
-	(t)->ll.q = q; \
-	debug("p(%lld), psum(%lld), q(%llu)", p, (t)->ll.psum, q); \
+	(t)->w.l.blk = blk; \
+	_store_v2i32(&(t)->w.l.aidx, idx); \
+	(t)->w.l.psum -= (t)->w.l.p - p; \
+	(t)->w.l.p = p; \
+	(t)->w.l.q = q; \
+	debug("p(%lld), psum(%lld), q(%llu)", p, (t)->w.l.psum, q); \
 }
 #define _trace_forward_save_context(t) { \
-	(t)->ll.fw_path = path; \
-	(t)->ll.fw_rem = rem; \
+	(t)->w.l.fw_path = path; \
+	(t)->w.l.fw_rem = rem; \
 	_trace_save_context(t); \
 }
 #define _trace_reverse_save_context(t) { \
 	/* reverse q-coordinate in the reverse trace */ \
 	debug("unreverse q-coordinate rq(%lld), q(%lld)", q, (BW - 1) - q); \
 	q = (BW - 1) - q; \
-	(t)->ll.rv_path = path; \
-	(t)->ll.rv_rem = rem; \
+	(t)->w.l.rv_path = path; \
+	(t)->w.l.rv_rem = rem; \
 	_trace_save_context(t); \
 }
 
@@ -2235,13 +2235,13 @@ void trace_load_section_b(
  */
 #define _trace_reload_tail(t) { \
 	debug("tail(%p), next tail(%p), p(%d), psum(%lld), ssum(%d)", \
-		(t)->ll.tail, (t)->ll.tail->tail, (t)->ll.tail->tail->p, \
-		(t)->ll.tail->tail->psum, (t)->ll.tail->tail->ssum); \
-	struct gaba_joint_tail_s const *tail = (t)->ll.tail = (t)->ll.tail->tail; \
+		(t)->w.l.tail, (t)->w.l.tail->tail, (t)->w.l.tail->tail->p, \
+		(t)->w.l.tail->tail->psum, (t)->w.l.tail->tail->ssum); \
+	struct gaba_joint_tail_s const *tail = (t)->w.l.tail = (t)->w.l.tail->tail; \
 	blk = _last_block(tail); \
-	(t)->ll.psum -= (t)->ll.p; \
-	p += ((t)->ll.p = tail->p); \
-	debug("updated psum(%lld), ll.p(%d), p(%lld)", (t)->ll.psum, (t)->ll.p, p); \
+	(t)->w.l.psum -= (t)->w.l.p; \
+	p += ((t)->w.l.p = tail->p); \
+	debug("updated psum(%lld), w.l.p(%d), p(%lld)", (t)->w.l.psum, (t)->w.l.p, p); \
 }
 
 /**
@@ -2333,7 +2333,7 @@ void trace_forward_trace(
 		}
 
 		/* check psum termination */
-		if(this->ll.psum < this->ll.p - p) {
+		if(this->w.l.psum < this->w.l.p - p) {
 			_trace_forward_save_context(this);
 			return;
 		}
@@ -2431,7 +2431,7 @@ void trace_reverse_trace(
 		}
 
 		/* check psum termination */
-		if(this->ll.psum < this->ll.p - p) {
+		if(this->w.l.psum < this->w.l.p - p) {
 			_trace_reverse_save_context(this);
 			return;
 		}
@@ -2450,41 +2450,41 @@ void trace_forward_push(
 	struct gaba_dp_context_s *this)
 {
 	/* load section info */
-	v2i32_t id = _load_v2i32(&this->ll.aid);
-	v2i32_t idx = _load_v2i32(&this->ll.aidx);
-	v2i32_t sidx = _load_v2i32(&this->ll.asidx);
+	v2i32_t id = _load_v2i32(&this->w.l.aid);
+	v2i32_t idx = _load_v2i32(&this->w.l.aidx);
+	v2i32_t sidx = _load_v2i32(&this->w.l.asidx);
 
 	/* calc path length */
-	int64_t plen = 32 * (this->ll.spath - this->ll.fw_path)
-		+ (this->ll.fw_rem - this->ll.srem);
+	int64_t plen = 32 * (this->w.l.spath - this->w.l.fw_path)
+		+ (this->w.l.fw_rem - this->w.l.srem);
 
 	/* store section info */	
-	_store_v2i32(&this->ll.sec[this->ll.fw_sec_idx].aid, id);
-	_store_v2i32(&this->ll.sec[this->ll.fw_sec_idx].apos, idx);
-	_store_v2i32(&this->ll.sec[this->ll.fw_sec_idx].alen, _sub_v2i32(sidx, idx));
+	_store_v2i32(&this->w.l.sec[this->w.l.fw_sec_idx].aid, id);
+	_store_v2i32(&this->w.l.sec[this->w.l.fw_sec_idx].apos, idx);
+	_store_v2i32(&this->w.l.sec[this->w.l.fw_sec_idx].alen, _sub_v2i32(sidx, idx));
 
 	/* store path length */
-	this->ll.sec[this->ll.fw_sec_idx].plen = plen;
-	this->ll.sec[this->ll.fw_sec_idx].ppos = 0;
+	this->w.l.sec[this->w.l.fw_sec_idx].plen = plen;
+	this->w.l.sec[this->w.l.fw_sec_idx].ppos = 0;
 
 	debug("push current section info a(%u, %u, %u), b(%u, %u, %u), len(%lld)",
-		this->ll.sec[this->ll.fw_sec_idx].aid,
-		this->ll.sec[this->ll.fw_sec_idx].apos,
-		this->ll.sec[this->ll.fw_sec_idx].alen,
-		this->ll.sec[this->ll.fw_sec_idx].bid,
-		this->ll.sec[this->ll.fw_sec_idx].bpos,
-		this->ll.sec[this->ll.fw_sec_idx].blen,
+		this->w.l.sec[this->w.l.fw_sec_idx].aid,
+		this->w.l.sec[this->w.l.fw_sec_idx].apos,
+		this->w.l.sec[this->w.l.fw_sec_idx].alen,
+		this->w.l.sec[this->w.l.fw_sec_idx].bid,
+		this->w.l.sec[this->w.l.fw_sec_idx].bpos,
+		this->w.l.sec[this->w.l.fw_sec_idx].blen,
 		plen);
 
 	/* update rsidx */
-	_store_v2i32(&this->ll.asidx, idx);
+	_store_v2i32(&this->w.l.asidx, idx);
 
 	/* update path and rem */
-	this->ll.spath = this->ll.fw_path;
-	this->ll.srem = this->ll.fw_rem;
+	this->w.l.spath = this->w.l.fw_path;
+	this->w.l.srem = this->w.l.fw_rem;
 
 	/* windback pointer */
-	this->ll.fw_sec_idx--;
+	this->w.l.fw_sec_idx--;
 	return;
 }
 
@@ -2497,44 +2497,44 @@ void trace_reverse_push(
 {
 	/* push section info to section array */
 	v2i32_t const mask = _set_v2i32(0x01);
-	v2i32_t len = _load_v2i32(&this->ll.alen);
-	v2i32_t id = _load_v2i32(&this->ll.aid);
-	v2i32_t idx = _load_v2i32(&this->ll.aidx);
-	v2i32_t sidx = _load_v2i32(&this->ll.asidx);
+	v2i32_t len = _load_v2i32(&this->w.l.alen);
+	v2i32_t id = _load_v2i32(&this->w.l.aid);
+	v2i32_t idx = _load_v2i32(&this->w.l.aidx);
+	v2i32_t sidx = _load_v2i32(&this->w.l.asidx);
 
 	/* calc path pos and len */
-	int64_t plen = 32 * (this->ll.rv_path - this->ll.spath)
-		+ (this->ll.rv_rem - this->ll.srem);
-	int64_t ppos = this->ll.pspos;
+	int64_t plen = 32 * (this->w.l.rv_path - this->w.l.spath)
+		+ (this->w.l.rv_rem - this->w.l.srem);
+	int64_t ppos = this->w.l.pspos;
 
 	/* store revcomped section */
-	_store_v2i32(&this->ll.sec[this->ll.rv_sec_idx].aid, _xor_v2i32(id, mask));
-	_store_v2i32(&this->ll.sec[this->ll.rv_sec_idx].apos, _sub_v2i32(len, sidx));
-	_store_v2i32(&this->ll.sec[this->ll.rv_sec_idx].alen, _sub_v2i32(sidx, idx));
+	_store_v2i32(&this->w.l.sec[this->w.l.rv_sec_idx].aid, _xor_v2i32(id, mask));
+	_store_v2i32(&this->w.l.sec[this->w.l.rv_sec_idx].apos, _sub_v2i32(len, sidx));
+	_store_v2i32(&this->w.l.sec[this->w.l.rv_sec_idx].alen, _sub_v2i32(sidx, idx));
 
 	/* store path length */
-	this->ll.sec[this->ll.rv_sec_idx].plen = plen;
-	this->ll.sec[this->ll.rv_sec_idx].ppos = ppos;
+	this->w.l.sec[this->w.l.rv_sec_idx].plen = plen;
+	this->w.l.sec[this->w.l.rv_sec_idx].ppos = ppos;
 
 	debug("push current section info a(%u, %u, %u), b(%u, %u, %u), pos(%lld), len(%lld)",
-		this->ll.sec[this->ll.rv_sec_idx].aid,
-		this->ll.sec[this->ll.rv_sec_idx].apos,
-		this->ll.sec[this->ll.rv_sec_idx].alen,
-		this->ll.sec[this->ll.rv_sec_idx].bid,
-		this->ll.sec[this->ll.rv_sec_idx].bpos,
-		this->ll.sec[this->ll.rv_sec_idx].blen,
+		this->w.l.sec[this->w.l.rv_sec_idx].aid,
+		this->w.l.sec[this->w.l.rv_sec_idx].apos,
+		this->w.l.sec[this->w.l.rv_sec_idx].alen,
+		this->w.l.sec[this->w.l.rv_sec_idx].bid,
+		this->w.l.sec[this->w.l.rv_sec_idx].bpos,
+		this->w.l.sec[this->w.l.rv_sec_idx].blen,
 		ppos, plen);
 
 	/* update rsidx */
-	_store_v2i32(&this->ll.asidx, idx);
+	_store_v2i32(&this->w.l.asidx, idx);
 
 	/* update path, rem, and pspos */
-	this->ll.spath = this->ll.rv_path;
-	this->ll.srem = this->ll.rv_rem;
-	this->ll.pspos = ppos + plen;
+	this->w.l.spath = this->w.l.rv_path;
+	this->w.l.srem = this->w.l.rv_rem;
+	this->w.l.pspos = ppos + plen;
 
 	/* windback pointer */
-	this->ll.rv_sec_idx++;
+	this->w.l.rv_sec_idx++;
 	return;
 }
 
@@ -2570,23 +2570,23 @@ void trace_generate_path(
 	);
 
 	/* initialize path length info */
-	this->ll.spath = (dir == TRACE_FORWARD) ? this->ll.fw_path : this->ll.rv_path;
-	this->ll.srem = 0;
-	this->ll.pspos = 0;
+	this->w.l.spath = (dir == TRACE_FORWARD) ? this->w.l.fw_path : this->w.l.rv_path;
+	this->w.l.srem = 0;
+	this->w.l.pspos = 0;
 
 	/* until the pointer reaches the root of the matrix */
-	while(this->ll.psum >= 0) {
+	while(this->w.l.psum >= 0) {
 		/* update section info */
-		if(this->ll.aidx <= 0) {
+		if(this->w.l.aidx <= 0) {
 			trace_load_section_a(this);
 		}
-		if(this->ll.bidx <= 0) {
+		if(this->w.l.bidx <= 0) {
 			trace_load_section_b(this);
 		}
 
 		/* fragment trace */
 		body(this);
-		debug("p(%d), psum(%lld), q(%d)", this->ll.p, this->ll.psum, this->ll.q);
+		debug("p(%d), psum(%lld), q(%d)", this->w.l.p, this->w.l.psum, this->w.l.q);
 
 		/* push section info to section array */
 		push(this);
@@ -2624,25 +2624,25 @@ void trace_init_work(
 
 	/* set section array info */
 	struct gaba_path_section_s *sec_base = (struct gaba_path_section_s *)(res + 1);
-	this->ll.sec = sec_base;
-	this->ll.fw_sec_idx = sec_len - 1;
-	this->ll.rv_sec_idx = 0;
-	this->ll.tail_sec_idx = sec_len - 1;
+	this->w.l.sec = sec_base;
+	this->w.l.fw_sec_idx = sec_len - 1;
+	this->w.l.rv_sec_idx = 0;
+	this->w.l.tail_sec_idx = sec_len - 1;
 
 	/* set path array info */
-	this->ll.fw_rem = 0;
-	this->ll.rv_rem = 0;
+	this->w.l.fw_rem = 0;
+	this->w.l.rv_rem = 0;
 
 	uint32_t *path_base = (uint32_t *)&sec_base[sec_len];
-	this->ll.fw_path = path_base + path_len - 1;
-	this->ll.rv_path = path_base;
-	this->ll.tail_path = path_base + path_len - 1;
+	this->w.l.fw_path = path_base + path_len - 1;
+	this->w.l.rv_path = path_base;
+	this->w.l.tail_path = path_base + path_len - 1;
 
 	/* clear path array */
-	this->ll.fw_path[0] = 0;
-	this->ll.fw_path[1] = 0x01;			/* terminator */
-	this->ll.fw_path[2] = 0;
-	this->ll.rv_path[0] = 0;
+	this->w.l.fw_path[0] = 0;
+	this->w.l.fw_path[1] = 0x01;			/* terminator */
+	this->w.l.fw_path[2] = 0;
+	this->w.l.rv_path[0] = 0;
 
 	return;
 }
@@ -2658,28 +2658,28 @@ struct gaba_result_s *trace_concatenate_path(
 	struct gaba_clip_params_s const *clip)
 {
 	debug("fw_path(%p), rv_path(%p), fw_sec(%u), rv_sec(%u)",
-		this->ll.fw_path, this->ll.rv_path, this->ll.fw_sec_idx, this->ll.rv_sec_idx);
-	debug("fw_rem(%d), rv_rem(%d)", this->ll.fw_rem, this->ll.rv_rem);
+		this->w.l.fw_path, this->w.l.rv_path, this->w.l.fw_sec_idx, this->w.l.rv_sec_idx);
+	debug("fw_rem(%d), rv_rem(%d)", this->w.l.fw_rem, this->w.l.rv_rem);
 
 	/* recover res pointer */
-	struct gaba_result_s *res = ((struct gaba_result_s *)this->ll.sec) - 1;
+	struct gaba_result_s *res = ((struct gaba_result_s *)this->w.l.sec) - 1;
 
 	/* store score */
 	int64_t score_adj = 0;					/* score adjustment at the root is not implemented */
 	res->score = fw_tail->max + rv_tail->max + score_adj;
 
 	/* store section pointer and section length */
-	res->sec = this->ll.sec;
-	res->slen = this->ll.rv_sec_idx + (this->ll.tail_sec_idx - this->ll.fw_sec_idx);
+	res->sec = this->w.l.sec;
+	res->slen = this->w.l.rv_sec_idx + (this->w.l.tail_sec_idx - this->w.l.fw_sec_idx);
 	// res->reserved = this->head_margin;		/* use reserved */
 
 	/* load section pointers */
-	struct gaba_path_section_s *fw_sec = this->ll.sec + this->ll.fw_sec_idx;
-	struct gaba_path_section_s *rv_sec = this->ll.sec + this->ll.rv_sec_idx;
-	struct gaba_path_section_s *tail_sec = this->ll.sec + this->ll.tail_sec_idx;
+	struct gaba_path_section_s *fw_sec = this->w.l.sec + this->w.l.fw_sec_idx;
+	struct gaba_path_section_s *rv_sec = this->w.l.sec + this->w.l.rv_sec_idx;
+	struct gaba_path_section_s *tail_sec = this->w.l.sec + this->w.l.tail_sec_idx;
 	
 	/* load base path pos */
-	uint32_t ppos = this->ll.pspos;
+	uint32_t ppos = this->w.l.pspos;
 
 	/* copy forward section */
 	while(fw_sec < tail_sec) {
@@ -2692,12 +2692,12 @@ struct gaba_result_s *trace_concatenate_path(
 	}
 
 	/* push forward path and update rem */
-	uint64_t fw_rem = this->ll.fw_rem;
-	uint64_t rv_rem = this->ll.rv_rem;
-	uint32_t *fw_path = this->ll.fw_path;
-	uint32_t *rv_path = this->ll.rv_path;
-	uint32_t *fw_path_base = this->ll.tail_path;
-	uint32_t *rv_path_base = (uint32_t *)&this->ll.sec[this->ll.tail_sec_idx + 1];
+	uint64_t fw_rem = this->w.l.fw_rem;
+	uint64_t rv_rem = this->w.l.rv_rem;
+	uint32_t *fw_path = this->w.l.fw_path;
+	uint32_t *rv_path = this->w.l.rv_path;
+	uint32_t *fw_path_base = this->w.l.tail_path;
+	uint32_t *rv_path_base = (uint32_t *)&this->w.l.sec[this->w.l.tail_sec_idx + 1];
 
 	/* concatenate the heads */
 	uint64_t prev_array = *fw_path;
@@ -3451,8 +3451,8 @@ struct gaba_dp_context_s *gaba_dp_init(
 	}
 
 	/* init seq lims */
-	this->rr.alim = alim;
-	this->rr.blim = blim;
+	this->w.r.alim = alim;
+	this->w.r.blim = blim;
 
 	/* copy template */
 	_memcpy_blk_aa(
@@ -3511,8 +3511,8 @@ void gaba_dp_flush(
 	uint8_t const *blim)
 {
 	/* init seq lims */
-	this->rr.alim = alim;
-	this->rr.blim = blim;
+	this->w.r.alim = alim;
+	this->w.r.blim = blim;
 
 	this->stack_top = (uint8_t *)this + sizeof(struct gaba_dp_context_s);
 	this->stack_end = (uint8_t *)this + MEM_INIT_SIZE - MEM_MARGIN_SIZE;

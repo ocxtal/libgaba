@@ -321,10 +321,10 @@ struct gaba_dp_context_s {
 	/** individually stored on init */
 
 	/** 64byte aligned */
-	union {
-		struct gaba_writer_work_s ll;	/** (192) */
-		struct gaba_reader_work_s rr;	/** (192) */
-	};
+	union gaba_work_s {
+		struct gaba_writer_work_s l;	/** (192) */
+		struct gaba_reader_work_s r;	/** (192) */
+	} w;
 	/** 192, 192 */
 
 	/** 64byte aligned */
