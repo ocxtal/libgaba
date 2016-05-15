@@ -170,7 +170,7 @@ typedef struct v32i16_s {
 		_mm_srli_si128(_vmax, 4)); \
 	_vmax = _mm_max_epi16(_vmax, \
 		_mm_srli_si128(_vmax, 2)); \
-	_mm_extract_epi16(_vmax, 0); \
+	(int16_t)_mm_extract_epi16(_vmax, 0); \
 })
 
 #define _cvt_v32i8_v32i16(a) ( \
