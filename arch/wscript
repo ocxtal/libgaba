@@ -23,7 +23,7 @@ def configure(conf):
 
 		# sse4.1 instructions are also available on the avx2 enabled machines.
 		conf.env.append_value('CFLAGS',
-			'-axcore-avx2' if conf.env.CC_NAME == 'icc' else '-mcore-avx2')
+			['-mcore-avx2', '-axcore-avx2'] if conf.env.CC_NAME == 'icc' else '-mcore-avx2')
 
 	# next, check if SSE4 instructions are availavle.
 	elif(conf.check_cc(fragment='''
@@ -42,7 +42,7 @@ def configure(conf):
 		msg = 'Checking for SSE4.1 instructions')):
 
 		conf.env.append_value('CFLAGS',
-			'-axsse4.1' if conf.env.CC_NAME == 'icc' else '-msse4.1')
+			['-msse4.1', '-axsse4.1'] if conf.env.CC_NAME == 'icc' else '-msse4.1')
 
 def build(bld):
 	pass
