@@ -214,6 +214,20 @@ Sections of reverse-complemented sequences are little bit complecated. They must
 When the fill functions fetch sequences from array, they use vector load instruction to parallelize sequence handling thus may invade tail boundary of the array. To keep the implementation fast, adding invasion checking in the fill functions are not planned so users must add 32-bytes margin after sequence arrays to avoid segfaults in the fill functions.
 
 
+### Aligning concatenated sequence of multiple sections
+
+The library can align sequences consisting of multiple sections. The root fill function, `gaba_dp_fill_root` creates the root of a matrix and extend alignment until either sequence pointer reaches the end. The normal fill function, `gaba_dp_fill`, takes a previous matrix (or band, the second argument of the function) and continue aligning with the given next two sections. The return object, `gaba_dp_fill_t` has flags (`gaba_dp_fill_t.status`) that indicates what reason the calculation terminated. The update flags, which are extracted with `GABA_STATUS_UPDATE_A` and `GABA_STATUS_UPDATE_B` masks, becomes non-zero when each sequence pointer reached its end. Only the section with update sign must be replaced with the next section and the other (section without update sign) must be left unchanged when calling the fill-in function with the previous return object to continue extending alignment. The X-drop termination flag, extracted with `GABA_STATUS_TERM`, indicates that the extension was terminated with X-drop test failure and cannot be continued.
+
+#### Pairwise alignment on trees
+
+The return object and corresponding matrix are treated as immutable in the library, enabling users to connect the matrix to multiple subsequent matrices. The multiple connection, or division, of the matrix can be applied to align sequences on tree structures. Each matrix keeps a link to the previous matrix (given to the fill-in funciton as second argument) thus the traceback will properly performed from (arbitrary) matrix fragment to the root. The next update of the library will support merging of multiple matrices (bands). This enables the user to align sequences in graphs (nucleotide string graphs).
+
+
+### Maximum score reporting policy
+
+The return object of the fill functions (`gaba_dp_fill_t`) contains `max` field that keeps the maximum score among all the matrix fragments from the root to the current. Users must aware that the value will not be updated when the scores in the current section are decreasing from the head to the tail. In this case, the value represents the maximum score of the previous matrix fragments, not the maximum score of **the current matrix fragment**.
+
+
 ## Functions
 
 ### Init / cleanup global context
