@@ -26,7 +26,8 @@ void print_usage(void)
  */
 char random_base(void)
 {
-	char const table[4] = {'A', 'C', 'G', 'T'};
+	// char const table[4] = {'A', 'C', 'G', 'T'};
+	char const table[4] = { 0x01, 0x02, 0x04, 0x08 };
 	return(table[rand() % 4]);
 }
 
@@ -42,7 +43,7 @@ char *generate_random_sequence(int len)
 {
 	int i;
 	char *seq;		/** a pointer to sequence */
-	seq = (char *)malloc(sizeof(char) * (len + 1));
+	seq = (char *)malloc(sizeof(char) * (len + 32 + 1));
 	if(seq == NULL) { return NULL; }
 	for(i = 0; i < len; i++) {
 		seq[i] = random_base();
@@ -69,7 +70,7 @@ char *generate_mutated_sequence(char *seq, int len, double x, double d, int bw)
 	char *mutated_seq;
 
 	if(seq == NULL) { return NULL; }
-	mutated_seq = (char *)malloc(sizeof(char) * (len + 1));
+	mutated_seq = (char *)malloc(sizeof(char) * (len + 32 + 1));
 	if(mutated_seq == NULL) { return NULL; }
 	for(i = 0, j = 0; i < len; i++) {
 		if(((double)rand() / (double)RAND_MAX) < x) {
@@ -160,13 +161,10 @@ int main(int argc, char *argv[])
 
 	/** init context */
 	gaba_t *ctx = gaba_init(GABA_PARAMS(
-		// .seq_a_direction = GABA_FW_ONLY,
-		// .seq_b_direction = GABA_FW_ONLY,
 		.xdrop = 100,
 		.score_matrix = GABA_SCORE_SIMPLE(2, 3, 5, 1)));
-	// gaba_seq_pair_t seq = gaba_build_seq_pair(a, strlen(a), b, strlen(b));
-	struct gaba_section_s asec = gaba_build_section(1, 0, strlen(a));
-	struct gaba_section_s bsec = gaba_build_section(2, 0, strlen(b));
+	struct gaba_section_s asec = gaba_build_section(0, (uint8_t const *)a, strlen(a));
+	struct gaba_section_s bsec = gaba_build_section(2, (uint8_t const *)b, strlen(b));
 
 	bench_init(total);
 
