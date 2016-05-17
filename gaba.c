@@ -841,14 +841,14 @@ void fill_cap_fetch(
 }
 
 /**
- * @macro fill_init_fetch
+ * @fn fill_init_fetch
  * @brief similar to cap fetch, updating ridx and rem
  */
 static _force_inline
 struct gaba_joint_block_s fill_init_fetch(
 	struct gaba_dp_context_s *this,
-	struct gaba_phantom_block_s *blk,
 	struct gaba_joint_tail_s const *prev_tail,
+	struct gaba_phantom_block_s *blk,
 	v2i32_t ridx)
 {
 	/* restore (brem, arem) */
@@ -913,7 +913,7 @@ struct gaba_joint_block_s fill_init_fetch(
 }
 
 /**
- * @macro fill_restore_fetch
+ * @fn fill_restore_fetch
  * @brief fetch sequence from existing block
  */
 static _force_inline
@@ -949,7 +949,7 @@ void fill_restore_fetch(
 }
 
 /**
- * @macro fill_update_section
+ * @fn fill_update_section
  */
 static _force_inline
 v2i32_t fill_update_section(
@@ -972,6 +972,21 @@ v2i32_t fill_update_section(
 	_print(a);
 	_print(b);
 	return(ridx);
+}
+
+/**
+ * @fn fill_popcnt_filter
+ */
+static _force_inline
+int32_t fill_popcnt_filter(
+	struct gaba_dp_context_s *this,
+	struct gaba_block_s *blk,
+	int32_t stat)
+{
+	/* load char vector from previous block */
+
+
+	return(stat);
 }
 
 /**
@@ -1023,7 +1038,14 @@ struct gaba_joint_block_s fill_create_phantom_block(
 		});
 	} else {
 		/* init fetch */
-		return(fill_init_fetch(this, blk, prev_tail, ridx));
+		// return(fill_init_fetch(this, prev_tail, blk, ridx));
+		struct gaba_joint_block_s stat = fill_init_fetch(this, prev_tail, blk, ridx);
+
+		/* check if initial vector is filled */
+		if(prev_tail->psum + stat.p >= 0) {
+			stat.stat = fill_popcnt_filter(this, stat.blk, stat.stat);
+		}
+		return(stat);
 	}
 }
 
@@ -1819,6 +1841,10 @@ struct gaba_joint_tail_s *fill_mem_bounded(
 	uint64_t blk_cnt)
 {
 	struct gaba_joint_block_s h = fill_create_phantom_block(this, prev_tail);
+	if(h.stat != CONT) {
+		return(fill_create_tail(this, prev_tail, h.blk, h.p, h.stat));
+	}
+
 	struct gaba_joint_block_s b = fill_bulk_predetd_blocks(this, h.blk, blk_cnt);
 	return(fill_create_tail(this, prev_tail, b.blk, h.p + b.p, b.stat));
 }
@@ -3427,6 +3453,7 @@ void gaba_init_restore_default_params(
 	}
 	restore(head_margin, 		0);
 	restore(tail_margin, 		0);
+	restore(popcnt_thresh,		0);
 	restore(xdrop, 				100);
 	restore(score_matrix, 		default_score_matrix);
 	return;

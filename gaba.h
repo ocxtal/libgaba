@@ -98,12 +98,12 @@ typedef struct gaba_score_s gaba_score_t;
  * @brief input parameters of gaba_init
  */
 struct gaba_params_s {
-	/** input options */
-	uint8_t reserved[2];
-
 	/** output options */
 	int16_t head_margin;		/** margin at the head of gaba_res_t */
 	int16_t tail_margin;		/** margin at the tail of gaba_res_t */
+
+	/** filtering options */
+	int16_t popcnt_thresh;		/** popcnt filter threshold, set zero if you want to disable it */
 
 	/** score parameters */
 	int16_t xdrop;
