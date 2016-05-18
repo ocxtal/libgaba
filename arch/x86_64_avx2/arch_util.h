@@ -8,8 +8,7 @@
 #define _ARCH_UTIL_H_INCLUDED
 
 #include "vector.h"
-#include <smmintrin.h>
-#include <immintrin.h>
+#include <x86intrin.h>
 #include <stdint.h>
 
 /**
@@ -157,6 +156,13 @@
 }
 #define _memset_blk_a(dst, a, size)			_memset_blk_intl(dst, a, size, _ymm_wr_a)
 #define _memset_blk_u(dst, a, size)			_memset_blk_intl(dst, a, size, _ymm_wr_u)
+
+
+/**
+ * substitution matrix abstraction
+ */
+#define _load_sc(this, name)				( _bc_v16i8(_load_v16i8((this)->scv.name)) )
+#define _load_sb(scv)						( _bc_v16i8(_load_v16i8((scv).sb)) )
 
 /**
  * gap penalty vector abstraction macros

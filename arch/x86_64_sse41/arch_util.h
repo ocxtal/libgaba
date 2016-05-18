@@ -7,9 +7,7 @@
 #ifndef _ARCH_UTIL_H_INCLUDED
 #define _ARCH_UTIL_H_INCLUDED
 
-// #include "../../sea.h"
-#include <smmintrin.h>
-#include <immintrin.h>
+#include <x86intrin.h>
 #include <stdint.h>
 
 /**
