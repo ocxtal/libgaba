@@ -3981,6 +3981,8 @@ void gaba_dp_clean(
 }
 
 /* unittests */
+#if UNITTEST == 1
+
 #include <string.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -5582,6 +5584,8 @@ unittest(with_seq_pair(
 	gaba_dp_clean(d);
 }
 #endif
+
+#endif /* UNITTEST */
 
 /**
  * end of gaba.c
