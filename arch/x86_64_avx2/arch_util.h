@@ -158,45 +158,6 @@
 #define _memset_blk_a(dst, a, size)			_memset_blk_intl(dst, a, size, _ymm_wr_a)
 #define _memset_blk_u(dst, a, size)			_memset_blk_intl(dst, a, size, _ymm_wr_u)
 
-/**
- * seqreader prototype implementation
- *
- * @memo
- * buf_len = BLK + BW = 64
- * sizeof(vector) = 16 (xmm)
- */
-
-/**
- * reader function declarations (see io.s)
- */
-void _loada_ascii_2bit_fw(uint8_t *dst, uint8_t const *src, uint64_t idx, uint64_t src_len, uint64_t copy_len);
-void _loada_ascii_2bit_fr(uint8_t *dst, uint8_t const *src, uint64_t idx, uint64_t src_len, uint64_t copy_len);
-void _loadb_ascii_2bit_fw(uint8_t *dst, uint8_t const *src, uint64_t idx, uint64_t src_len, uint64_t copy_len);
-void _loadb_ascii_2bit_fr(uint8_t *dst, uint8_t const *src, uint64_t idx, uint64_t src_len, uint64_t copy_len);
-
-/**
- * @fn rd_load, rd_loada, rd_loadb
- * @brief wrapper of loada function
- */
-#define rd_load(func, dst, src, pos, lim, len) { \
-	uint64_t register u0, u1, u2, u3, u4; \
-	__asm__ __volatile__ ( \
-		"movq %%rbx, %%r8\n\t" \
-		"call *%%rax\n\t" \
-		: "=a"(u0), \
-		  "=D"(u1), \
-		  "=S"(u2), \
-		  "=d"(u3), \
-		  "=c"(u4) \
-		: "a"(func), \
-		  "D"(dst), \
-		  "S"(src), \
-		  "d"(pos), \
-		  "c"(lim), \
-		  "b"(len) \
-		: "%r8", "%xmm0", "%xmm1", "%xmm2", "%xmm3", "%xmm4", "%xmm5"); \
-}
-
 #endif /* #ifndef _ARCH_UTIL_H_INCLUDED */
 /**
  * end of arch_util.h
