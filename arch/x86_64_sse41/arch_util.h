@@ -168,6 +168,47 @@
 #define _memset_blk_a(dst, a, size)			_memset_blk_intl(dst, a, size, _xmm_wr_a)
 #define _memset_blk_u(dst, a, size)			_memset_blk_intl(dst, a, size, _xmm_wr_u)
 
+/**
+ * substitution matrix abstraction
+ */
+#define _load_sc(this, name)				( _bc_v16i8(_load_v16i8((this)->scv.name)) )
+#define _load_sb(scv)						( _bc_v16i8(_load_v16i8((scv).sb)) )
+
+
+/**
+ * gap penalty vector abstraction macros
+ */
+/* store */
+#define _store_gap(_ptr, _vec)				{ _mm_store_si128((__m128i *)(_ptr), (_vec)); }
+#define _make_gap(_e1, _e2, _e3, _e4) ( \
+	_mm_set_epi8( \
+		(_e4), (_e4), (_e4), (_e4), \
+		(_e3), (_e3), (_e3), (_e3), \
+		(_e2), (_e2), (_e2), (_e2), \
+		(_e1), (_e1), (_e1), (_e1)) \
+)
+#define _store_adjh(_scv, _adjh, _adjv, _ofsh, _ofsv) { \
+	_store_gap((_scv).adjh, _make_gap(_adjh, _adjv, _ofsh, _ofsv)) \
+}
+#define _store_adjv(_scv, _adjh, _adjv, _ofsh, _ofsv) { \
+	_store_gap((_scv).adjv, _make_gap(_adjh, _adjv, _ofsh, _ofsv)) \
+}
+#define _store_ofsh(_scv, _adjh, _adjv, _ofsh, _ofsv) { \
+	_store_gap((_scv).ofsh, _make_gap(_adjh, _adjv, _ofsh, _ofsv)) \
+}
+#define _store_ofsv(_scv, _adjh, _adjv, _ofsh, _ofsv) { \
+	_store_gap((_scv).ofsv, _make_gap(_adjh, _adjv, _ofsh, _ofsv)) \
+}
+
+/* load */
+#define _load_gap(_ptr, _idx)					( _mm_shuffle_epi32(_mm_load_si128((__m128i const *)(_ptr)), (_idx)) )
+
+#define _load_adjh(_scv)						( (v32i8_t){ _load_gap((_scv).ofsv, 0x00), _load_gap((_scv).ofsv, 0x00) } )
+#define _load_adjv(_scv)						( (v32i8_t){ _load_gap((_scv).ofsv, 0x55), _load_gap((_scv).ofsv, 0x55) } )
+#define _load_ofsh(_scv)						( (v32i8_t){ _load_gap((_scv).ofsv, 0xaa), _load_gap((_scv).ofsv, 0xaa) } )
+#define _load_ofsv(_scv)						( (v32i8_t){ _load_gap((_scv).ofsv, 0xff), _load_gap((_scv).ofsv, 0xff) } )
+
+
 #endif /* #ifndef _ARCH_UTIL_H_INCLUDED */
 /**
  * end of arch_util.h
