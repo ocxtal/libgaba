@@ -22,6 +22,7 @@ def configure(conf):
 		# note: https://groups.google.com/forum/#!topic/waf-users/TJKhe04HGQc
 		conf.env.append_value('CFLAGS', '-diag-disable')
 		conf.env.append_value('CFLAGS', 'remark')
+		conf.env.append_value('CFLAGS', '-inline-forceinline')
 	elif conf.env.CC_NAME == 'gcc':
 		conf.env.append_value('CFLAGS', '-Wno-unused-variable')
 		conf.env.append_value('CFLAGS', '-Wno-unused-but-set-variable')
