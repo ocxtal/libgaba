@@ -339,16 +339,21 @@ _static_assert(sizeof(struct gaba_writer_work_s) == 192);
  * @struct gaba_score_vec_s
  */
 struct gaba_score_vec_s {
-	// int8_t mv[16];				/** (16) match matrix */
-	int8_t sb[16];				/** (16) substitution matrix (or mismatch matrix) */
+	int8_t v1[16];
+	int8_t v2[16];
+	int8_t v3[16];
+	int8_t v4[16];
+	int8_t v5[16];
+
+	#if 0
 	int8_t adjh[16];			/** (16) */
 	int8_t adjv[16];			/** (16) */
 	int8_t ofsh[16];			/** (16) */
 	int8_t ofsv[16];			/** (16) */
+	int8_t sb[16];				/** (16) substitution matrix (or mismatch matrix) */
+	#endif
 };
 _static_assert(sizeof(struct gaba_score_vec_s) == 80);
-_static_assert_offset(struct gaba_score_s, score_sub, struct gaba_score_vec_s, sb, 0);
-_static_assert_offset(struct gaba_score_s, score_gi_a, struct gaba_score_vec_s, adjh, 0);
 
 /**
  * @struct gaba_dp_context_s
@@ -367,13 +372,13 @@ struct gaba_dp_context_s {
 	/** 192, 192 */
 
 	/** 64byte aligned */
-	uint8_t *stack_top;					/** (8) dynamic programming matrix */
-	uint8_t *stack_end;					/** (8) the end of dp matrix */
-	/** 16, 208 */
-
 	/** loaded on init */
 	struct gaba_score_vec_s scv;		/** (80) substitution matrix and gaps */
-	/** 80, 288 */
+	/** 80, 272 */
+
+	uint8_t *stack_top;					/** (8) dynamic programming matrix */
+	uint8_t *stack_end;					/** (8) the end of dp matrix */
+	/** 16, 288 */
 
 	int16_t tx;							/** (2) xdrop threshold */
 	uint16_t mem_cnt;					/** (2) */
@@ -398,8 +403,8 @@ struct gaba_dp_context_s {
 _static_assert(sizeof(struct gaba_dp_context_s) == 640);
 #define GABA_DP_CONTEXT_LOAD_OFFSET	( offsetof(struct gaba_dp_context_s, scv) )
 #define GABA_DP_CONTEXT_LOAD_SIZE	( sizeof(struct gaba_dp_context_s) - GABA_DP_CONTEXT_LOAD_OFFSET )
-_static_assert(GABA_DP_CONTEXT_LOAD_OFFSET == 208);
-_static_assert(GABA_DP_CONTEXT_LOAD_SIZE == 432);
+_static_assert(GABA_DP_CONTEXT_LOAD_OFFSET == 192);
+_static_assert(GABA_DP_CONTEXT_LOAD_SIZE == 448);
 
 /**
  * @struct gaba_context_s
@@ -1134,11 +1139,6 @@ struct gaba_joint_tail_s *fill_create_tail(
 #  endif
 #endif /* _match */
 
-/**
- * @macro _load_sc
- * @brief load constant vectors from gaba_dp_context_s
- */
-#define _load_sc(this, name)	( _bc_v16i8(_load_v16i8((this)->scv.name)) )
 
 /**
  * @macro _fill_load_contexts
@@ -1155,8 +1155,8 @@ struct gaba_joint_tail_s *fill_create_tail(
 	/* load vector registers */ \
 	vec_t register dh = _load(_pv(((_blk) - 1)->diff.dh)); \
 	vec_t register dv = _load(_pv(((_blk) - 1)->diff.dv)); \
-	_print(_add(dh, _load_sc(this, ofsh))); \
-	_print(_add(dv, _load_sc(this, ofsv))); \
+	_print(_add(dh, _load_ofsh(this->scv))); \
+	_print(_add(dv, _load_ofsv(this->scv))); \
 	/* load delta vectors */ \
 	vec_t register delta = _load(_pv(((_blk) - 1)->sd.delta)); \
 	vec_t register max = _load(_pv(((_blk) - 1)->sd.max)); \
@@ -1186,10 +1186,10 @@ struct gaba_joint_tail_s *fill_create_tail(
 	de = _add(dv, de); \
 	df = _add(dh, df); \
 	dh = _sub(_zero(), dh); \
-	_print(_add(dh, _load_sc(this, ofsh))); \
-	_print(_add(dv, _load_sc(this, ofsv))); \
-	_print(_sub(_sub(de, dv), _load_sc(this, adjh))); \
-	_print(_sub(_add(df, dh), _load_sc(this, adjv))); \
+	_print(_add(dh, _load_ofsh(this->scv))); \
+	_print(_add(dv, _load_ofsv(this->scv))); \
+	_print(_sub(_sub(de, dv), _load_adjh(this->scv))); \
+	_print(_sub(_add(df, dh), _load_adjv(this->scv))); \
 	/* load delta vectors */ \
 	vec_t register delta = _load(_pv(((_blk) - 1)->sd.delta)); \
 	vec_t register max = _load(_pv(((_blk) - 1)->sd.max)); \
@@ -1209,7 +1209,8 @@ struct gaba_joint_tail_s *fill_create_tail(
 #if MODEL == LINEAR
 #define _fill_body() { \
 	vec_t register t = _match(_loadu(aptr), _loadu(bptr)); \
-	t = _shuf(_load_sc(this, sb), t); \
+	/*t = _shuf(_load_sc(this, sb), t);*/ \
+	t = _shuf(_load_sb(this->scv), t); \
 	_print(t); \
 	t = _max(dh, t); \
 	t = _max(dv, t); \
@@ -1220,15 +1221,16 @@ struct gaba_joint_tail_s *fill_create_tail(
 	vec_t _dv = _sub(t, dh); \
 	dh = _sub(t, dv); \
 	dv = _dv; \
-	_print(_add(dh, _load_sc(this, ofsh))); \
-	_print(_add(dv, _load_sc(this, ofsv))); \
+	_print(_add(dh, _load_ofsh(this->scv))); \
+	_print(_add(dv, _load_ofsv(this->scv))); \
 }
 #else
 #define _fill_body() { \
 	vec_t register t = _match(_loadu(aptr), _loadu(bptr)); \
 	_print(_loadu(aptr)); \
 	_print(_loadu(bptr)); \
-	t = _shuf(_load_sc(this, sb), t); \
+	/*t = _shuf(_load_sc(this, sb), t);*/ \
+	t = _shuf(_load_sb(this->scv), t); \
 	_print(t); \
 	t = _max(de, t); \
 	t = _max(df, t); \
@@ -1236,15 +1238,17 @@ struct gaba_joint_tail_s *fill_create_tail(
 	mask_ptr->pair.v.mask = _mask(_eq(t, df)); \
 	debug("mask(%llx)", mask_ptr->all); \
 	mask_ptr++; \
-	df = _sub(_max(_add(df, _load_sc(this, adjv)), t), dv); \
+	/*df = _sub(_max(_add(df, _load_sc(this, adjv)), t), dv);*/ \
+	df = _sub(_max(_add(df, _load_adjv(this->scv)), t), dv); \
 	dv = _sub(dv, t); \
-	de = _add(_max(_add(de, _load_sc(this, adjh)), t), dh); \
+	/*de = _add(_max(_add(de, _load_sc(this, adjh)), t), dh);*/ \
+	de = _add(_max(_add(de, _load_adjh(this->scv)), t), dh); \
 	t = _add(dh, t); \
 	dh = dv; dv = t; \
-	_print(_add(dh, _load_sc(this, ofsh))); \
-	_print(_add(dv, _load_sc(this, ofsv))); \
-	_print(_sub(_sub(de, dv), _load_sc(this, adjh))); \
-	_print(_sub(_add(df, dh), _load_sc(this, adjv))); \
+	_print(_add(dh, _load_ofsh(this->scv))); \
+	_print(_add(dv, _load_ofsv(this->scv))); \
+	_print(_sub(_sub(de, dv), _load_adjh(this->scv))); \
+	_print(_sub(_add(df, dh), _load_adjv(this->scv))); \
 }
 #endif /* MODEL */
 
@@ -1274,14 +1278,16 @@ struct gaba_joint_tail_s *fill_create_tail(
 #define _fill_right() { \
 	dh = _bsl(dh, 1);	/* shift left dh */ \
 	_fill_body();		/* update vectors */ \
-	_fill_update_delta(_add, dh, _load_sc(this, ofsh), 1); \
+	/*_fill_update_delta(_add, dh, _load_sc(this, ofsh), 1);*/ \
+	_fill_update_delta(_add, dh, _load_ofsh(this->scv), 1); \
 }
 #else
 #define _fill_right() { \
 	dh = _bsl(dh, 1);	/* shift left dh */ \
 	df = _bsl(df, 1);	/* shift left df */ \
 	_fill_body();		/* update vectors */ \
-	_fill_update_delta(_sub, dh, _load_sc(this, ofsh), -1); \
+	/*_fill_update_delta(_sub, dh, _load_sc(this, ofsh), -1);*/ \
+	_fill_update_delta(_sub, dh, _load_ofsh(this->scv), -1); \
 }
 #endif /* MODEL */
 #define _fill_down_update_ptr() { \
@@ -1294,14 +1300,16 @@ struct gaba_joint_tail_s *fill_create_tail(
 #define _fill_down() { \
 	dv = _bsr(dv, 1);	/* shift right dv */ \
 	_fill_body();		/* update vectors */ \
-	_fill_update_delta(_add, dv, _load_sc(this, ofsv), 1); \
+	/*_fill_update_delta(_add, dv, _load_sc(this, ofsv), 1);*/ \
+	_fill_update_delta(_add, dv, _load_ofsv(this->scv), 1); \
 }
 #else
 #define _fill_down() { \
 	dv = _bsr(dv, 1);	/* shift right dv */ \
 	de = _bsr(de, 1);	/* shift right de */ \
 	_fill_body();		/* update vectors */ \
-	_fill_update_delta(_add, dv, _load_sc(this, ofsv), 1); \
+	/*_fill_update_delta(_add, dv, _load_sc(this, ofsv), 1);*/ \
+	_fill_update_delta(_add, dv, _load_ofsv(this->scv), 1); \
 }
 #endif /* MODEL */
 
@@ -3471,32 +3479,49 @@ struct gaba_score_vec_s gaba_init_create_score_vector(
 	int8_t gev = -score_matrix->score_ge_b;
 	int8_t gih = -score_matrix->score_gi_a;
 	int8_t giv = -score_matrix->score_gi_b;
+	
+	int8_t sb[16] __attribute__(( aligned(16) ));
 	struct gaba_score_vec_s sc;
 	#if BIT == 2
 		for(int i = 0; i < 16; i++) {
-			sc.sb[i] = v[i] - (geh + gih + gev + giv);
+			sb[i] = v[i] - (geh + gih + gev + giv);
 		}
 	#else /* BIT == 4 */
 		int8_t min = extract_min(score_matrix->score_sub);
-		sc.sb[0] = min - (geh + gih + gev + giv);
+		sb[0] = min - (geh + gih + gev + giv);
 		for(int i = 1; i < 16; i++) {
-			sc.sb[i] = v[0] - (geh + gih + gev + giv);
+			sb[i] = v[0] - (geh + gih + gev + giv);
 		}
-	#endif	
+	#endif
+	_store_sb(sc, _load_v16i8(sb));
 
 	#if MODEL == LINEAR
+		_store_adjh(sc, 0, 0, geh + gih, gev + giv);
+		_store_adjv(sc, 0, 0, geh + gih, gev + giv);
+		_store_ofsh(sc, 0, 0, geh + gih, gev + giv);
+		_store_ofsv(sc, 0, 0, geh + gih, gev + giv);
+
+		/*
 		for(int i = 0; i < 16; i++) {
 			sc.adjh[i] = sc.adjv[i] = 0;
 			sc.ofsh[i] = geh + gih;
 			sc.ofsv[i] = gev + giv;
 		}
+		*/
 	#else
+		_store_adjh(sc, -gih, -giv, -(geh + gih), gev + giv);
+		_store_adjv(sc, -gih, -giv, -(geh + gih), gev + giv);
+		_store_ofsh(sc, -gih, -giv, -(geh + gih), gev + giv);
+		_store_ofsv(sc, -gih, -giv, -(geh + gih), gev + giv);
+
+		/*
 		for(int i = 0; i < 16; i++) {
 			sc.adjh[i] = -gih;
 			sc.adjv[i] = -giv;
 			sc.ofsh[i] = -(geh + gih);
 			sc.ofsv[i] = gev + giv;
 		}
+		*/
 	#endif
 	return(sc);
 }

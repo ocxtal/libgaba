@@ -7,9 +7,7 @@
 #ifndef _ARCH_UTIL_H_INCLUDED
 #define _ARCH_UTIL_H_INCLUDED
 
-// #include "../../sea.h"
-#include <smmintrin.h>
-#include <immintrin.h>
+#include <x86intrin.h>
 #include <stdint.h>
 
 /**
@@ -169,43 +167,50 @@
 #define _memset_blk_u(dst, a, size)			_memset_blk_intl(dst, a, size, _xmm_wr_u)
 
 /**
- * seqreader prototype implementation
- *
- * @memo
- * buf_len = BLK + BW = 64
- * sizeof(vector) = 16 (xmm)
+ * substitution matrix abstraction
  */
+/* store */
+#define _store_sb(_scv, sv16)				{ _store_v16i8((_scv).v1, (sv16)); }
+
+/* load */
+#define _load_sb(scv)						( _bc_v16i8(_load_v16i8((scv).v1)) )
+
 
 /**
- * reader function declarations (see io.s)
+ * gap penalty vector abstraction macros
  */
-void _loada_ascii_2bit_fw(uint8_t *dst, uint8_t const *src, uint64_t idx, uint64_t src_len, uint64_t copy_len);
-void _loada_ascii_2bit_fr(uint8_t *dst, uint8_t const *src, uint64_t idx, uint64_t src_len, uint64_t copy_len);
-void _loadb_ascii_2bit_fw(uint8_t *dst, uint8_t const *src, uint64_t idx, uint64_t src_len, uint64_t copy_len);
-void _loadb_ascii_2bit_fr(uint8_t *dst, uint8_t const *src, uint64_t idx, uint64_t src_len, uint64_t copy_len);
-
-/**
- * @fn rd_load, rd_loada, rd_loadb
- * @brief wrapper of loada function
- */
-#define rd_load(func, dst, src, pos, lim, len) { \
-	uint64_t register u0, u1, u2, u3, u4; \
-	__asm__ __volatile__ ( \
-		"movq %%rbx, %%r8\n\t" \
-		"call *%%rax\n\t" \
-		: "=a"(u0), \
-		  "=D"(u1), \
-		  "=S"(u2), \
-		  "=d"(u3), \
-		  "=c"(u4) \
-		: "a"(func), \
-		  "D"(dst), \
-		  "S"(src), \
-		  "d"(pos), \
-		  "c"(lim), \
-		  "b"(len) \
-		: "%r8", "%xmm0", "%xmm1", "%xmm2", "%xmm3", "%xmm4", "%xmm5"); \
+/* store */
+#define _make_gap(_e1, _e2, _e3, _e4) ( \
+	(v16i8_t){ _mm_set_epi8( \
+		(_e4), (_e4), (_e4), (_e4), \
+		(_e3), (_e3), (_e3), (_e3), \
+		(_e2), (_e2), (_e2), (_e2), \
+		(_e1), (_e1), (_e1), (_e1)) \
+	} \
+)
+#define _store_adjh(_scv, _adjh, _adjv, _ofsh, _ofsv) { \
+	_store_v16i8((_scv).v2, _make_gap(_adjh, _adjv, _ofsh, _ofsv)) \
 }
+#define _store_adjv(_scv, _adjh, _adjv, _ofsh, _ofsv) { \
+	_store_v16i8((_scv).v3, _make_gap(_adjh, _adjv, _ofsh, _ofsv)) \
+}
+#define _store_ofsh(_scv, _adjh, _adjv, _ofsh, _ofsv) { \
+	_store_v16i8((_scv).v4, _make_gap(_adjh, _adjv, _ofsh, _ofsv)) \
+}
+#define _store_ofsv(_scv, _adjh, _adjv, _ofsh, _ofsv) { \
+	_store_v16i8((_scv).v5, _make_gap(_adjh, _adjv, _ofsh, _ofsv)) \
+}
+
+/* load */
+#define _load_gap(_ptr, _idx) ( \
+	(v16i8_t){ _mm_shuffle_epi32(_mm_load_si128((__m128i const *)(_ptr)), (_idx)) } \
+)
+
+#define _load_adjh(_scv)					( _bc_v16i8(_load_gap((_scv).v2, 0x00)) )
+#define _load_adjv(_scv)					( _bc_v16i8(_load_gap((_scv).v2, 0x55)) )
+#define _load_ofsh(_scv)					( _bc_v16i8(_load_gap((_scv).v2, 0xaa)) )
+#define _load_ofsv(_scv)					( _bc_v16i8(_load_gap((_scv).v2, 0xff)) )
+
 
 #endif /* #ifndef _ARCH_UTIL_H_INCLUDED */
 /**

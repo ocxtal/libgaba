@@ -8,7 +8,7 @@
 #define _V2I64_H_INCLUDED
 
 /* include header for intel / amd sse2 instruction sets */
-#include <smmintrin.h>
+#include <x86intrin.h>
 #include "log.h"
 
 /* 8bit 32cell */
