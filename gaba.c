@@ -339,11 +339,19 @@ _static_assert(sizeof(struct gaba_writer_work_s) == 192);
  * @struct gaba_score_vec_s
  */
 struct gaba_score_vec_s {
+	int8_t v1[16];
+	int8_t v2[16];
+	int8_t v3[16];
+	int8_t v4[16];
+	int8_t v5[16];
+
+	#if 0
 	int8_t adjh[16];			/** (16) */
 	int8_t adjv[16];			/** (16) */
 	int8_t ofsh[16];			/** (16) */
 	int8_t ofsv[16];			/** (16) */
 	int8_t sb[16];				/** (16) substitution matrix (or mismatch matrix) */
+	#endif
 };
 _static_assert(sizeof(struct gaba_score_vec_s) == 80);
 
@@ -364,13 +372,13 @@ struct gaba_dp_context_s {
 	/** 192, 192 */
 
 	/** 64byte aligned */
-	uint8_t *stack_top;					/** (8) dynamic programming matrix */
-	uint8_t *stack_end;					/** (8) the end of dp matrix */
-	/** 16, 208 */
-
 	/** loaded on init */
 	struct gaba_score_vec_s scv;		/** (80) substitution matrix and gaps */
-	/** 80, 288 */
+	/** 80, 272 */
+
+	uint8_t *stack_top;					/** (8) dynamic programming matrix */
+	uint8_t *stack_end;					/** (8) the end of dp matrix */
+	/** 16, 288 */
 
 	int16_t tx;							/** (2) xdrop threshold */
 	uint16_t mem_cnt;					/** (2) */
@@ -395,8 +403,8 @@ struct gaba_dp_context_s {
 _static_assert(sizeof(struct gaba_dp_context_s) == 640);
 #define GABA_DP_CONTEXT_LOAD_OFFSET	( offsetof(struct gaba_dp_context_s, scv) )
 #define GABA_DP_CONTEXT_LOAD_SIZE	( sizeof(struct gaba_dp_context_s) - GABA_DP_CONTEXT_LOAD_OFFSET )
-_static_assert(GABA_DP_CONTEXT_LOAD_OFFSET == 208);
-_static_assert(GABA_DP_CONTEXT_LOAD_SIZE == 432);
+_static_assert(GABA_DP_CONTEXT_LOAD_OFFSET == 192);
+_static_assert(GABA_DP_CONTEXT_LOAD_SIZE == 448);
 
 /**
  * @struct gaba_context_s
@@ -3444,18 +3452,21 @@ struct gaba_score_vec_s gaba_init_create_score_vector(
 	int8_t gev = -score_matrix->score_ge_b;
 	int8_t gih = -score_matrix->score_gi_a;
 	int8_t giv = -score_matrix->score_gi_b;
+	
+	int8_t sb[16] __attribute__(( aligned(16) ));
 	struct gaba_score_vec_s sc;
 	#if BIT == 2
 		for(int i = 0; i < 16; i++) {
-			sc.sb[i] = v[i] - (geh + gih + gev + giv);
+			sb[i] = v[i] - (geh + gih + gev + giv);
 		}
 	#else /* BIT == 4 */
 		int8_t min = extract_min(score_matrix->score_sub);
-		sc.sb[0] = min - (geh + gih + gev + giv);
+		sb[0] = min - (geh + gih + gev + giv);
 		for(int i = 1; i < 16; i++) {
-			sc.sb[i] = v[0] - (geh + gih + gev + giv);
+			sb[i] = v[0] - (geh + gih + gev + giv);
 		}
-	#endif	
+	#endif
+	_store_sb(sc, _load_v16i8(sb));
 
 	#if MODEL == LINEAR
 		_store_adjh(sc, 0, 0, geh + gih, gev + giv);
