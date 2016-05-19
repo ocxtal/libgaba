@@ -165,7 +165,7 @@
 #define _store_sb(_scv, sv16)				{ _store_v32i8((_scv).v1, _bc_v16i8_v32i8(sv16)); }
 
 /* load */
-#define _load_sb(scv)						( _bc_v32i8(_load_v32i8((scv).sb)) )
+#define _load_sb(scv)						( _bc_v32i8(_load_v32i8((scv).v1)) )
 
 /**
  * gap penalty vector abstraction macros
