@@ -138,8 +138,9 @@ int main(int argc, char *argv[])
 	int64_t i;
 	char *a;
 	char *b;
+	char *c;
 	struct params p;
-	bench_t total;
+	bench_t fill, trace, parse;
 
 	/** set defaults */
 	p.len = 10000;
@@ -159,6 +160,9 @@ int main(int argc, char *argv[])
 	a = generate_random_sequence(p.len);
 	b = generate_mutated_sequence(a, p.len, p.x, p.d, 8);
 
+	/* init cigar string buffer */
+	c = (char *)malloc(p.len);
+
 	/** init context */
 	gaba_t *ctx = gaba_init(GABA_PARAMS(
 		.xdrop = 100,
@@ -166,7 +170,9 @@ int main(int argc, char *argv[])
 	struct gaba_section_s asec = gaba_build_section(0, (uint8_t const *)a, strlen(a));
 	struct gaba_section_s bsec = gaba_build_section(2, (uint8_t const *)b, strlen(b));
 
-	bench_init(total);
+	bench_init(fill);
+	bench_init(trace);
+	bench_init(parse);
 
 	/**
 	 * run benchmark.
@@ -177,13 +183,18 @@ int main(int argc, char *argv[])
 
 		gaba_dp_t *dp = gaba_dp_init(ctx, lim, lim);
 
-		bench_start(total);
-
+		bench_start(fill);
 		struct gaba_fill_s *f = gaba_dp_fill_root(dp, &asec, 0, &bsec, 0);
-		// struct gaba_result_s *r = gaba_dp_trace(dp, f, NULL, NULL);
 		score += f->max;
+		bench_end(fill);
+		
+		bench_start(trace);
+		struct gaba_result_s *r = gaba_dp_trace(dp, f, NULL, NULL);
+		bench_end(trace);
 
-		bench_end(total);
+		bench_start(parse);
+		gaba_dp_dump_cigar(c, p.len, r->path->array, r->path->offset, r->path->len);
+		bench_end(parse);
 
 		gaba_dp_clean(dp);
 	}
@@ -191,13 +202,19 @@ int main(int argc, char *argv[])
 	/**
 	 * print results.
 	 */
-	printf("%lld\t%lld\n", bench_get(total), score);
+	printf("%lld\t%lld\t%lld\t%lld\t%lld\n",
+		bench_get(fill),
+		bench_get(trace),
+		bench_get(parse),
+		bench_get(fill) + bench_get(trace) + bench_get(parse),
+		score);
 
 	/**
 	 * clean malloc'd memories
 	 */
 	free(a);
 	free(b);
+	free(c);
 
 	gaba_clean(ctx);
 	return 0;
