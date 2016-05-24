@@ -735,19 +735,19 @@ void fill_load_seq_b(
 	#if BIT == 2
 		if(pos < this->w.r.blim) {
 			debug("forward fetch b: pos(%p), len(%llu)", pos, len);
+			/* forward fetch: pos */
+			vec_t b = _loadu(pos);
+			_storeu(_rd_bufb(this, BW, len), _shl(b, 2));
+		} else {
+			debug("reverse fetch b: pos(%p), len(%llu)", pos, len);
 			/* take complement */
 			vec_t const mask = _set(0x03);
 
-			/* forward fetch: pos */
-			vec_t b = _loadu(pos);
-			_storeu(_rd_bufb(this, BW, len), _xor(_shl(b, 2), mask));
-		} else {
-			debug("reverse fetch b: pos(%p), len(%llu)", pos, len);
 			/* reverse fetch: 2 * blen - pos + (len - 32) */
 			vec_t b = _loadu(_rev(pos, this->w.r.blim) + (len - BW));
 			_print(b);
 			_print(_shl(_swap(b), 2));
-			_storeu(_rd_bufb(this, BW, len), _shl(_swap(b), 2));
+			_storeu(_rd_bufb(this, BW, len), _shl(_swap(_xor(b, mask)), 2));
 		}
 	#else /* BIT == 4 */
 		if(pos < this->w.r.blim) {
