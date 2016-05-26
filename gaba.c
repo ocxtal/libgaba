@@ -2893,6 +2893,29 @@ void trace_reverse_trace(
 	int64_t rem = (t)->w.l.rv_rem; \
 	_trace_load_context(t);
 
+
+/**
+ * @macro _trace_reload_tail
+ */
+#define _trace_reload_tail(t) { \
+	debug("tail(%p), next tail(%p), p(%d), psum(%lld), ssum(%d)", \
+		(t)->w.l.tail, (t)->w.l.tail->tail, (t)->w.l.tail->tail->p, \
+		(t)->w.l.tail->tail->psum, (t)->w.l.tail->tail->ssum); \
+	/* save the last p */ \
+	int64_t plast = p; \
+	/* update psum */ \
+	(t)->w.l.psum -= (t)->w.l.p; \
+	/* load tail */ \
+	struct gaba_joint_tail_s const *tail = (t)->w.l.tail = (t)->w.l.tail->tail; \
+	blk = _last_block(tail); \
+	psave = p = ((t)->w.l.p = tail->p) - 1; \
+	debug("updated psum(%lld), w.l.p(%d), p(%lld)", (t)->w.l.psum, (t)->w.l.p, p); \
+	/* reload dir and mask pointer */ \
+	dir = _dir_load(blk, p & (BLK - 1)); \
+	mask_ptr = &blk->mask[p & (BLK - 1)]; \
+	_trace_load_mask(); \
+}
+
 /**
  * @macro _trace_*_cap_update_path
  * @brief store path array and update path pointer
@@ -2902,18 +2925,22 @@ void trace_reverse_trace(
 	path_array = path_array<<(BLK - (_traced_count)); \
 	path[0] = (uint32_t)(prev_array | (path_array>>rem)); \
 	path[-1] = (uint32_t)(path_array<<(BLK - rem)); \
+	debug("path[0](%x), path[-1](%x)", path[0], path[-1]); \
 	path -= ((rem + (_traced_count)) & BLK) != 0; \
 	rem = (rem + (_traced_count)) & (BLK - 1); \
-	prev_array = path[0]; \
+	path_array = 0; \
+	prev_array = (uint64_t)path[0]; \
 }
 #define _trace_reverse_cap_update_path(_traced_count) { \
 	debug("path_array(%llx), prev_array(%llx), cnt(%lld)", path_array, prev_array, _traced_count); \
 	path_array = path_array>>(BLK - (_traced_count)); \
 	path[0] = (uint32_t)(prev_array | (path_array<<rem)); \
 	path[1] = (uint32_t)(path_array>>(BLK - rem)); \
+	debug("path[0](%x), path[1](%x)", path[0], path[1]); \
 	path += ((rem + (_traced_count)) & BLK) != 0; \
 	rem = (rem + (_traced_count)) & (BLK - 1); \
-	prev_array = path[0]; \
+	path_array = 0; \
+	prev_array = (uint64_t)path[0]; \
 }
 
 /**
@@ -2923,18 +2950,49 @@ void trace_reverse_trace(
 #define _trace_forward_bulk_update_path() { \
 	debug("path_array(%llx), prev_array(%llx)", path_array, prev_array); \
 	*path-- = (uint32_t)(prev_array | (path_array>>rem)); \
-	*path = (uint32_t)(prev_array = (path_array<<(BLK - rem))); \
+	prev_array = (uint64_t)(*path = (uint32_t)(path_array<<(BLK - rem))); \
+	path_array = 0; \
 }
 #define _trace_reverse_bulk_update_path() { \
 	debug("path_array(%llx), prev_array(%llx)", path_array, prev_array); \
 	*path++ = (uint32_t)(prev_array | (path_array<<rem)); \
-	*path = (uint32_t)(prev_array = (path_array>>(BLK - rem))); \
+	prev_array = (uint64_t)(*path = (uint32_t)(path_array>>(BLK - rem))); \
+	path_array = 0; \
+}
+
+/**
+ * @macro _trace_*_calc_index
+ * @brief restore index from ridx and q
+ */
+#define _trace_forward_calc_index(t) { \
+	_print_v2i32(idx); \
+	/* calc idx of the head of the block from ridx */ \
+	v2i32_t ridx = _load_v2i32(&blk->aridx); \
+	v2i32_t len = _load_v2i32(&(t)->w.l.alen); \
+	idx = _sub_v2i32(_sub_v2i32(len, ridx), _seta_v2i32((BW - 1) - q, q)); \
+	debug("calc_index p(%lld), q(%lld)", p, q); \
+	_print_v2i32(ridx); \
+	_print_v2i32(len); \
+	_print_v2i32(idx); \
+	psave = p; \
+}
+#define _trace_reverse_calc_index(t) { \
+	_print_v2i32(idx); \
+	/* calc idx of the head of the block from ridx */ \
+	v2i32_t ridx = _load_v2i32(&blk->aridx); \
+	v2i32_t len = _load_v2i32(&(t)->w.l.alen); \
+	idx = _sub_v2i32(_sub_v2i32(len, ridx), _seta_v2i32(q, (BW - 1) - q)); \
+	debug("calc_index p(%lld), q(%lld)", p, q); \
+	_print_v2i32(ridx); \
+	_print_v2i32(len); \
+	_print_v2i32(idx); \
+	psave = p; \
 }
 
 /**
  * @macro _trace_forward_*_load
  */
-#define _trace_forward_head_load() { \
+#define _trace_forward_head_load(t, _jump_to) { \
 	if(mask_ptr == blk->mask - 1) { \
 		int64_t loop_count = (p + 1) & (BLK - 1); \
 		debug("load block, loop_count(%lld), blk(%p), next_blk(%p), p(%lld), next_p(%lld)", \
@@ -2946,11 +3004,12 @@ void trace_reverse_trace(
 		mask_ptr = &(--blk)->mask[BLK - 1]; \
 		dir = _dir_load(blk, BLK - 1); \
 		_trace_load_mask(); \
-		goto _trace_forward_head_load_break; \
+		debug("jump to %s", #_jump_to); \
+		goto _jump_to; \
 	} \
 	_trace_load_mask(); \
 }
-#define _trace_forward_bulk_load() { \
+#define _trace_forward_bulk_load(t, _jump_to) { \
 	if(mask_ptr == blk->mask - 1) { \
 		debug("load block, blk(%p), next_blk(%p), p(%lld), next_p(%lld)", \
 			blk, blk-1, p, p - BLK); \
@@ -2960,10 +3019,16 @@ void trace_reverse_trace(
 		/* load dir and update mask pointer */ \
 		mask_ptr = &(--blk)->mask[BLK - 1]; \
 		dir = _dir_load(blk, BLK - 1); \
+		if(p < 2 * BLK) { \
+			_trace_load_mask(); \
+			_trace_forward_calc_index(t); \
+			debug("jump to %s", #_jump_to); \
+			goto _jump_to; \
+		} \
 	} \
 	_trace_load_mask(); \
 }
-#define _trace_forward_tail_load() { \
+#define _trace_forward_tail_load(t, _jump_to) { \
 	if(mask_ptr == blk->mask - 1) { \
 		debug("load block, blk(%p), next_blk(%p), p(%lld)", \
 			blk, blk-1, p); \
@@ -2971,7 +3036,13 @@ void trace_reverse_trace(
 		_trace_forward_cap_update_path(psave - p); \
 		psave = p; \
 		if(p < 0) { \
-			goto _trace_forward_tail_load_break; \
+			debug("w.l.psum(%lld), w.l.p(%d), p(%lld)", (t)->w.l.psum, (t)->w.l.p, p); \
+			if((t)->w.l.psum < (t)->w.l.p - p) { \
+				goto _trace_forward_index_break; \
+			} \
+			_trace_reload_tail(t); \
+			debug("jump to %s", #_jump_to); \
+			goto _jump_to; \
 		} \
 		/* load dir and update mask pointer */ \
 		mask_ptr = &(--blk)->mask[BLK - 1]; \
@@ -2983,7 +3054,7 @@ void trace_reverse_trace(
 /**
  * @macro _trace_reverse_*_load
  */
-#define _trace_reverse_head_load() { \
+#define _trace_reverse_head_load(t, _jump_to) { \
 	if(mask_ptr == blk->mask - 1) { \
 		int64_t loop_count = (p + 1) & (BLK - 1); \
 		debug("load block, loop_count(%lld), blk(%p), next_blk(%p), p(%lld), next_p(%lld)", \
@@ -2995,11 +3066,12 @@ void trace_reverse_trace(
 		mask_ptr = &(--blk)->mask[BLK - 1]; \
 		dir = _dir_load(blk, BLK - 1); \
 		_trace_load_mask(); \
-		goto _trace_reverse_head_load_break; \
+		debug("jump to %s", #_jump_to); \
+		goto _jump_to; \
 	} \
 	_trace_load_mask(); \
 }
-#define _trace_reverse_bulk_load() { \
+#define _trace_reverse_bulk_load(t, _jump_to) { \
 	if(mask_ptr == blk->mask - 1) { \
 		debug("load block, blk(%p), next_blk(%p), p(%lld), next_p(%lld)", \
 			blk, blk-1, p, p - BLK); \
@@ -3009,10 +3081,16 @@ void trace_reverse_trace(
 		/* load dir and update mask pointer */ \
 		mask_ptr = &(--blk)->mask[BLK - 1]; \
 		dir = _dir_load(blk, BLK - 1); \
+		if(p < 2 * BLK) { \
+			_trace_load_mask(); \
+			_trace_reverse_calc_index(t); \
+			debug("jump to %s", #_jump_to); \
+			goto _jump_to; \
+		} \
 	} \
 	_trace_load_mask(); \
 }
-#define _trace_reverse_tail_load() { \
+#define _trace_reverse_tail_load(t, _jump_to) { \
 	if(mask_ptr == blk->mask - 1) { \
 		debug("load block, blk(%p), next_blk(%p), p(%lld)", \
 			blk, blk-1, p); \
@@ -3020,7 +3098,13 @@ void trace_reverse_trace(
 		_trace_reverse_cap_update_path(psave - p); \
 		psave = p; \
 		if(p < 0) { \
-			goto _trace_reverse_tail_load_break; \
+			debug("w.l.psum(%lld), w.l.p(%d), p(%lld)", (t)->w.l.psum, (t)->w.l.p, p); \
+			if((t)->w.l.psum < (t)->w.l.p - p) { \
+				goto _trace_reverse_index_break; \
+			} \
+			_trace_reload_tail(t); \
+			debug("jump to %s", #_jump_to); \
+			goto _jump_to; \
 		} \
 		/* load dir and update mask pointer */ \
 		mask_ptr = &(--blk)->mask[BLK - 1]; \
@@ -3030,52 +3114,17 @@ void trace_reverse_trace(
 }
 
 /**
- * @macro _trace_*_calc_index
- * @brief restore index from ridx and q
- */
-#define _trace_forward_calc_index(this) { \
-	/* calc idx of the head of the block from ridx */ \
-	v2i32_t ridx = _load_v2i32(&(blk - 1)->aridx); \
-	v2i32_t len = _load_v2i32(&this->w.l.alen); \
-	idx = _sub_v2i32(_sub_v2i32(len, ridx), _seta_v2i32(BW - q, q + 1)); \
-	psave = p; \
-}
-#define _trace_reverse_calc_index(this) { \
-	/* calc idx of the head of the block from ridx */ \
-	v2i32_t ridx = _load_v2i32(&(blk - 1)->aridx); \
-	v2i32_t len = _load_v2i32(&this->w.l.alen); \
-	idx = _sub_v2i32(_sub_v2i32(len, ridx), _seta_v2i32(q + 1, BW - q)); \
-	psave = p; \
-}
-
-/**
- * @macro _trace_head_*_*_index
+ * @macro _trace_head_*_test_index
  * @brief test and update indices
  */
-#define _trace_head_v_test_index()		( p < 2 * BLK )
-#define _trace_head_d_test_index()		( p < 2 * BLK )
-#define _trace_head_h_test_index()		( p < 2 * BLK )
+#define _trace_head_v_test_index()		( 0 )
+#define _trace_head_d_test_index()		( 0 )
+#define _trace_head_h_test_index()		( 0 )
 
-#define _trace_head_v_update_index()	;
-#define _trace_head_d_update_index()	;
-#define _trace_head_h_update_index()	;
+#define _trace_bulk_v_test_index()		( 0 )
+#define _trace_bulk_d_test_index()		( 0 )
+#define _trace_bulk_h_test_index()		( 0 )
 
-/**
- * @macro _trace_bulk_*_*_index
- * @brief test and update indices
- */
-#define _trace_bulk_v_test_index()		( p < 2 * BLK )
-#define _trace_bulk_d_test_index()		( p < 2 * BLK )
-#define _trace_bulk_h_test_index()		( p < 2 * BLK )
-
-#define _trace_bulk_v_update_index()	;
-#define _trace_bulk_d_update_index()	;
-#define _trace_bulk_h_update_index()	;
-
-/**
- * @macro _trace_tail_*_*_index
- * @brief test and update indices
- */
 #define _trace_tail_v_test_index() ( \
 	_mask_v2i32(_eq_v2i32(idx, _zero_v2i32())) & V2I32_MASK_10 \
 )
@@ -3086,13 +3135,19 @@ void trace_reverse_trace(
 	_mask_v2i32(_eq_v2i32(idx, _zero_v2i32())) & V2I32_MASK_01 \
 )
 
+/**
+ * @macro _trace_bulk_*_update_index
+ * @brief test and update indices
+ */
+#define _trace_head_v_update_index()	;
+#define _trace_head_h_update_index()	;
+
+#define _trace_bulk_v_update_index()	;
+#define _trace_bulk_h_update_index()	;
+
 #define _trace_tail_v_update_index() { \
 	p--; \
 	idx = _sub_v2i32(idx, _seta_v2i32(1, 0)); \
-}
-#define _trace_tail_d_update_index() { \
-	p -= 2; \
-	idx = _sub_v2i32(idx, _seta_v2i32(1, 1)); \
 }
 #define _trace_tail_h_update_index() { \
 	p--; \
@@ -3153,127 +3208,108 @@ void trace_reverse_trace(
 	_trace_save_context(t); \
 }
 
-/**
- * @macro _trace_reload_tail
- */
-#define _trace_reload_tail(t) { \
-	debug("tail(%p), next tail(%p), p(%d), psum(%lld), ssum(%d)", \
-		(t)->w.l.tail, (t)->w.l.tail->tail, (t)->w.l.tail->tail->p, \
-		(t)->w.l.tail->tail->psum, (t)->w.l.tail->tail->ssum); \
-	/* save the last p */ \
-	int64_t plast = p; \
-	/* update psum */ \
-	(t)->w.l.psum -= (t)->w.l.p; \
-	/* load tail */ \
-	struct gaba_joint_tail_s const *tail = (t)->w.l.tail = (t)->w.l.tail->tail; \
-	blk = _last_block(tail); \
-	psave = p = ((t)->w.l.p = tail->p) - 1; \
-	debug("updated psum(%lld), w.l.p(%d), p(%lld)", (t)->w.l.psum, (t)->w.l.p, p); \
-	/* reload dir and mask pointer */ \
-	dir = _dir_load(blk, p & (BLK - 1)); \
-	mask_ptr = &blk->mask[p & (BLK - 1)]; \
-	_trace_load_mask(); \
-	/* compensate block pointer */ \
-	if(plast == -2) { \
-		if(mask_ptr == blk->mask - 1) { \
-			mask_ptr = &(--blk)->mask[BLK - 1]; \
-			dir = _dir_load(blk, BLK - 1); \
-		} \
-		_trace_load_mask(); \
-	} \
-}
-
 static
 void trace_forward_trace(
 	struct gaba_dp_context_s *this)
 {
-	#define _trace_forward_gap_loop(_type, _label) { \
-		_trace_forward_##_type##_##_label##_loop: \
+	#define _trace_forward_gap_loop(t, _type, _next, _label) { \
 		while(1) { \
+		_trace_forward_##_type##_##_label##_head: \
 			if(_trace_test_##_label() == 0) { \
-				goto _trace_forward_##_type##_d_loop; \
+				goto _trace_forward_##_type##_d_head; \
 			} \
 			if(_trace_##_type##_##_label##_test_index()) { \
-				goto _trace_forward_##_type##_loop_break; \
+				goto _trace_forward_index_break; \
 			} \
 			debug("go %s (%s), mask_h(%x), mask_v(%x), p(%lld), q(%lld), mask_ptr(%p), path_array(%llx), prev_array(%llx)", \
 				#_label, #_type, mask_h, mask_v, p, q, mask_ptr, path_array, prev_array); \
 			_trace_##_type##_##_label##_update_index(); \
 			_trace_forward_##_label##_update_path_q(); \
-			_trace_forward_##_type##_load(); \
+			_trace_forward_##_type##_load(t, _trace_forward_##_next##_##_label##_head); \
 		} \
 	}
 
-	#define _trace_forward_diag_loop(_type) { \
-		_trace_forward_##_type##_d_loop: \
+	#define _trace_forward_diag_loop(t, _type, _next) { \
 		while(1) { \
+		_trace_forward_##_type##_d_head: \
 			if(_trace_test_h() != 0) { \
-				goto _trace_forward_##_type##_h_loop; \
+				goto _trace_forward_##_type##_h_head; \
 			} \
 			if(_trace_##_type##_d_test_index()) { \
-				goto _trace_forward_##_type##_loop_break; \
+				_trace_forward_cap_update_path(psave - p); \
+				goto _trace_forward_index_break; \
 			} \
 			debug("go d (%s), mask_h(%x), mask_v(%x), p(%lld), q(%lld), mask_ptr(%p), path_array(%llx), prev_array(%llx)", \
 				#_type, mask_h, mask_v, p, q, mask_ptr, path_array, prev_array); \
-			_trace_##_type##_d_update_index(); \
+			_trace_##_type##_h_update_index(); \
 			_trace_forward_h_update_path_q(); \
-			_trace_forward_##_type##_load(); \
+			_trace_forward_##_type##_load(t, _trace_forward_##_next##_d_mid); \
+		_trace_forward_##_type##_d_mid: \
+			_trace_##_type##_v_update_index(); \
 			_trace_forward_v_update_path_q(); \
-			_trace_forward_##_type##_load(); \
+			_trace_forward_##_type##_load(t, _trace_forward_##_next##_d_head); \
 			if(_trace_test_v() != 0) { \
-				goto _trace_forward_##_type##_v_loop; \
+				goto _trace_forward_##_type##_v_head; \
 			} \
 		} \
 	}
 
 	_trace_forward_load_context(this);
 
-	while(1) {
-		debug("p(%lld), q(%lld), path_array(%llx), prev_array(%llx)", p, q, path_array, prev_array);
+	debug("p(%lld), q(%lld), path_array(%llx), prev_array(%llx)", p, q, path_array, prev_array);
 
-		if(!_trace_bulk_d_test_index()) {
-
-			/* head trace */
-			_trace_forward_gap_loop(head, v);
-			_trace_forward_diag_loop(head);
-			_trace_forward_gap_loop(head, h);
-
-_trace_forward_head_load_break:;
-
-			/* bulk trace */
-			_trace_forward_gap_loop(bulk, v);
-			_trace_forward_diag_loop(bulk);
-			_trace_forward_gap_loop(bulk, h);
-
-_trace_forward_head_loop_break:;
-_trace_forward_bulk_loop_break:;
-			/* compensate index */
-			_trace_forward_calc_index(this);
+	/* v dispatcher */
+	_trace_forward_loop_v_head: {
+		if(p < 2 * BLK) {
+			goto _trace_forward_tail_v_head;
+		} else {
+			goto _trace_forward_head_v_head;
 		}
-
-		/* tail trace */ {
-			_trace_forward_gap_loop(tail, v);
-			_trace_forward_diag_loop(tail);
-			_trace_forward_gap_loop(tail, h);
-
-_trace_forward_tail_loop_break:;
-			_trace_forward_cap_update_path(psave - p);
-			_trace_forward_save_context(this);
-			return;
-
-_trace_forward_tail_load_break:;
-			_trace_forward_cap_update_path(psave - p);
-		}
-
-		/* check psum termination */
-		if(this->w.l.psum < this->w.l.p - p) {
-			_trace_forward_save_context(this);
-			return;
-		}
-
-		/* reload tail pointer */
-		_trace_reload_tail(this);
 	}
+	/* v loop */ {
+		_trace_forward_gap_loop(this, head, bulk, v);
+		_trace_forward_gap_loop(this, bulk, tail, v);
+		_trace_forward_gap_loop(this, tail, loop, v);
+	}
+
+	/* d dispatchers */
+	_trace_forward_loop_d_head: {
+		if(p < 2 * BLK) {
+			goto _trace_forward_tail_d_head;
+		} else {
+			goto _trace_forward_head_d_head;
+		}
+	}
+	_trace_forward_loop_d_mid: {
+		if(p < 2 * BLK) {
+			goto _trace_forward_tail_d_mid;
+		} else {
+			goto _trace_forward_head_d_mid;
+		}
+	}
+	/* d loop */ {
+		_trace_forward_diag_loop(this, head, bulk);
+		_trace_forward_diag_loop(this, bulk, tail);
+		_trace_forward_diag_loop(this, tail, loop);
+	}
+
+	/* h dispatcher */
+	_trace_forward_loop_h_head: {
+		if(p < 2 * BLK) {
+			goto _trace_forward_tail_h_head;
+		} else {
+			goto _trace_forward_head_h_head;
+		}
+	}
+
+	/* h loop */ {
+		_trace_forward_gap_loop(this, head, bulk, h);
+		_trace_forward_gap_loop(this, bulk, tail, h);
+		_trace_forward_gap_loop(this, tail, loop, h);
+	}
+
+_trace_forward_index_break:;
+	_trace_forward_save_context(this);
 	return;
 }
 
@@ -3282,95 +3318,107 @@ static
 void trace_reverse_trace(
 	struct gaba_dp_context_s *this)
 {
-	#define _trace_reverse_gap_loop(_type, _label) { \
-		_trace_reverse_##_type##_##_label##_loop: \
+	#define _trace_reverse_gap_loop(t, _type, _next, _label) { \
 		while(1) { \
+		_trace_reverse_##_type##_##_label##_head: \
 			if(_trace_test_##_label() == 0) { \
-				goto _trace_reverse_##_type##_d_loop; \
+				goto _trace_reverse_##_type##_d_head; \
 			} \
 			if(_trace_##_type##_##_label##_test_index()) { \
-				goto _trace_reverse_##_type##_loop_break; \
+				goto _trace_reverse_index_break; \
 			} \
 			debug("go %s (%s), mask_h(%x), mask_v(%x), p(%lld), q(%lld), mask_ptr(%p), path_array(%llx), prev_array(%llx)", \
 				#_label, #_type, mask_h, mask_v, p, q, mask_ptr, path_array, prev_array); \
 			_trace_##_type##_##_label##_update_index(); \
 			_trace_reverse_##_label##_update_path_q(); \
-			_trace_reverse_##_type##_load(); \
+			_trace_reverse_##_type##_load(t, _trace_reverse_##_next##_##_label##_head); \
 		} \
 	}
 
-	#define _trace_reverse_diag_loop(_type) { \
-		_trace_reverse_##_type##_d_loop: \
+	#define _trace_reverse_diag_loop(t, _type, _next) { \
 		while(1) { \
+		_trace_reverse_##_type##_d_head: \
 			if(_trace_test_v() != 0) { \
-				goto _trace_reverse_##_type##_v_loop; \
+				goto _trace_reverse_##_type##_v_head; \
 			} \
 			if(_trace_##_type##_d_test_index()) { \
-				goto _trace_reverse_##_type##_loop_break; \
+				_trace_reverse_cap_update_path(psave - p); \
+				goto _trace_reverse_index_break; \
 			} \
 			debug("go d (%s), mask_h(%x), mask_v(%x), p(%lld), q(%lld), mask_ptr(%p), path_array(%llx), prev_array(%llx)", \
 				#_type, mask_h, mask_v, p, q, mask_ptr, path_array, prev_array); \
-			_trace_##_type##_d_update_index(); \
+			_trace_##_type##_v_update_index(); \
 			_trace_reverse_v_update_path_q(); \
-			_trace_reverse_##_type##_load(); \
+			_trace_reverse_##_type##_load(t, _trace_reverse_##_next##_d_mid); \
+		_trace_reverse_##_type##_d_mid: \
+			_trace_##_type##_h_update_index(); \
 			_trace_reverse_h_update_path_q(); \
-			_trace_reverse_##_type##_load(); \
+			_trace_reverse_##_type##_load(t, _trace_reverse_##_next##_d_head); \
 			if(_trace_test_h() != 0) { \
-				goto _trace_reverse_##_type##_h_loop; \
+				goto _trace_reverse_##_type##_h_head; \
 			} \
 		} \
 	}
 
 	_trace_reverse_load_context(this);
 
-	while(1) {
-		debug("p(%lld), q(%lld), path_array(%llx), prev_array(%llx)", p, q, path_array, prev_array);
+	debug("p(%lld), q(%lld), path_array(%llx), prev_array(%llx)", p, q, path_array, prev_array);
 
-		if(!_trace_bulk_d_test_index()) {
-
-			/* head trace */
-			_trace_reverse_gap_loop(head, h);
-			_trace_reverse_diag_loop(head);
-			_trace_reverse_gap_loop(head, v);
-
-_trace_reverse_head_load_break:;
-
-			/* bulk trace */
-			_trace_reverse_gap_loop(bulk, h);
-			_trace_reverse_diag_loop(bulk);
-			_trace_reverse_gap_loop(bulk, v);
-
-_trace_reverse_head_loop_break:;
-_trace_reverse_bulk_loop_break:;
-			/* compensate index */
-			_trace_reverse_calc_index(this);
+	/* v dispatcher */
+	_trace_reverse_loop_v_head: {
+		if(p < 2 * BLK) {
+			goto _trace_reverse_tail_v_head;
+		} else {
+			goto _trace_reverse_head_v_head;
 		}
-
-		/* tail trace */ {
-			_trace_reverse_gap_loop(tail, h);
-			_trace_reverse_diag_loop(tail);
-			_trace_reverse_gap_loop(tail, v);
-
-_trace_reverse_tail_loop_break:;
-			_trace_reverse_cap_update_path(psave - p);
-			_trace_reverse_save_context(this);
-			return;
-
-_trace_reverse_tail_load_break:;
-			_trace_reverse_cap_update_path(psave - p);
-		}
-
-		/* check psum termination */
-		if(this->w.l.psum < this->w.l.p - p) {
-			_trace_reverse_save_context(this);
-			return;
-		}
-
-		/* reload tail pointer */
-		_trace_reload_tail(this);
 	}
+	/* v loop */ {
+		_trace_reverse_gap_loop(this, head, bulk, v);
+		_trace_reverse_gap_loop(this, bulk, tail, v);
+		_trace_reverse_gap_loop(this, tail, loop, v);
+	}
+
+	/* d dispatchers */
+	_trace_reverse_loop_d_head: {
+		if(p < 2 * BLK) {
+			goto _trace_reverse_tail_d_head;
+		} else {
+			goto _trace_reverse_head_d_head;
+		}
+	}
+	_trace_reverse_loop_d_mid: {
+		if(p < 2 * BLK) {
+			goto _trace_reverse_tail_d_mid;
+		} else {
+			goto _trace_reverse_head_d_mid;
+		}
+	}
+	/* d loop */ {
+		_trace_reverse_diag_loop(this, head, bulk);
+		_trace_reverse_diag_loop(this, bulk, tail);
+		_trace_reverse_diag_loop(this, tail, loop);
+	}
+
+	/* h dispatcher */
+	_trace_reverse_loop_h_head: {
+		if(p < 2 * BLK) {
+			goto _trace_reverse_tail_h_head;
+		} else {
+			goto _trace_reverse_head_h_head;
+		}
+	}
+
+	/* h loop */ {
+		_trace_reverse_gap_loop(this, head, bulk, h);
+		_trace_reverse_gap_loop(this, bulk, tail, h);
+		_trace_reverse_gap_loop(this, tail, loop, h);
+	}
+
+_trace_reverse_index_break:;
+	_trace_reverse_save_context(this);
 	return;
 }
+
 
 /**
  * @fn trace_forward_push
