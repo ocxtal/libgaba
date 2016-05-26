@@ -530,7 +530,7 @@ void gaba_aligned_free(
  * @macro _dir_is_down, _dir_is_right
  * @brief direction indicator (_dir_is_down returns true if dir == down)
  */
-#define _dir_is_down(_dir)					( (_dir).dynamic.array & 0x01 )
+#define _dir_is_down(_dir)					( ((uint64_t)(_dir).dynamic.array) & 0x01 )
 #define _dir_is_right(_dir)					( !_dir_is_down(_dir) )
 /**
  * @macro _dir_load
@@ -2943,8 +2943,8 @@ void trace_reverse_trace(
 		_trace_forward_cap_update_path(loop_count); \
 		p -= loop_count; \
 		/* load dir and update mask pointer */ \
-		dir = _dir_load(blk, BLK - 1); \
 		mask_ptr = &(--blk)->mask[BLK - 1]; \
+		dir = _dir_load(blk, BLK - 1); \
 		_trace_load_mask(); \
 		goto _trace_forward_head_load_break; \
 	} \
@@ -2958,8 +2958,8 @@ void trace_reverse_trace(
 		_trace_forward_bulk_update_path(); \
 		p -= BLK; \
 		/* load dir and update mask pointer */ \
-		dir = _dir_load(blk, BLK - 1); \
 		mask_ptr = &(--blk)->mask[BLK - 1]; \
+		dir = _dir_load(blk, BLK - 1); \
 	} \
 	_trace_load_mask(); \
 }
@@ -2970,12 +2970,12 @@ void trace_reverse_trace(
 		/* store path_array */ \
 		_trace_forward_cap_update_path(psave - p); \
 		psave = p; \
-		if(p <= 0) { \
+		if(p < 0) { \
 			goto _trace_forward_tail_load_break; \
 		} \
 		/* load dir and update mask pointer */ \
-		dir = _dir_load(blk, BLK - 1); \
 		mask_ptr = &(--blk)->mask[BLK - 1]; \
+		dir = _dir_load(blk, BLK - 1); \
 	} \
 	_trace_load_mask(); \
 }
@@ -2992,8 +2992,8 @@ void trace_reverse_trace(
 		_trace_reverse_cap_update_path(loop_count); \
 		p -= loop_count; \
 		/* load dir and update mask pointer */ \
-		dir = _dir_load(blk, BLK - 1); \
 		mask_ptr = &(--blk)->mask[BLK - 1]; \
+		dir = _dir_load(blk, BLK - 1); \
 		_trace_load_mask(); \
 		goto _trace_reverse_head_load_break; \
 	} \
@@ -3007,8 +3007,8 @@ void trace_reverse_trace(
 		_trace_reverse_bulk_update_path(); \
 		p -= BLK; \
 		/* load dir and update mask pointer */ \
-		dir = _dir_load(blk, BLK - 1); \
 		mask_ptr = &(--blk)->mask[BLK - 1]; \
+		dir = _dir_load(blk, BLK - 1); \
 	} \
 	_trace_load_mask(); \
 }
@@ -3019,12 +3019,12 @@ void trace_reverse_trace(
 		/* store path_array */ \
 		_trace_reverse_cap_update_path(psave - p); \
 		psave = p; \
-		if(p <= 0) { \
+		if(p < 0) { \
 			goto _trace_reverse_tail_load_break; \
 		} \
 		/* load dir and update mask pointer */ \
-		dir = _dir_load(blk, BLK - 1); \
 		mask_ptr = &(--blk)->mask[BLK - 1]; \
+		dir = _dir_load(blk, BLK - 1); \
 	} \
 	_trace_load_mask(); \
 }
@@ -3052,9 +3052,9 @@ void trace_reverse_trace(
  * @macro _trace_head_*_*_index
  * @brief test and update indices
  */
-#define _trace_head_v_test_index()		( p <= 2 * BLK )
-#define _trace_head_d_test_index()		( p <= 2 * BLK )
-#define _trace_head_h_test_index()		( p <= 2 * BLK )
+#define _trace_head_v_test_index()		( p < 2 * BLK )
+#define _trace_head_d_test_index()		( p < 2 * BLK )
+#define _trace_head_h_test_index()		( p < 2 * BLK )
 
 #define _trace_head_v_update_index()	;
 #define _trace_head_d_update_index()	;
@@ -3064,9 +3064,9 @@ void trace_reverse_trace(
  * @macro _trace_bulk_*_*_index
  * @brief test and update indices
  */
-#define _trace_bulk_v_test_index()		( p <= 2 * BLK )
-#define _trace_bulk_d_test_index()		( p <= 2 * BLK )
-#define _trace_bulk_h_test_index()		( p <= 2 * BLK )
+#define _trace_bulk_v_test_index()		( p < 2 * BLK )
+#define _trace_bulk_d_test_index()		( p < 2 * BLK )
+#define _trace_bulk_h_test_index()		( p < 2 * BLK )
 
 #define _trace_bulk_v_update_index()	;
 #define _trace_bulk_d_update_index()	;
@@ -3160,11 +3160,27 @@ void trace_reverse_trace(
 	debug("tail(%p), next tail(%p), p(%d), psum(%lld), ssum(%d)", \
 		(t)->w.l.tail, (t)->w.l.tail->tail, (t)->w.l.tail->tail->p, \
 		(t)->w.l.tail->tail->psum, (t)->w.l.tail->tail->ssum); \
+	/* save the last p */ \
+	int64_t plast = p; \
+	/* update psum */ \
+	(t)->w.l.psum -= (t)->w.l.p; \
+	/* load tail */ \
 	struct gaba_joint_tail_s const *tail = (t)->w.l.tail = (t)->w.l.tail->tail; \
 	blk = _last_block(tail); \
-	(t)->w.l.psum -= (t)->w.l.p; \
-	p += ((t)->w.l.p = tail->p); \
+	psave = p = ((t)->w.l.p = tail->p) - 1; \
 	debug("updated psum(%lld), w.l.p(%d), p(%lld)", (t)->w.l.psum, (t)->w.l.p, p); \
+	/* reload dir and mask pointer */ \
+	dir = _dir_load(blk, p & (BLK - 1)); \
+	mask_ptr = &blk->mask[p & (BLK - 1)]; \
+	_trace_load_mask(); \
+	/* compensate block pointer */ \
+	if(plast == -2) { \
+		if(mask_ptr == blk->mask - 1) { \
+			mask_ptr = &(--blk)->mask[BLK - 1]; \
+			dir = _dir_load(blk, BLK - 1); \
+		} \
+		_trace_load_mask(); \
+	} \
 }
 
 static
@@ -4823,7 +4839,7 @@ unittest_config(
 	.clean = unittest_clean_context
 );
 
-
+#if 0
 /**
  * check if gaba_init returns a valid pointer to a context
  */
@@ -4896,6 +4912,7 @@ unittest(with_seq_pair("A", "A"))
 	assert(s->brtail.base == (void const *)0x1000000000000 - (uint64_t)s->b - 21, "%p", s->brtail.base);
 	assert(s->brtail.len == 20, "%u", s->brtail.len);
 }
+#endif
 
 /**
  * check if gaba_dp_init returns a vaild pointer to a dp context
@@ -4913,6 +4930,7 @@ unittest(with_seq_pair("A", "A"))
 	gaba_dp_clean(d);
 }
 
+#if 0
 /**
  * check if gaba_dp_fill_root and gaba_dp_fill returns a correct score
  */
@@ -5238,6 +5256,7 @@ unittest(with_seq_pair("A", "A"))
 
 	gaba_dp_clean(d);
 }
+#endif
 
 /* with short sequences */
 unittest(with_seq_pair("A", "A"))
