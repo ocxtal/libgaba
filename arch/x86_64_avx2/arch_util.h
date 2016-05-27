@@ -18,7 +18,7 @@
 /**
  * @macro popcnt
  */
-#ifdef __POPCNT__
+#if 1
 	#define popcnt(x)		_mm_popcnt_u64(x)
 #else
 	static inline
@@ -39,7 +39,7 @@
  * @macro tzcnt
  * @brief trailing zero count (count #continuous zeros from LSb)
  */
-#ifdef __BMI__
+#if 1
 	/** immintrin.h is already included */
 	#define tzcnt(x)		_tzcnt_u64(x)
 #else
@@ -60,7 +60,7 @@
  * @macro lzcnt
  * @brief leading zero count (count #continuous zeros from MSb)
  */
-#ifdef __LZCNT__
+#if 1
 	#define lzcnt(x)		_lzcnt_u64(x)
 #else
 	static inline
