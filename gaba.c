@@ -4476,7 +4476,6 @@ unittest_config(
 	.clean = unittest_clean_context
 );
 
-#if 0
 /**
  * check if gaba_init returns a valid pointer to a context
  */
@@ -4549,7 +4548,6 @@ unittest(with_seq_pair("A", "A"))
 	assert(s->brtail.base == (void const *)0x1000000000000 - (uint64_t)s->b - 21, "%p", s->brtail.base);
 	assert(s->brtail.len == 20, "%u", s->brtail.len);
 }
-#endif
 
 /**
  * check if gaba_dp_init returns a vaild pointer to a dp context
@@ -4567,7 +4565,6 @@ unittest(with_seq_pair("A", "A"))
 	gaba_dp_clean(d);
 }
 
-#if 0
 /**
  * check if gaba_dp_fill_root and gaba_dp_fill returns a correct score
  */
@@ -4893,7 +4890,6 @@ unittest(with_seq_pair("A", "A"))
 
 	gaba_dp_clean(d);
 }
-#endif
 
 /* with short sequences */
 unittest(with_seq_pair("A", "A"))
@@ -5649,8 +5645,8 @@ unittest()
 	#endif
 	srand(seed);
 
-	int64_t cross_test_count = 10000000;
-	// int64_t cross_test_count = 1000;
+	// int64_t cross_test_count = 10000000;
+	int64_t cross_test_count = 1000;
 	for(int64_t i = 0; i < cross_test_count; i++) {
 		/* generate sequences */
 		char *a = unittest_generate_random_sequence(1000);
