@@ -2153,10 +2153,10 @@ struct trace_max_block_s trace_detect_max_block(
 {
 	/* scan blocks backward */
 	struct gaba_block_s *blk = _last_block(tail);
-	int32_t p = tail->p;
+	int32_t p = -1;
 
 	/* b must be sined integer, in order to detect negative index. */
-	for(int32_t b = (p - 1)>>BLK_BASE; b >= 0; b--, blk--) {
+	for(int32_t b = (tail->p - 1)>>BLK_BASE; b >= 0; b--, blk--) {
 
 		/* load the previous max vector and offset */
 		vec_t prev_max = _load(&(blk - 1)->sd.max);
@@ -2174,6 +2174,7 @@ struct trace_max_block_s trace_detect_max_block(
 			b, offset, mask_max, prev_mask_max);
 
 		if(prev_mask_max == 0) {
+			debug("block found: blk(%p), p(%d), mask_max(%u)", blk, b * BLK, mask_max);
 			p = b * BLK;
 			break;
 		}
@@ -2184,7 +2185,7 @@ struct trace_max_block_s trace_detect_max_block(
 		mask_max = prev_mask_max;
 	}
 
-	debug("block found: blk(%p), p(%d), mask_max(%u)", blk, p, mask_max);
+	debug("loop break: blk(%p), p(%d), mask_max(%u)", blk, p, mask_max);
 	return((struct trace_max_block_s){
 		.max = max,
 		.blk = blk,
@@ -2261,6 +2262,7 @@ struct trace_max_pos_s trace_detect_max_pos(
 	}
 
 	/* not found in the block (never reaches here) */
+	debug("max pos NOT found.");
 	return((struct trace_max_pos_s){
 		.p = 0,
 		.q = 0
@@ -2268,15 +2270,13 @@ struct trace_max_pos_s trace_detect_max_pos(
 }
 
 /**
- * @fn trace_save_coordinates
+ * @fn trace_save_section
  */
 static _force_inline
-void trace_save_coordinates(
+void trace_save_section(
 	struct gaba_dp_context_s *this,
 	struct gaba_joint_tail_s const *tail,
-	struct gaba_block_s const *blk,
-	int32_t p,
-	int32_t q)
+	struct gaba_block_s const *blk)
 {
 	/* store tail and block pointer */
 	this->w.l.tail = tail;
@@ -2295,6 +2295,21 @@ void trace_save_coordinates(
 	_store_v2i32(&this->w.l.alen, _zero_v2i32());
 	_store_v2i32(&this->w.l.aid, _set_v2i32(-1));
 	#endif
+	return;
+}
+
+/**
+ * @fn trace_save_coordinates
+ */
+static _force_inline
+void trace_save_coordinates(
+	struct gaba_dp_context_s *this,
+	struct gaba_joint_tail_s const *tail,
+	struct gaba_block_s const *blk,
+	int32_t p,
+	int32_t q)
+{
+	trace_save_section(this, tail, blk);
 
 	/* calc ridx */
 	int64_t mask_idx = p & (BLK - 1);
@@ -2324,6 +2339,30 @@ void trace_save_coordinates(
 }
 
 /**
+ * @fn trace_save_phantom_coordinates
+ */
+static _force_inline
+void trace_save_phantom_coordinates(
+	struct gaba_dp_context_s *this,
+	struct gaba_joint_tail_s const *tail,
+	struct gaba_block_s const *blk,
+	uint32_t mask_max)
+{
+	trace_save_section(this, tail, blk);
+
+	/* convert to idx */
+	_store_v2i32(&this->w.l.aidx, _zero_v2i32());
+	_store_v2i32(&this->w.l.asidx, _zero_v2i32());
+
+	/* i \in [0 .. BLK) */
+	/* adjust global coordinates with local coordinate */
+	this->w.l.psum = tail->psum - tail->p - 1;
+	this->w.l.p = -1;
+	this->w.l.q = tzcnt(mask_max);
+	return;
+}
+
+/**
  * @fn trace_search_max
  */
 static _force_inline
@@ -2337,6 +2376,11 @@ void trace_search_max(
 	/* search block */
 	struct trace_max_block_s b = trace_detect_max_block(
 		this, tail, m.offset, m.mask_max, m.max);
+	debug("check p(%d)", b.p);
+	if(b.p == -1) {
+		trace_save_phantom_coordinates(this, tail, b.blk, b.mask_max);
+		return;
+	}
 
 	/* refill detected block */
 	int64_t len = MIN2(tail->p - b.p, BLK);
@@ -2457,8 +2501,6 @@ void trace_load_section_b(
 	debug("tail(%p), next tail(%p), p(%d), psum(%lld), ssum(%d)", \
 		(t)->w.l.tail, (t)->w.l.tail->tail, (t)->w.l.tail->tail->p, \
 		(t)->w.l.tail->tail->psum, (t)->w.l.tail->tail->ssum); \
-	/* save the last p */ \
-	int64_t plast = p; \
 	/* update psum */ \
 	(t)->w.l.psum -= (t)->w.l.p; \
 	/* load tail */ \
@@ -2830,13 +2872,6 @@ void trace_forward_trace(
 	}
 
 	/* d dispatchers */
-	_trace_forward_loop_d_head: {
-		if(p < 2 * BLK) {
-			goto _trace_forward_tail_d_head;
-		} else {
-			goto _trace_forward_head_d_head;
-		}
-	}
 	_trace_forward_loop_d_mid: {
 		if(p < 2 * BLK) {
 			goto _trace_forward_tail_d_mid;
@@ -2944,13 +2979,6 @@ void trace_reverse_trace(
 	}
 
 	/* d dispatchers */
-	_trace_reverse_loop_d_head: {
-		if(p < 2 * BLK) {
-			goto _trace_reverse_tail_d_head;
-		} else {
-			goto _trace_reverse_head_d_head;
-		}
-	}
 	_trace_reverse_loop_d_mid: {
 		if(p < 2 * BLK) {
 			goto _trace_reverse_tail_d_mid;
@@ -5383,9 +5411,17 @@ struct unittest_naive_result_s unittest_naive(
 	while(max.apos > 0 || max.bpos > 0) {
 		/* M > I > D > X */
 		if(mat[s(max.apos, max.bpos)] == mat[f(max.apos, max.bpos)]) {
+			while(mat[s(max.apos, max.bpos)] == mat[s(max.apos, max.bpos - 1)] + geb) {
+				max.bpos--;
+				result.path[--path_index] = 'D';
+			}
 			max.bpos--;
 			result.path[--path_index] = 'D';
 		} else if(mat[s(max.apos, max.bpos)] == mat[e(max.apos, max.bpos)]) {
+			while(mat[s(max.apos, max.bpos)] == mat[s(max.apos - 1, max.bpos)] + gea) {
+				max.apos--;
+				result.path[--path_index] = 'R';
+			}
 			max.apos--;
 			result.path[--path_index] = 'R';
 		} else {
@@ -5507,7 +5543,7 @@ char *unittest_add_tail(
 	&& (_r).path_length == strlen(_path) \
 )
 #define print_naive_result(_r) \
-	"score(%lld), path(%s), len(%lld)", \
+	"score(%d), path(%s), len(%d)", \
 	(_r).score, (_r).path, (_r).path_length
 
 static
@@ -5607,11 +5643,16 @@ unittest()
 	n = unittest_naive(p, "TTACGTACGT", "TTTTACGTACGT");
 	assert(check_naive_result(n, 13, "DRDRDDDRDRDRDRDRDRDRDR"), print_naive_result(n));
 	free(n.path);
+
+	/* ins-match-del */
+	n = unittest_naive(p, "ATGAAGCTGCGAGGC", "TGATGGCTTGCGAGGC");
+	assert(check_naive_result(n, 6, "DDDRDRDRRRDRDRDRDDRDRDRDRDRDRDR"), print_naive_result(n));
+	free(n.path);
 }
 #endif /* MODEL */
 
 
-#if 0
+#if 1
 /* cross test */
 unittest()
 {
@@ -5630,7 +5671,7 @@ unittest()
 	// int64_t cross_test_count = 1000;
 	for(int64_t i = 0; i < cross_test_count; i++) {
 		/* generate sequences */
-		char *a = unittest_generate_random_sequence(100);
+		char *a = unittest_generate_random_sequence(1000);
 		char *b = unittest_generate_mutated_sequence(a, 0.1, 0.1, 500);
 
 		/* add random sequences at the tail */
@@ -5687,7 +5728,7 @@ unittest()
 		/* check scores */
 		assert(r->score == n.score, "m->max(%lld), r->score(%lld), n.score(%d)",
 			m->max, r->score, n.score);
-		assert(check_path(r, n.path), "\n%s\n%s",
+		assert(check_path(r, n.path), "\n%s\n%s\n%s",
 			a, b, format_string_pair_diff(decode_path(r), n.path));
 
 		debug("score(%lld, %d), alen(%lld), blen(%lld)\n%s",
@@ -5724,11 +5765,13 @@ unittest()
 "CGTAGCTGGTTCCAAGAATTCGTAAAACACTTCAGAATCATGGTCTCTACGCCCTACCGGGCTAATCTAAATGTCTCTTTTCGGCTATGTCCGCACTAACGCTGTGGCGATGGATTTGGTGTACAGGATCCTCACGTGAAAAATGGGTTCGTACTTGAGAACCTGGGGGGGGGGGGGGGGGGGG"
 "ATTCATAGTTTGTTCCCCACGTATGAACTGTCTTGCTCAACATACCGCATAAGCAGGTTGTCCCTTGAAGTTTTAAGTATTTCCGTATATGGGACACTAGTAGGAAATTGCCTGACCAGTCTCCCAGCTCTGAGGGCGAGCCCAACCGTCACAGAGTTACTCCTCCCCCCCCCCCCCCCCCCCC",
 "ATGTCATAGTTTGTTCCCCACCTATGACTCTCCTTGCTCAGTATATCGCATAACAGGTTCGGCCCGTTGAAGTACGAATATTTACTATATGGGACAAAGGGTGAATGCCGCAGCTGGGCCAATCGCTCCCAAAGTGATCTGGTACGGCTCCTGCTAGTTGCCCCGGGGGGGGGGGGGGGGGGGG"
+"CTACTTTGATTCCTGGAGCTCTCGTAGGCCTTCATACCTTGAGCGTTGGTAAAGTTATTTACCGGGACGGACCG",
+"GCATACCTTTGAAATTGCCACTTTGGGACGTATTGGCCTCAATGAGTCCCAGGCGAGACCCACTAGAGGCAGTG"
 #endif
 /* for debugging */
 unittest(with_seq_pair(
-"CCCTTAATCCTTACCGTAGAGCAGGCGAATTCTAATGAAGCTGCGAGGCGAACTTTGCTGCCCCAGCAATCGTGGGACAAGCGGCCACCTGAGGCAAACCCGTGCGCTCTAGGCATAGCAGGTGATGGGTTTTGCGGACCAAACTATTCTAGGTGTCGTCCCGGCCCCCCCCCCCCCCCCCCCC",
-"CCGTTATTGCTTACCGTAGAGCAGACTAATTCTATGATGGCTTGCGAGGCTATACTTTACTTCCCCCAGGAATCGTGGGAAAGCGGCGACCTGAGGCAATAGAAATGCAAAAACGCACTGGCCCTCCTCAAAGACGAAACCGGTGTTTCTTGGCGATAGCGCTGGGGGGGGGGGGGGGGGGGGG"))
+"CTGCGCGAGTCTGCCATGAAATCGAGCTTACAATCCCGATCTTCTCAGCCCTATTGCGGATAGTAGTATATTCA",
+"ACGTGCGCGGTGGTTGCTCTTCTGGACGCGTTCGACACGTATTACGAAGTCCTTACCGCTATAAATCACAACGC"))
 {
 	omajinai();
 	struct gaba_score_s const *p = c->params.score_matrix;
