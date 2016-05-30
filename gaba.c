@@ -2857,15 +2857,11 @@ void trace_forward_trace(
 
 	debug("p(%lld), q(%lld), path_array(%llx), prev_array(%llx)", p, q, path_array, prev_array);
 
-	/* v dispatcher */
+	/* v loop */
 	_trace_forward_loop_v_head: {
 		if(p < 2 * BLK) {
 			goto _trace_forward_tail_v_head;
-		} else {
-			goto _trace_forward_head_v_head;
 		}
-	}
-	/* v loop */ {
 		_trace_forward_gap_loop(this, head, bulk, v);
 		_trace_forward_gap_loop(this, bulk, tail, v);
 		_trace_forward_gap_loop(this, tail, loop, v);
@@ -2892,16 +2888,11 @@ void trace_forward_trace(
 		_trace_forward_diag_loop(this, tail, loop);
 	}
 
-	/* h dispatcher */
+	/* h loop */
 	_trace_forward_loop_h_head: {
 		if(p < 2 * BLK) {
 			goto _trace_forward_tail_h_head;
-		} else {
-			goto _trace_forward_head_h_head;
 		}
-	}
-
-	/* h loop */ {
 		_trace_forward_gap_loop(this, head, bulk, h);
 		_trace_forward_gap_loop(this, bulk, tail, h);
 		_trace_forward_gap_loop(this, tail, loop, h);
@@ -2964,15 +2955,11 @@ void trace_reverse_trace(
 
 	debug("p(%lld), q(%lld), path_array(%llx), prev_array(%llx)", p, q, path_array, prev_array);
 
-	/* h dispatcher */
+	/* h loop */
 	_trace_reverse_loop_h_head: {
 		if(p < 2 * BLK) {
 			goto _trace_reverse_tail_h_head;
-		} else {
-			goto _trace_reverse_head_h_head;
 		}
-	}
-	/* v loop */ {
 		_trace_reverse_gap_loop(this, head, bulk, h);
 		_trace_reverse_gap_loop(this, bulk, tail, h);
 		_trace_reverse_gap_loop(this, tail, loop, h);
@@ -2999,16 +2986,11 @@ void trace_reverse_trace(
 		_trace_reverse_diag_loop(this, tail, loop);
 	}
 
-	/* v dispatcher */
+	/* v loop */
 	_trace_reverse_loop_v_head: {
 		if(p < 2 * BLK) {
 			goto _trace_reverse_tail_v_head;
-		} else {
-			goto _trace_reverse_head_v_head;
 		}
-	}
-
-	/* h loop */ {
 		_trace_reverse_gap_loop(this, head, bulk, v);
 		_trace_reverse_gap_loop(this, bulk, tail, v);
 		_trace_reverse_gap_loop(this, tail, loop, v);
