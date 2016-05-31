@@ -59,8 +59,11 @@ struct gaba_api_s {
 		gaba_fill_t const *fw_tail,
 		gaba_fill_t const *rv_tail,
 		gaba_clip_params_t const *clip);
+
+	/* padding */
+	void *pad[2];
 };
-_static_assert(sizeof(struct gaba_api_s) < 8 * sizeof(void *));
+_static_assert(sizeof(struct gaba_api_s) == 8 * sizeof(void *));
 #define _api(_ctx)				( (struct gaba_api_s const *)(_ctx) )
 
 
