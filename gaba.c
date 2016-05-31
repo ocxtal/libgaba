@@ -2,35 +2,12 @@
 /**
  * @file gaba.c
  *
- * @brief libgaba (libsea3) API implementations
+ * @brief libgaba (libsea3) DP routine implementation
  *
  * @author Hajime Suzuki
  * @date 2016/1/11
  * @license Apache v2
  */
-
-/* import unittest */
-#define UNITTEST_UNIQUE_ID			33
-#include  "unittest.h"
-
-
-#include <stdio.h>				/* sprintf in dump_path */
-#include <stdint.h>				/* uint32_t, uint64_t, ... */
-#include <stddef.h>				/* offsetof */
-#include <string.h>				/* memset, memcpy */
-#include "gaba.h"
-#include "arch/arch.h"
-
-
-/* aliasing vector macros */
-#define _VECTOR_ALIAS_PREFIX	v32i8
-#include "arch/vector_alias.h"
-
-/* import utils */
-// #include "util.h"
-#include "bench.h"
-#include "sassert.h"
-
 
 /* input sequence bitwidth option (2bit or 4bit) */
 #ifdef BIT
@@ -54,6 +31,46 @@
 #  define MODEL 					AFFINE
 // #  define MODEL 					LINEAR
 #endif
+
+
+/* import unittest */
+#ifndef UNITTEST_UNIQUE_ID
+#  if MODEL == LINEAR
+#    define UNITTEST_UNIQUE_ID		33
+#  else
+#    define UNITTEST_UNIQUE_ID		34
+#  endif
+#endif
+#include  "unittest.h"
+
+
+#include <stdio.h>				/* sprintf in dump_path */
+#include <stdint.h>				/* uint32_t, uint64_t, ... */
+#include <stddef.h>				/* offsetof */
+#include <string.h>				/* memset, memcpy */
+#include "gaba.h"
+#include "arch/arch.h"
+
+
+/* aliasing vector macros */
+#define _VECTOR_ALIAS_PREFIX		v32i8
+#include "arch/vector_alias.h"
+
+#include "bench.h"
+#include "sassert.h"
+
+
+/* add suffix */
+#ifdef SUFFIX
+#  if MODEL == LINEAR
+#    define suffix(_base)			_base##_linear
+#  else
+#    define suffix(_base)			_base##_affine
+#  endif
+#else
+#  define suffix(_base)				_base
+#endif
+
 
 /* constants */
 #define BW_BASE						( 5 )
@@ -362,6 +379,10 @@ _static_assert(sizeof(struct gaba_score_vec_s) == 80);
  * sizeof(struct gaba_dp_context_s) == 640
  */
 struct gaba_dp_context_s {
+	/** API function pointers */
+	void *api[8];						/** (64) */
+	/** 64, 64 */
+
 	/** individually stored on init */
 
 	/** 64byte aligned */
@@ -369,16 +390,16 @@ struct gaba_dp_context_s {
 		struct gaba_writer_work_s l;	/** (192) */
 		struct gaba_reader_work_s r;	/** (192) */
 	} w;
-	/** 192, 192 */
+	/** 192, 256 */
 
 	/** 64byte aligned */
 	/** loaded on init */
 	struct gaba_score_vec_s scv;		/** (80) substitution matrix and gaps */
-	/** 80, 272 */
+	/** 80, 320 */
 
 	uint8_t *stack_top;					/** (8) dynamic programming matrix */
 	uint8_t *stack_end;					/** (8) the end of dp matrix */
-	/** 16, 288 */
+	/** 16, 336 */
 
 	int16_t tx;							/** (2) xdrop threshold */
 	uint16_t mem_cnt;					/** (2) */
@@ -389,21 +410,21 @@ struct gaba_dp_context_s {
 
 	#define GABA_MEM_ARRAY_SIZE		( 11 )
 	uint8_t *mem_array[GABA_MEM_ARRAY_SIZE];/** (88) */
-	/** 96, 384 */
+	/** 96, 448 */
 
 	/** phantom vectors */
 	/** 64byte aligned */
 	struct gaba_phantom_block_s blk;	/** (192) */
-	/** 192, 576 */
+	/** 192, 640 */
 
 	/** 64byte aligned */
 	struct gaba_joint_tail_s tail;		/** (64) */
-	/** 64, 640 */
+	/** 64, 704 */
 };
-_static_assert(sizeof(struct gaba_dp_context_s) == 640);
+_static_assert(sizeof(struct gaba_dp_context_s) == 704);
 #define GABA_DP_CONTEXT_LOAD_OFFSET	( offsetof(struct gaba_dp_context_s, scv) )
 #define GABA_DP_CONTEXT_LOAD_SIZE	( sizeof(struct gaba_dp_context_s) - GABA_DP_CONTEXT_LOAD_OFFSET )
-_static_assert(GABA_DP_CONTEXT_LOAD_OFFSET == 192);
+_static_assert(GABA_DP_CONTEXT_LOAD_OFFSET == 256);
 _static_assert(GABA_DP_CONTEXT_LOAD_SIZE == 448);
 
 /**
@@ -415,21 +436,22 @@ _static_assert(GABA_DP_CONTEXT_LOAD_SIZE == 448);
  * sizeof(struct gaba_context_s) = 1472
  */
 struct gaba_context_s {
-	/** 64byte aligned */
 	/** templates */
-	struct gaba_middle_delta_s md;	/** (64) */
-	/** 64, 64 */
-	
 	/** 64byte aligned */
-	struct gaba_dp_context_s k;		/** (640) */
-	/** 640, 704 */
+	struct gaba_dp_context_s k;		/** (704) */
+	/** 704, 704 */
+
+	/** 64byte aligned */
+	struct gaba_middle_delta_s md;	/** (64) */
+	/** 64, 768 */
 
 	/** 64byte aligned */
 	struct gaba_params_s params;	/** (16) */
 	uint64_t _pad[6];				/** (48) */
-	/** 64byte aligned */
+
+	/** 64, 832 */
 };
-_static_assert(sizeof(struct gaba_context_s) == 768);
+_static_assert(sizeof(struct gaba_context_s) == 832);
 
 /**
  * @enum _STATE
@@ -1441,9 +1463,9 @@ void fill_bulk_block(
 	#define _fill_block(_direction, _label, _jump_to) { \
 		_dir_fetch(dir); \
 		if(_unlikely(!_dir_is_##_direction(dir))) { \
-			goto _linear_fill_##_jump_to; \
+			goto _fill_##_jump_to; \
 		} \
-		_linear_fill_##_label: \
+		_fill_##_label: \
 		_fill_##_direction##_update_ptr(); \
 		_fill_##_direction(); \
 		if(--i == 0) { break; } \
@@ -2011,7 +2033,7 @@ struct gaba_joint_tail_s *fill_section_seq_p_bounded(
  *
  * @brief build_root API
  */
-struct gaba_fill_s *gaba_dp_fill_root(
+struct gaba_fill_s *suffix(gaba_dp_fill_root)(
 	struct gaba_dp_context_s *this,
 	struct gaba_section_s const *a,
 	uint32_t apos,
@@ -2029,7 +2051,7 @@ struct gaba_fill_s *gaba_dp_fill_root(
  *
  * @brief fill API
  */
-struct gaba_fill_s *gaba_dp_fill(
+struct gaba_fill_s *suffix(gaba_dp_fill)(
 	struct gaba_dp_context_s *this,
 	struct gaba_fill_s const *prev_sec,
 	struct gaba_section_s const *a,
@@ -3310,7 +3332,7 @@ struct gaba_result_s *trace_concatenate_path(
 /**
  * @fn gaba_dp_trace
  */
-struct gaba_result_s *gaba_dp_trace(
+struct gaba_result_s *suffix(gaba_dp_trace)(
 	struct gaba_dp_context_s *this,
 	struct gaba_fill_s const *fw_tail,
 	struct gaba_fill_s const *rv_tail,
@@ -3464,7 +3486,7 @@ int64_t parse_dump_gap_string(
  * @fn gaba_dp_print_cigar
  * @brief parse path string and print cigar to file
  */
-int64_t gaba_dp_print_cigar(
+int64_t suffix(gaba_dp_print_cigar)(
 	gaba_dp_fprintf_t _fprintf,
 	void *fp,
 	uint32_t const *path,
@@ -3507,7 +3529,7 @@ int64_t gaba_dp_print_cigar(
  * @fn gaba_dp_dump_cigar
  * @brief parse path string and store cigar to buffer
  */
-int64_t gaba_dp_dump_cigar(
+int64_t suffix(gaba_dp_dump_cigar)(
 	char *buf,
 	uint64_t buf_size,
 	uint32_t const *path,
@@ -3546,7 +3568,7 @@ int64_t gaba_dp_dump_cigar(
 /**
  * @fn gaba_dp_set_qual
  */
-void gaba_dp_set_qual(
+void suffix(gaba_dp_set_qual)(
 	gaba_result_t *res,
 	int32_t qual)
 {
@@ -3913,7 +3935,7 @@ struct gaba_char_vec_s gaba_init_create_char_vector(
 /**
  * @fn gaba_init
  */
-gaba_t *gaba_init(
+gaba_t *suffix(gaba_init)(
 	struct gaba_params_s const *params)
 {
 	if(params == NULL) {
@@ -3937,9 +3959,6 @@ gaba_t *gaba_init(
 
 	/* fill context */
 	*ctx = (struct gaba_context_s) {
-		/* default middle delta vector */
-		.md = gaba_init_create_middle_delta(params_intl.score_matrix),
-
 		/* template */
 		.k = (struct gaba_dp_context_s) {
 			.stack_top = NULL,						/* stored on init */
@@ -4001,6 +4020,9 @@ gaba_t *gaba_init(
 			},
 		},
 
+		/* default middle delta vector */
+		.md = gaba_init_create_middle_delta(params_intl.score_matrix),
+
 		/* copy params */
 		.params = *params
 	};
@@ -4011,7 +4033,7 @@ gaba_t *gaba_init(
 /**
  * @fn gaba_clean
  */
-void gaba_clean(
+void suffix(gaba_clean)(
 	struct gaba_context_s *ctx)
 {
 	gaba_aligned_free(ctx);
@@ -4021,7 +4043,7 @@ void gaba_clean(
 /**
  * @fn gaba_dp_init
  */
-struct gaba_dp_context_s *gaba_dp_init(
+struct gaba_dp_context_s *suffix(gaba_dp_init)(
 	struct gaba_context_s const *ctx,
 	uint8_t const *alim,
 	uint8_t const *blim)
@@ -4089,7 +4111,7 @@ int32_t gaba_dp_add_stack(
 /**
  * @fn gaba_dp_flush
  */
-void gaba_dp_flush(
+void suffix(gaba_dp_flush)(
 	struct gaba_dp_context_s *this,
 	uint8_t const *alim,
 	uint8_t const *blim)
@@ -4149,7 +4171,7 @@ void *gaba_dp_smalloc(
 /**
  * @fn gaba_dp_clean
  */
-void gaba_dp_clean(
+void suffix(gaba_dp_clean)(
 	struct gaba_dp_context_s *this)
 {
 	if(this == NULL) {
@@ -4174,8 +4196,13 @@ void gaba_dp_clean(
  * @fn unittest_build_context
  * @brief build context for unittest
  */
-static
-struct gaba_score_s const *unittest_default_score_matrix = GABA_SCORE_SIMPLE(2, 3, 5, 1);
+#if MODEL == LINEAR
+	static
+	struct gaba_score_s const *unittest_default_score_matrix = GABA_SCORE_SIMPLE(2, 3, 0, 6);
+#else
+	static
+	struct gaba_score_s const *unittest_default_score_matrix = GABA_SCORE_SIMPLE(2, 3, 5, 1);
+#endif
 static
 void *unittest_build_context(void *params)
 {
@@ -5443,7 +5470,7 @@ char unittest_random_base(void)
 /**
  * @fn unittest_generate_random_sequence
  */
-static
+static _force_inline
 char *unittest_generate_random_sequence(
 	int64_t len)
 {
@@ -5461,7 +5488,7 @@ char *unittest_generate_random_sequence(
 /**
  * @fn unittest_generate_mutated_sequence
  */
-static
+static _force_inline
 char *unittest_generate_mutated_sequence(
 	char const *seq,
 	double x,
@@ -5499,6 +5526,7 @@ char *unittest_generate_mutated_sequence(
 /**
  * @fn unittest_add_tail
  */
+static _force_inline
 char *unittest_add_tail(
 	char *seq,
 	char c,

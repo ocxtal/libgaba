@@ -33,14 +33,29 @@ def configure(conf):
 	else:
 		pass
 
-	conf.env.append_value('OBJ_GABA', ['gaba.o'])
+	conf.env.append_value('OBJ_GABA', ['gaba_wrap.o', 'gaba_linear.o', 'gaba_affine.o'])
 
 
 def build(bld):
 
 	bld.recurse('arch')
 
-	bld.objects(source = 'gaba.c', target = 'gaba.o', includes = ['.'])
+	bld.objects(
+		source = 'gaba.c',
+		target = 'gaba_linear.o',
+		includes = ['.'],
+		defines = ['SUFFIX', 'MODEL=LINEAR'])
+
+	bld.objects(
+		source = 'gaba.c',
+		target = 'gaba_affine.o',
+		includes = ['.'],
+		defines = ['SUFFIX', 'MODEL=AFFINE'])
+
+	bld.objects(
+		source = 'gaba_wrap.c',
+		target = 'gaba_wrap.o',
+		includes = ['.'])
 
 	bld.stlib(
 		source = ['unittest.c'],

@@ -50,31 +50,6 @@ enum gaba_error {
 };
 
 /**
- * @enum gaba_direction
- */
-enum gaba_direction {
-	GABA_UE_LEFT = 0x00,							/** 0b00 */
-	GABA_UE_TOP  = 0x01,							/** 0b01 */
-	GABA_LE_LEFT = GABA_UE_LEFT<<1,				/** 0b00 */
-	GABA_LE_TOP  = GABA_UE_TOP<<1,				/** 0b10 */
-	GABA_LEFT    = GABA_UE_LEFT | GABA_LE_LEFT,	/** 0b00 */
-	GABA_TOP     = GABA_UE_TOP | GABA_LE_TOP		/** 0b11 */
-};
-
-/**
- * @enum gaba_checkpoint_type
- */
-enum gaba_checkpoint_type {
-	GABA_CP_UPWARD = 1,
-	GABA_CP_DOWNWARD = 2,
-	GABA_CP_3PRIME = GABA_CP_UPWARD,
-	GABA_CP_5PRIME = GABA_CP_DOWNWARD,
-	GABA_CP_BEGIN = GABA_CP_DOWNWARD,
-	GABA_CP_END = GABA_CP_UPWARD,
-	GABA_CP_CHECKPOINT = GABA_CP_UPWARD | GABA_CP_DOWNWARD
-};
-
-/**
  * @enum gaba_clip_type
  */
 enum gaba_clip_type {
@@ -161,7 +136,7 @@ typedef struct gaba_section_s gaba_section_t;
 		.len = (_len) \
 	} \
 )
-#define gaba_rev(pos, len)		( 2 * (len) - (pos) )
+#define gaba_rev(pos, len)		( (len) + (uint64_t)(len) - (uint64_t)(pos) )
 
 /**
  * @type gaba_dp_t
@@ -254,7 +229,7 @@ void gaba_clean(
 /**
  * @fn gaba_dp_init
  */
-struct gaba_dp_context_s *gaba_dp_init(
+gaba_dp_t *gaba_dp_init(
 	gaba_t const *ctx,
 	uint8_t const *alim,
 	uint8_t const *blim);
@@ -301,7 +276,7 @@ gaba_fill_t *gaba_dp_fill(
 gaba_fill_t *gaba_dp_merge(
 	gaba_dp_t *this,
 	gaba_fill_t const *sec_list,
-	uint64_t tail_list_len);
+	uint64_t sec_list_len);
 
 /**
  * @struct gaba_clip_params_s
