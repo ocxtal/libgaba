@@ -6,6 +6,8 @@ def options(opt):
 
 	opt.recurse('arch')
 
+	opt.add_option('--bit', action = 'store', default = 4, help = 'Input sequence format')
+
 def configure(conf):
 	conf.load('ar')
 	conf.load('compiler_c')
@@ -34,6 +36,7 @@ def configure(conf):
 		pass
 
 	conf.env.append_value('OBJ_GABA', ['gaba_wrap.o', 'gaba_linear.o', 'gaba_affine.o'])
+	conf.env.append_value('DEFINES', ['BIT={}'.format(conf.options.bit)])
 
 
 def build(bld):
@@ -44,13 +47,13 @@ def build(bld):
 		source = 'gaba.c',
 		target = 'gaba_linear.o',
 		includes = ['.'],
-		defines = ['SUFFIX', 'MODEL=LINEAR'])
+		defines = ['SUFFIX', 'MODEL=LINEAR'] + bld.env.DEFINES)
 
 	bld.objects(
 		source = 'gaba.c',
 		target = 'gaba_affine.o',
 		includes = ['.'],
-		defines = ['SUFFIX', 'MODEL=AFFINE'])
+		defines = ['SUFFIX', 'MODEL=AFFINE'] + bld.env.DEFINES)
 
 	bld.objects(
 		source = 'gaba_wrap.c',
