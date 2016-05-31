@@ -187,7 +187,8 @@
 	/*_store_v32i8((_scv).v3, _bc_v16i8_v32i8(_make_gap(_adjh, _adjv, _ofsh, _ofsv)))*/ \
 }
 #define _store_ofsh(_scv, _adjh, _adjv, _ofsh, _ofsv) { \
-	_store_v32i8((_scv).v5, _bc_v16i8_v32i8(_make_gap(_adjh, _adjv, _ofsh, _ofsv))) \
+	/* nothing to do */ \
+	/* _store_v32i8((_scv).v5, _bc_v16i8_v32i8(_make_gap(_adjh, _adjv, _ofsh, _ofsv)))*/ \
 }
 #define _store_ofsv(_scv, _adjh, _adjv, _ofsh, _ofsv) { \
 	/* nothing to do */ \
