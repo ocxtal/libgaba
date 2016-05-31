@@ -3653,28 +3653,11 @@ struct gaba_score_vec_s gaba_init_create_score_vector(
 		_store_adjv(sc, 0, 0, geh + gih, gev + giv);
 		_store_ofsh(sc, 0, 0, geh + gih, gev + giv);
 		_store_ofsv(sc, 0, 0, geh + gih, gev + giv);
-
-		/*
-		for(int i = 0; i < 16; i++) {
-			sc.adjh[i] = sc.adjv[i] = 0;
-			sc.ofsh[i] = geh + gih;
-			sc.ofsv[i] = gev + giv;
-		}
-		*/
 	#else
 		_store_adjh(sc, -gih, -giv, -(geh + gih), gev + giv);
 		_store_adjv(sc, -gih, -giv, -(geh + gih), gev + giv);
 		_store_ofsh(sc, -gih, -giv, -(geh + gih), gev + giv);
 		_store_ofsv(sc, -gih, -giv, -(geh + gih), gev + giv);
-
-		/*
-		for(int i = 0; i < 16; i++) {
-			sc.adjh[i] = -gih;
-			sc.adjv[i] = -giv;
-			sc.ofsh[i] = -(geh + gih);
-			sc.ofsv[i] = gev + giv;
-		}
-		*/
 	#endif
 	return(sc);
 }
@@ -3725,9 +3708,6 @@ struct gaba_small_delta_s gaba_init_create_small_delta(
 	struct gaba_small_delta_s sd;
 	#if MODEL == LINEAR
 		for(int i = 0; i < BW/2; i++) {
-			// sd.delta[i] = sd.delta[BW/2 + i] = 0;
-			// sd.max[i] = sd.max[BW/2 + i] = 0;
-
 			sd.delta[i] = relax * (BW/2 - i);
 			sd.delta[BW/2 + i] = relax * i;
 			sd.max[i] = relax * (BW/2 - i);
@@ -3735,9 +3715,6 @@ struct gaba_small_delta_s gaba_init_create_small_delta(
 		}
 	#else
 		for(int i = 0; i < BW/2; i++) {
-			// sd.delta[i] = sd.delta[BW/2 + i] = 0;
-			// sd.max[i] = sd.max[BW/2 + i] = 0;
-
 			sd.delta[i] = relax * (BW/2 - i);
 			sd.delta[BW/2 + i] = relax * i;
 			sd.max[i] = relax * (BW/2 - i);
@@ -3746,13 +3723,6 @@ struct gaba_small_delta_s gaba_init_create_small_delta(
 	#endif
 
 	return(sd);
-
-	/*
-	return((struct gaba_small_delta_s){
-		.delta = { 0 },
-		.max = { 0 }
-	});
-	*/
 }
 
 /**
@@ -3770,15 +3740,11 @@ struct gaba_middle_delta_s gaba_init_create_middle_delta(
 	int8_t relax = 128 / BW;
 
 	#if MODEL == LINEAR
-		// int16_t coef_a = -max + 2 * (geh + gih);
-		// int16_t coef_b = -max + 2 * (gev + giv);
 		int16_t coef_a = -max + 2 * (geh + gih) + relax;
 		int16_t coef_b = -max + 2 * (gev + giv) + relax;
 		int16_t ofs_a = 0;
 		int16_t ofs_b = 0;
 	#else
-		// int16_t coef_a = -max + 2*geh;
-		// int16_t coef_b = -max + 2*gev;
 		int16_t coef_a = -max + 2*geh + relax;
 		int16_t coef_b = -max + 2*gev + relax;
 		int16_t ofs_a = gih;
