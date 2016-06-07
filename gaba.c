@@ -36,9 +36,9 @@
 /* import unittest */
 #ifndef UNITTEST_UNIQUE_ID
 #  if MODEL == LINEAR
-#    define UNITTEST_UNIQUE_ID		33
-#  else
 #    define UNITTEST_UNIQUE_ID		34
+#  else
+#    define UNITTEST_UNIQUE_ID		35
 #  endif
 #endif
 #include  "unittest.h"
