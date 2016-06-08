@@ -18,7 +18,7 @@
 /**
  * @macro popcnt
  */
-#ifdef __POPCNT__
+#if 1
 	#define popcnt(x)		_mm_popcnt_u64(x)
 #else
 	static inline
@@ -39,7 +39,7 @@
  * @macro tzcnt
  * @brief trailing zero count (count #continuous zeros from LSb)
  */
-#ifdef __BMI__
+#if 1
 	/** immintrin.h is already included */
 	#define tzcnt(x)		_tzcnt_u64(x)
 #else
@@ -60,7 +60,7 @@
  * @macro lzcnt
  * @brief leading zero count (count #continuous zeros from MSb)
  */
-#ifdef __LZCNT__
+#if 1
 	#define lzcnt(x)		_lzcnt_u64(x)
 #else
 	static inline
@@ -187,7 +187,8 @@
 	/*_store_v32i8((_scv).v3, _bc_v16i8_v32i8(_make_gap(_adjh, _adjv, _ofsh, _ofsv)))*/ \
 }
 #define _store_ofsh(_scv, _adjh, _adjv, _ofsh, _ofsv) { \
-	_store_v32i8((_scv).v5, _bc_v16i8_v32i8(_make_gap(_adjh, _adjv, _ofsh, _ofsv))) \
+	/* nothing to do */ \
+	/* _store_v32i8((_scv).v5, _bc_v16i8_v32i8(_make_gap(_adjh, _adjv, _ofsh, _ofsv)))*/ \
 }
 #define _store_ofsv(_scv, _adjh, _adjv, _ofsh, _ofsv) { \
 	/* nothing to do */ \

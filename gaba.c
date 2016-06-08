@@ -2,35 +2,12 @@
 /**
  * @file gaba.c
  *
- * @brief libgaba (libsea3) API implementations
+ * @brief libgaba (libsea3) DP routine implementation
  *
  * @author Hajime Suzuki
  * @date 2016/1/11
  * @license Apache v2
  */
-
-/* import unittest */
-#define UNITTEST_UNIQUE_ID			33
-#include  "unittest.h"
-
-
-#include <stdio.h>				/* sprintf in dump_path */
-#include <stdint.h>				/* uint32_t, uint64_t, ... */
-#include <stddef.h>				/* offsetof */
-#include <string.h>				/* memset, memcpy */
-#include "gaba.h"
-#include "arch/arch.h"
-
-
-/* aliasing vector macros */
-#define _VECTOR_ALIAS_PREFIX	v32i8
-#include "arch/vector_alias.h"
-
-/* import utils */
-// #include "util.h"
-#include "bench.h"
-#include "sassert.h"
-
 
 /* input sequence bitwidth option (2bit or 4bit) */
 #ifdef BIT
@@ -54,6 +31,46 @@
 #  define MODEL 					AFFINE
 // #  define MODEL 					LINEAR
 #endif
+
+
+/* import unittest */
+#ifndef UNITTEST_UNIQUE_ID
+#  if MODEL == LINEAR
+#    define UNITTEST_UNIQUE_ID		34
+#  else
+#    define UNITTEST_UNIQUE_ID		35
+#  endif
+#endif
+#include  "unittest.h"
+
+
+#include <stdio.h>				/* sprintf in dump_path */
+#include <stdint.h>				/* uint32_t, uint64_t, ... */
+#include <stddef.h>				/* offsetof */
+#include <string.h>				/* memset, memcpy */
+#include "gaba.h"
+#include "arch/arch.h"
+
+
+/* aliasing vector macros */
+#define _VECTOR_ALIAS_PREFIX		v32i8
+#include "arch/vector_alias.h"
+
+#include "bench.h"
+#include "sassert.h"
+
+
+/* add suffix */
+#ifdef SUFFIX
+#  if MODEL == LINEAR
+#    define suffix(_base)			_base##_linear
+#  else
+#    define suffix(_base)			_base##_affine
+#  endif
+#else
+#  define suffix(_base)				_base
+#endif
+
 
 /* constants */
 #define BW_BASE						( 5 )
@@ -362,6 +379,10 @@ _static_assert(sizeof(struct gaba_score_vec_s) == 80);
  * sizeof(struct gaba_dp_context_s) == 640
  */
 struct gaba_dp_context_s {
+	/** API function pointers */
+	void *api[8];						/** (64) */
+	/** 64, 64 */
+
 	/** individually stored on init */
 
 	/** 64byte aligned */
@@ -369,16 +390,16 @@ struct gaba_dp_context_s {
 		struct gaba_writer_work_s l;	/** (192) */
 		struct gaba_reader_work_s r;	/** (192) */
 	} w;
-	/** 192, 192 */
+	/** 192, 256 */
 
 	/** 64byte aligned */
 	/** loaded on init */
 	struct gaba_score_vec_s scv;		/** (80) substitution matrix and gaps */
-	/** 80, 272 */
+	/** 80, 320 */
 
 	uint8_t *stack_top;					/** (8) dynamic programming matrix */
 	uint8_t *stack_end;					/** (8) the end of dp matrix */
-	/** 16, 288 */
+	/** 16, 336 */
 
 	int16_t tx;							/** (2) xdrop threshold */
 	uint16_t mem_cnt;					/** (2) */
@@ -389,21 +410,21 @@ struct gaba_dp_context_s {
 
 	#define GABA_MEM_ARRAY_SIZE		( 11 )
 	uint8_t *mem_array[GABA_MEM_ARRAY_SIZE];/** (88) */
-	/** 96, 384 */
+	/** 96, 448 */
 
 	/** phantom vectors */
 	/** 64byte aligned */
 	struct gaba_phantom_block_s blk;	/** (192) */
-	/** 192, 576 */
+	/** 192, 640 */
 
 	/** 64byte aligned */
 	struct gaba_joint_tail_s tail;		/** (64) */
-	/** 64, 640 */
+	/** 64, 704 */
 };
-_static_assert(sizeof(struct gaba_dp_context_s) == 640);
+_static_assert(sizeof(struct gaba_dp_context_s) == 704);
 #define GABA_DP_CONTEXT_LOAD_OFFSET	( offsetof(struct gaba_dp_context_s, scv) )
 #define GABA_DP_CONTEXT_LOAD_SIZE	( sizeof(struct gaba_dp_context_s) - GABA_DP_CONTEXT_LOAD_OFFSET )
-_static_assert(GABA_DP_CONTEXT_LOAD_OFFSET == 192);
+_static_assert(GABA_DP_CONTEXT_LOAD_OFFSET == 256);
 _static_assert(GABA_DP_CONTEXT_LOAD_SIZE == 448);
 
 /**
@@ -415,21 +436,22 @@ _static_assert(GABA_DP_CONTEXT_LOAD_SIZE == 448);
  * sizeof(struct gaba_context_s) = 1472
  */
 struct gaba_context_s {
-	/** 64byte aligned */
 	/** templates */
-	struct gaba_middle_delta_s md;	/** (64) */
-	/** 64, 64 */
-	
 	/** 64byte aligned */
-	struct gaba_dp_context_s k;		/** (640) */
-	/** 640, 704 */
+	struct gaba_dp_context_s k;		/** (704) */
+	/** 704, 704 */
+
+	/** 64byte aligned */
+	struct gaba_middle_delta_s md;	/** (64) */
+	/** 64, 768 */
 
 	/** 64byte aligned */
 	struct gaba_params_s params;	/** (16) */
 	uint64_t _pad[6];				/** (48) */
-	/** 64byte aligned */
+
+	/** 64, 832 */
 };
-_static_assert(sizeof(struct gaba_context_s) == 768);
+_static_assert(sizeof(struct gaba_context_s) == 832);
 
 /**
  * @enum _STATE
@@ -447,7 +469,7 @@ _static_assert((int32_t)TERM == (int32_t)GABA_STATUS_TERM);
 /**
  * coordinate conversion macros
  */
-#define _rev(pos, len)				( (len) + (uint64_t)(len) - (uint64_t)(pos) )
+#define _rev(pos, len)				( (len) + (uint64_t)(len) - (uint64_t)(pos) - 1 )
 #define _roundup(x, base)			( ((x) + (base) - 1) & ~((base) - 1) )
 
 /**
@@ -530,8 +552,8 @@ void gaba_aligned_free(
  * @macro _dir_is_down, _dir_is_right
  * @brief direction indicator (_dir_is_down returns true if dir == down)
  */
-#define _dir_is_down(_dir)					( (_dir).dynamic.array & 0x01 )
-#define _dir_is_right(_dir)					( !_dir_is_down(_dir) )
+#define _dir_is_down(_dir)					( ((uint64_t)(_dir).dynamic.array) & 0x01 )
+#define _dir_is_right(_dir)					( ~((uint64_t)(_dir).dynamic.array) & 0x01 )
 /**
  * @macro _dir_load
  */
@@ -695,7 +717,7 @@ void fill_load_seq_a(
 			vec_t const mask = _set(0x03);
 
 			/* forward fetch: 2 * alen - pos */
-			vec_t a = _loadu(_rev(pos, this->w.r.alim));
+			vec_t a = _loadu(_rev(pos, this->w.r.alim) - (len - 1));
 			_storeu(_rd_bufa(this, BW, len), _xor(a, mask));
 		}
 	#else /* BIT == 4 */
@@ -703,21 +725,19 @@ void fill_load_seq_a(
 			debug("reverse fetch a: pos(%p), len(%llu)", pos, len);
 			/* reverse fetch: 2 * alen - (2 * alen - pos) + (len - 32) */
 			vec_t a = _loadu(pos + (len - BW));
-			_print(a);
-			_print(_swap(a));
 			_storeu(_rd_bufa(this, BW, len), _swap(a));
 		} else {
 			debug("forward fetch a: pos(%p), len(%llu)", pos, len);
 			/* take complement */
-			uint8_t const comp[16] __attribute__(( aligned(16) )) = {
+			static uint8_t const comp[16] __attribute__(( aligned(16) )) = {
 				0x00, 0x08, 0x04, 0x0c, 0x02, 0x0a, 0x06, 0x0e,
 				0x01, 0x09, 0x05, 0x0d, 0x03, 0x0b, 0x07, 0x0f
 			};
 			vec_t const cv = _bc_v16i8(_load_v16i8(comp));
 
 			/* forward fetch: 2 * alen - pos */
-			vec_t a = _loadu(_rev(pos, this->w.r.alim));
-			_storeu(_rd_bufa(this, BW, len), _shuf(a, cv));
+			vec_t a = _loadu(_rev(pos, this->w.r.alim) - (len - 1));
+			_storeu(_rd_bufa(this, BW, len), _shuf(cv, a));
 		}
 	#endif
 	return;
@@ -744,9 +764,7 @@ void fill_load_seq_b(
 			vec_t const mask = _set(0x03);
 
 			/* reverse fetch: 2 * blen - pos + (len - 32) */
-			vec_t b = _loadu(_rev(pos, this->w.r.blim) + (len - BW));
-			_print(b);
-			_print(_shl(_swap(b), 2));
+			vec_t b = _loadu(_rev(pos, this->w.r.blim) - (BW - 1));
 			_storeu(_rd_bufb(this, BW, len), _shl(_swap(_xor(b, mask)), 2));
 		}
 	#else /* BIT == 4 */
@@ -758,15 +776,15 @@ void fill_load_seq_b(
 		} else {
 			debug("reverse fetch b: pos(%p), len(%llu)", pos, len);
 			/* take complement */
-			uint8_t const comp[16] __attribute__(( aligned(16) )) = {
+			static uint8_t const comp[16] __attribute__(( aligned(16) )) = {
 				0x00, 0x08, 0x04, 0x0c, 0x02, 0x0a, 0x06, 0x0e,
 				0x01, 0x09, 0x05, 0x0d, 0x03, 0x0b, 0x07, 0x0f
 			};
 			vec_t const cv = _bc_v16i8(_load_v16i8(comp));
 
 			/* reverse fetch: 2 * blen - pos + (len - 32) */
-			vec_t b = _loadu(_rev(pos, this->w.r.blim) + (len - BW));
-			_storeu(_rd_bufb(this, BW, len), _shuf(_swap(b), cv));
+			vec_t b = _loadu(_rev(pos, this->w.r.blim) - (BW - 1));
+			_storeu(_rd_bufb(this, BW, len), _shuf(cv, _swap(b)));
 		}
 	#endif
 	return;
@@ -1463,9 +1481,9 @@ void fill_bulk_block(
 	#define _fill_block(_direction, _label, _jump_to) { \
 		_dir_fetch(dir); \
 		if(_unlikely(!_dir_is_##_direction(dir))) { \
-			goto _linear_fill_##_jump_to; \
+			goto _fill_##_jump_to; \
 		} \
-		_linear_fill_##_label: \
+		_fill_##_label: \
 		_fill_##_direction##_update_ptr(); \
 		_fill_##_direction(); \
 		if(--i == 0) { break; } \
@@ -2037,7 +2055,7 @@ struct gaba_joint_tail_s *fill_section_seq_p_bounded(
  *
  * @brief build_root API
  */
-struct gaba_fill_s *gaba_dp_fill_root(
+struct gaba_fill_s *suffix(gaba_dp_fill_root)(
 	struct gaba_dp_context_s *this,
 	struct gaba_section_s const *a,
 	uint32_t apos,
@@ -2055,7 +2073,7 @@ struct gaba_fill_s *gaba_dp_fill_root(
  *
  * @brief fill API
  */
-struct gaba_fill_s *gaba_dp_fill(
+struct gaba_fill_s *suffix(gaba_dp_fill)(
 	struct gaba_dp_context_s *this,
 	struct gaba_fill_s const *prev_sec,
 	struct gaba_section_s const *a,
@@ -2179,10 +2197,10 @@ struct trace_max_block_s trace_detect_max_block(
 {
 	/* scan blocks backward */
 	struct gaba_block_s *blk = _last_block(tail);
-	int32_t p = tail->p;
+	int32_t p = -1;
 
 	/* b must be sined integer, in order to detect negative index. */
-	for(int32_t b = (p - 1)>>BLK_BASE; b >= 0; b--, blk--) {
+	for(int32_t b = (tail->p - 1)>>BLK_BASE; b >= 0; b--, blk--) {
 
 		/* load the previous max vector and offset */
 		vec_t prev_max = _load(&(blk - 1)->sd.max);
@@ -2200,6 +2218,7 @@ struct trace_max_block_s trace_detect_max_block(
 			b, offset, mask_max, prev_mask_max);
 
 		if(prev_mask_max == 0) {
+			debug("block found: blk(%p), p(%d), mask_max(%u)", blk, b * BLK, mask_max);
 			p = b * BLK;
 			break;
 		}
@@ -2210,7 +2229,7 @@ struct trace_max_block_s trace_detect_max_block(
 		mask_max = prev_mask_max;
 	}
 
-	debug("block found: blk(%p), p(%d), mask_max(%u)", blk, p, mask_max);
+	debug("loop break: blk(%p), p(%d), mask_max(%u)", blk, p, mask_max);
 	return((struct trace_max_block_s){
 		.max = max,
 		.blk = blk,
@@ -2287,6 +2306,7 @@ struct trace_max_pos_s trace_detect_max_pos(
 	}
 
 	/* not found in the block (never reaches here) */
+	debug("max pos NOT found.");
 	return((struct trace_max_pos_s){
 		.p = 0,
 		.q = 0
@@ -2294,15 +2314,13 @@ struct trace_max_pos_s trace_detect_max_pos(
 }
 
 /**
- * @fn trace_save_coordinates
+ * @fn trace_save_section
  */
 static _force_inline
-void trace_save_coordinates(
+void trace_save_section(
 	struct gaba_dp_context_s *this,
 	struct gaba_joint_tail_s const *tail,
-	struct gaba_block_s const *blk,
-	int32_t p,
-	int32_t q)
+	struct gaba_block_s const *blk)
 {
 	/* store tail and block pointer */
 	this->w.l.tail = tail;
@@ -2321,6 +2339,21 @@ void trace_save_coordinates(
 	_store_v2i32(&this->w.l.alen, _zero_v2i32());
 	_store_v2i32(&this->w.l.aid, _set_v2i32(-1));
 	#endif
+	return;
+}
+
+/**
+ * @fn trace_save_coordinates
+ */
+static _force_inline
+void trace_save_coordinates(
+	struct gaba_dp_context_s *this,
+	struct gaba_joint_tail_s const *tail,
+	struct gaba_block_s const *blk,
+	int32_t p,
+	int32_t q)
+{
+	trace_save_section(this, tail, blk);
 
 	/* calc ridx */
 	int64_t mask_idx = p & (BLK - 1);
@@ -2350,6 +2383,30 @@ void trace_save_coordinates(
 }
 
 /**
+ * @fn trace_save_phantom_coordinates
+ */
+static _force_inline
+void trace_save_phantom_coordinates(
+	struct gaba_dp_context_s *this,
+	struct gaba_joint_tail_s const *tail,
+	struct gaba_block_s const *blk,
+	uint32_t mask_max)
+{
+	trace_save_section(this, tail, blk);
+
+	/* convert to idx */
+	_store_v2i32(&this->w.l.aidx, _zero_v2i32());
+	_store_v2i32(&this->w.l.asidx, _zero_v2i32());
+
+	/* i \in [0 .. BLK) */
+	/* adjust global coordinates with local coordinate */
+	this->w.l.psum = tail->psum - tail->p - 1;
+	this->w.l.p = -1;
+	this->w.l.q = tzcnt(mask_max);
+	return;
+}
+
+/**
  * @fn trace_search_max
  */
 static _force_inline
@@ -2363,6 +2420,11 @@ void trace_search_max(
 	/* search block */
 	struct trace_max_block_s b = trace_detect_max_block(
 		this, tail, m.offset, m.mask_max, m.max);
+	debug("check p(%d)", b.p);
+	if(b.p == -1) {
+		trace_save_phantom_coordinates(this, tail, b.blk, b.mask_max);
+		return;
+	}
 
 	/* refill detected block */
 	int64_t len = MIN2(tail->p - b.p, BLK);
@@ -2437,211 +2499,337 @@ void trace_load_section_b(
 }
 
 /**
- * @macro _trace_load_context, _trace_forward_load_context
+ * @macro _trace_load_mask
+ * @brief load mask and decrement pointer
+ */
+#define _trace_load_mask() { \
+	mask_h = mask_ptr->pair.h.all; \
+	mask_v = mask_ptr->pair.v.all; \
+	mask_ptr--; \
+}
+
+/**
+ * @macro _trace_*_load_context
+ * @brief load context onto registers
  */
 #define _trace_load_context(t) \
 	v2i32_t idx = _load_v2i32(&(t)->w.l.aidx); \
 	struct gaba_block_s const *blk = (t)->w.l.blk; \
 	int64_t p = (t)->w.l.p; \
 	int64_t q = (t)->w.l.q; \
-	int64_t diff_q = 0; \
-	int64_t prev_c = 0;
+	int64_t psave = p; \
+	union gaba_dir_u dir = _dir_load(blk, p & (BLK - 1)); \
+	union gaba_mask_pair_u const *mask_ptr = &blk->mask[p & (BLK - 1)]; \
+	uint64_t prev_array = path[0]; \
+	uint64_t path_array = 0; \
+	uint32_t mask_h, mask_v; \
+	_trace_load_mask(); \
+	debug("p(%lld), q(%lld), mask_h(%x), mask_v(%x), path_array(%llx), prev_array(%llx)", \
+		p, q, mask_h, mask_v, path_array, prev_array);
+
 #define _trace_forward_load_context(t) \
-	_trace_load_context(t); \
 	uint32_t *path = (t)->w.l.fw_path; \
-	int64_t rem = (t)->w.l.fw_rem;
+	int64_t rem = (t)->w.l.fw_rem; \
+	_trace_load_context(t);
+
 #define _trace_reverse_load_context(t) \
-	_trace_load_context(t); \
 	uint32_t *path = (t)->w.l.rv_path; \
 	int64_t rem = (t)->w.l.rv_rem; \
-	/* reverse q-coordinate in the reverse trace */ \
-	debug("reverse q-coordinate q(%lld), rq(%lld)", q, (BW - 1) - q); \
-	q = (BW - 1) - q;
+	_trace_load_context(t);
+
 
 /**
- * @macro _trace_load_block
+ * @macro _trace_reload_tail
  */
-#define _trace_load_block(_local_idx) \
-	union gaba_dir_u dir = _dir_load(blk, (_local_idx)); \
-	union gaba_mask_pair_u const *mask_ptr = &blk->mask[(_local_idx)]; \
-	uint64_t path_array = 0; \
-	/* working registers need not be initialized */ \
-	v2i32_t next_idx; \
-	int64_t next_diff_q; \
-	uint64_t next_path_array, next_prev_c;
+#define _trace_reload_tail(t) { \
+	debug("tail(%p), next tail(%p), p(%d), psum(%lld), ssum(%d)", \
+		(t)->w.l.tail, (t)->w.l.tail->tail, (t)->w.l.tail->tail->p, \
+		(t)->w.l.tail->tail->psum, (t)->w.l.tail->tail->ssum); \
+	/* update psum */ \
+	(t)->w.l.psum -= (t)->w.l.p; \
+	/* load tail */ \
+	struct gaba_joint_tail_s const *tail = (t)->w.l.tail = (t)->w.l.tail->tail; \
+	blk = _last_block(tail); \
+	psave = p = ((t)->w.l.p = tail->p) - 1; \
+	debug("updated psum(%lld), w.l.p(%d), p(%lld)", (t)->w.l.psum, (t)->w.l.p, p); \
+	/* reload dir and mask pointer */ \
+	dir = _dir_load(blk, p & (BLK - 1)); \
+	mask_ptr = &blk->mask[p & (BLK - 1)]; \
+	_trace_load_mask(); \
+}
 
 /**
- * @macro _trace_forward_determine_direction
+ * @macro _trace_*_cap_update_path
+ * @brief store path array and update path pointer
  */
-#define _trace_forward_determine_direction(_mask) ({ \
-	uint64_t _mask_h = (_mask)>>q; \
-	uint64_t _mask_v = _mask_h>>BW; \
-	int64_t _is_down = (0x01 & _mask_v) | prev_c; \
-	next_path_array = (path_array<<1) | _is_down; \
-	next_diff_q = _dir_is_down(dir) - _is_down; \
-	next_prev_c = 0x01 & ~(prev_c | _mask_h | _mask_v); \
-	debug("c(%lld), prev_c(%llu), p(%lld), psum(%lld), q(%lld), diff_q(%lld), down(%d), mask(%llx), path_array(%llx)", \
-		_is_down, prev_c, p, this->w.l.psum - (this->w.l.p - p), q, next_diff_q, _dir_is_down(dir), _mask, path_array); \
-	_is_down; \
-})
-#define _trace_reverse_determine_direction(_mask) ({ \
-	uint64_t _mask_h = (_mask)<<q; \
-	uint64_t _mask_v = _mask_h>>BW; \
-	int64_t _is_right = (0x80000000 & _mask_h) | prev_c; \
-	next_path_array = (path_array>>1) | _is_right; \
-	next_diff_q = (int64_t)!_is_right - _dir_is_down(dir); \
-	next_prev_c = 0x80000000 & ~(prev_c | _mask_h | _mask_v); \
-	debug("c(%lld), prev_c(%llu), p(%lld), psum(%lld), q(%lld), diff_q(%lld), down(%d), mask(%llx), path_array(%llx)", \
-		_is_right>>31, prev_c>>31, p, this->w.l.psum - (this->w.l.p - p), q, next_diff_q, _dir_is_down(dir), _mask, path_array); \
-	_is_right; \
-})
+#define _trace_forward_cap_update_path(_traced_count) { \
+	debug("path_array(%llx), prev_array(%llx), cnt(%lld)", path_array, prev_array, _traced_count); \
+	path_array = path_array<<(BLK - (_traced_count)); \
+	path[0] = (uint32_t)(prev_array | (path_array>>rem)); \
+	path[-1] = (uint32_t)(path_array<<(BLK - rem)); \
+	debug("path[0](%x), path[-1](%x)", path[0], path[-1]); \
+	path -= ((rem + (_traced_count)) & BLK) != 0; \
+	rem = (rem + (_traced_count)) & (BLK - 1); \
+	path_array = 0; \
+	prev_array = (uint64_t)path[0]; \
+}
+#define _trace_reverse_cap_update_path(_traced_count) { \
+	debug("path_array(%llx), prev_array(%llx), cnt(%lld)", path_array, prev_array, _traced_count); \
+	path_array = path_array>>(BLK - (_traced_count)); \
+	path[0] = (uint32_t)(prev_array | (path_array<<rem)); \
+	path[1] = (uint32_t)(path_array>>(BLK - rem)); \
+	debug("path[0](%x), path[1](%x)", path[0], path[1]); \
+	path += ((rem + (_traced_count)) & BLK) != 0; \
+	rem = (rem + (_traced_count)) & (BLK - 1); \
+	path_array = 0; \
+	prev_array = (uint64_t)path[0]; \
+}
 
 /**
- * @macro _trace_update_index
+ * @macro _trace_bulk_*_update_path
+ * @brief store path array
  */
-#define _trace_update_index() { \
-	q += next_diff_q; \
-	diff_q = next_diff_q; \
-	path_array = next_path_array; \
-	prev_c = next_prev_c; \
-	mask_ptr--; \
+#define _trace_forward_bulk_update_path() { \
+	debug("path_array(%llx), prev_array(%llx)", path_array, prev_array); \
+	*path-- = (uint32_t)(prev_array | (path_array>>rem)); \
+	prev_array = (uint64_t)(*path = (uint32_t)(path_array<<(BLK - rem))); \
+	path_array = 0; \
+}
+#define _trace_reverse_bulk_update_path() { \
+	debug("path_array(%llx), prev_array(%llx)", path_array, prev_array); \
+	*path++ = (uint32_t)(prev_array | (path_array<<rem)); \
+	prev_array = (uint64_t)(*path = (uint32_t)(path_array>>(BLK - rem))); \
+	path_array = 0; \
+}
+
+/**
+ * @macro _trace_*_calc_index
+ * @brief restore index from ridx and q
+ */
+#define _trace_forward_calc_index(t) { \
+	_print_v2i32(idx); \
+	/* calc idx of the head of the block from ridx */ \
+	v2i32_t ridx = _load_v2i32(&blk->aridx); \
+	v2i32_t len = _load_v2i32(&(t)->w.l.alen); \
+	idx = _sub_v2i32(_sub_v2i32(len, ridx), _seta_v2i32((BW - 1) - q, q)); \
+	debug("calc_index p(%lld), q(%lld)", p, q); \
+	_print_v2i32(ridx); \
+	_print_v2i32(len); \
+	_print_v2i32(idx); \
+	psave = p; \
+}
+#define _trace_reverse_calc_index(t) { \
+	_print_v2i32(idx); \
+	/* calc idx of the head of the block from ridx */ \
+	v2i32_t ridx = _load_v2i32(&blk->aridx); \
+	v2i32_t len = _load_v2i32(&(t)->w.l.alen); \
+	idx = _sub_v2i32(_sub_v2i32(len, ridx), _seta_v2i32(q, (BW - 1) - q)); \
+	debug("calc_index p(%lld), q(%lld)", p, q); \
+	_print_v2i32(ridx); \
+	_print_v2i32(len); \
+	_print_v2i32(idx); \
+	psave = p; \
+}
+
+/**
+ * @macro _trace_forward_*_load
+ */
+#define _trace_forward_head_load(t, _jump_to) { \
+	if(mask_ptr == blk->mask - 1) { \
+		int64_t loop_count = (p & (BLK - 1)) + 1; \
+		debug("load block, loop_count(%lld), blk(%p), next_blk(%p), p(%lld), next_p(%lld)", \
+			loop_count, blk, blk-1, p, p - loop_count); \
+		/* store path_array and update rem */ \
+		_trace_forward_cap_update_path(loop_count); \
+		p -= loop_count; \
+		/* load dir and update mask pointer */ \
+		mask_ptr = &(--blk)->mask[BLK - 1]; \
+		dir = _dir_load(blk, BLK - 1); \
+		_trace_load_mask(); \
+		debug("jump to %s", #_jump_to); \
+		goto _jump_to; \
+	} \
+	_trace_load_mask(); \
+}
+#define _trace_forward_bulk_load(t, _jump_to) { \
+	if(mask_ptr == blk->mask - 1) { \
+		debug("load block, blk(%p), next_blk(%p), p(%lld), next_p(%lld)", \
+			blk, blk-1, p, p - BLK); \
+		/* store path_array */ \
+		_trace_forward_bulk_update_path(); \
+		p -= BLK; \
+		/* load dir and update mask pointer */ \
+		mask_ptr = &(--blk)->mask[BLK - 1]; \
+		dir = _dir_load(blk, BLK - 1); \
+		if(p < 2 * BLK) { \
+			_trace_load_mask(); \
+			_trace_forward_calc_index(t); \
+			debug("jump to %s", #_jump_to); \
+			goto _jump_to; \
+		} \
+	} \
+	_trace_load_mask(); \
+}
+#define _trace_forward_tail_load(t, _jump_to) { \
+	if(mask_ptr == blk->mask - 1) { \
+		debug("load block, blk(%p), next_blk(%p), p(%lld)", \
+			blk, blk-1, p); \
+		/* store path_array */ \
+		_trace_forward_cap_update_path(psave - p); \
+		psave = p; \
+		if(p < 0) { \
+			debug("w.l.psum(%lld), w.l.p(%d), p(%lld)", (t)->w.l.psum, (t)->w.l.p, p); \
+			if((t)->w.l.psum < (t)->w.l.p - p) { \
+				goto _trace_forward_index_break; \
+			} \
+			_trace_reload_tail(t); \
+			debug("jump to %s", #_jump_to); \
+			goto _jump_to; \
+		} \
+		/* load dir and update mask pointer */ \
+		mask_ptr = &(--blk)->mask[BLK - 1]; \
+		dir = _dir_load(blk, BLK - 1); \
+	} \
+	_trace_load_mask(); \
+}
+
+/**
+ * @macro _trace_reverse_*_load
+ */
+#define _trace_reverse_head_load(t, _jump_to) { \
+	if(mask_ptr == blk->mask - 1) { \
+		int64_t loop_count = (p + 1) & (BLK - 1); \
+		debug("load block, loop_count(%lld), blk(%p), next_blk(%p), p(%lld), next_p(%lld)", \
+			loop_count, blk, blk-1, p, p - loop_count); \
+		/* store path_array and update rem */ \
+		_trace_reverse_cap_update_path(loop_count); \
+		p -= loop_count; \
+		/* load dir and update mask pointer */ \
+		mask_ptr = &(--blk)->mask[BLK - 1]; \
+		dir = _dir_load(blk, BLK - 1); \
+		_trace_load_mask(); \
+		debug("jump to %s", #_jump_to); \
+		goto _jump_to; \
+	} \
+	_trace_load_mask(); \
+}
+#define _trace_reverse_bulk_load(t, _jump_to) { \
+	if(mask_ptr == blk->mask - 1) { \
+		debug("load block, blk(%p), next_blk(%p), p(%lld), next_p(%lld)", \
+			blk, blk-1, p, p - BLK); \
+		/* store path_array */ \
+		_trace_reverse_bulk_update_path(); \
+		p -= BLK; \
+		/* load dir and update mask pointer */ \
+		mask_ptr = &(--blk)->mask[BLK - 1]; \
+		dir = _dir_load(blk, BLK - 1); \
+		if(p < 2 * BLK) { \
+			_trace_load_mask(); \
+			_trace_reverse_calc_index(t); \
+			debug("jump to %s", #_jump_to); \
+			goto _jump_to; \
+		} \
+	} \
+	_trace_load_mask(); \
+}
+#define _trace_reverse_tail_load(t, _jump_to) { \
+	if(mask_ptr == blk->mask - 1) { \
+		debug("load block, blk(%p), next_blk(%p), p(%lld)", \
+			blk, blk-1, p); \
+		/* store path_array */ \
+		_trace_reverse_cap_update_path(psave - p); \
+		psave = p; \
+		if(p < 0) { \
+			debug("w.l.psum(%lld), w.l.p(%d), p(%lld)", (t)->w.l.psum, (t)->w.l.p, p); \
+			if((t)->w.l.psum < (t)->w.l.p - p) { \
+				goto _trace_reverse_index_break; \
+			} \
+			_trace_reload_tail(t); \
+			debug("jump to %s", #_jump_to); \
+			goto _jump_to; \
+		} \
+		/* load dir and update mask pointer */ \
+		mask_ptr = &(--blk)->mask[BLK - 1]; \
+		dir = _dir_load(blk, BLK - 1); \
+	} \
+	_trace_load_mask(); \
+}
+
+/**
+ * @macro _trace_head_*_test_index
+ * @brief test and update indices
+ */
+#define _trace_head_v_test_index()		( 0 )
+#define _trace_head_d_test_index()		( 0 )
+#define _trace_head_h_test_index()		( 0 )
+
+#define _trace_bulk_v_test_index()		( 0 )
+#define _trace_bulk_d_test_index()		( 0 )
+#define _trace_bulk_h_test_index()		( 0 )
+
+#define _trace_tail_v_test_index() ( \
+	_mask_v2i32(_eq_v2i32(idx, _zero_v2i32())) & V2I32_MASK_10 \
+)
+#define _trace_tail_d_test_index() ( \
+	_mask_v2i32(_eq_v2i32(idx, _zero_v2i32())) \
+)
+#define _trace_tail_h_test_index() ( \
+	_mask_v2i32(_eq_v2i32(idx, _zero_v2i32())) & V2I32_MASK_01 \
+)
+
+/**
+ * @macro _trace_bulk_*_update_index
+ * @brief test and update indices
+ */
+#define _trace_head_v_update_index()	;
+#define _trace_head_h_update_index()	;
+
+#define _trace_bulk_v_update_index()	;
+#define _trace_bulk_h_update_index()	;
+
+#define _trace_tail_v_update_index() { \
+	p--; \
+	idx = _sub_v2i32(idx, _seta_v2i32(1, 0)); \
+}
+#define _trace_tail_h_update_index() { \
+	p--; \
+	idx = _sub_v2i32(idx, _seta_v2i32(0, 1)); \
+}
+
+/**
+ * @macro _trace_test_*
+ * @brief test mask
+ */
+#define _trace_test_h()					( (mask_h>>q) & 0x01 )
+#define _trace_test_v()					( (mask_v>>q) & 0x01 )
+
+/**
+ * @macro _trace_*_*_update_path_q
+ */
+#define _trace_forward_h_update_path_q() { \
+	path_array = path_array<<1; \
+	q += _dir_is_down(dir); \
+	_dir_windback(dir); \
+}
+#define _trace_forward_v_update_path_q() { \
+	path_array = (path_array<<1) | 0x01; \
+	q += _dir_is_down(dir) - 1; \
+	_dir_windback(dir); \
+}
+#define _trace_reverse_h_update_path_q() { \
+	path_array = path_array>>1; \
+	q += _dir_is_down(dir); \
+	_dir_windback(dir); \
+}
+#define _trace_reverse_v_update_path_q() { \
+	path_array = (path_array>>1) | 0x80000000; \
+	q += _dir_is_down(dir) - 1; \
 	_dir_windback(dir); \
 }
 
 /**
- * @macro _trace_forward_bulk_body
- */
-#define _trace_forward_bulk_body() { \
-	_trace_forward_determine_direction(mask_ptr->all); \
-	_trace_update_index(); \
-}
-#define _trace_reverse_bulk_body() { \
-	_trace_reverse_determine_direction(mask_ptr->all); \
-	_trace_update_index(); \
-}
-
-/**
- * @macro _trace_forward_cap_body
- */
-#define _trace_forward_cap_body() { \
-	int64_t _is_down = _trace_forward_determine_direction(mask_ptr->all); \
-	/* calculate the next ridx */ \
-	v2i32_t const idx_down = _seta_v2i32(1, 0); \
-	v2i32_t const idx_right = _seta_v2i32(0, 1); \
-	next_idx = _sub_v2i32(idx, _is_down ? idx_down : idx_right); \
-	_print_v2i32(next_idx); \
-}
-#define _trace_reverse_cap_body() { \
-	int64_t _is_right = _trace_reverse_determine_direction(mask_ptr->all); \
-	/* calculate the next ridx */ \
-	v2i32_t const idx_down = _seta_v2i32(1, 0); \
-	v2i32_t const idx_right = _seta_v2i32(0, 1); \
-	next_idx = _sub_v2i32(idx, _is_right ? idx_right : idx_down); \
-	_print_v2i32(next_idx); \
-}
-
-/**
- * @macro _trace_cap_update_index
- */
-#define _trace_cap_update_index() { \
-	_trace_update_index(); \
- 	idx = next_idx; \
-	p--; \
-}
-
-/**
- * @macro _trace_test_cap_loop
- *
- * @brief returns non-zero if ridx >= len
- */
-#define _trace_test_cap_loop() ( \
-	/* next_ridx must be precalculated */ \
-	_mask_v2i32(_lt_v2i32(next_idx, _zero_v2i32())) \
-)
-#define _trace_test_bulk_loop() ( \
-	_mask_v2i32(_lt_v2i32(idx, _set_v2i32(BW))) \
-)
-
-/** 
- * @macro _trace_bulk_update_index
- */
-#define _trace_bulk_update_index() { \
-	int32_t bcnt = popcnt(path_array); \
-	idx = _sub_v2i32(idx, _seta_v2i32(bcnt, BLK - bcnt)); \
-	debug("bulk update index p(%lld)", p); \
-	_print_v2i32(idx); \
-	p -= BLK; \
-}
-
-/**
- * @macro _trace_forward_update_path, _trace_backward_update_path
- */
-#define _trace_forward_compensate_remainder(_traced_count) ({ \
-	/* decrement cnt when invasion of boundary on seq b with diagonal path occurred */ \
-	int64_t _cnt = (_traced_count) - prev_c; \
-	path_array >>= prev_c; \
-	p += prev_c; \
-	q -= (prev_c == 0) ? 0 : diff_q; \
-	idx = _add_v2i32(idx, _seta_v2i32(0, prev_c)); \
-	debug("cnt(%lld), traced_count(%lld), prev_c(%lld), path_array(%llx), p(%lld)", \
-		_cnt, _traced_count, prev_c, path_array, p); \
-	_cnt; \
-})
-#define _trace_reverse_compensate_remainder(_traced_count) ({ \
-	/* decrement cnt when invasion of boundary on seq b with diagonal path occurred */ \
-	prev_c >>= 31; \
-	int64_t _cnt = (_traced_count) - prev_c; \
-	path_array <<= prev_c; \
-	p += prev_c; \
-	q -= (prev_c == 0) ? 0 : diff_q; \
-	idx = _add_v2i32(idx, _seta_v2i32(prev_c, 0)); \
-	debug("cnt(%lld), traced_count(%lld), prev_c(%lld), path_array(%llx), p(%lld)", \
-		_cnt, _traced_count, prev_c, path_array, p); \
-	_cnt; \
-})
-#define _trace_forward_update_path(_traced_count) { \
-	/* adjust path_array */ \
-	path_array = path_array<<(BLK - (_traced_count)); \
-	/* load the previous array */ \
-	uint64_t prev_array = path[0]; \
-	/* write back array */ \
-	path[-1] = (uint32_t)(path_array<<(BLK - rem)); \
-	path[0] = (uint32_t)(prev_array | (path_array>>rem)); \
-	debug("prev_array(%llx), path_array(%llx), path[-1](%x), path[0](%x), blk(%p)", \
-		prev_array, path_array, path[-1], path[0], blk); \
-	/* update path and remainder */ \
-	path -= (rem + (_traced_count)) / BLK; \
-	debug("path_adv(%d)", ((rem + (_traced_count)) & BLK) != 0 ? 1 : 0); \
-	rem = (rem + (_traced_count)) & (BLK - 1); \
-	debug("i(%lld), rem(%lld)", (int64_t)(_traced_count), rem); \
-}
-#define _trace_reverse_update_path(_traced_count) { \
-	/* adjust path_array */ \
-	path_array = (uint64_t)(~((uint32_t)path_array))>>(BLK - (_traced_count)); \
-	/* load previous array */ \
-	uint64_t prev_array = path[0]; \
-	/* write back array */ \
-	path[0] = (uint32_t)(prev_array | (path_array<<rem)); \
-	path[1] = (uint32_t)(path_array>>(BLK - rem)); \
-	debug("prev_array(%llx), path_array(%llx), path[0](%x), path[1](%x), blk(%p)", \
-		prev_array, path_array, path[0], path[1], blk); \
-	/* update path and remainder */ \
-	path += (rem + (_traced_count)) / BLK; \
-	debug("path_adv(%d)", ((rem + (_traced_count)) & BLK) != 0 ? 1 : 0); \
-	rem = (rem + (_traced_count)) & (BLK - 1); \
-	debug("i(%lld), rem(%lld)", (int64_t)(_traced_count), rem); \
-}
-
-/**
- * @macro _trace_windback_block
- */
-#define _trace_windback_block() { \
-	/* load the previous block */ \
-	blk--; \
-}
-
-/**
- * @macro _trace_forward_save_context
+ * @macro _trace_*_save_context
+ * @brief save context to working buffer
  */
 #define _trace_save_context(t) { \
 	(t)->w.l.blk = blk; \
@@ -2657,225 +2845,206 @@ void trace_load_section_b(
 	_trace_save_context(t); \
 }
 #define _trace_reverse_save_context(t) { \
-	/* reverse q-coordinate in the reverse trace */ \
-	debug("unreverse q-coordinate rq(%lld), q(%lld)", q, (BW - 1) - q); \
-	q = (BW - 1) - q; \
 	(t)->w.l.rv_path = path; \
 	(t)->w.l.rv_rem = rem; \
 	_trace_save_context(t); \
 }
 
-/**
- * @macro _trace_reload_tail
- */
-#define _trace_reload_tail(t) { \
-	debug("tail(%p), next tail(%p), p(%d), psum(%lld), ssum(%d)", \
-		(t)->w.l.tail, (t)->w.l.tail->tail, (t)->w.l.tail->tail->p, \
-		(t)->w.l.tail->tail->psum, (t)->w.l.tail->tail->ssum); \
-	struct gaba_joint_tail_s const *tail = (t)->w.l.tail = (t)->w.l.tail->tail; \
-	blk = _last_block(tail); \
-	(t)->w.l.psum -= (t)->w.l.p; \
-	p += ((t)->w.l.p = tail->p); \
-	debug("updated psum(%lld), w.l.p(%d), p(%lld)", (t)->w.l.psum, (t)->w.l.p, p); \
-}
-
-/**
- * @fn trace_forward_trace
- *
- * @brief traceback path until section invasion occurs
- */
 static
 void trace_forward_trace(
 	struct gaba_dp_context_s *this)
 {
-	/* load context onto registers */
-	_trace_forward_load_context(this);
-	debug("start traceback loop p(%lld), q(%llu)", p, q);
-
-	while(1) {
-		/* cap trace at the head */
-		if(p > 0 && (p + 1) % BLK != 0) {
-			int64_t loop_count = (p + 1) % BLK;		/* loop_count \in (1 .. BLK), 0 is invalid */
-
-			/* load direction array and mask pointer */
-			_trace_load_block(loop_count - 1);
-
-			/* cap trace loop */
-			for(int64_t i = 0; i < loop_count; i++) {
-				_trace_forward_cap_body();
-
-				/* check if the section invasion occurred */
-				if(_trace_test_cap_loop() != 0) {
-					debug("cap test failed, i(%lld)", i);
-					i = _trace_forward_compensate_remainder(i);
-					_trace_forward_update_path(i);
-					_trace_forward_save_context(this);
-					return;
-				}
-
-				_trace_cap_update_index();
-			}
-
-			/* update rem, path, and block */
-			_trace_forward_update_path(loop_count);
-			_trace_windback_block();
-		}
-
-		/* bulk trace */
-		while(p > 0 && _trace_test_bulk_loop() == 0) {
-			/* load direction array and mask pointer */
-			_trace_load_block(BLK - 1);
-			(void)next_idx;		/* to avoid warning */
-
-			/* bulk trace loop */
-			for(int64_t i = 0; i < BLK; i++) {
-				_trace_forward_bulk_body();
-			}
-
-			/* update path and block */
-			_trace_bulk_update_index();
-			_trace_forward_update_path(BLK);
-			_trace_windback_block();
-
-			debug("bulk loop end p(%lld), q(%llu)", p, q);
-		}
-
-		/* bulk trace test failed, continue to cap trace */
-		while(p > 0) {
-			/* cap loop */
-			_trace_load_block(BLK - 1);
-
-			/* cap trace loop */
-			for(int64_t i = 0; i < BLK; i++) {
-				_trace_forward_cap_body();
-
-				/* check if the section invasion occurred */
-				if(_trace_test_cap_loop() != 0) {
-					debug("cap test failed, i(%lld)", i);
-					i = _trace_forward_compensate_remainder(i);
-					_trace_forward_update_path(i);
-					_trace_forward_save_context(this);
-					return;		/* exit is here */
-				}
-
-				_trace_cap_update_index();
-			}
-			debug("bulk loop end p(%lld), q(%llu)", p, q);
-
-			/* update path and block */
-			_trace_forward_update_path(BLK);
-			_trace_windback_block();
-		}
-
-		/* check psum termination */
-		if(this->w.l.psum < this->w.l.p - p) {
-			_trace_forward_save_context(this);
-			return;
-		}
-
-		/* reload tail pointer */
-		_trace_reload_tail(this);
+	#define _trace_forward_gap_loop(t, _type, _next, _label) { \
+		while(1) { \
+		_trace_forward_##_type##_##_label##_head: \
+			if(_trace_test_##_label() == 0) { \
+				goto _trace_forward_##_type##_d_head; \
+			} \
+			if(_trace_##_type##_##_label##_test_index()) { \
+				goto _trace_forward_index_break; \
+			} \
+			debug("go %s (%s), dir(%llx), mask_h(%x), mask_v(%x), p(%lld), q(%lld), mask_ptr(%p), path_array(%llx), prev_array(%llx)", \
+				#_label, #_type, ((uint64_t)dir.dynamic.array), mask_h, mask_v, p, q, mask_ptr, path_array, prev_array); \
+			_trace_##_type##_##_label##_update_index(); \
+			_trace_forward_##_label##_update_path_q(); \
+			_trace_forward_##_type##_load(t, _trace_forward_##_next##_##_label##_head); \
+		} \
 	}
+
+	#define _trace_forward_diag_loop(t, _type, _next) { \
+		while(1) { \
+		_trace_forward_##_type##_d_head: \
+			if(_trace_test_h() != 0) { \
+				goto _trace_forward_##_type##_h_head; \
+			} \
+			if(_trace_##_type##_d_test_index()) { \
+				_trace_forward_cap_update_path(psave - p); \
+				goto _trace_forward_index_break; \
+			} \
+			debug("go d (%s), dir(%llx), mask_h(%x), mask_v(%x), p(%lld), q(%lld), mask_ptr(%p), path_array(%llx), prev_array(%llx)", \
+				#_type, ((uint64_t)dir.dynamic.array), mask_h, mask_v, p, q, mask_ptr, path_array, prev_array); \
+			_trace_##_type##_h_update_index(); \
+			_trace_forward_h_update_path_q(); \
+			_trace_forward_##_type##_load(t, _trace_forward_##_next##_d_mid); \
+		_trace_forward_##_type##_d_mid: \
+			_trace_##_type##_v_update_index(); \
+			_trace_forward_v_update_path_q(); \
+			_trace_forward_##_type##_load(t, _trace_forward_##_next##_d_tail); \
+		_trace_forward_##_type##_d_tail: \
+			if(_trace_test_v() != 0) { \
+				goto _trace_forward_##_type##_v_head; \
+			} \
+		} \
+	}
+
+	_trace_forward_load_context(this);
+
+	debug("p(%lld), q(%lld), path_array(%llx), prev_array(%llx)", p, q, path_array, prev_array);
+
+	/* v loop */
+	_trace_forward_loop_v_head: {
+		if(p < 2 * BLK) {
+			goto _trace_forward_tail_v_head;
+		}
+		_trace_forward_gap_loop(this, head, bulk, v);
+		_trace_forward_gap_loop(this, bulk, tail, v);
+		_trace_forward_gap_loop(this, tail, loop, v);
+	}
+
+	/* d dispatchers */
+	_trace_forward_loop_d_mid: {
+		if(p < 2 * BLK) {
+			goto _trace_forward_tail_d_mid;
+		} else {
+			goto _trace_forward_head_d_mid;
+		}
+	}
+	_trace_forward_loop_d_tail: {
+		if(p < 2 * BLK) {
+			goto _trace_forward_tail_d_tail;
+		} else {
+			goto _trace_forward_head_d_tail;
+		}
+	}
+	/* d loop */ {
+		_trace_forward_diag_loop(this, head, bulk);
+		_trace_forward_diag_loop(this, bulk, tail);
+		_trace_forward_diag_loop(this, tail, loop);
+	}
+
+	/* h loop */
+	_trace_forward_loop_h_head: {
+		if(p < 2 * BLK) {
+			goto _trace_forward_tail_h_head;
+		}
+		_trace_forward_gap_loop(this, head, bulk, h);
+		_trace_forward_gap_loop(this, bulk, tail, h);
+		_trace_forward_gap_loop(this, tail, loop, h);
+	}
+
+_trace_forward_index_break:;
+	_trace_forward_save_context(this);
 	return;
 }
 
-/**
- * @fn trace_reverse_trace
- *
- * @brief traceback path until section invasion occurs
- */
+
 static
 void trace_reverse_trace(
 	struct gaba_dp_context_s *this)
 {
-	/* load context onto registers */
-	_trace_reverse_load_context(this);
-	debug("start traceback loop p(%lld), q(%llu)", p, q);
-
-	while(1) {
-		/* cap trace at the head */ {
-			int64_t loop_count = (p + 1) % BLK;		/* loop_count \in (1 .. BLK), 0 is invalid */
-
-			/* load direction array and mask pointer */
-			_trace_load_block(loop_count - 1);
-
-			/* cap trace loop */
-			for(int64_t i = 0; i < loop_count; i++) {
-				_trace_reverse_cap_body();
-
-				/* check if the section invasion occurred */
-				if(_trace_test_cap_loop() != 0) {
-					debug("cap test failed, i(%lld)", i);
-					i = _trace_reverse_compensate_remainder(i);
-					_trace_reverse_update_path(i);
-					_trace_reverse_save_context(this);
-					return;
-				}
-
-				_trace_cap_update_index();
-			}
-
-			/* update rem, path, and block */
-			_trace_reverse_update_path(loop_count);
-			_trace_windback_block();
-		}
-
-		/* bulk trace */
-		while(p > 0 && _trace_test_bulk_loop() == 0) {
-			/* load direction array and mask pointer */
-			_trace_load_block(BLK - 1);
-			(void)next_idx;		/* to avoid warning */
-
-			/* bulk trace loop */
-			_trace_bulk_update_index();
-			for(int64_t i = 0; i < BLK; i++) {
-				_trace_reverse_bulk_body();
-			}
-			debug("bulk loop end p(%lld), q(%llu)", p, q);
-
-			/* update path and block */
-			_trace_reverse_update_path(BLK);
-			_trace_windback_block();
-		}
-
-		/* bulk trace test failed, continue to cap trace */
-		while(p > 0) {
-			/* cap loop */
-			_trace_load_block(BLK - 1);
-
-			/* cap trace loop */
-			for(int64_t i = 0; i < BLK; i++) {
-				_trace_reverse_cap_body();
-
-				/* check if the section invasion occurred */
-				if(_trace_test_cap_loop() != 0) {
-					debug("cap test failed, i(%lld)", i);
-					i = _trace_reverse_compensate_remainder(i);
-					_trace_reverse_update_path(i);
-					_trace_reverse_save_context(this);
-					return;		/* exit is here */
-				}
-
-				_trace_cap_update_index();
-			}
-			debug("bulk loop end p(%lld), q(%llu)", p, q);
-
-			/* update path and block */
-			_trace_reverse_update_path(BLK);
-			_trace_windback_block();
-		}
-
-		/* check psum termination */
-		if(this->w.l.psum < this->w.l.p - p) {
-			_trace_reverse_save_context(this);
-			return;
-		}
-
-		/* reload tail pointer */
-		_trace_reload_tail(this);
+	#define _trace_reverse_gap_loop(t, _type, _next, _label) { \
+		while(1) { \
+		_trace_reverse_##_type##_##_label##_head: \
+			if(_trace_test_##_label() == 0) { \
+				goto _trace_reverse_##_type##_d_head; \
+			} \
+			if(_trace_##_type##_##_label##_test_index()) { \
+				goto _trace_reverse_index_break; \
+			} \
+			debug("go %s (%s), dir(%llx), mask_h(%x), mask_v(%x), p(%lld), q(%lld), mask_ptr(%p), path_array(%llx), prev_array(%llx)", \
+				#_label, #_type, ((uint64_t)dir.dynamic.array), mask_h, mask_v, p, q, mask_ptr, path_array, prev_array); \
+			_trace_##_type##_##_label##_update_index(); \
+			_trace_reverse_##_label##_update_path_q(); \
+			_trace_reverse_##_type##_load(t, _trace_reverse_##_next##_##_label##_head); \
+		} \
 	}
+
+	#define _trace_reverse_diag_loop(t, _type, _next) { \
+		while(1) { \
+		_trace_reverse_##_type##_d_head: \
+			if(_trace_test_v() != 0) { \
+				goto _trace_reverse_##_type##_v_head; \
+			} \
+			if(_trace_##_type##_d_test_index()) { \
+				_trace_reverse_cap_update_path(psave - p); \
+				goto _trace_reverse_index_break; \
+			} \
+			debug("go d (%s), dir(%llx), mask_h(%x), mask_v(%x), p(%lld), q(%lld), mask_ptr(%p), path_array(%llx), prev_array(%llx)", \
+				#_type, ((uint64_t)dir.dynamic.array), mask_h, mask_v, p, q, mask_ptr, path_array, prev_array); \
+			_trace_##_type##_v_update_index(); \
+			_trace_reverse_v_update_path_q(); \
+			_trace_reverse_##_type##_load(t, _trace_reverse_##_next##_d_mid); \
+		_trace_reverse_##_type##_d_mid: \
+			_trace_##_type##_h_update_index(); \
+			_trace_reverse_h_update_path_q(); \
+			_trace_reverse_##_type##_load(t, _trace_reverse_##_next##_d_tail); \
+		_trace_reverse_##_type##_d_tail: \
+			if(_trace_test_h() != 0) { \
+				goto _trace_reverse_##_type##_h_head; \
+			} \
+		} \
+	}
+
+	_trace_reverse_load_context(this);
+
+	debug("p(%lld), q(%lld), path_array(%llx), prev_array(%llx)", p, q, path_array, prev_array);
+
+	/* h loop */
+	_trace_reverse_loop_h_head: {
+		if(p < 2 * BLK) {
+			goto _trace_reverse_tail_h_head;
+		}
+		_trace_reverse_gap_loop(this, head, bulk, h);
+		_trace_reverse_gap_loop(this, bulk, tail, h);
+		_trace_reverse_gap_loop(this, tail, loop, h);
+	}
+
+	/* d dispatchers */
+	_trace_reverse_loop_d_mid: {
+		if(p < 2 * BLK) {
+			goto _trace_reverse_tail_d_mid;
+		} else {
+			goto _trace_reverse_head_d_mid;
+		}
+	}
+	_trace_reverse_loop_d_tail: {
+		if(p < 2 * BLK) {
+			goto _trace_reverse_tail_d_tail;
+		} else {
+			goto _trace_reverse_head_d_tail;
+		}
+	}
+	/* d loop */ {
+		_trace_reverse_diag_loop(this, head, bulk);
+		_trace_reverse_diag_loop(this, bulk, tail);
+		_trace_reverse_diag_loop(this, tail, loop);
+	}
+
+	/* v loop */
+	_trace_reverse_loop_v_head: {
+		if(p < 2 * BLK) {
+			goto _trace_reverse_tail_v_head;
+		}
+		_trace_reverse_gap_loop(this, head, bulk, v);
+		_trace_reverse_gap_loop(this, bulk, tail, v);
+		_trace_reverse_gap_loop(this, tail, loop, v);
+	}
+
+_trace_reverse_index_break:;
+	_trace_reverse_save_context(this);
 	return;
 }
+
 
 /**
  * @fn trace_forward_push
@@ -3185,7 +3354,7 @@ struct gaba_result_s *trace_concatenate_path(
 /**
  * @fn gaba_dp_trace
  */
-struct gaba_result_s *gaba_dp_trace(
+struct gaba_result_s *suffix(gaba_dp_trace)(
 	struct gaba_dp_context_s *this,
 	struct gaba_fill_s const *fw_tail,
 	struct gaba_fill_s const *rv_tail,
@@ -3247,20 +3416,27 @@ union parse_cigar_table_u parse_get_cigar_elem(
 			[0] = (_str)[0], \
 			[1] = (_str)[1], \
 		}, \
-		.len = strlen(_str), \
-		.adv = strlen(_str) + 1 \
+		.len = sizeof(_str) - 1, \
+		.adv = sizeof(_str) \
 	}
 	
-	struct parse_cigar_table_s const conv_table[64] = {
-		{ .str = { 0 }, .len = 0, .adv = 0 },
-		/*e(""),*/ e("1"), e("2"), e("3"), e("4"), e("5"), e("6"), e("7"),
-		e("8"), e("9"), e("10"), e("11"), e("12"), e("13"), e("14"), e("15"),
-		e("16"), e("17"), e("18"), e("19"), e("20"), e("21"), e("22"), e("23"),
-		e("24"), e("25"), e("26"), e("27"), e("28"), e("29"), e("30"), e("31"),
-		e("32"), e("33"), e("34"), e("35"), e("36"), e("37"), e("38"), e("39"),
-		e("40"), e("41"), e("42"), e("43"), e("44"), e("45"), e("46"), e("47"),
-		e("48"), e("49"), e("50"), e("51"), e("52"), e("53"), e("54"), e("55"),
-		e("56"), e("57"), e("58"), e("59"), e("60"), e("61"), e("62"), e("63"),
+	static struct parse_cigar_table_s const conv_table[64] = {
+		{{0 }, 0, 0}, {{'1'}, 1, 2}, {{'2'}, 1, 2}, {{'3'}, 1, 2},
+		{{'4'}, 1, 2}, {{'5'}, 1, 2}, {{'6'}, 1, 2}, {{'7'}, 1, 2},
+		{{'8'}, 1, 2}, {{'9'}, 1, 2}, {{'1', '0'}, 2, 3}, {{'1', '1'}, 2, 3},
+		{{'1', '2'}, 2, 3}, {{'1', '3'}, 2, 3}, {{'1', '4'}, 2, 3}, {{'1', '5'}, 2, 3},
+		{{'1', '6'}, 2, 3}, {{'1', '7'}, 2, 3}, {{'1', '8'}, 2, 3}, {{'1', '9'}, 2, 3},
+		{{'2', '0'}, 2, 3}, {{'2', '1'}, 2, 3}, {{'2', '2'}, 2, 3}, {{'2', '3'}, 2, 3},
+		{{'2', '4'}, 2, 3}, {{'2', '5'}, 2, 3}, {{'2', '6'}, 2, 3}, {{'2', '7'}, 2, 3},
+		{{'2', '8'}, 2, 3}, {{'2', '9'}, 2, 3}, {{'3', '0'}, 2, 3}, {{'3', '1'}, 2, 3},
+		{{'3', '2'}, 2, 3}, {{'3', '3'}, 2, 3}, {{'3', '4'}, 2, 3}, {{'3', '5'}, 2, 3},
+		{{'3', '6'}, 2, 3}, {{'3', '7'}, 2, 3}, {{'3', '8'}, 2, 3}, {{'3', '9'}, 2, 3},
+		{{'4', '0'}, 2, 3}, {{'4', '1'}, 2, 3}, {{'4', '2'}, 2, 3}, {{'4', '3'}, 2, 3},
+		{{'4', '4'}, 2, 3}, {{'4', '5'}, 2, 3}, {{'4', '6'}, 2, 3}, {{'4', '7'}, 2, 3},
+		{{'4', '8'}, 2, 3}, {{'4', '9'}, 2, 3}, {{'5', '0'}, 2, 3}, {{'5', '1'}, 2, 3},
+		{{'5', '2'}, 2, 3}, {{'5', '3'}, 2, 3}, {{'5', '4'}, 2, 3}, {{'5', '5'}, 2, 3},
+		{{'5', '6'}, 2, 3}, {{'5', '7'}, 2, 3}, {{'5', '8'}, 2, 3}, {{'5', '9'}, 2, 3},
+		{{'6', '0'}, 2, 3}, {{'6', '1'}, 2, 3}, {{'6', '2'}, 2, 3}, {{'6', '3'}, 2, 3}
 	};
 	return((union parse_cigar_table_u){ .table = conv_table[i] });
 
@@ -3332,7 +3508,7 @@ int64_t parse_dump_gap_string(
  * @fn gaba_dp_print_cigar
  * @brief parse path string and print cigar to file
  */
-int64_t gaba_dp_print_cigar(
+int64_t suffix(gaba_dp_print_cigar)(
 	gaba_dp_fprintf_t _fprintf,
 	void *fp,
 	uint32_t const *path,
@@ -3375,7 +3551,7 @@ int64_t gaba_dp_print_cigar(
  * @fn gaba_dp_dump_cigar
  * @brief parse path string and store cigar to buffer
  */
-int64_t gaba_dp_dump_cigar(
+int64_t suffix(gaba_dp_dump_cigar)(
 	char *buf,
 	uint64_t buf_size,
 	uint32_t const *path,
@@ -3414,7 +3590,7 @@ int64_t gaba_dp_dump_cigar(
 /**
  * @fn gaba_dp_set_qual
  */
-void gaba_dp_set_qual(
+void suffix(gaba_dp_set_qual)(
 	gaba_result_t *res,
 	int32_t qual)
 {
@@ -3500,28 +3676,11 @@ struct gaba_score_vec_s gaba_init_create_score_vector(
 		_store_adjv(sc, 0, 0, geh + gih, gev + giv);
 		_store_ofsh(sc, 0, 0, geh + gih, gev + giv);
 		_store_ofsv(sc, 0, 0, geh + gih, gev + giv);
-
-		/*
-		for(int i = 0; i < 16; i++) {
-			sc.adjh[i] = sc.adjv[i] = 0;
-			sc.ofsh[i] = geh + gih;
-			sc.ofsv[i] = gev + giv;
-		}
-		*/
 	#else
 		_store_adjh(sc, -gih, -giv, -(geh + gih), gev + giv);
 		_store_adjv(sc, -gih, -giv, -(geh + gih), gev + giv);
 		_store_ofsh(sc, -gih, -giv, -(geh + gih), gev + giv);
 		_store_ofsv(sc, -gih, -giv, -(geh + gih), gev + giv);
-
-		/*
-		for(int i = 0; i < 16; i++) {
-			sc.adjh[i] = -gih;
-			sc.adjv[i] = -giv;
-			sc.ofsh[i] = -(geh + gih);
-			sc.ofsv[i] = gev + giv;
-		}
-		*/
 	#endif
 	return(sc);
 }
@@ -3572,9 +3731,6 @@ struct gaba_small_delta_s gaba_init_create_small_delta(
 	struct gaba_small_delta_s sd;
 	#if MODEL == LINEAR
 		for(int i = 0; i < BW/2; i++) {
-			// sd.delta[i] = sd.delta[BW/2 + i] = 0;
-			// sd.max[i] = sd.max[BW/2 + i] = 0;
-
 			sd.delta[i] = relax * (BW/2 - i);
 			sd.delta[BW/2 + i] = relax * i;
 			sd.max[i] = relax * (BW/2 - i);
@@ -3582,9 +3738,6 @@ struct gaba_small_delta_s gaba_init_create_small_delta(
 		}
 	#else
 		for(int i = 0; i < BW/2; i++) {
-			// sd.delta[i] = sd.delta[BW/2 + i] = 0;
-			// sd.max[i] = sd.max[BW/2 + i] = 0;
-
 			sd.delta[i] = relax * (BW/2 - i);
 			sd.delta[BW/2 + i] = relax * i;
 			sd.max[i] = relax * (BW/2 - i);
@@ -3593,13 +3746,6 @@ struct gaba_small_delta_s gaba_init_create_small_delta(
 	#endif
 
 	return(sd);
-
-	/*
-	return((struct gaba_small_delta_s){
-		.delta = { 0 },
-		.max = { 0 }
-	});
-	*/
 }
 
 /**
@@ -3617,15 +3763,11 @@ struct gaba_middle_delta_s gaba_init_create_middle_delta(
 	int8_t relax = 128 / BW;
 
 	#if MODEL == LINEAR
-		// int16_t coef_a = -max + 2 * (geh + gih);
-		// int16_t coef_b = -max + 2 * (gev + giv);
 		int16_t coef_a = -max + 2 * (geh + gih) + relax;
 		int16_t coef_b = -max + 2 * (gev + giv) + relax;
 		int16_t ofs_a = 0;
 		int16_t ofs_b = 0;
 	#else
-		// int16_t coef_a = -max + 2*geh;
-		// int16_t coef_b = -max + 2*gev;
 		int16_t coef_a = -max + 2*geh + relax;
 		int16_t coef_b = -max + 2*gev + relax;
 		int16_t ofs_a = gih;
@@ -3782,7 +3924,7 @@ struct gaba_char_vec_s gaba_init_create_char_vector(
 /**
  * @fn gaba_init
  */
-gaba_t *gaba_init(
+gaba_t *suffix(gaba_init)(
 	struct gaba_params_s const *params)
 {
 	if(params == NULL) {
@@ -3806,9 +3948,6 @@ gaba_t *gaba_init(
 
 	/* fill context */
 	*ctx = (struct gaba_context_s) {
-		/* default middle delta vector */
-		.md = gaba_init_create_middle_delta(params_intl.score_matrix),
-
 		/* template */
 		.k = (struct gaba_dp_context_s) {
 			.stack_top = NULL,						/* stored on init */
@@ -3870,6 +4009,9 @@ gaba_t *gaba_init(
 			},
 		},
 
+		/* default middle delta vector */
+		.md = gaba_init_create_middle_delta(params_intl.score_matrix),
+
 		/* copy params */
 		.params = *params
 	};
@@ -3880,7 +4022,7 @@ gaba_t *gaba_init(
 /**
  * @fn gaba_clean
  */
-void gaba_clean(
+void suffix(gaba_clean)(
 	struct gaba_context_s *ctx)
 {
 	gaba_aligned_free(ctx);
@@ -3890,7 +4032,7 @@ void gaba_clean(
 /**
  * @fn gaba_dp_init
  */
-struct gaba_dp_context_s *gaba_dp_init(
+struct gaba_dp_context_s *suffix(gaba_dp_init)(
 	struct gaba_context_s const *ctx,
 	uint8_t const *alim,
 	uint8_t const *blim)
@@ -3958,7 +4100,7 @@ int32_t gaba_dp_add_stack(
 /**
  * @fn gaba_dp_flush
  */
-void gaba_dp_flush(
+void suffix(gaba_dp_flush)(
 	struct gaba_dp_context_s *this,
 	uint8_t const *alim,
 	uint8_t const *blim)
@@ -4018,7 +4160,7 @@ void *gaba_dp_smalloc(
 /**
  * @fn gaba_dp_clean
  */
-void gaba_dp_clean(
+void suffix(gaba_dp_clean)(
 	struct gaba_dp_context_s *this)
 {
 	if(this == NULL) {
@@ -4043,8 +4185,13 @@ void gaba_dp_clean(
  * @fn unittest_build_context
  * @brief build context for unittest
  */
-static
-struct gaba_score_s const *unittest_default_score_matrix = GABA_SCORE_SIMPLE(2, 3, 5, 1);
+#if MODEL == LINEAR
+	static
+	struct gaba_score_s const *unittest_default_score_matrix = GABA_SCORE_SIMPLE(2, 3, 0, 6);
+#else
+	static
+	struct gaba_score_s const *unittest_default_score_matrix = GABA_SCORE_SIMPLE(2, 3, 5, 1);
+#endif
 static
 void *unittest_build_context(void *params)
 {
@@ -4110,7 +4257,7 @@ uint8_t unittest_encode_base(
 	/* conversion tables */
 	#if BIT == 2
 		enum bases { A = 0x00, C = 0x01, G = 0x02, T = 0x03 };
-		uint8_t const table[] = {
+		static uint8_t const table[] = {
 			[_b('A')] = A,
 			[_b('C')] = C,
 			[_b('G')] = G,
@@ -4121,7 +4268,7 @@ uint8_t unittest_encode_base(
 		};
 	#else /* BIT == 4 */
 		enum bases { A = 0x01, C = 0x02, G = 0x04, T = 0x08 };
-		uint8_t const table[] = {
+		static uint8_t const table[] = {
 			[_b('A')] = A,
 			[_b('C')] = C,
 			[_b('G')] = G,
@@ -4198,10 +4345,10 @@ void *unittest_build_seqs(void *params)
 		.bftail = gaba_build_section(6, cb + blen, 20),
 
 		/* reverse */
-		.arsec = gaba_build_section(1, _rev(ca + alen, alim), alen),
-		.artail = gaba_build_section(3, _rev(ca + atot, alim), 20),
-		.brsec = gaba_build_section(5, _rev(cb + blen, blim), blen),
-		.brtail = gaba_build_section(7, _rev(cb + btot, blim), 20)
+		.arsec = gaba_build_section(1, _rev(ca + alen - 1, alim), alen),
+		.artail = gaba_build_section(3, _rev(ca + atot - 1, alim), 20),
+		.brsec = gaba_build_section(5, _rev(cb + blen - 1, blim), blen),
+		.brtail = gaba_build_section(7, _rev(cb + btot - 1, blim), 20)
 	};
 	return((void *)sec);
 }
@@ -4345,7 +4492,6 @@ unittest_config(
 	.clean = unittest_clean_context
 );
 
-
 /**
  * check if gaba_init returns a valid pointer to a context
  */
@@ -4470,6 +4616,39 @@ unittest(with_seq_pair("A", "A"))
 	gaba_dp_clean(d);
 }
 
+/* reverse fetch */
+unittest(with_seq_pair("A", "A"))
+{
+	omajinai();
+
+	/* fill root section */
+	struct gaba_fill_s *f = gaba_dp_fill_root(d, &s->arsec, 0, &s->brsec, 0);
+	assert(f->status == 0x1ff, "%x", f->status);
+	assert(check_tail(f, 0, 0, -29, 1), print_tail(f));
+
+	/* fill again */
+	f = gaba_dp_fill(d, f, &s->arsec, &s->brsec);
+	assert(f->status == 0x1ff, "%x", f->status);
+	assert(check_tail(f, 0, 0, -27, 2), print_tail(f));
+
+	/* fill tail section */
+	f = gaba_dp_fill(d, f, &s->artail, &s->brtail);
+	assert(f->status == 0x1ff, "%x", f->status);
+	assert(check_tail(f, 4, 13, 13, 3), print_tail(f));
+
+	/* fill tail section again */
+	f = gaba_dp_fill(d, f, &s->artail, &s->brtail);
+	#if MODEL == LINEAR
+		assert(f->status == 0x1ff, "%x", f->status);
+		assert(check_tail(f, 4, 40, 53, 4), print_tail(f));
+	#else
+		assert(f->status == 0x10f, "%x", f->status);
+		assert(check_tail(f, 4, 31, 44, 4), print_tail(f));
+	#endif
+
+	gaba_dp_clean(d);
+}
+
 /* with longer sequences */
 unittest(with_seq_pair("ACGTACGTACGT", "ACGTACGTACGT"))
 {
@@ -4492,6 +4671,39 @@ unittest(with_seq_pair("ACGTACGTACGT", "ACGTACGTACGT"))
 
 	/* fill tail section again */
 	f = gaba_dp_fill(d, f, &s->aftail, &s->bftail);
+	#if MODEL == LINEAR
+		assert(f->status == 0x1ff, "%x", f->status);
+		assert(check_tail(f, 48, 40, 97, 4), print_tail(f));
+	#else
+		assert(f->status == 0x10f, "%x", f->status);
+		assert(check_tail(f, 48, 31, 88, 4), print_tail(f));
+	#endif
+
+	gaba_dp_clean(d);
+}
+
+/* reverse fetch */
+unittest(with_seq_pair("ACGTACGTACGT", "ACGTACGTACGT"))
+{
+	omajinai();
+
+	/* fill root section */
+	struct gaba_fill_s *f = gaba_dp_fill_root(d, &s->arsec, 0, &s->brsec, 0);
+	assert(f->status == 0x1ff, "%x", f->status);
+	assert(check_tail(f, 0, 0, -7, 1), print_tail(f));
+
+	/* fill again */
+	f = gaba_dp_fill(d, f, &s->arsec, &s->brsec);
+	assert(f->status == 0x1ff, "%x", f->status);
+	assert(check_tail(f, 16, 17, 17, 2), print_tail(f));
+
+	/* fill tail section */
+	f = gaba_dp_fill(d, f, &s->artail, &s->brtail);
+	assert(f->status == 0x1ff, "%x", f->status);
+	assert(check_tail(f, 48, 40, 57, 3), print_tail(f));
+
+	/* fill tail section again */
+	f = gaba_dp_fill(d, f, &s->artail, &s->brtail);
 	#if MODEL == LINEAR
 		assert(f->status == 0x1ff, "%x", f->status);
 		assert(check_tail(f, 48, 40, 97, 4), print_tail(f));
@@ -5259,9 +5471,17 @@ struct unittest_naive_result_s unittest_naive(
 	while(max.apos > 0 || max.bpos > 0) {
 		/* M > I > D > X */
 		if(mat[s(max.apos, max.bpos)] == mat[f(max.apos, max.bpos)]) {
+			while(mat[s(max.apos, max.bpos)] == mat[s(max.apos, max.bpos - 1)] + geb) {
+				max.bpos--;
+				result.path[--path_index] = 'D';
+			}
 			max.bpos--;
 			result.path[--path_index] = 'D';
 		} else if(mat[s(max.apos, max.bpos)] == mat[e(max.apos, max.bpos)]) {
+			while(mat[s(max.apos, max.bpos)] == mat[s(max.apos - 1, max.bpos)] + gea) {
+				max.apos--;
+				result.path[--path_index] = 'R';
+			}
 			max.apos--;
 			result.path[--path_index] = 'R';
 		} else {
@@ -5305,7 +5525,7 @@ char unittest_random_base(void)
 /**
  * @fn unittest_generate_random_sequence
  */
-static
+static _force_inline
 char *unittest_generate_random_sequence(
 	int64_t len)
 {
@@ -5323,7 +5543,7 @@ char *unittest_generate_random_sequence(
 /**
  * @fn unittest_generate_mutated_sequence
  */
-static
+static _force_inline
 char *unittest_generate_mutated_sequence(
 	char const *seq,
 	double x,
@@ -5361,6 +5581,7 @@ char *unittest_generate_mutated_sequence(
 /**
  * @fn unittest_add_tail
  */
+static _force_inline
 char *unittest_add_tail(
 	char *seq,
 	char c,
@@ -5383,7 +5604,7 @@ char *unittest_add_tail(
 	&& (_r).path_length == strlen(_path) \
 )
 #define print_naive_result(_r) \
-	"score(%lld), path(%s), len(%lld)", \
+	"score(%d), path(%s), len(%d)", \
 	(_r).score, (_r).path, (_r).path_length
 
 static
@@ -5483,6 +5704,11 @@ unittest()
 	n = unittest_naive(p, "TTACGTACGT", "TTTTACGTACGT");
 	assert(check_naive_result(n, 13, "DRDRDDDRDRDRDRDRDRDRDR"), print_naive_result(n));
 	free(n.path);
+
+	/* ins-match-del */
+	n = unittest_naive(p, "ATGAAGCTGCGAGGC", "TGATGGCTTGCGAGGC");
+	assert(check_naive_result(n, 6, "DDDRDRDRRRDRDRDRDDRDRDRDRDRDRDR"), print_naive_result(n));
+	free(n.path);
 }
 #endif /* MODEL */
 
@@ -5563,9 +5789,8 @@ unittest()
 		/* check scores */
 		assert(r->score == n.score, "m->max(%lld), r->score(%lld), n.score(%d)",
 			m->max, r->score, n.score);
-		assert(check_path(r, n.path), "\n%s\n%s",
-			format_string_pair_diff(a, b),
-			format_string_pair_diff(decode_path(r), n.path));
+		assert(check_path(r, n.path), "\n%s\n%s\n%s",
+			a, b, format_string_pair_diff(decode_path(r), n.path));
 
 		debug("score(%lld, %d), alen(%lld), blen(%lld)\n%s",
 			r->score, n.score, n.alen, n.blen,
@@ -5589,11 +5814,25 @@ unittest()
 "TTCAAAGGATACCAAGAAGATACAACCTTTAACCTGAAAGATCATGCGATTTGGATGGCTCAATTCCCTGTCCGCCCTATACACGCCCGCGTGCTATTAGCATCCTGTGAGGGTTTTGTACTCGGCCAGTATATGCATGAAAACTATGCATGGTACCGGACAAGCGAAGTAAGCGTTTGCTACTAGGAAGATTGGCCTTGGATCCTTGCTGTGACTGCACCATCCGCATGCAGCATGATCTCAATAAGACACTAGCCCCCTATAACACCCGAACGGCCAAAAGTTTCGTTAACGCAGATTCATGCCATGGTTAAAGCCTCCTACCAGAACGCGAAAGAACGTCTGCTAAGGGTGAGCAGCGCATGTTAGTCTCCGCTAGATGTAGTCTCATGTTTTGCGGAAGCATCGATACATGACCCCATAAACTTTTGTTGGATAATCGGAGAAGGTCAATAGAGGGTAGACTTAATTACCCACGACAATAACCTCTAAGACCATCCTTGGCCGTGGAATTCAAACAATTGTCACGTGCGCTTGATTAACACGATGGGAGCCGATACTCTATCGTGCCCTTCAGTTGGAGCGGGGGGGACCTATAGTCCCTTGAGGCATCTGAATAGTGGGACACCATCACTCTTGAAGTTGCCGTGGCGGGTTCCTTGTATACATAAAATCATCACAATTCCTTTAGCGTGGCTCGTACATGACTAAAAAAAGTAGCCAATCGCGGCTTGATCTAATCCGGATGACCAAACGTCCCCTTGCTCGTCTTAAATCGCTATTCGGTGGTGCCTCGCGTGCTGGCGAGTCCTCCTACACTGACCGCGATACCGTTCACTTTAACTAGTCGTATCGAGAGGAACGCTGTAGCGATTGTAAGACGAACGACATACTGTACCGTGAATATCCCGAAGCGTATCTGAAAAAGTTCTTCAGGAGCGGGTACGAACGCAGTACTAATCGCCCGACATGGGAGTTGTTTCAGTTTATCTTGTACGCCGAAGGAACAGGTCGTCGTGAAGTGTTGGAACTGCTAATCAATTAGGTACCGGGGAAGTGTAGTTGGGGGGGGGGGGGGGGGGGG"
 "CCGCGTCTTCGCGGGCTTGGATCGCCAAGAGGCGTGTCCATGTTGAGCTGCTCCATAAGGGCGCGCGACTAGCCCACAGTTCTGCCCACCCCTGGGTTATTGCTGGCGTTCTGAATGTATAATGCTTAATCTCGCAGGGCCAACTGCAGAGGGCACTATCCTAATGGCGGTTGGTACCCTTTTTGTAGGTAGTGCAAACGCTTATTGAAGGTGAAAGTGTCGGGCTATATGCATTCGGGGAGATCCTCGTTCGGAGTGGTTTTCCGGGTCTGAAGAATCTCCCTATACCGACTTTCATTATTATCCTTATCACAGAGATTTGCAGCAAGTCTTGAGTTCGATCTATTGTCCGATATTTACCCTTTTAGATTTTGACGATTGAAGAGATTCCTTACAACAGTAGCCCGATCACACGACATAAAGAGATCCGAGTCGTGCGAGGTCGCCCTACGGATAACTGCTTCCATTCTCGCCCTCTCCGCCCCCATTTGCCGCTGTGGGAGCGAATTAGTAGTGTCGTCTGGGTATCCCAAATGTCTCAAGGTGCCGCGAATACCACAGAATGCAACAACGAGGTCGTGCGCGACCAAGAATTCCGACGTATTCCCGGACGTCCGCAAAATTCCATACCGAGCATCCCACACAGCCTGCCTCCGTATAAACCGATGTAGAAGCATTAAGTTCAGTGCGACCAGTTCTCTACTGGGGTCAGTGACCTGTCTGGGACTCTCCGAGCTCCCATAATAATTTCACCAATCTCTTCTGACTTGCAACCACTCTGGACAGTAGCTGAGCCAGCTTATTAGGTGCGATCTAACCTGGAAGGGTACTCCATGTGATATCCTACTCTAATTCAGGTTGGAGAGGGAATCTGGCGCTGCTCTTTTGTGCGCTCGTGGTGGACGGTCTTTAGACTATGTGCCTTATTCCGGGTGAAGACCCAGGGAAAAAACTAGGGCACGTGAGGGACCGCGAGGACCGTTATATACACACATAGGGGGAGCTGCTTATGGTAGTCCGCGATGTAAAGTTTCCGGATCTGTACCGCACCGACGGAATAGGTCCCCCCCCCCCCCCCCCCCCC",
 "CCGCGGTCTTCGCGGCTTGGAGCGCCAAGAGGCAGTGTCATGATGAGCTGCCCCATAAGTTCGCTGAGCGTAGCACACAGTTCTAGCCCACCCTTGGGTTATTCCTCTGGCGTATTTGATGTATAATCCTTAATCTCGCAGGTAGTCACTGCAGTGGGCACTATCCTAATGGGGTTGGGACCCTTTTTGTAGGTAGTGCAAACGCGCTCTGTGAAGGTGTATGCTGTCGGCGATATGTATTCACGCGAGATCCTCGTGTCGGAGTGGTTTTCCGGGTCTGCAGATTTCCCTCATACTGCTTTCATTATTTTGCCTTATCACAGAATTCTGCAGCGAGTCTTGTGTTGATCTTTTGTCCTACAGTTACGTTATTAGTTTTGACGATTGAGATATTCATGACAACACGAGCCCGATCGAACGACATAAAGAGAGCCGGTCGTGCGGAGGTCTGCCCAGGGGATAACTGCTTCCCTTCTCGCCCTCTCCGCCCCCATTTGCCGTCTGTGTAGCGAATGGAATGTGCAGTCTGTGTATCCCAAATGTTTCAAGGTTCCCCGAATACCACAGAATCAACAAAGAGGTCTGCGCGACCAAGAATTCCGACGTATACCGGACGTCCGCAAAATTCCATACCGAGCATCCACACAGGCTGGCTCCGTATAAACCGATGTATAAGCATTAAGTTCAGTGCGACCAATTCTCTAATGGGGGACATACCAGTCTGGGACTTTCCCGAGCTCCCATACATCATTTCACCTATCTCGTCTGAGTTGCAACCACTCGAACAGTAGTGATTAGCTTAGTTGTGCGATCTTACCTGAATGGTACTCCATGTGTTGTCTACTCTAATTGAGCTTGGAGCGGGAACGGCGCTGCTGCTTTTCGGCGCCGGGGTGGGAACGGTCTTTAGACTAATGTGCCTTAATCCGGAGGGAGACCCAGGGAAAACAACTAAGGACGTGTGGACTGGAGACCGTTAATACCAATAGGGGGTGGACAGACATCCTCAGCTGCTTGGGACAGACTTTACAAAGGATTATTTTGCTCCGCGCCGACGCAAGCCGGGGGGGGGGGGGGGGGGGGG"
+"CCGCGTCTTCGCGGGCTTGGATCGCCAAGAGGCGTGTCCATGTTGAGCTGCTCCATAAGGGCGCGCGACTAGCCCACAGTTCTGCCCACCCCTGGGTTATTGCTGGCGTTCTGAATGTATAATGCTTAATCTCGCAGGGCCAACTGCAGAGGGCACTATCCTAATGGCGGTTGGTACCCTTTTTGTAGGTAGTGCAAACGCTTATTGAAGGTGAAAGTGTCGGGCTATATGCATTCGGGGAGATCCTCGTTCGGAGTGGTTTTCCGGGTCTGAAGAATCTCCCTATACCGACTTTCATTATTATCCTTATCACAGAGATTTGCAGCAAGTCTTGAGTTCGATCTATTGTCCGATATTTACCCTTTTAGATTTTGACGATTGAAGAGATTCCTTACAACAGTAGCCCGATCACACGACATAAAGAGATCCGAGTCGTGCGAGGTCGCCCTACGGATAACTGCTTCCATTCTCGCCCTCTCCGCCCCCATTTGCCGCTGTGGGAGCGAATTAGTAGTGTCGTCTGGGTATCCCAAATGTCTCAAGGTGCCGCGAATACCACAGAATGCAACAACGAGGTCGTGCGCGACCAAGAATTCCGACGTATTCCCGGACGTCCGCAAAATTCCATACCGAGCATCCCACACAGCCTGCCTCCGTATAAACCGATGTAGAAGCATTAAGTTCAGTGCGACCAGTTCTCTACTGGGGTCAGTGACCTGTCTGGGACTCTCCGAGCTCCCATAATAATTTCACCAATCTCTTCTGACTTGCAACCACTCTGGACAGTAGCTGAGCCAGCTTATTAGGTGCGATCTAACCTGGAAGGGTACTCCATGTGATATCCTACTCTAATTCAGGTTGGAGAGGGAATCTGGCGCTGCTCTTTTGTGCGCTCGTGGTGGACGGTCTTTAGACTATGTGCCTTATTCCGGGTGAAGACCCAGGGAAAAAACTAGGGCACGTGAGGGACCGCGAGGACCGTTATATACACACATAGGGGGAGCTGCTTATGGTAGTCCGCGATGTAAAGTTTCCGGATCTGTACCGCACCGACGGAATAGGTCCCCCCCCCCCCCCCCCCCCC",
+"CCGCGGTCTTCGCGGCTTGGAGCGCCAAGAGGCAGTGTCATGATGAGCTGCCCCATAAGTTCGCTGAGCGTAGCACACAGTTCTAGCCCACCCTTGGGTTATTCCTCTGGCGTATTTGATGTATAATCCTTAATCTCGCAGGTAGTCACTGCAGTGGGCACTATCCTAATGGGGTTGGGACCCTTTTTGTAGGTAGTGCAAACGCGCTCTGTGAAGGTGTATGCTGTCGGCGATATGTATTCACGCGAGATCCTCGTGTCGGAGTGGTTTTCCGGGTCTGCAGATTTCCCTCATACTGCTTTCATTATTTTGCCTTATCACAGAATTCTGCAGCGAGTCTTGTGTTGATCTTTTGTCCTACAGTTACGTTATTAGTTTTGACGATTGAGATATTCATGACAACACGAGCCCGATCGAACGACATAAAGAGAGCCGGTCGTGCGGAGGTCTGCCCAGGGGATAACTGCTTCCCTTCTCGCCCTCTCCGCCCCCATTTGCCGTCTGTGTAGCGAATGGAATGTGCAGTCTGTGTATCCCAAATGTTTCAAGGTTCCCCGAATACCACAGAATCAACAAAGAGGTCTGCGCGACCAAGAATTCCGACGTATACCGGACGTCCGCAAAATTCCATACCGAGCATCCACACAGGCTGGCTCCGTATAAACCGATGTATAAGCATTAAGTTCAGTGCGACCAATTCTCTAATGGGGGACATACCAGTCTGGGACTTTCCCGAGCTCCCATACATCATTTCACCTATCTCGTCTGAGTTGCAACCACTCGAACAGTAGTGATTAGCTTAGTTGTGCGATCTTACCTGAATGGTACTCCATGTGTTGTCTACTCTAATTGAGCTTGGAGCGGGAACGGCGCTGCTGCTTTTCGGCGCCGGGGTGGGAACGGTCTTTAGACTAATGTGCCTTAATCCGGAGGGAGACCCAGGGAAAACAACTAAGGACGTGTGGACTGGAGACCGTTAATACCAATAGGGGGTGGACAGACATCCTCAGCTGCTTGGGACAGACTTTACAAAGGATTATTTTGCTCCGCGCCGACGCAAGCCGGGGGGGGGGGGGGGGGGGGG"
+"GCCACACGGTGCCTGATCCCGTCGGACCCCGACTGAGTCTTAACATTCACGACAACGGCGCCTAGGTCGGGACTGTGAAACCTTAAGTCCTGAAACAGCCTCGCTGACATATACCCACCAGGCATTCCCTCCTCTTGCACACGTGAACTAGGTATTGACCTATGCGTTACGGACTATACGTCGCTGGAAAACAATCGCTCAAAGTCACATCCTTACGATACGCGAACTTGCGTCGTTCGCGGCTGGCGATCCCGAAGGGGACTTGCTCAGCCCGGTGGTTGGGACATCACCGGTTATTTCCCTATAGCTCCAACTTCACGAGACATTCACGCCCAGCTCAGCGTAGTGGCGCCGGTCACGCTAGGTTGGCACGAAGGAGCGAAAGGGAAACGCACCTTCTGTAAGTTCTCGGGGAGATTTCCTCAAGAAGCTGGTAAATGTGTTGAGTAAGGGTAATCTAGTAGAATTATACGTGGCTAAAAGGTCACTGCCGATTGCGGCCTAACGGGCTTTTGGTACGTGGAGGGCTGTTCCTGTGCGCCAAACACATTGGCATTGTTACGTAGAATATGCTGTTCAATACCCTGTCCGCGCTTAAATCCGGTATCTCGAGTGCTGAGTTGTTGTCAGAGACGTGGTCGTCCTTTTATACATCCCGCGGCAAAGTTAGAAGGAGTGTAGGCGTGCGATCGGCATTATCGGAGGGAGTTGTCTGCTACCGCGAGCTTTTGCGGCGAGCGTTCGCGCTGCAATACCTTGCCGTTCTATGCTAAGCATTTAGTTTGAAGCAAAAAGTACGCAGTAAACGCGTCCATCCGATGTGCGGATGAGAAGTAACTGTATTAGAGGACATGTTTACGTAAATGATTGTACTGTCTCTGGGCCTATGATAAGAGAGGTAGCTCTGTTCCCACATGCAATTTACAGCAGTTCACAAATCTTCAATGGAAGTTCAAATAAATGTAGTATTTGGTGACCAGAATTGATCGTAGATATCAAGTCCCGCTAGTATGGAGGAGGGAAGGGCACTTAAGGCCAGTCTTCGATCCAACCCATATCTTCTGCCCCCCCCCCCCCCCCCCCC",
+"GCCACACGGGCCTGAACCACCGTCGCACGCCATTGAAGTCTTAACTATCACGACAACGCGGCCTAGGTTGAGACTGTGACATCCTTTAAGTCCTGAAACAGACTCGCTGACATTACCCACCAGGTCATTTCGCTCCTCTTACACAACTGAACTAGGTATTACCATGGAGTTATCGGACTATACGTCGCTGGTAACAAGCGCTCAAGTCACATCCTTCGCGGATCGTTCGAACTAGGGCGTCGCGGCTGAGCGATCCCGAAGGGGACTTTACATCAGCCCGGTCGGTTGGGACGATCACCGCGTTATTTTCGTATAACTCAGACGTCACGAGACATCCCGCCCACTTCAGGTAGTGGCGCCGTCACGCTAAGGTTAGCACGAGAGAGCAGAAAGGGAAACGCACCTCTGTAAGTTCTCGGTGACATTTTTCTCACGAAGTGTTAATATGTGAGTAAGGGTAGTCTAGTAGAATTATACCGTGGCTAAAAGGTCACTGCCGATTGCAGCTAACGGGCTATTGGTTCATTGGAGGGCTGTTACCTGACCGCCAGATAGTTGGCATTGTCACGAGGAATCAGCTTTTCAATACCTCGTCCGTTGCTTAAATCCAGCTATCTCGAGCTTGCGAGTCTGTGCAGCAGACTTGGTCGTCCTTTTATACATACGCTGCAAAGTTAGGAATGAGTGCTAGCGTGCGATCGGAATTATCGGAGGCGATTGTCTGCTCCCGCGAACTTTTGCCGCGAGGTTCGGCTGTAATACCTCGCCGTTACTATGCTAAGCATTGAGTTTGAAGCAACAAGTACACAGTAAACACGCCCTCGATGATGCCGGATGAGAAGACTGTATTAGGGACATGTTTACCGTCAATGATGTACTGTCTCTAAGGCCGATGAAAAGCAGAGGAGCTCTGATTCTCACATGCAATTTACTGCAGTTCAAAAATCTTCAATCGAAGTTCAAATAAATGTCAGCTTTGTGACAGAATTGATTGATAGATTCTTAACCCATCTGGCTAAATGAGGCATCTGTCACACATAAAGGACCGCTCCTCCAATTTAGAGGGGGGGGGGGGGGGGGGGGG"
+"AGCAAACTTCATTCTCGCGACATATGTCTCTGTGTTACGGATTCTCGTCTCATTTCCACTTAACGGAGTACTCTGACAATTCAGCGTAAATCGCCCGCAGGCGGACTCGCGCTCTTCCATCCGTAGCGCACCTTATGCTCGAAAAATGGTAGCGTCAATGTTGAGATTTCCATGCGGAACAGTTAATTGTTAGAGTACTTCCTTTCTGAAACAGTAGCTATCCCCCGACACTCATCTTCAACGTGATTTCCACAATACACAATGGATTCTCGCGGCGAGGTACCTAAGGTATTGAGTTACAGAAATGTTATTGTCGGATGCGCTTTTTCCGAGTGTCATATATGAATAGTGGTCGATATGCGTAGCTCGCTCCGGGCCATTAGTGCTGTGTCTTGGAGAGCAAGCAAACCCTTAAACTTTATCGACTCGAGGAGTGTTTTCTATCGCATACCAACAGAGTGATGCCTACGCGACCTCGGTATGGTCTAAGGCCCGAATATGTCTGTTATCGGGGTCTCGCTTATGCATCAGCTGCGTCCGGCACAGTTATCACGCTCACGATTGTTCCTGGCGTAAATGATGCCGAGTTGCCAGAAGCATGTAGCCAGAAATACACTTTCTACGTTACTATGTGTCTCGAGAAGGTGGTCCTAGTGTAGGCAGATGGATAAGTATCCCGTAGAGAACTTTCACTCCACTTCGATGCCCGCTCGGATCTAGTCAGGTAGGGGCTCGATCCGTGGCTATGGTGAGCCGGATGCTTTCCTCACCTCTAATGTAACGGCCGGATAGTTGCCGCGCGGCGAGTTACCGCGATACTTTGTAAAGATTTGGAACTATTATTCCGCTCCAGAATAACCCCTTGTGGGTCCGTTACGCCTCTGCAATCAAGGCAACTTATTCAATCGATATGTATCTATATGGGATGCCCGTCGGACCTACGATCCCAGAGGCAGCCAATAGGGACGGTTGTGAACAAGTGCTCGATAGGTTAGCATCAAAGCAACCCTCAACGGGACCACCCCGAGAAGCGTGAGTCATCGCTGACTCGCATATACACGTGACCCCCCCCCCCCCCCCCCCC",
+"AGCAAACTTCTTCTCGCGACATAAGTCTCTGCGTACACGCGATTCACGCTCATTTCAACTAAACGGGACTTGACAATTCATCGTAAATCGCCCGCAGTCGGACTACATGCTCCTCCCACCCGTGGCGCCGTATGGTCGAAAAATGGTAGCGTCAATGATGAGACTTCCATGCGGAACAGTTAATTGTTAGAGTGCTTCCTTCTTCAACAGTCAGCTGTACCCCCGACACTCATCTCCAAGTGATTTCCACAATACCCCAATCGATTTCTCGCGGCGAGGACCTAAGTATTGAGTTACAGAGAATGATATTGTCCGATGCGCTTTTTCCGAGTGTCATATATACATAGTGGTCGATATGCTTAGCTCGCTCCGGGTCATAGTGCTAGTGTCTATAGAGCAAGCAAGCCCTTAAACTTATCGATCCAAGGAGTGTTTTCTATCGCATACGACAGAGTGATGCCTCACGCGCCTCGAGTATCGTCTAAAGCCCGAAATGTTGTTTCTGGTCCGACTTTATGGACGAGCTGCGTCCGGAAGTTTTGACGGTCACCGATTGTTCTGGTGTAAATTGATGCCGATTGCCAGACGCATGTATGCTAGAAATAGCCTTCATACGTTACTATGTGCTCTCGAGAAGGGGAGTCTAGTATAGGCAGTACGGATCAGTATCCGTATAGAACTTTCACTCGACTTCATGCCAGCTCGAACTATCGAGTAGAGGCTCGAGCCGTGGCATGGAGAGCCGGATGCTTCTCACCTCTAATATAACGGTCTGGATAGTTGCCGCGCGCGAGTTAACGCGATACTTTGTAGTAGATTTGGAATATTATTCCGCTCCAGAGAATCACCCTTGTGGTCCGATTACGCCTTGCAATCAAGCCAAGCTTATTCAATCGATATGTATCAATATGGGTATGCCCGTGGACGTACGATCCCAGAGGCCGCCAATAGAGGACGTTGTGAACCATGTGCTCGATAGGTTAGCATTGGGGACACGGGATTTGTATATATGAGATGAATTAGGCAGAAAGGTAGACTGAGCTAAGTGAGCGCTCGATCGCGAAGGGGGGGGGGGGGGGGGGGG"
+"AACCAGAAGTTTCAAAGCCAGTGCCTGGGCCGTACATCAAGCCATTGATGGCTGTAGGGATAGGTTATTGGGTTCCCCCTTCGACCGGAGCGGGCGCGAGAAGCTTGTTTCACCTTGGAGGCTCAAGTACGACACTCATTGTCGGTTCCGATCAGTCTACCTCCCGCAAGATCTGCTCCGATATCTCAACTCATTCATTGACTTTGATGGGCGCTGCAAGAGGTGTTAAGAAATCGGATTACGCGTTCATTGGTAGAAAGTCCTTCGTATCTAATGTGAAAGGACACCTGCGCCTCACGTGCGGCCGCTGGTCGCATGATGTACGCCCTTCAGATAGTAGATCAACAAGATCGCCACAGGGGATTACCAAACCTAGTAGGAGGTCTTGCGTCGATCTTCATTCGATTAACATGGCGTCCTCAGAGCGTTCGGCGGATAAAGAAAGCGCAGAGTAAGTGTATCGTGCTGACGCTAGTTTCCGTTCTCATCTTCGCCGACGCAGGAGTCTTGAGGGAAGCCCCCCTTCGTCGGTGTGTGTTACCAGCCTGACGTCTAAAGAGGGAATCCCAAATCTATTCGAATCATTTAAGCACAACCCAATTGAGCAAATTGGCTGGGTGTCGCTAGGTTATGCCAACTTTGAGCTGCATCCCGTACTCAAAGGTCTTAATGTCGTAGACATGGACGTAGTGTCCACTCACTAAGCCCGCGCTGGGCTATCTACGAGTACTGGCAGGCTTTTGATGGTATAAAGGAGGACCTGTAAAACTTATGTGATGGGAAAAACCTATGCGAAATTGGAGATCGGCGCAGAGTCACTTGTCCCTGATGAATCACGAGAAGCTGGGGCTCTAAGAGCATTTCTGCGGCGAGTGTGTTCTGAACGCGGTAAATCCCGCCCTAACAGGGCCGCGACCACTCGCAGCGTAAAACAACTATGGGCTGGGCCCAAGCAGCCCTCCCGAATCCTTGGTCAATGAGCTGTCATGCACAGATGCATGAGGCCGGAGGTAGGGACGTACTCAGGATCGTCGATCCTCAATCGTACGAGCGTGCCTGTAAGGCCCCCCCCCCCCCCCCCCCC",
+"AAACAGGACTTTAAAAGCCAGTGCCTGGGCAGTACATCAAGCCATCAAAGGCTGTAGTGAAGGTTATTGGGTTCCCCCTTCGACCGGAGCGGCGCGATGAAGCTTGTTTCACCTTGGAGGCCTAAGTGCGACCTCGATTGTCGGTATCCACTAGACTACTCACGCGATATCTGCTCCGATATGCTTAACCCATTCATTGACTTTGATGGGGCGTGCCAGGGGACTTAAGAAATCGGAGTACGCGTTCGTTTGGTGGGAAGTCTATCCGTATCAACGTTAAAGGACACCTGCGCCTCGCGTGGGGCCGCTGGTCGATGATGTACGCCCTTCGATAGAATGAACAAATCGCCACAGGGGATTACCGAACCTAGTAGGGGGGTCTTGCGTCGATCGTCATTCGATTAACATGGCGTCCTCAGAGCGTTCGGCGGACGAAAAAAGCGCAAAGAAGTGTATCGTGCTGCCGCTAGTTCCGTCTCATCTTGACCGAGCAGGAGTCTTGAGGGAAGCCCCCCTTCGTGGTTGTGTTCCCAAGCCTGAACGTTTAAGAGCGAATCCCAAACTATTCGAATCATTTAACCACAACCCAATTAGCAAACATGGCTGGGTGTCGCTGGGTTTATTCCAACATAGCTGAATTCGTATCTCAAGGGTCTTACGTCGTAGACGTGGACGTAGTTGGTCTCCCTCACTAACCCCAGCGCTGGGCTATCGAGCGTATGTAGCTCTTATGTGGCATAAAGGAGGAAGCTGTAAAACTTAATGTGATGGCAAAAAACTATCCGAACTGGAGATCGGCGCAAGAGTCACTTGACCCGATAGAATCACGTAGAAGCTGGGCTCTTAAGCTGCAGTTCTGCGGCGAGCGTGTTCTGAACCCGGTAAATCCCGCCCTAACAGGCCGCGACCACTTGCATCGTAAAACAACTATTGCTGGGCCAAGCGCCCTCGCCGATGCTTGGTCAAGTGAAGTCTGTCATACACAGAGGATAAGTCCTCCGATTATCGTTACTGTTAAGCATCGGAGTGTGCCACAGTATCAGCTATGTGCCGCTTTTATATCTGGGGGGGGGGGGGGGGGGGG"
+"CGTAGCTGGTTCCAAGACAGGTAAACTTCAAGAATATGTCTGCTTCGCCCCTACCGAGCTAATGCTAAATGTCTGTGTTCGGCTAATCCGCACTACCGAGCGTGCGAATAAATGCGCAAAACCACATTGCATCCGCAATGATTACAGATTGCTCGTACTTTTCACCCCCCCCCCCCCCCCCCCC",
+"CGTAGCTGGTTCCAAGAATTCGTAAAACACTTCAGAATCATGGTCTCTACGCCCTACCGGGCTAATCTAAATGTCTCTTTTCGGCTATGTCCGCACTAACGCTGTGGCGATGGATTTGGTGTACAGGATCCTCACGTGAAAAATGGGTTCGTACTTGAGAACCTGGGGGGGGGGGGGGGGGGGG"
+"ATTCATAGTTTGTTCCCCACGTATGAACTGTCTTGCTCAACATACCGCATAAGCAGGTTGTCCCTTGAAGTTTTAAGTATTTCCGTATATGGGACACTAGTAGGAAATTGCCTGACCAGTCTCCCAGCTCTGAGGGCGAGCCCAACCGTCACAGAGTTACTCCTCCCCCCCCCCCCCCCCCCCC",
+"ATGTCATAGTTTGTTCCCCACCTATGACTCTCCTTGCTCAGTATATCGCATAACAGGTTCGGCCCGTTGAAGTACGAATATTTACTATATGGGACAAAGGGTGAATGCCGCAGCTGGGCCAATCGCTCCCAAAGTGATCTGGTACGGCTCCTGCTAGTTGCCCCGGGGGGGGGGGGGGGGGGGG"
+"CTACTTTGATTCCTGGAGCTCTCGTAGGCCTTCATACCTTGAGCGTTGGTAAAGTTATTTACCGGGACGGACCG",
+"GCATACCTTTGAAATTGCCACTTTGGGACGTATTGGCCTCAATGAGTCCCAGGCGAGACCCACTAGAGGCAGTG"
 #endif
 /* for debugging */
 unittest(with_seq_pair(
-"CCGCGTCTTCGCGGGCTTGGATCGCCAAGAGGCGTGTCCATGTTGAGCTGCTCCATAAGGGCGCGCGACTAGCCCACAGTTCTGCCCACCCCTGGGTTATTGCTGGCGTTCTGAATGTATAATGCTTAATCTCGCAGGGCCAACTGCAGAGGGCACTATCCTAATGGCGGTTGGTACCCTTTTTGTAGGTAGTGCAAACGCTTATTGAAGGTGAAAGTGTCGGGCTATATGCATTCGGGGAGATCCTCGTTCGGAGTGGTTTTCCGGGTCTGAAGAATCTCCCTATACCGACTTTCATTATTATCCTTATCACAGAGATTTGCAGCAAGTCTTGAGTTCGATCTATTGTCCGATATTTACCCTTTTAGATTTTGACGATTGAAGAGATTCCTTACAACAGTAGCCCGATCACACGACATAAAGAGATCCGAGTCGTGCGAGGTCGCCCTACGGATAACTGCTTCCATTCTCGCCCTCTCCGCCCCCATTTGCCGCTGTGGGAGCGAATTAGTAGTGTCGTCTGGGTATCCCAAATGTCTCAAGGTGCCGCGAATACCACAGAATGCAACAACGAGGTCGTGCGCGACCAAGAATTCCGACGTATTCCCGGACGTCCGCAAAATTCCATACCGAGCATCCCACACAGCCTGCCTCCGTATAAACCGATGTAGAAGCATTAAGTTCAGTGCGACCAGTTCTCTACTGGGGTCAGTGACCTGTCTGGGACTCTCCGAGCTCCCATAATAATTTCACCAATCTCTTCTGACTTGCAACCACTCTGGACAGTAGCTGAGCCAGCTTATTAGGTGCGATCTAACCTGGAAGGGTACTCCATGTGATATCCTACTCTAATTCAGGTTGGAGAGGGAATCTGGCGCTGCTCTTTTGTGCGCTCGTGGTGGACGGTCTTTAGACTATGTGCCTTATTCCGGGTGAAGACCCAGGGAAAAAACTAGGGCACGTGAGGGACCGCGAGGACCGTTATATACACACATAGGGGGAGCTGCTTATGGTAGTCCGCGATGTAAAGTTTCCGGATCTGTACCGCACCGACGGAATAGGTCCCCCCCCCCCCCCCCCCCCC",
-"CCGCGGTCTTCGCGGCTTGGAGCGCCAAGAGGCAGTGTCATGATGAGCTGCCCCATAAGTTCGCTGAGCGTAGCACACAGTTCTAGCCCACCCTTGGGTTATTCCTCTGGCGTATTTGATGTATAATCCTTAATCTCGCAGGTAGTCACTGCAGTGGGCACTATCCTAATGGGGTTGGGACCCTTTTTGTAGGTAGTGCAAACGCGCTCTGTGAAGGTGTATGCTGTCGGCGATATGTATTCACGCGAGATCCTCGTGTCGGAGTGGTTTTCCGGGTCTGCAGATTTCCCTCATACTGCTTTCATTATTTTGCCTTATCACAGAATTCTGCAGCGAGTCTTGTGTTGATCTTTTGTCCTACAGTTACGTTATTAGTTTTGACGATTGAGATATTCATGACAACACGAGCCCGATCGAACGACATAAAGAGAGCCGGTCGTGCGGAGGTCTGCCCAGGGGATAACTGCTTCCCTTCTCGCCCTCTCCGCCCCCATTTGCCGTCTGTGTAGCGAATGGAATGTGCAGTCTGTGTATCCCAAATGTTTCAAGGTTCCCCGAATACCACAGAATCAACAAAGAGGTCTGCGCGACCAAGAATTCCGACGTATACCGGACGTCCGCAAAATTCCATACCGAGCATCCACACAGGCTGGCTCCGTATAAACCGATGTATAAGCATTAAGTTCAGTGCGACCAATTCTCTAATGGGGGACATACCAGTCTGGGACTTTCCCGAGCTCCCATACATCATTTCACCTATCTCGTCTGAGTTGCAACCACTCGAACAGTAGTGATTAGCTTAGTTGTGCGATCTTACCTGAATGGTACTCCATGTGTTGTCTACTCTAATTGAGCTTGGAGCGGGAACGGCGCTGCTGCTTTTCGGCGCCGGGGTGGGAACGGTCTTTAGACTAATGTGCCTTAATCCGGAGGGAGACCCAGGGAAAACAACTAAGGACGTGTGGACTGGAGACCGTTAATACCAATAGGGGGTGGACAGACATCCTCAGCTGCTTGGGACAGACTTTACAAAGGATTATTTTGCTCCGCGCCGACGCAAGCCGGGGGGGGGGGGGGGGGGGGG"))
+"CTGCGCGAGTCTGCCATGAAATCGAGCTTACAATCCCGATCTTCTCAGCCCTATTGCGGATAGTAGTATATTCA",
+"ACGTGCGCGGTGGTTGCTCTTCTGGACGCGTTCGACACGTATTACGAAGTCCTTACCGCTATAAATCACAACGC"))
 {
 	omajinai();
 	struct gaba_score_s const *p = c->params.score_matrix;
@@ -5624,9 +5863,8 @@ unittest(with_seq_pair(
 	/* check scores */
 	assert(r->score == n.score, "f->max(%lld), r->score(%lld), n.score(%d)",
 		f->max, r->score, n.score);
-	assert(check_path(r, n.path), "\n%s\n%s",
-		format_string_pair_diff(a, b),
-		format_string_pair_diff(decode_path(r), n.path));
+	assert(check_path(r, n.path), "\n%s\n%s\n%s",
+		a, b, format_string_pair_diff(decode_path(r), n.path));
 
 	debug("score(%lld, %d), alen(%lld), blen(%lld)\n%s",
 		r->score, n.score, n.alen, n.blen,
