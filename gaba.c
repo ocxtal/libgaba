@@ -3246,26 +3246,38 @@ struct gaba_result_s *trace_concatenate_path(
 	res->score = fw_tail->max + rv_tail->max + score_adj;
 
 	/* store section pointer and section length */
+	uint32_t sflen = this->w.l.tail_sec_idx - this->w.l.fw_sec_idx;
+	uint32_t srlen = this->w.l.rv_sec_idx;
 	res->sec = this->w.l.sec;
-	res->slen = this->w.l.rv_sec_idx + (this->w.l.tail_sec_idx - this->w.l.fw_sec_idx);
+	res->slen = sflen + srlen;
+	// res->slen = this->w.l.rv_sec_idx + (this->w.l.tail_sec_idx - this->w.l.fw_sec_idx);
 	// res->reserved = this->head_margin;		/* use reserved */
 
 	/* load section pointers */
-	struct gaba_path_section_s *fw_sec = this->w.l.sec + this->w.l.fw_sec_idx;
-	struct gaba_path_section_s *rv_sec = this->w.l.sec + this->w.l.rv_sec_idx;
+	struct gaba_path_section_s *fw_sec = this->w.l.sec + this->w.l.fw_sec_idx + 1;
+	struct gaba_path_section_s *rv_sec = this->w.l.sec + this->w.l.rv_sec_idx - 1;
 	struct gaba_path_section_s *tail_sec = this->w.l.sec + this->w.l.tail_sec_idx;
 	
 	/* load base path pos */
 	uint32_t ppos = this->w.l.pspos;
 
-	/* copy forward section */
-	while(fw_sec < tail_sec) {
-		*rv_sec = *++fw_sec;
+	debug("sflen(%u), srlen(%u)");
+	if(sflen > 0 && srlen > 0 && fw_sec->apos != 0 && fw_sec->bpos != 0) {
+		debug("apos(%u), bpos(%u)", sflen, srlen, fw_sec->apos, fw_sec->bpos);
 
-		/* update pos */
-		rv_sec++->ppos = ppos;
+		/* merge the root sections */
+		rv_sec->alen += fw_sec->alen;
+		rv_sec->blen += fw_sec->blen;
+		rv_sec->plen += fw_sec->plen;
 		ppos += fw_sec->plen;
-		debug("copy forward section, ppos(%u)", ppos);
+		fw_sec++; res->slen--;
+	}
+
+	/* copy forward section */
+	while(fw_sec <= tail_sec) {
+		*++rv_sec = *fw_sec;
+		rv_sec->ppos = ppos;
+		ppos += fw_sec++->plen;
 	}
 
 	/* push forward path and update rem */
@@ -5024,6 +5036,41 @@ unittest(with_seq_pair("ACGTACGTACGT", "ACGTACGTACGT"))
 	assert(check_section(r->sec[1], s->arsec, 0, 12, s->brsec, 0, 12, 24, 24), print_section(r->sec[1]));
 	assert(check_section(r->sec[2], s->afsec, 0, 12, s->bfsec, 0, 12, 48, 24), print_section(r->sec[2]));
 	assert(check_section(r->sec[3], s->afsec, 0, 12, s->bfsec, 0, 12, 72, 24), print_section(r->sec[3]));
+
+	gaba_dp_clean(d);
+}
+
+/* concatenate */
+unittest(with_seq_pair("ACGTACGTACGT", "ACGTACGTACGT"))
+{
+	omajinai();
+
+	/* fill forward root section */
+	struct gaba_fill_s *f1 = gaba_dp_fill_root(d, &s->afsec, 6, &s->bfsec, 6);
+	assert(f1->status == 0x1ff, "%x", f1->status);
+	assert(check_tail(f1, 0, 0, -19, 1), print_tail(f1));
+
+	/* fill tail section */
+	f1 = gaba_dp_fill(d, f1, &s->aftail, &s->bftail);
+	assert(f1->status == 0x1ff, "%x", f1->status);
+	assert(check_tail(f1, 12, 21, 21, 2), print_tail(f1));
+
+	/* fill forward root section */
+	struct gaba_fill_s *f2 = gaba_dp_fill_root(d, &s->arsec, 6, &s->brsec, 6);
+	assert(f2->status == 0x1ff, "%x", f2->status);
+	assert(check_tail(f2, 0, 0, -19, 1), print_tail(f2));
+
+	/* fill tail section */
+	f2 = gaba_dp_fill(d, f2, &s->artail, &s->brtail);
+	assert(f2->status == 0x1ff, "%x", f2->status);
+	assert(check_tail(f2, 12, 21, 21, 2), print_tail(f2));
+
+	/* fw-rv */
+	struct gaba_result_s *r = gaba_dp_trace(d, f1, f2, NULL);
+	assert(check_result(r, 24, 24, 8, 1), print_result(r));
+	assert(check_path(r, "DRDRDRDRDRDRDRDRDRDRDRDR"), print_path(r));
+	assert(check_cigar(r, "12M"), print_path(r));
+	assert(check_section(r->sec[0], s->afsec, 0, 12, s->bfsec, 0, 12, 0, 24), print_section(r->sec[0]));
 
 	gaba_dp_clean(d);
 }
