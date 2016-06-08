@@ -469,7 +469,7 @@ _static_assert((int32_t)TERM == (int32_t)GABA_STATUS_TERM);
 /**
  * coordinate conversion macros
  */
-#define _rev(pos, len)				( (len) + (uint64_t)(len) - (uint64_t)(pos) )
+#define _rev(pos, len)				( (len) + (uint64_t)(len) - (uint64_t)(pos) - 1 )
 #define _roundup(x, base)			( ((x) + (base) - 1) & ~((base) - 1) )
 
 /**
@@ -717,7 +717,7 @@ void fill_load_seq_a(
 			vec_t const mask = _set(0x03);
 
 			/* forward fetch: 2 * alen - pos */
-			vec_t a = _loadu(_rev(pos, this->w.r.alim));
+			vec_t a = _loadu(_rev(pos, this->w.r.alim) - (len - 1));
 			_storeu(_rd_bufa(this, BW, len), _xor(a, mask));
 		}
 	#else /* BIT == 4 */
@@ -725,8 +725,6 @@ void fill_load_seq_a(
 			debug("reverse fetch a: pos(%p), len(%llu)", pos, len);
 			/* reverse fetch: 2 * alen - (2 * alen - pos) + (len - 32) */
 			vec_t a = _loadu(pos + (len - BW));
-			_print(a);
-			_print(_swap(a));
 			_storeu(_rd_bufa(this, BW, len), _swap(a));
 		} else {
 			debug("forward fetch a: pos(%p), len(%llu)", pos, len);
@@ -738,8 +736,8 @@ void fill_load_seq_a(
 			vec_t const cv = _bc_v16i8(_load_v16i8(comp));
 
 			/* forward fetch: 2 * alen - pos */
-			vec_t a = _loadu(_rev(pos, this->w.r.alim));
-			_storeu(_rd_bufa(this, BW, len), _shuf(a, cv));
+			vec_t a = _loadu(_rev(pos, this->w.r.alim) - (len - 1));
+			_storeu(_rd_bufa(this, BW, len), _shuf(cv, a));
 		}
 	#endif
 	return;
@@ -766,9 +764,7 @@ void fill_load_seq_b(
 			vec_t const mask = _set(0x03);
 
 			/* reverse fetch: 2 * blen - pos + (len - 32) */
-			vec_t b = _loadu(_rev(pos, this->w.r.blim) + (len - BW));
-			_print(b);
-			_print(_shl(_swap(b), 2));
+			vec_t b = _loadu(_rev(pos, this->w.r.blim) - (BW - 1));
 			_storeu(_rd_bufb(this, BW, len), _shl(_swap(_xor(b, mask)), 2));
 		}
 	#else /* BIT == 4 */
@@ -787,8 +783,8 @@ void fill_load_seq_b(
 			vec_t const cv = _bc_v16i8(_load_v16i8(comp));
 
 			/* reverse fetch: 2 * blen - pos + (len - 32) */
-			vec_t b = _loadu(_rev(pos, this->w.r.blim) + (len - BW));
-			_storeu(_rd_bufb(this, BW, len), _shuf(_swap(b), cv));
+			vec_t b = _loadu(_rev(pos, this->w.r.blim) - (BW - 1));
+			_storeu(_rd_bufb(this, BW, len), _shuf(cv, _swap(b)));
 		}
 	#endif
 	return;
@@ -4322,10 +4318,10 @@ void *unittest_build_seqs(void *params)
 		.bftail = gaba_build_section(6, cb + blen, 20),
 
 		/* reverse */
-		.arsec = gaba_build_section(1, _rev(ca + alen, alim), alen),
-		.artail = gaba_build_section(3, _rev(ca + atot, alim), 20),
-		.brsec = gaba_build_section(5, _rev(cb + blen, blim), blen),
-		.brtail = gaba_build_section(7, _rev(cb + btot, blim), 20)
+		.arsec = gaba_build_section(1, _rev(ca + alen - 1, alim), alen),
+		.artail = gaba_build_section(3, _rev(ca + atot - 1, alim), 20),
+		.brsec = gaba_build_section(5, _rev(cb + blen - 1, blim), blen),
+		.brtail = gaba_build_section(7, _rev(cb + btot - 1, blim), 20)
 	};
 	return((void *)sec);
 }
@@ -4593,6 +4589,39 @@ unittest(with_seq_pair("A", "A"))
 	gaba_dp_clean(d);
 }
 
+/* reverse fetch */
+unittest(with_seq_pair("A", "A"))
+{
+	omajinai();
+
+	/* fill root section */
+	struct gaba_fill_s *f = gaba_dp_fill_root(d, &s->arsec, 0, &s->brsec, 0);
+	assert(f->status == 0x1ff, "%x", f->status);
+	assert(check_tail(f, 0, 0, -29, 1), print_tail(f));
+
+	/* fill again */
+	f = gaba_dp_fill(d, f, &s->arsec, &s->brsec);
+	assert(f->status == 0x1ff, "%x", f->status);
+	assert(check_tail(f, 0, 0, -27, 2), print_tail(f));
+
+	/* fill tail section */
+	f = gaba_dp_fill(d, f, &s->artail, &s->brtail);
+	assert(f->status == 0x1ff, "%x", f->status);
+	assert(check_tail(f, 4, 13, 13, 3), print_tail(f));
+
+	/* fill tail section again */
+	f = gaba_dp_fill(d, f, &s->artail, &s->brtail);
+	#if MODEL == LINEAR
+		assert(f->status == 0x1ff, "%x", f->status);
+		assert(check_tail(f, 4, 40, 53, 4), print_tail(f));
+	#else
+		assert(f->status == 0x10f, "%x", f->status);
+		assert(check_tail(f, 4, 31, 44, 4), print_tail(f));
+	#endif
+
+	gaba_dp_clean(d);
+}
+
 /* with longer sequences */
 unittest(with_seq_pair("ACGTACGTACGT", "ACGTACGTACGT"))
 {
@@ -4615,6 +4644,39 @@ unittest(with_seq_pair("ACGTACGTACGT", "ACGTACGTACGT"))
 
 	/* fill tail section again */
 	f = gaba_dp_fill(d, f, &s->aftail, &s->bftail);
+	#if MODEL == LINEAR
+		assert(f->status == 0x1ff, "%x", f->status);
+		assert(check_tail(f, 48, 40, 97, 4), print_tail(f));
+	#else
+		assert(f->status == 0x10f, "%x", f->status);
+		assert(check_tail(f, 48, 31, 88, 4), print_tail(f));
+	#endif
+
+	gaba_dp_clean(d);
+}
+
+/* reverse fetch */
+unittest(with_seq_pair("ACGTACGTACGT", "ACGTACGTACGT"))
+{
+	omajinai();
+
+	/* fill root section */
+	struct gaba_fill_s *f = gaba_dp_fill_root(d, &s->arsec, 0, &s->brsec, 0);
+	assert(f->status == 0x1ff, "%x", f->status);
+	assert(check_tail(f, 0, 0, -7, 1), print_tail(f));
+
+	/* fill again */
+	f = gaba_dp_fill(d, f, &s->arsec, &s->brsec);
+	assert(f->status == 0x1ff, "%x", f->status);
+	assert(check_tail(f, 16, 17, 17, 2), print_tail(f));
+
+	/* fill tail section */
+	f = gaba_dp_fill(d, f, &s->artail, &s->brtail);
+	assert(f->status == 0x1ff, "%x", f->status);
+	assert(check_tail(f, 48, 40, 57, 3), print_tail(f));
+
+	/* fill tail section again */
+	f = gaba_dp_fill(d, f, &s->artail, &s->brtail);
 	#if MODEL == LINEAR
 		assert(f->status == 0x1ff, "%x", f->status);
 		assert(check_tail(f, 48, 40, 97, 4), print_tail(f));

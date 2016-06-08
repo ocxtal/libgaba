@@ -136,7 +136,7 @@ typedef struct gaba_section_s gaba_section_t;
 		.len = (_len) \
 	} \
 )
-#define gaba_rev(pos, len)		( (len) + (uint64_t)(len) - (uint64_t)(pos) )
+#define gaba_rev(pos, len)		( (len) + (uint64_t)(len) - (uint64_t)(pos) - 1 )
 
 /**
  * @type gaba_dp_t
