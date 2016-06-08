@@ -3193,12 +3193,11 @@ void trace_init_work(
 	debug("psum(%lld), path_len(%llu), sec_len(%llu)", psum, path_len, sec_len);
 
 	/* malloc pointer */
-	uint64_t path_size = sizeof(uint32_t) * path_len;
 	uint64_t sec_size = sizeof(struct gaba_path_section_s) * sec_len;
+	uint64_t path_size = sizeof(uint32_t) * path_len;
 	struct gaba_result_s *res = (struct gaba_result_s *)(gaba_dp_malloc(this,
 		  sizeof(struct gaba_result_s) + path_size + sec_size
-		+ this->head_margin + this->tail_margin) + this->head_margin
-		+ sizeof(uint64_t));
+		+ this->head_margin + this->tail_margin) + this->head_margin);
 
 	/* set section array info */
 	struct gaba_path_section_s *sec_base = (struct gaba_path_section_s *)(res + 1);
@@ -3493,10 +3492,13 @@ int64_t suffix(gaba_dp_print_cigar)(
 			int64_t a = MIN2(_parse_count_match(parse_load_uint64(p, lim - ridx)), ridx & ~0x01);
 			if(a < 64) { ridx -= a; break; }
 			ridx -= 64;
+
+			debug("bulk match");
 		}
 		int64_t m = (rsidx - ridx)>>1;
 		if(m > 0) {
 			clen += _fprintf(fp, "%lldM", m);
+			debug("match m(%lld)", m);
 		}
 		if(ridx <= 0) { break; }
 
@@ -3504,6 +3506,7 @@ int64_t suffix(gaba_dp_print_cigar)(
 		int64_t g = MIN2(_parse_count_gap(arr = parse_load_uint64(p, lim - ridx)), ridx);
 		if(g > 0) {
 			clen += _fprintf(fp, "%u%c", g, 'D' + ((char)(0ULL - (arr & 0x01)) & ('I' - 'D')));
+			debug("gap g(%lld)", g);
 		}
 		if((ridx -= g) <= 0) { break; }
 	}
@@ -3538,13 +3541,22 @@ int64_t suffix(gaba_dp_dump_cigar)(
 			debug("a(%lld), ridx(%lld), ridx&~0x01(%lld)", a, ridx, ridx & ~0x01);
 			if(a < 64) { ridx -= a; break; }
 			ridx -= 64;
+
+			debug("bulk match");
 		}
-		b += parse_dump_match_string(b, (rsidx - ridx)>>1);
+		int64_t m = (rsidx - ridx)>>1;
+		if(m > 0) {
+			b += parse_dump_match_string(b, m);
+			debug("match m(%lld)", m);
+		}
 		if(ridx <= 0 || b > blim) { break; }
 
 		uint64_t arr;
 		int64_t g = MIN2(_parse_count_gap(arr = parse_load_uint64(p, lim - ridx)), ridx);
-		b += parse_dump_gap_string(b, g, arr & 0x01);
+		if(g > 0) {
+			b += parse_dump_gap_string(b, g, arr & 0x01);
+			debug("gap g(%lld)", g);
+		}
 		if((ridx -= g) <= 0 || b > blim) { break; }
 	}
 	return(b - buf);
