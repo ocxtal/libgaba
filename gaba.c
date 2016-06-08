@@ -3385,15 +3385,6 @@ static _force_inline
 union parse_cigar_table_u parse_get_cigar_elem(
 	uint8_t i)
 {
-	#define e(_str) { \
-		.str = { \
-			[0] = (_str)[0], \
-			[1] = (_str)[1], \
-		}, \
-		.len = sizeof(_str) - 1, \
-		.adv = sizeof(_str) \
-	}
-	
 	static struct parse_cigar_table_s const conv_table[64] = {
 		{{0 }, 0, 0}, {{'1'}, 1, 2}, {{'2'}, 1, 2}, {{'3'}, 1, 2},
 		{{'4'}, 1, 2}, {{'5'}, 1, 2}, {{'6'}, 1, 2}, {{'7'}, 1, 2},
@@ -3413,8 +3404,6 @@ union parse_cigar_table_u parse_get_cigar_elem(
 		{{'6', '0'}, 2, 3}, {{'6', '1'}, 2, 3}, {{'6', '2'}, 2, 3}, {{'6', '3'}, 2, 3}
 	};
 	return((union parse_cigar_table_u){ .table = conv_table[i] });
-
-	#undef e
 }
 
 /**
