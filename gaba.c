@@ -84,7 +84,7 @@
 
 #define MIN_BULK_BLOCKS				( 32 )
 #define MEM_ALIGN_SIZE				( 32 )		/* 32byte aligned for AVX2 environments */
-#define MEM_INIT_SIZE				( (uint64_t)32 * 1024 * 1024 )
+#define MEM_INIT_SIZE				( (uint64_t)256 * 1024 * 1024 )
 #define MEM_MARGIN_SIZE				( 2048 )
 #define PSUM_BASE					( 1 )
 
@@ -361,16 +361,31 @@ struct gaba_score_vec_s {
 	int8_t v3[16];
 	int8_t v4[16];
 	int8_t v5[16];
-
-	#if 0
-	int8_t adjh[16];			/** (16) */
-	int8_t adjv[16];			/** (16) */
-	int8_t ofsh[16];			/** (16) */
-	int8_t ofsv[16];			/** (16) */
-	int8_t sb[16];				/** (16) substitution matrix (or mismatch matrix) */
-	#endif
 };
 _static_assert(sizeof(struct gaba_score_vec_s) == 80);
+
+/**
+ * @struct gaba_mem_block_s
+ */
+struct gaba_mem_block_s {
+	struct gaba_mem_block_s *next;
+	struct gaba_mem_block_s *prev;
+	uint64_t size;
+	uint64_t pad;
+};
+_static_assert(sizeof(struct gaba_mem_block_s) == 32);
+
+/**
+ * @struct gaba_stack_s
+ * @brief save stack pointer
+ */
+struct gaba_stack_s {
+	struct gaba_mem_block_s *mem;
+	uint8_t *stack_top;
+	uint8_t *stack_end;
+	uint64_t pad;
+};
+_static_assert(sizeof(struct gaba_stack_s) == 32);
 
 /**
  * @struct gaba_dp_context_s
@@ -380,7 +395,9 @@ _static_assert(sizeof(struct gaba_score_vec_s) == 80);
  */
 struct gaba_dp_context_s {
 	/** API function pointers */
-	void *api[8];						/** (64) */
+	void *api[6];						/** (48) */
+	uint8_t *stack_top;					/** (8) dynamic programming matrix */
+	uint8_t *stack_end;					/** (8) the end of dp matrix */
 	/** 64, 64 */
 
 	/** individually stored on init */
@@ -395,37 +412,34 @@ struct gaba_dp_context_s {
 	/** 64byte aligned */
 	/** loaded on init */
 	struct gaba_score_vec_s scv;		/** (80) substitution matrix and gaps */
-	/** 80, 320 */
-
-	uint8_t *stack_top;					/** (8) dynamic programming matrix */
-	uint8_t *stack_end;					/** (8) the end of dp matrix */
-	/** 16, 336 */
+	/** 80, 336 */
 
 	int16_t tx;							/** (2) xdrop threshold */
-	uint16_t mem_cnt;					/** (2) */
+	uint16_t pad;						/** (2) */
 
 	/** output options */
 	int16_t head_margin;				/** (2) margin at the head of gaba_res_t */
 	int16_t tail_margin;				/** (2) margin at the tail of gaba_res_t */
 
-	#define GABA_MEM_ARRAY_SIZE		( 11 )
-	uint8_t *mem_array[GABA_MEM_ARRAY_SIZE];/** (88) */
-	/** 96, 448 */
+	/* memory management */
+	struct gaba_mem_block_s *curr_mem;	/** (8) */
+	struct gaba_mem_block_s mem;		/** (32) */
+	/** 48, 384 */
 
 	/** phantom vectors */
 	/** 64byte aligned */
 	struct gaba_phantom_block_s blk;	/** (192) */
-	/** 192, 640 */
+	/** 192, 576 */
 
 	/** 64byte aligned */
 	struct gaba_joint_tail_s tail;		/** (64) */
-	/** 64, 704 */
+	/** 64, 640 */
 };
-_static_assert(sizeof(struct gaba_dp_context_s) == 704);
+_static_assert(sizeof(struct gaba_dp_context_s) == 640);
 #define GABA_DP_CONTEXT_LOAD_OFFSET	( offsetof(struct gaba_dp_context_s, scv) )
 #define GABA_DP_CONTEXT_LOAD_SIZE	( sizeof(struct gaba_dp_context_s) - GABA_DP_CONTEXT_LOAD_OFFSET )
 _static_assert(GABA_DP_CONTEXT_LOAD_OFFSET == 256);
-_static_assert(GABA_DP_CONTEXT_LOAD_SIZE == 448);
+_static_assert(GABA_DP_CONTEXT_LOAD_SIZE == 384);
 
 /**
  * @struct gaba_context_s
@@ -433,25 +447,19 @@ _static_assert(GABA_DP_CONTEXT_LOAD_SIZE == 448);
  * @brief (API) an algorithmic context.
  *
  * @sa gaba_init, gaba_close
- * sizeof(struct gaba_context_s) = 1472
+ * sizeof(struct gaba_context_s) = 704
  */
 struct gaba_context_s {
 	/** templates */
 	/** 64byte aligned */
-	struct gaba_dp_context_s k;		/** (704) */
-	/** 704, 704 */
+	struct gaba_dp_context_s k;		/** (640) */
+	/** 640, 640 */
 
 	/** 64byte aligned */
 	struct gaba_middle_delta_s md;	/** (64) */
-	/** 64, 768 */
-
-	/** 64byte aligned */
-	struct gaba_params_s params;	/** (16) */
-	uint64_t _pad[6];				/** (48) */
-
-	/** 64, 832 */
+	/** 64, 704 */
 };
-_static_assert(sizeof(struct gaba_context_s) == 832);
+_static_assert(sizeof(struct gaba_context_s) == 704);
 
 /**
  * @enum _STATE
@@ -1012,6 +1020,7 @@ struct gaba_joint_block_s fill_create_phantom_block(
 	/* init working stack */
 	struct gaba_phantom_block_s *blk = (struct gaba_phantom_block_s *)this->stack_top;
 	struct gaba_block_s *pblk = _last_block(prev_tail);
+	debug("start stack_top(%p), stack_end(%p)", this->stack_top, this->stack_end);
 
 	/* copy phantom vectors from the previous fragment */
 	// _memcpy_blk_aa(&blk->diff, &pblk->diff, offsetof(struct gaba_phantom_block_s, sd.max));
@@ -1068,6 +1077,7 @@ struct gaba_joint_tail_s *fill_create_tail(
 	struct gaba_joint_tail_s *tail = (struct gaba_joint_tail_s *)blk;
 	this->stack_top = (void *)(tail + 1);	/* write back stack_top */
 	(blk - 1)->md = _last_block(prev_tail)->md;	/* copy middle delta pointer */
+	debug("end stack_top(%p), stack_end(%p), blocks(%lld)", this->stack_top, this->stack_end, (p + BLK - 1) / BLK);
 
 	/* update p */
 	int64_t prev_psum = prev_tail->psum;
@@ -1774,12 +1784,71 @@ static _force_inline
 uint64_t calc_max_bulk_blocks_mem(
 	struct gaba_dp_context_s const *this)
 {
+	uint64_t mem_size = this->stack_end - this->stack_top;
+	uint64_t blk_cnt = mem_size / sizeof(struct gaba_block_s);
+	debug("calc_max_block_mem, stack_top(%p), stack_end(%p), mem_size(%llu), cnt(%llu)",
+		this->stack_top, this->stack_end, mem_size, (blk_cnt > 3) ? (blk_cnt - 3) : 0);
+	return(((blk_cnt > 3) ? blk_cnt : 3) - 3);
+
+	/*
 	uint64_t const rem = sizeof(struct gaba_joint_tail_s)
 					   + 3 * sizeof(struct gaba_block_s);
 	uint64_t mem_size = this->stack_end - this->stack_top;
-	return((mem_size - rem) / sizeof(struct gaba_block_s) / BLK);
+	debug("calc_max_block_mem, stack_top(%p), stack_end(%p), mem_size(%llu), rem(%llu), cnt(%llu)",
+		this->stack_top, this->stack_end, mem_size, rem, (mem_size - rem) / sizeof(struct gaba_block_s));
+	return((mem_size - rem) / sizeof(struct gaba_block_s));
+	*/
 }
 
+/**
+ * @fn calc_min_expected_blocks_blk
+ * @brief calc min #expected blocks from block,
+ * used to determine #blocks which can be filled without seq boundary check.
+ */
+static _force_inline
+uint64_t calc_min_expected_blocks_blk(
+	struct gaba_dp_context_s const *this,
+	struct gaba_block_s const *blk)
+{
+	uint64_t p = MIN2(
+		(blk - 1)->aridx,
+		(blk - 1)->bridx);
+	return((p + p/2) / BLK);
+}
+
+/**
+ * @fn calc_max_expected_blocks_tail
+ * @brief calc max #expected blocks from block,
+ * used to determine #blocks which can be filled without mem boundary check.
+ */
+static _force_inline
+uint64_t calc_max_expected_blocks_tail(
+	struct gaba_dp_context_s const *this,
+	struct gaba_joint_tail_s const *tail)
+{
+	uint64_t p = MIN2(
+		this->w.r.alen - tail->apos,
+		this->w.r.blen - tail->bpos);
+	return((2*p + p/2) / BLK);
+}
+
+/**
+ * @fn calc_min_expected_blocks_tail
+ * @brief calc min #expected blocks from block,
+ * used to determine #blocks which can be filled without seq boundary check.
+ */
+static _force_inline
+uint64_t calc_min_expected_blocks_tail(
+	struct gaba_dp_context_s const *this,
+	struct gaba_joint_tail_s const *tail)
+{
+	uint64_t p = MIN2(
+		this->w.r.alen - tail->apos,
+		this->w.r.blen - tail->bpos);
+	return((p + p/2) / BLK);
+}
+
+#if 0
 /**
  * @fn calc_max_bulk_blocks_seq
  * @brief calculate maximum number of blocks (limited by seq bounds)
@@ -1833,6 +1902,7 @@ uint64_t calc_max_bulk_blocks_seq_p_tail(
 		this->w.r.plim - psum);
 	return(max_bulk_p / BLK);
 }
+#endif
 
 /**
  * @fn fill_mem_bounded
@@ -1845,6 +1915,10 @@ struct gaba_joint_tail_s *fill_mem_bounded(
 	uint64_t blk_cnt)
 {
 	struct gaba_joint_block_s h = fill_create_phantom_block(this, prev_tail);
+	if(h.stat != CONT) {
+		return(fill_create_tail(this, prev_tail, h.blk, h.p, h.stat));
+	}
+
 	struct gaba_joint_block_s b = fill_bulk_predetd_blocks(this, h.blk, blk_cnt);
 	return(fill_create_tail(this, prev_tail, b.blk, h.p + b.p, b.stat));
 }
@@ -1867,14 +1941,14 @@ struct gaba_joint_tail_s *fill_seq_bounded(
 	}
 
 	/* calculate block size */
-	uint64_t seq_bulk_blocks = calc_max_bulk_blocks_seq_blk(this, stat.blk);
+	uint64_t seq_bulk_blocks = calc_min_expected_blocks_blk(this, stat.blk);
 	while(seq_bulk_blocks > MIN_BULK_BLOCKS) {
 		/* bulk fill without ij-bound test */
 		psum += (stat = fill_bulk_predetd_blocks(this, stat.blk, seq_bulk_blocks)).p;
 		if(stat.stat != CONT) {
 			goto _fill_seq_bounded_finish;	/* skip cap */
 		}
-		seq_bulk_blocks = calc_max_bulk_blocks_seq_blk(this, stat.blk);
+		seq_bulk_blocks = calc_min_expected_blocks_blk(this, stat.blk);
 	}
 
 	/* bulk fill with ij-bound test */
@@ -1891,6 +1965,7 @@ _fill_seq_bounded_finish:;
 	return(fill_create_tail(this, prev_tail, stat.blk, psum, stat.stat));
 }
 
+#if 0
 /**
  * @fn fill_seq_p_bounded
  * @brief fill blocks with seq bound tests, adding head and tail
@@ -1932,6 +2007,7 @@ struct gaba_joint_tail_s *fill_seq_p_bounded(
 _fill_seq_p_bounded_finish:;
 	return(fill_create_tail(this, prev_tail, stat.blk, psum, stat.stat));
 }
+#endif
 
 /**
  * @fn fill_section_seq_bounded
@@ -1951,25 +2027,37 @@ struct gaba_joint_tail_s *fill_section_seq_bounded(
 	struct gaba_joint_tail_s *tail = _tail(prev_tail);
 
 	/* calculate block sizes */
+	// uint64_t mem_bulk_blocks = calc_max_bulk_blocks_mem(this);
+	// uint64_t seq_bulk_blocks = calc_max_bulk_blocks_seq_tail(this, tail);
 	uint64_t mem_bulk_blocks = calc_max_bulk_blocks_mem(this);
-	uint64_t seq_bulk_blocks = calc_max_bulk_blocks_seq_tail(this, tail);
+	uint64_t seq_bulk_blocks = calc_max_expected_blocks_tail(this, tail);
 
 	/* extra large bulk fill (with stack allocation) */
+	debug("mem_bulk_blocks(%llu), seq_bulk_blocks(%llu)", mem_bulk_blocks, seq_bulk_blocks);
 	while(_unlikely(mem_bulk_blocks < seq_bulk_blocks)) {
-		if(mem_bulk_blocks > MIN_BULK_BLOCKS) {
-			if((tail = fill_mem_bounded(this, tail, mem_bulk_blocks))->stat != CONT) {
+		uint64_t bulk_cnt = MIN2(
+			mem_bulk_blocks,
+			calc_min_expected_blocks_tail(this, tail));
+
+		if(bulk_cnt > MIN_BULK_BLOCKS) {
+			debug("mem bounded fill");
+			if((tail = fill_mem_bounded(this, tail, bulk_cnt))->stat != CONT) {
 				return(tail);
 			}
 
 			/* fill-in area has changed */
-			seq_bulk_blocks = calc_max_bulk_blocks_seq_tail(this, tail);
+			seq_bulk_blocks = calc_max_expected_blocks_tail(this, tail);
 		}
 
 		/* malloc the next stack and set pointers */
-		gaba_dp_add_stack(this, 0);
+		debug("add stack");
+		if(gaba_dp_add_stack(this, 0) != GABA_SUCCESS) {
+			return(NULL);
+		}
 
 		/* stack size has changed */
 		mem_bulk_blocks = calc_max_bulk_blocks_mem(this);
+		debug("mem_bulk_blocks(%llu), seq_bulk_blocks(%llu)", mem_bulk_blocks, seq_bulk_blocks);
 	}
 
 	debug("v(%p), psum(%lld), p(%d)", _last_block(tail)->md, tail->psum, tail->p);
@@ -1978,6 +2066,7 @@ struct gaba_joint_tail_s *fill_section_seq_bounded(
 	return(fill_seq_bounded(this, tail));
 }
 
+#if 0
 /**
  * @fn fill_section_seq_p_bounded
  * @brief fill dp matrix inside section pairs
@@ -2023,6 +2112,7 @@ struct gaba_joint_tail_s *fill_section_seq_p_bounded(
 	/* bulk fill with seq bound check */
 	return(fill_seq_p_bounded(this, tail));
 }
+#endif
 
 /**
  * @fn gaba_dp_fill_root
@@ -3261,9 +3351,9 @@ struct gaba_result_s *trace_concatenate_path(
 	/* load base path pos */
 	uint32_t ppos = this->w.l.pspos;
 
-	debug("sflen(%u), srlen(%u)");
+	debug("sflen(%u), srlen(%u)", sflen, srlen);
 	if(sflen > 0 && srlen > 0 && fw_sec->apos != 0 && fw_sec->bpos != 0) {
-		debug("apos(%u), bpos(%u)", sflen, srlen, fw_sec->apos, fw_sec->bpos);
+		debug("apos(%u), bpos(%u)", fw_sec->apos, fw_sec->bpos);
 
 		/* merge the root sections */
 		rv_sec->alen += fw_sec->alen;
@@ -3431,7 +3521,7 @@ int64_t parse_dump_match_string(
 		*((uint16_t *)(buf + c.table.len)) = 'M';
 		return(c.table.adv);
 	} else {
-		int64_t l = sprintf(buf, "%lldM", len);
+		int64_t l = sprintf(buf, "%" PRId64 "M", len);
 		return(l);
 	}
 }
@@ -3454,7 +3544,7 @@ int64_t parse_dump_gap_string(
 		*((uint16_t *)(buf + c.table.len)) = gap_ch;
 		return(c.table.adv);
 	} else {
-		int64_t l = sprintf(buf, "%lld%c", len, gap_ch);
+		int64_t l = sprintf(buf, "%" PRId64 "%c", len, gap_ch);
 		return(l);
 	}
 }
@@ -3509,7 +3599,7 @@ int64_t suffix(gaba_dp_print_cigar)(
 		}
 		int64_t m = (rsidx - ridx)>>1;
 		if(m > 0) {
-			clen += _fprintf(fp, "%lldM", m);
+			clen += _fprintf(fp, "%" PRId64 "M", m);
 			debug("match m(%lld)", m);
 		}
 		if(ridx <= 0) { break; }
@@ -3517,7 +3607,7 @@ int64_t suffix(gaba_dp_print_cigar)(
 		uint64_t arr;
 		int64_t g = MIN2(_parse_count_gap(arr = parse_load_uint64(p, lim - ridx)), ridx);
 		if(g > 0) {
-			clen += _fprintf(fp, "%u%c", g, 'D' + ((char)(0ULL - (arr & 0x01)) & ('I' - 'D')));
+			clen += _fprintf(fp, "%" PRId64 "%c", g, 'D' + ((char)(0ULL - (arr & 0x01)) & ('I' - 'D')));
 			debug("gap g(%lld)", g);
 		}
 		if((ridx -= g) <= 0) { break; }
@@ -3936,6 +4026,9 @@ gaba_t *suffix(gaba_init)(
 	*ctx = (struct gaba_context_s) {
 		/* template */
 		.k = (struct gaba_dp_context_s) {
+			/* memory management */
+			.mem = { 0 },
+			.curr_mem = NULL,
 			.stack_top = NULL,						/* stored on init */
 			.stack_end = NULL,						/* stored on init */
 
@@ -3946,10 +4039,6 @@ gaba_t *suffix(gaba_init)(
 			/* input and output options */
 			.head_margin = _roundup(params_intl.head_margin, MEM_ALIGN_SIZE),
 			.tail_margin = _roundup(params_intl.tail_margin, MEM_ALIGN_SIZE),
-
-			/* memory management */
-			.mem_cnt = 0,
-			.mem_array = { 0 },						/* NULL */
 
 			/* phantom block at root */
 			.blk = (struct gaba_phantom_block_s) {
@@ -3996,10 +4085,7 @@ gaba_t *suffix(gaba_init)(
 		},
 
 		/* default middle delta vector */
-		.md = gaba_init_create_middle_delta(params_intl.score_matrix),
-
-		/* copy params */
-		.params = *params
+		.md = gaba_init_create_middle_delta(params_intl.score_matrix)
 	};
 
 	return((gaba_t *)ctx);
@@ -4031,6 +4117,10 @@ struct gaba_dp_context_s *suffix(gaba_dp_init)(
 		return(NULL);
 	}
 
+	/* init stack pointers */
+	this->stack_top = (uint8_t *)(this + 1);
+	this->stack_end = (uint8_t *)this + MEM_INIT_SIZE - MEM_MARGIN_SIZE;
+
 	/* init seq lims */
 	this->w.r.alim = alim;
 	this->w.r.blim = blim;
@@ -4041,12 +4131,46 @@ struct gaba_dp_context_s *suffix(gaba_dp_init)(
 		(uint8_t *)&ctx->k + GABA_DP_CONTEXT_LOAD_OFFSET,
 		GABA_DP_CONTEXT_LOAD_SIZE);
 
-	/* init stack pointers */
-	this->stack_top = (uint8_t *)this + sizeof(struct gaba_dp_context_s);
-	this->stack_end = (uint8_t *)this + MEM_INIT_SIZE - MEM_MARGIN_SIZE;
+	/* init mem object */
+	this->curr_mem = &this->mem;
+	this->mem = (struct gaba_mem_block_s){
+		.next = NULL,
+		.prev = NULL,
+		.size = MEM_INIT_SIZE
+	};
 	return(this);
 }
 
+/**
+ * @fn gaba_dp_add_stack
+ */
+static _force_inline
+int32_t gaba_dp_add_stack(
+	struct gaba_dp_context_s *this,
+	uint64_t size)
+{
+	if(this->curr_mem->next == NULL) {
+		/* add new block */
+		uint64_t next_size = this->curr_mem->size * 2;
+		struct gaba_mem_block_s *mem = this->curr_mem->next =
+			(struct gaba_mem_block_s *)malloc(next_size);
+		if(mem == NULL) { return(GABA_ERROR_OUT_OF_MEM); }
+
+		mem->next = NULL;
+		mem->prev = this->curr_mem;
+		mem->size = next_size;
+	}
+
+	/* follow the forward link */
+	this->curr_mem = this->curr_mem->next;
+
+	/* init stack pointers */
+	this->stack_top = (uint8_t *)(this->curr_mem + 1);
+	this->stack_end = (uint8_t *)this->curr_mem + this->curr_mem->size - MEM_MARGIN_SIZE;
+	return(GABA_SUCCESS);
+}
+
+#if 0
 /**
  * @fn gaba_dp_add_stack
  */
@@ -4082,6 +4206,7 @@ int32_t gaba_dp_add_stack(
 		this->stack_top, this->stack_end, size);
 	return(GABA_SUCCESS);
 }
+#endif
 
 /**
  * @fn gaba_dp_flush
@@ -4089,17 +4214,54 @@ int32_t gaba_dp_add_stack(
 void suffix(gaba_dp_flush)(
 	struct gaba_dp_context_s *this,
 	uint8_t const *alim,
-	uint8_t const *blim)
+	uint8_t const *blim,
+	gaba_stack_t const *stack)
 {
 	/* init seq lims */
 	this->w.r.alim = alim;
 	this->w.r.blim = blim;
 
-	this->stack_top = (uint8_t *)this + sizeof(struct gaba_dp_context_s);
-	this->stack_end = (uint8_t *)this + MEM_INIT_SIZE - MEM_MARGIN_SIZE;
+	this->curr_mem = &this->mem;
+	this->stack_top = (uint8_t *)(this + 1);
+	this->stack_end = (uint8_t *)this + this->mem.size - MEM_MARGIN_SIZE;
+	return;
+}
 
-	/* clear memory */
-	this->mem_cnt = 0;
+/**
+ * @fn gaba_dp_save_stack
+ */
+struct gaba_stack_s const *suffix(gaba_dp_save_stack)(
+	struct gaba_dp_context_s *this)
+{
+	struct gaba_mem_block_s *mem = this->curr_mem;
+	uint8_t *stack_top = this->stack_top;
+	uint8_t *stack_end = this->stack_end;
+
+	/* save */
+	struct gaba_stack_s *stack = (struct gaba_stack_s *)gaba_dp_malloc(
+		this, sizeof(struct gaba_stack_s));
+	stack->mem = mem;
+	stack->stack_top = stack_top;
+	stack->stack_end = stack_end;
+	debug("save stack(%p, %p, %p)", stack->mem, stack->stack_top, stack->stack_end);
+	return(stack);
+}
+
+/**
+ * @fn gaba_dp_flush_stack
+ */
+void suffix(gaba_dp_flush_stack)(
+	struct gaba_dp_context_s *this,
+	gaba_stack_t const *stack)
+{
+	if(stack == NULL) {
+		return;
+	}
+
+	this->curr_mem = stack->mem;
+	this->stack_top = stack->stack_top;
+	this->stack_end = stack->stack_end;
+	debug("restore stack(%p, %p, %p)", stack->mem, stack->stack_top, stack->stack_end);
 	return;
 }
 
@@ -4153,8 +4315,10 @@ void suffix(gaba_dp_clean)(
 		return;
 	}
 
-	for(uint64_t i = 0; i < GABA_MEM_ARRAY_SIZE; i++) {
-		gaba_aligned_free(this->mem_array[i]); this->mem_array[i] = NULL;
+	struct gaba_mem_block_s *m = this->mem.next;
+	while(m != NULL) {
+		struct gaba_mem_block_s *mnext = m->next;
+		free(m); m = mnext;
 	}
 	gaba_aligned_free(this);
 	return;
@@ -5685,8 +5849,7 @@ char *string_pair_diff(
 #if MODEL == LINEAR
 unittest()
 {
-	struct gaba_context_s const *c = (struct gaba_context_s const *)gctx;
-	struct gaba_score_s const *p = c->params.score_matrix;
+	struct gaba_score_s const *p = unittest_default_score_matrix;
 	struct unittest_naive_result_s n;
 
 	/* all matches */
@@ -5707,8 +5870,7 @@ unittest()
 #else /* MODEL == AFFINE */
 unittest()
 {
-	struct gaba_context_s const *c = (struct gaba_context_s const *)gctx;
-	struct gaba_score_s const *p = c->params.score_matrix;
+	struct gaba_score_s const *p = unittest_default_score_matrix;
 	struct unittest_naive_result_s n;
 
 	/* all matches */
@@ -5739,7 +5901,7 @@ unittest()
 unittest()
 {
 	struct gaba_context_s const *c = (struct gaba_context_s const *)gctx;
-	struct gaba_score_s const *p = c->params.score_matrix;
+	struct gaba_score_s const *p = unittest_default_score_matrix;
 
 	/* seed rand */
 	#ifndef SEED
@@ -5801,7 +5963,8 @@ unittest()
 			m->max, f->max, f->status, t1->max, t1->status, t2->max, t2->status, n.score);
 		if(m->max != n.score) {
 			struct gaba_fill_s *f2 = gaba_dp_fill_root(d, &sec->afsec, 0, &sec->bfsec, 0);
-			log("refill f2(%lld, %u)", f2->max, f2->status);
+			(void)f2;
+			debug("refill f2(%lld, %u)", f2->max, f2->status);
 		}
 
 		/* trace */
@@ -5856,7 +6019,7 @@ unittest(with_seq_pair(
 "ACGTGCGCGGTGGTTGCTCTTCTGGACGCGTTCGACACGTATTACGAAGTCCTTACCGCTATAAATCACAACGC"))
 {
 	omajinai();
-	struct gaba_score_s const *p = c->params.score_matrix;
+	struct gaba_score_s const *p = unittest_default_score_matrix;
 
 	/* fill section */
 	struct gaba_section_s const *as = &s->afsec;

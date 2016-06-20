@@ -119,6 +119,13 @@ typedef struct gaba_params_s gaba_params_t;
 typedef struct gaba_context_s gaba_t;
 
 /**
+ * @type gaba_stack_t
+ *
+ * @brief stack context container
+ */
+typedef struct gaba_stack_s gaba_stack_t;
+
+/**
  * @struct gaba_section_s
  *
  * @brief section container, a tuple of (id, length, head position).
@@ -236,13 +243,25 @@ gaba_dp_t *gaba_dp_init(
 
 /**
  * @fn gaba_dp_flush
- *
- * @brief flush stack
+ * @brief flush stack (flush all if NULL) 
  */
 void gaba_dp_flush(
 	gaba_dp_t *this,
 	uint8_t const *alim,
 	uint8_t const *blim);
+
+/**
+ * @fn gaba_dp_save_stack
+ */
+gaba_stack_t const *gaba_dp_save_stack(
+	gaba_dp_t *this);
+
+/**
+ * @fn gaba_dp_flush_stack
+ */
+void gaba_dp_flush_stack(
+	gaba_dp_t *this,
+	gaba_stack_t const *stack);
 
 /**
  * @fn gaba_dp_clean
