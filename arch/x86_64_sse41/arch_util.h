@@ -173,7 +173,7 @@
 #define _store_sb(_scv, sv16)				{ _store_v16i8((_scv).v1, (sv16)); }
 
 /* load */
-#define _load_sb(scv)						( _bc_v16i8(_load_v16i8((scv).v1)) )
+#define _load_sb(scv)						( _from_v16i8(_load_v16i8((scv).v1)) )
 
 
 /**
@@ -206,10 +206,10 @@
 	(v16i8_t){ _mm_shuffle_epi32(_mm_load_si128((__m128i const *)(_ptr)), (_idx)) } \
 )
 
-#define _load_adjh(_scv)					( _bc_v16i8(_load_gap((_scv).v2, 0x00)) )
-#define _load_adjv(_scv)					( _bc_v16i8(_load_gap((_scv).v2, 0x55)) )
-#define _load_ofsh(_scv)					( _bc_v16i8(_load_gap((_scv).v2, 0xaa)) )
-#define _load_ofsv(_scv)					( _bc_v16i8(_load_gap((_scv).v2, 0xff)) )
+#define _load_adjh(_scv)					( _from_v16i8(_load_gap((_scv).v2, 0x00)) )
+#define _load_adjv(_scv)					( _from_v16i8(_load_gap((_scv).v2, 0x55)) )
+#define _load_ofsh(_scv)					( _from_v16i8(_load_gap((_scv).v2, 0xaa)) )
+#define _load_ofsv(_scv)					( _from_v16i8(_load_gap((_scv).v2, 0xff)) )
 
 
 #endif /* #ifndef _ARCH_UTIL_H_INCLUDED */

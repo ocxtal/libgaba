@@ -78,7 +78,7 @@ struct gaba_params_s {
 	int16_t tail_margin;		/** margin at the tail of gaba_res_t */
 
 	/** filtering options */
-	int16_t popcnt_thresh;		/** popcnt filter threshold, set zero if you want to disable it */
+	int16_t filter_thresh;		/** popcnt filter threshold, set zero if you want to disable it */
 
 	/** score parameters */
 	int16_t xdrop;

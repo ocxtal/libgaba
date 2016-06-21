@@ -114,6 +114,7 @@ _static_assert(sizeof(struct gaba_section_s) == 16);
 _static_assert(sizeof(struct gaba_fill_s) == 64);
 _static_assert(sizeof(struct gaba_path_section_s) == 32);
 _static_assert(sizeof(struct gaba_result_s) == 32);
+_static_assert(sizeof(vec_masku_t) == 4);
 
 
 /* forward declarations */
@@ -155,22 +156,13 @@ struct gaba_middle_delta_s {
 _static_assert(sizeof(struct gaba_middle_delta_s) == 64);
 
 /**
- * @struct gaba_mask_u
- */
-union gaba_mask_u {
-	vec_mask_t mask;
-	uint32_t all;
-};
-_static_assert(sizeof(union gaba_mask_u) == 4);
-
-/**
  * @struct gaba_mask_pair_u
  */
 #if MODEL == LINEAR
 union gaba_mask_pair_u {
 	struct gaba_mask_pair_s {
-		union gaba_mask_u h;	/** (4) horizontal mask vector */
-		union gaba_mask_u v;	/** (4) vertical mask vector */
+		vec_masku_t h;	/** (4) horizontal mask vector */
+		vec_masku_t v;	/** (4) vertical mask vector */
 	} pair;
 	uint64_t all;
 };
@@ -178,10 +170,10 @@ _static_assert(sizeof(union gaba_mask_pair_u) == 8);
 #else
 union gaba_mask_pair_u {
 	struct gaba_mask_pair_s {
-		union gaba_mask_u h;	/** (4) horizontal mask vector */
-		union gaba_mask_u v;	/** (4) vertical mask vector */
-		union gaba_mask_u e;	/** (4) e mask vector */
-		union gaba_mask_u f;	/** (4) f mask vector */
+		vec_masku_t h;	/** (4) horizontal mask vector */
+		vec_masku_t v;	/** (4) vertical mask vector */
+		vec_masku_t e;	/** (4) e mask vector */
+		vec_masku_t f;	/** (4) f mask vector */
 	} pair;
 	uint64_t all;
 };
@@ -432,7 +424,7 @@ struct gaba_dp_context_s {
 	/** 80, 336 */
 
 	int16_t tx;							/** (2) xdrop threshold */
-	uint16_t pad;						/** (2) */
+	uint16_t tf;						/** (2) ungapped alignment filter threshold */
 
 	/** output options */
 	int16_t head_margin;				/** (2) margin at the head of gaba_res_t */
@@ -758,7 +750,7 @@ void fill_load_seq_a(
 				0x00, 0x08, 0x04, 0x0c, 0x02, 0x0a, 0x06, 0x0e,
 				0x01, 0x09, 0x05, 0x0d, 0x03, 0x0b, 0x07, 0x0f
 			};
-			vec_t const cv = _bc_v16i8(_load_v16i8(comp));
+			vec_t const cv = _from_v16i8(_load_v16i8(comp));
 
 			/* forward fetch: 2 * alen - pos */
 			vec_t a = _loadu(_rev(pos, this->w.r.alim) - (len - 1));
@@ -805,7 +797,7 @@ void fill_load_seq_b(
 				0x00, 0x08, 0x04, 0x0c, 0x02, 0x0a, 0x06, 0x0e,
 				0x01, 0x09, 0x05, 0x0d, 0x03, 0x0b, 0x07, 0x0f
 			};
-			vec_t const cv = _bc_v16i8(_load_v16i8(comp));
+			vec_t const cv = _from_v16i8(_load_v16i8(comp));
 
 			/* reverse fetch: 2 * blen - pos + (len - 32) */
 			vec_t b = _loadu(_rev(pos, this->w.r.blim) - (BW - 1));
@@ -1023,18 +1015,55 @@ v2i32_t fill_update_section(
 }
 
 /**
- * @fn fill_popcnt_filter
+ * @fn fill_gapless_filter
  */
 static _force_inline
-int32_t fill_popcnt_filter(
+int32_t fill_gapless_filter(
 	struct gaba_dp_context_s *this,
 	struct gaba_block_s *blk,
 	int32_t stat)
 {
-	/* load char vector from previous block */
+	v16i8_t const load_mask = _set_v16i8(0x0f);
+	v16i8_t const match_mask = _bsl_v16i8(_set_v16i8(0xff), 1);
 
+	/* load char vectors */
+	v16i8_t a = _load_v16i8(&blk->ch.w[0]);
+	v16i8_t b = _load_v16i8(&blk->ch.w[16]);
 
-	return(stat);
+	v16i8_t a0 = _swap_v16i8(_and_v16i8(load_mask, a));
+	v16i8_t b0 = _bsr_v16i8(_and_v16i8(load_mask, _shr_v16i8(b, 4)), 1);
+
+	/* make shifted vectors */
+	v16i8_t a1 = _bsr_v16i8(a0, 1), a2 = _bsr_v16i8(a0, 2);
+	v16i8_t b1 = _bsr_v16i8(b0, 1), b2 = _bsr_v16i8(b0, 2);
+
+	_print_v16i8(a0);
+	_print_v16i8(a1);
+	_print_v16i8(a2);
+	_print_v16i8(b0);
+	_print_v16i8(b1);
+	_print_v16i8(b2);
+
+	/* ungapped alignment */
+	v16i8_t m0 = _shuf_v16i8(match_mask, _and_v16i8(a0, b2));
+	v16i8_t m1 = _shuf_v16i8(match_mask, _and_v16i8(a0, b1));
+	v16i8_t m2 = _shuf_v16i8(match_mask, _and_v16i8(a0, b0));
+	v16i8_t m3 = _shuf_v16i8(match_mask, _and_v16i8(a1, b2));
+	v16i8_t m4 = _shuf_v16i8(match_mask, _and_v16i8(a2, b2));
+
+	_print_v16i8(m0);
+	_print_v16i8(m1);
+	_print_v16i8(m2);
+	_print_v16i8(m3);
+	_print_v16i8(m4);
+
+	v16i8_t cnt_mask = _or_v16i8(_or_v16i8(_or_v16i8(m0, m1), m2), _or_v16i8(m3, m4));
+	int64_t cnt = popcnt(((v16i8_masku_t){ .mask = _mask_v16i8(cnt_mask) }).all);
+
+	_print_v16i8(cnt_mask);
+	debug("cnt(%lld), tf(%u)", cnt, this->tf);
+
+	return((cnt > this->tf) ? CONT : TERM);
 }
 
 /**
@@ -1092,7 +1121,7 @@ struct gaba_joint_block_s fill_create_phantom_block(
 
 		/* check if initial vector is filled */
 		if(prev_tail->psum + stat.p >= 0) {
-			stat.stat = fill_popcnt_filter(this, stat.blk, stat.stat);
+			stat.stat = fill_gapless_filter(this, stat.blk - 1, stat.stat);
 		}
 		return(stat);
 	}
@@ -2263,7 +2292,7 @@ struct trace_max_mask_s trace_load_max_mask(
 	/* load max vector, create mask */
 	vec_t max = _load(&blk->sd.max);
 	int64_t offset = blk->offset;
-	uint32_t mask_max = ((union gaba_mask_u){
+	uint32_t mask_max = ((vec_masku_t){
 		.mask = _mask_v32i16(_eq_v32i16(
 			_set_v32i16(tail->max - offset),
 			_add_v32i16(_load_v32i16(_last_block(tail)->md), _cvt_v32i8_v32i16(max))))
@@ -2311,7 +2340,7 @@ struct trace_max_block_s trace_detect_max_block(
 		max = _add(max, _set(offset - prev_offset));
 
 		/* take mask */
-		uint32_t prev_mask_max = mask_max & ((union gaba_mask_u){
+		uint32_t prev_mask_max = mask_max & ((vec_masku_t){
 			.mask = _mask(_eq(prev_max, max))
 		}).all;
 
@@ -2345,7 +2374,7 @@ struct trace_max_block_s trace_detect_max_block(
 static _force_inline
 void trace_refill_block(
 	struct gaba_dp_context_s *this,
-	union gaba_mask_u *mask_max_ptr,
+	vec_masku_t *mask_max_ptr,
 	int64_t len,
 	struct gaba_block_s *blk,
 	vec_t compd_max)
@@ -2364,7 +2393,7 @@ void trace_refill_block(
 				_fill_down(); \
 			} \
 			(_mask_ptr)++->mask = _mask(_eq(max, delta)); \
-			debug("mask(%x)", ((union gaba_mask_u){ .mask = _mask(_eq(max, delta)) }).all); \
+			debug("mask(%x)", ((vec_masku_t){ .mask = _mask(_eq(max, delta)) }).all); \
 		}
 
 		/* load contexts and overwrite max vector */
@@ -2389,7 +2418,7 @@ struct trace_max_pos_s {
 static _force_inline
 struct trace_max_pos_s trace_detect_max_pos(
 	struct gaba_dp_context_s *this,
-	union gaba_mask_u *mask_max_ptr,
+	vec_masku_t *mask_max_ptr,
 	int64_t len,
 	uint32_t mask_max)
 {
@@ -2529,7 +2558,7 @@ void trace_search_max(
 
 	/* refill detected block */
 	int64_t len = MIN2(tail->p - b.p, BLK);
-	union gaba_mask_u mask_max_arr[BLK];
+	vec_masku_t mask_max_arr[BLK];
 	trace_refill_block(this, mask_max_arr, len, b.blk, b.max);
 
 	/* detect pos */
@@ -3774,7 +3803,7 @@ void gaba_init_restore_default_params(
 	}
 	restore(head_margin, 		0);
 	restore(tail_margin, 		0);
-	restore(popcnt_thresh,		0);
+	restore(filter_thresh,		0);
 	restore(xdrop, 				100);
 	restore(score_matrix, 		default_score_matrix);
 	return;
@@ -4096,6 +4125,7 @@ gaba_t *suffix(gaba_init)(
 			/* score vectors */
 			.scv = gaba_init_create_score_vector(params_intl.score_matrix),
 			.tx = params_intl.xdrop,
+			.tf = params_intl.filter_thresh,
 
 			/* input and output options */
 			.head_margin = _roundup(params_intl.head_margin, MEM_ALIGN_SIZE),

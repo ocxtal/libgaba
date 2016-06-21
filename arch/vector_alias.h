@@ -14,6 +14,7 @@
 
 #define vec_t 		vector_alias_join(vector_prefix, _t)
 #define vec_mask_t	vector_alias_join(vector_prefix, _mask_t)
+#define vec_masku_t	vector_alias_join(vector_prefix, _masku_t)
 
 /* address */
 #define _pv 		vector_alias_join(_pv_, vector_prefix)
@@ -72,8 +73,10 @@
 #define _mask 		vector_alias_join(_mask_, vector_prefix)
 
 /* broadcast */
-#define _bc_v16i8	vector_alias_join(_bc_v16i8_, vector_prefix)
-#define _bc_v32i8	vector_alias_join(_bc_v32i8_, vector_prefix)
+#define _from_v16i8	vector_alias_join(_from_v16i8_, vector_prefix)
+#define _from_v32i8	vector_alias_join(_from_v32i8_, vector_prefix)
+#define _to_v16i8	vector_alias_join(_to_v16i8_, vector_prefix)
+#define _to_v32i8	vector_alias_join(_to_v32i8_, vector_prefix)
 
 /* print */
 #define _print		vector_alias_join(_print_, vector_prefix)

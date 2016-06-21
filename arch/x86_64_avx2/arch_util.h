@@ -162,10 +162,10 @@
  * substitution matrix abstraction
  */
 /* store */
-#define _store_sb(_scv, sv16)				{ _store_v32i8((_scv).v1, _bc_v16i8_v32i8(sv16)); }
+#define _store_sb(_scv, sv16)				{ _store_v32i8((_scv).v1, _from_v16i8_v32i8(sv16)); }
 
 /* load */
-#define _load_sb(scv)						( _bc_v32i8(_load_v32i8((scv).v1)) )
+#define _load_sb(scv)						( _from_v32i8(_load_v32i8((scv).v1)) )
 
 /**
  * gap penalty vector abstraction macros
@@ -180,19 +180,19 @@
 	} \
 )
 #define _store_adjh(_scv, _adjh, _adjv, _ofsh, _ofsv) { \
-	_store_v32i8((_scv).v3, _bc_v16i8_v32i8(_make_gap(_adjh, _adjv, _ofsh, _ofsv))) \
+	_store_v32i8((_scv).v3, _from_v16i8_v32i8(_make_gap(_adjh, _adjv, _ofsh, _ofsv))) \
 }
 #define _store_adjv(_scv, _adjh, _adjv, _ofsh, _ofsv) { \
 	/* nothing to do */ \
-	/*_store_v32i8((_scv).v3, _bc_v16i8_v32i8(_make_gap(_adjh, _adjv, _ofsh, _ofsv)))*/ \
+	/*_store_v32i8((_scv).v3, _from_v16i8_v32i8(_make_gap(_adjh, _adjv, _ofsh, _ofsv)))*/ \
 }
 #define _store_ofsh(_scv, _adjh, _adjv, _ofsh, _ofsv) { \
 	/* nothing to do */ \
-	/* _store_v32i8((_scv).v5, _bc_v16i8_v32i8(_make_gap(_adjh, _adjv, _ofsh, _ofsv)))*/ \
+	/* _store_v32i8((_scv).v5, _from_v16i8_v32i8(_make_gap(_adjh, _adjv, _ofsh, _ofsv)))*/ \
 }
 #define _store_ofsv(_scv, _adjh, _adjv, _ofsh, _ofsv) { \
 	/* nothing to do */ \
-	/*_store_v32i8((_scv).v5, _bc_v16i8_v32i8(_make_gap(_adjh, _adjv, _ofsh, _ofsv)))*/ \
+	/*_store_v32i8((_scv).v5, _from_v16i8_v32i8(_make_gap(_adjh, _adjv, _ofsh, _ofsv)))*/ \
 }
 
 /* load */
@@ -200,10 +200,10 @@
 	(v32i8_t){ _mm256_shuffle_epi32(_mm256_load_si256((__m256i const *)(_ptr)), (_idx)) } \
 )
 
-#define _load_adjh(_scv)					( _bc_v32i8(_load_gap((_scv).v3, 0x00)) )
-#define _load_adjv(_scv)					( _bc_v32i8(_load_gap((_scv).v3, 0x55)) )
-#define _load_ofsh(_scv)					( _bc_v32i8(_load_gap((_scv).v3, 0xaa)) )
-#define _load_ofsv(_scv)					( _bc_v32i8(_load_gap((_scv).v3, 0xff)) )
+#define _load_adjh(_scv)					( _from_v32i8(_load_gap((_scv).v3, 0x00)) )
+#define _load_adjv(_scv)					( _from_v32i8(_load_gap((_scv).v3, 0x55)) )
+#define _load_ofsh(_scv)					( _from_v32i8(_load_gap((_scv).v3, 0xaa)) )
+#define _load_ofsv(_scv)					( _from_v32i8(_load_gap((_scv).v3, 0xff)) )
 
 
 #endif /* #ifndef _ARCH_UTIL_H_INCLUDED */

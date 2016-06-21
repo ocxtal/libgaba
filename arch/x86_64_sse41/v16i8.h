@@ -121,6 +121,38 @@ typedef struct v16i8_s {
 	(int8_t)_i_v16i8(extract)((a).v1, (imm)) \
 )
 
+/* shift */
+#define _bsl_v16i8(a, imm) ( \
+	(v16i8_t) { \
+		_i_v16i8x(slli)((a).v1, (imm)) \
+	} \
+)
+#define _bsr_v16i8(a, imm) ( \
+	(v16i8_t) { \
+		_i_v16i8x(srli)((a).v1, (imm)) \
+	} \
+)
+#define _shl_v16i8(a, imm) ( \
+	(v16i8_t) { \
+		_mm_slli_epi32((a).v1, (imm)) \
+	} \
+)
+#define _shr_v16i8(a, imm) ( \
+	(v16i8_t) { \
+		_mm_srli_epi32((a).v1, (imm)) \
+	} \
+)
+#define _sal_v16i8(a, imm) ( \
+	(v16i8_t) { \
+		_mm_slai_epi32((a).v1, (imm)) \
+	} \
+)
+#define _sar_v16i8(a, imm) ( \
+	(v16i8_t) { \
+		_mm_srai_epi32((a).v1, (imm)) \
+	} \
+)
+
 /* mask */
 #define _mask_v16i8(a) ( \
 	(v16_mask_t) { \
