@@ -2842,7 +2842,7 @@ void trace_load_section_b(
  */
 #define _trace_reverse_head_load(t, _jump_to) { \
 	if(mask_ptr == blk->mask - 1) { \
-		int64_t loop_count = (p + 1) & (BLK - 1); \
+		int64_t loop_count = (p & (BLK - 1)) + 1; \
 		debug("load block, loop_count(%lld), blk(%p), next_blk(%p), p(%lld), next_p(%lld)", \
 			loop_count, blk, blk-1, p, p - loop_count); \
 		/* store path_array and update rem */ \
