@@ -228,8 +228,9 @@ void *gaba_set_api(
 	void *ctx,
 	struct gaba_api_s const *api)
 {
-	_memcpy_blk_aa((void *)ctx, (void *)api, sizeof(struct gaba_api_s));
-	return(ctx);
+	struct gaba_api_s *dst = (struct gaba_api_s *)ctx;
+	*dst = *api;
+	return((void *)dst);
 }
 
 /**
