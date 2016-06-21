@@ -59,11 +59,8 @@ struct gaba_api_s {
 		gaba_fill_t const *fw_tail,
 		gaba_fill_t const *rv_tail,
 		gaba_clip_params_t const *clip);
-
-	/* padding */
-	void *pad[2];
 };
-_static_assert(sizeof(struct gaba_api_s) == 8 * sizeof(void *));
+_static_assert(sizeof(struct gaba_api_s) == 6 * sizeof(void *));
 #define _api(_ctx)				( (struct gaba_api_s const *)(_ctx) )
 
 
@@ -80,6 +77,11 @@ void gaba_dp_flush_linear(
 	gaba_dp_t *this,
 	uint8_t const *alim,
 	uint8_t const *blim);
+gaba_stack_t const *gaba_dp_save_stack_linear(
+	gaba_dp_t *this);
+void gaba_dp_flush_stack_linear(
+	gaba_dp_t *this,
+	gaba_stack_t const *stack);
 void gaba_dp_clean_linear(
 	gaba_dp_t *this);
 gaba_fill_t *gaba_dp_fill_root_linear(
@@ -131,6 +133,11 @@ void gaba_dp_flush_affine(
 	gaba_dp_t *this,
 	uint8_t const *alim,
 	uint8_t const *blim);
+gaba_stack_t const *gaba_dp_save_stack_affine(
+	gaba_dp_t *this);
+void gaba_dp_flush_stack_affine(
+	gaba_dp_t *this,
+	gaba_stack_t const *stack);
 void gaba_dp_clean_affine(
 	gaba_dp_t *this);
 gaba_fill_t *gaba_dp_fill_root_affine(
@@ -221,8 +228,9 @@ void *gaba_set_api(
 	void *ctx,
 	struct gaba_api_s const *api)
 {
-	_memcpy_blk_aa((void *)ctx, (void *)api, sizeof(struct gaba_api_s));
-	return(ctx);
+	struct gaba_api_s *dst = (struct gaba_api_s *)ctx;
+	*dst = *api;
+	return((void *)dst);
 }
 
 /**
@@ -273,6 +281,25 @@ void gaba_dp_flush(
 	uint8_t const *blim)
 {
 	return(gaba_dp_flush_linear(this, alim, blim));
+}
+
+/**
+ * @fn gaba_dp_save_stack
+ */
+gaba_stack_t const *gaba_dp_save_stack(
+	gaba_dp_t *this)
+{
+	return(gaba_dp_save_stack_linear(this));
+}
+
+/**
+ * @fn gaba_dp_flush_stack
+ */
+void gaba_dp_flush_stack(
+	gaba_dp_t *this,
+	gaba_stack_t const *stack)
+{
+	return(gaba_dp_flush_stack_linear(this, stack));
 }
 
 /**
