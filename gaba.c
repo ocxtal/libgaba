@@ -166,6 +166,7 @@ _static_assert(sizeof(union gaba_mask_u) == 4);
 /**
  * @struct gaba_mask_pair_u
  */
+#if MODEL == LINEAR
 union gaba_mask_pair_u {
 	struct gaba_mask_pair_s {
 		union gaba_mask_u h;	/** (4) horizontal mask vector */
@@ -174,6 +175,18 @@ union gaba_mask_pair_u {
 	uint64_t all;
 };
 _static_assert(sizeof(union gaba_mask_pair_u) == 8);
+#else
+union gaba_mask_pair_u {
+	struct gaba_mask_pair_s {
+		union gaba_mask_u h;	/** (4) horizontal mask vector */
+		union gaba_mask_u v;	/** (4) vertical mask vector */
+		union gaba_mask_u e;	/** (4) e mask vector */
+		union gaba_mask_u f;	/** (4) f mask vector */
+	} pair;
+	uint64_t all;
+};
+_static_assert(sizeof(union gaba_mask_pair_u) == 16);
+#endif
 
 /**
  * @struct gaba_diff_vec_s
@@ -196,7 +209,7 @@ _static_assert(sizeof(struct gaba_char_vec_s) == 32);
  * @struct gaba_block_s
  */
 struct gaba_block_s {
-	union gaba_mask_pair_u mask[MAX_BLK];/** (256) mask vectors */
+	union gaba_mask_pair_u mask[MAX_BLK];/** (256 / 512) mask vectors */
 	struct gaba_diff_vec_s diff; 		/** (64) */
 	struct gaba_small_delta_s sd;		/** (64) */
 	union gaba_dir_u dir;				/** (8) */
@@ -214,7 +227,11 @@ struct gaba_phantom_block_s {
 	struct gaba_middle_delta_s const *md;/** (8) pointer to the middle delta vectors */
 	struct gaba_char_vec_s ch;			/** (32) char vector */
 };
+#if MODEL == LINEAR
 _static_assert(sizeof(struct gaba_block_s) == 448);
+#else
+_static_assert(sizeof(struct gaba_block_s) == 704);
+#endif
 _static_assert(sizeof(struct gaba_phantom_block_s) == 192);
 #define _last_block(x)				( (struct gaba_block_s *)(x) - 1 )
 
@@ -1230,12 +1247,11 @@ struct gaba_joint_tail_s *fill_create_tail(
 	_print(_add(dh, _load_ofsh(this->scv))); \
 	_print(_add(dv, _load_ofsv(this->scv))); \
 }
-#else
+#else /* MODEL == AFFINE */
 #define _fill_body() { \
 	vec_t register t = _match(_loadu(aptr), _loadu(bptr)); \
 	_print(_loadu(aptr)); \
 	_print(_loadu(bptr)); \
-	/*t = _shuf(_load_sc(this, sb), t);*/ \
 	t = _shuf(_load_sb(this->scv), t); \
 	_print(t); \
 	t = _max(de, t); \
@@ -1243,14 +1259,20 @@ struct gaba_joint_tail_s *fill_create_tail(
 	mask_ptr->pair.h.mask = _mask(_eq(t, de)); \
 	mask_ptr->pair.v.mask = _mask(_eq(t, df)); \
 	debug("mask(%llx)", mask_ptr->all); \
+	/* update de and dh */ \
+	de = _add(de, _load_adjh(this->scv)); \
+	vec_t te = _max(de, t); \
+	mask_ptr->pair.e.mask = _mask(_eq(te, de)); \
+	de = _add(te, dh); \
+	dh = _add(dh, t); \
+	/* update df and dv */ \
+	df = _add(df, _load_adjv(this->scv)); \
+	vec_t tf = _max(df, t); \
+	mask_ptr->pair.f.mask = _mask(_eq(tf, df)); \
+	df = _sub(tf, dv); \
+	t = _sub(dv, t); \
 	mask_ptr++; \
-	/*df = _sub(_max(_add(df, _load_sc(this, adjv)), t), dv);*/ \
-	df = _sub(_max(_add(df, _load_adjv(this->scv)), t), dv); \
-	dv = _sub(dv, t); \
-	/*de = _add(_max(_add(de, _load_sc(this, adjh)), t), dh);*/ \
-	de = _add(_max(_add(de, _load_adjh(this->scv)), t), dh); \
-	t = _add(dh, t); \
-	dh = dv; dv = t; \
+	dv = dh; dh = t; \
 	_print(_add(dh, _load_ofsh(this->scv))); \
 	_print(_add(dv, _load_ofsv(this->scv))); \
 	_print(_sub(_sub(de, dv), _load_adjh(this->scv))); \
@@ -1284,7 +1306,6 @@ struct gaba_joint_tail_s *fill_create_tail(
 #define _fill_right() { \
 	dh = _bsl(dh, 1);	/* shift left dh */ \
 	_fill_body();		/* update vectors */ \
-	/*_fill_update_delta(_add, dh, _load_sc(this, ofsh), 1);*/ \
 	_fill_update_delta(_add, dh, _load_ofsh(this->scv), 1); \
 }
 #else
@@ -1292,7 +1313,6 @@ struct gaba_joint_tail_s *fill_create_tail(
 	dh = _bsl(dh, 1);	/* shift left dh */ \
 	df = _bsl(df, 1);	/* shift left df */ \
 	_fill_body();		/* update vectors */ \
-	/*_fill_update_delta(_sub, dh, _load_sc(this, ofsh), -1);*/ \
 	_fill_update_delta(_sub, dh, _load_ofsh(this->scv), -1); \
 }
 #endif /* MODEL */
@@ -1306,7 +1326,6 @@ struct gaba_joint_tail_s *fill_create_tail(
 #define _fill_down() { \
 	dv = _bsr(dv, 1);	/* shift right dv */ \
 	_fill_body();		/* update vectors */ \
-	/*_fill_update_delta(_add, dv, _load_sc(this, ofsv), 1);*/ \
 	_fill_update_delta(_add, dv, _load_ofsv(this->scv), 1); \
 }
 #else
@@ -1314,7 +1333,6 @@ struct gaba_joint_tail_s *fill_create_tail(
 	dv = _bsr(dv, 1);	/* shift right dv */ \
 	de = _bsr(de, 1);	/* shift right de */ \
 	_fill_body();		/* update vectors */ \
-	/*_fill_update_delta(_add, dv, _load_sc(this, ofsv), 1);*/ \
 	_fill_update_delta(_add, dv, _load_ofsv(this->scv), 1); \
 }
 #endif /* MODEL */
@@ -1325,11 +1343,9 @@ struct gaba_joint_tail_s *fill_create_tail(
  */
 #define _fill_update_offset() { \
 	int8_t _cd = _ext(delta, BW/2); \
-	/*int8_t _cd = (_ext(delta, BW/4) + _ext(delta, 3*BW/4))>>1;*/ \
 	offset += _cd; \
 	delta = _sub(delta, _set(_cd)); \
 	max = _sub(max, _set(_cd)); \
-	/*debug("_cd(%d), offset(%lld)", _cd, offset);*/ \
 }
 
 /**
@@ -1383,7 +1399,6 @@ struct gaba_joint_tail_s *fill_create_tail(
 	/* calc cnt */ \
 	uint64_t acnt = _rd_bufa(this, 0, BW) - aptr; \
 	uint64_t bcnt = bptr - _rd_bufb(this, 0, BW); \
-	/*_print_v2i32(_seta_v2i32(bcnt, acnt));*/ \
 	_seta_v2i32(bcnt, acnt); \
 })
 #endif
@@ -2566,11 +2581,25 @@ void trace_load_section_b(
  * @macro _trace_load_mask
  * @brief load mask and decrement pointer
  */
+#if MODEL == LINEAR
+#define _trace_declare_mask() \
+	uint32_t mask_h, mask_v;
 #define _trace_load_mask() { \
-	mask_h = mask_ptr->pair.h.all; \
 	mask_v = mask_ptr->pair.v.all; \
+	mask_h = mask_ptr->pair.h.all; \
 	mask_ptr--; \
 }
+#else /* MODEL == AFFINE */
+#define _trace_declare_mask() \
+	uint32_t mask_h, mask_v, mask_e, mask_f;
+#define _trace_load_mask() { \
+	mask_f = mask_ptr->pair.f.all; \
+	mask_e = mask_ptr->pair.e.all; \
+	mask_v = mask_ptr->pair.v.all; \
+	mask_h = mask_ptr->pair.h.all; \
+	mask_ptr--; \
+}
+#endif
 
 /**
  * @macro _trace_*_load_context
@@ -2586,7 +2615,7 @@ void trace_load_section_b(
 	union gaba_mask_pair_u const *mask_ptr = &blk->mask[p & (BLK - 1)]; \
 	uint64_t prev_array = path[0]; \
 	uint64_t path_array = 0; \
-	uint32_t mask_h, mask_v; \
+	_trace_declare_mask(); \
 	_trace_load_mask(); \
 	debug("p(%lld), q(%lld), mask_h(%x), mask_v(%x), path_array(%llx), prev_array(%llx)", \
 		p, q, mask_h, mask_v, path_array, prev_array);
@@ -2864,8 +2893,17 @@ void trace_load_section_b(
  * @macro _trace_test_*
  * @brief test mask
  */
-#define _trace_test_h()					( (mask_h>>q) & 0x01 )
-#define _trace_test_v()					( (mask_v>>q) & 0x01 )
+#if MODEL == LINEAR
+#define _trace_test_diag_h()			( (mask_h>>q) & 0x01 )
+#define _trace_test_diag_v()			( (mask_v>>q) & 0x01 )
+#define _trace_test_gap_h()				( (mask_h>>q) & 0x01 )
+#define _trace_test_gap_v()				( (mask_v>>q) & 0x01 )
+#else /* MODEL == AFFINE */
+#define _trace_test_diag_h()			( (mask_h>>q) & 0x01 )
+#define _trace_test_diag_v()			( (mask_v>>q) & 0x01 )
+#define _trace_test_gap_h()				( (mask_e>>q) & 0x01 )
+#define _trace_test_gap_v()				( (mask_f>>q) & 0x01 )
+#endif
 
 /**
  * @macro _trace_*_*_update_path_q
@@ -2921,7 +2959,7 @@ void trace_forward_trace(
 	#define _trace_forward_gap_loop(t, _type, _next, _label) { \
 		while(1) { \
 		_trace_forward_##_type##_##_label##_head: \
-			if(_trace_test_##_label() == 0) { \
+			if(_trace_test_gap_##_label() == 0) { \
 				goto _trace_forward_##_type##_d_head; \
 			} \
 			if(_trace_##_type##_##_label##_test_index()) { \
@@ -2938,7 +2976,7 @@ void trace_forward_trace(
 	#define _trace_forward_diag_loop(t, _type, _next) { \
 		while(1) { \
 		_trace_forward_##_type##_d_head: \
-			if(_trace_test_h() != 0) { \
+			if(_trace_test_diag_h() != 0) { \
 				goto _trace_forward_##_type##_h_head; \
 			} \
 			if(_trace_##_type##_d_test_index()) { \
@@ -2955,7 +2993,7 @@ void trace_forward_trace(
 			_trace_forward_v_update_path_q(); \
 			_trace_forward_##_type##_load(t, _trace_forward_##_next##_d_tail); \
 		_trace_forward_##_type##_d_tail: \
-			if(_trace_test_v() != 0) { \
+			if(_trace_test_diag_v() != 0) { \
 				goto _trace_forward_##_type##_v_head; \
 			} \
 		} \
@@ -3019,7 +3057,7 @@ void trace_reverse_trace(
 	#define _trace_reverse_gap_loop(t, _type, _next, _label) { \
 		while(1) { \
 		_trace_reverse_##_type##_##_label##_head: \
-			if(_trace_test_##_label() == 0) { \
+			if(_trace_test_gap_##_label() == 0) { \
 				goto _trace_reverse_##_type##_d_head; \
 			} \
 			if(_trace_##_type##_##_label##_test_index()) { \
@@ -3036,7 +3074,7 @@ void trace_reverse_trace(
 	#define _trace_reverse_diag_loop(t, _type, _next) { \
 		while(1) { \
 		_trace_reverse_##_type##_d_head: \
-			if(_trace_test_v() != 0) { \
+			if(_trace_test_diag_v() != 0) { \
 				goto _trace_reverse_##_type##_v_head; \
 			} \
 			if(_trace_##_type##_d_test_index()) { \
@@ -3053,7 +3091,7 @@ void trace_reverse_trace(
 			_trace_reverse_h_update_path_q(); \
 			_trace_reverse_##_type##_load(t, _trace_reverse_##_next##_d_tail); \
 		_trace_reverse_##_type##_d_tail: \
-			if(_trace_test_h() != 0) { \
+			if(_trace_test_diag_h() != 0) { \
 				goto _trace_reverse_##_type##_h_head; \
 			} \
 		} \
@@ -5655,14 +5693,14 @@ struct unittest_naive_result_s unittest_naive(
 	while(max.apos > 0 || max.bpos > 0) {
 		/* M > I > D > X */
 		if(mat[s(max.apos, max.bpos)] == mat[f(max.apos, max.bpos)]) {
-			while(mat[s(max.apos, max.bpos)] == mat[s(max.apos, max.bpos - 1)] + geb) {
+			while(mat[f(max.apos, max.bpos)] == mat[f(max.apos, max.bpos - 1)] + geb) {
 				max.bpos--;
 				result.path[--path_index] = 'D';
 			}
 			max.bpos--;
 			result.path[--path_index] = 'D';
 		} else if(mat[s(max.apos, max.bpos)] == mat[e(max.apos, max.bpos)]) {
-			while(mat[s(max.apos, max.bpos)] == mat[s(max.apos - 1, max.bpos)] + gea) {
+			while(mat[e(max.apos, max.bpos)] == mat[e(max.apos - 1, max.bpos)] + gea) {
 				max.apos--;
 				result.path[--path_index] = 'R';
 			}

@@ -335,6 +335,9 @@ gaba_result_t *gaba_dp_trace(
  * @fn gaba_dp_print_cigar
  *
  * @brief convert path string to cigar.
+ * @detail
+ * fprintf must accept ("%" PRId64 "M") and ("%" PRId64 "%c") format string
+ * otherwise can be ignored.
  */
 typedef int (*gaba_dp_fprintf_t)(void *, char const *, ...);
 int64_t gaba_dp_print_cigar(
