@@ -4214,8 +4214,7 @@ int32_t gaba_dp_add_stack(
 void suffix(gaba_dp_flush)(
 	struct gaba_dp_context_s *this,
 	uint8_t const *alim,
-	uint8_t const *blim,
-	gaba_stack_t const *stack)
+	uint8_t const *blim)
 {
 	/* init seq lims */
 	this->w.r.alim = alim;
