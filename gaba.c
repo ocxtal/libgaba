@@ -3651,25 +3651,25 @@ struct gaba_alignment_s *trace_refine_alignment(
 	struct gaba_trace_params_s const *params)
 {
 	if(params->sec != NULL) {
-		/* append seed path */
-		uint32_t seed = 0x55555555;
-		trace_cat_path(this, &res.rv_path, &((struct gaba_path_intl_s const){
-			.head = &seed,
-			.tail = &seed,
-			.hofs = 0,
-			.tofs = 2 * params->k
-		}));
-
 		/* append seed section */
 		trace_cat_section(this, &res.rv_sec, &((struct gaba_sec_arr_s const){
 			.head = (struct gaba_path_section_s *)params->sec,
 			.tail = (struct gaba_path_section_s *)params->sec + params->slen
 		}));
+
+		/* append seed path */
+		uint32_t seed = 0x55555555;
+		trace_cat_path(this, &res.rv_path, &((struct gaba_path_intl_s const){
+			.head = &seed,
+			.tail = &seed,
+			.hofs = 2 * params->k,
+			.tofs = 0
+		}));
 	}
 
 	/* append forward section */
-	trace_cat_path(this, &res.rv_path, &res.fw_path);
 	trace_cat_section(this, &res.rv_sec, &res.fw_sec);
+	trace_cat_path(this, &res.rv_path, &res.fw_path);
 
 	/* set pointer fields in aln object */
 	struct gaba_alignment_s *aln = res.aln;
@@ -4661,6 +4661,7 @@ struct unittest_sections_s {
 	uint64_t alen, blen;
 	struct gaba_section_s afsec, aftail, bfsec, bftail;
 	struct gaba_section_s arsec, artail, brsec, brtail;
+	struct gaba_section_s assec, bssec;
 };
 
 /**
@@ -4768,7 +4769,11 @@ void *unittest_build_seqs(void *params)
 		.arsec = gaba_build_section(1, _rev(ca + alen - 1, alim), alen),
 		.artail = gaba_build_section(3, _rev(ca + atot - 1, alim), 20),
 		.brsec = gaba_build_section(5, _rev(cb + blen - 1, blim), blen),
-		.brtail = gaba_build_section(7, _rev(cb + btot - 1, blim), 20)
+		.brtail = gaba_build_section(7, _rev(cb + btot - 1, blim), 20),
+
+		/* seed section */
+		.assec = gaba_build_section(100, ca, 14),
+		.bssec = gaba_build_section(102, cb, 14)
 	};
 	return((void *)sec);
 }
@@ -4804,7 +4809,7 @@ void unittest_clean_seqs(void *ctx)
 #define print_tail(_t) \
 	"tail(%p), max(%lld), p(%d), psum(%lld), ssum(%u)", \
 	(_t), (_t)->max, (_t)->p, (_t)->psum, (_t)->ssum
-#define check_result(_r, _score, _plen, _offset, _slen) ( \
+#define check_result(_r, _score, _plen, _slen) ( \
 	   (_r) != NULL \
 	&& (_r)->sec != NULL \
 	&& (_r)->path != NULL \
@@ -5372,22 +5377,22 @@ unittest(with_seq_pair("A", "A"))
 
 	/* forward-only traceback */
 	struct gaba_alignment_s *r = gaba_dp_trace(d, f, NULL, NULL);
-	assert(check_result(r, 0, 0, 0, 0), print_result(r));
+	assert(check_result(r, 0, 0, 0), print_result(r));
 
 	/* forward-reverse traceback */
 	r = gaba_dp_trace(d, f, f, NULL);
-	assert(check_result(r, 0, 0, 0, 0), print_result(r));
+	assert(check_result(r, 0, 0, 0), print_result(r));
 
 	/* section added */
 	f = gaba_dp_fill(d, f, &s->afsec, &s->bfsec);
 
 	/* forward-only traceback */
 	r = gaba_dp_trace(d, f, NULL, NULL);
-	assert(check_result(r, 0, 0, 0, 0), print_result(r));
+	assert(check_result(r, 0, 0, 0), print_result(r));
 
 	/* forward-reverse traceback */
 	r = gaba_dp_trace(d, f, f, NULL);
-	assert(check_result(r, 0, 0, 0, 0), print_result(r));
+	assert(check_result(r, 0, 0, 0), print_result(r));
 
 	gaba_dp_clean(d);
 }
@@ -5404,7 +5409,7 @@ unittest(with_seq_pair("A", "A"))
 
 	/* forward-only traceback */
 	struct gaba_alignment_s *r = gaba_dp_trace(d, f, NULL, NULL);
-	assert(check_result(r, 4, 4, 28, 2), print_result(r));
+	assert(check_result(r, 4, 4, 2), print_result(r));
 	assert(check_path(r, "DRDR"), print_path(r));
 	assert(check_cigar(r, "2M"), print_path(r));
 	assert(check_section(r->sec[0], s->afsec, 0, 1, s->bfsec, 0, 1, 0, 2), print_section(r->sec[0]));
@@ -5412,7 +5417,7 @@ unittest(with_seq_pair("A", "A"))
 
 	/* reverse-only traceback */
 	r = gaba_dp_trace(d, NULL, f, NULL);
-	assert(check_result(r, 4, 4, 28, 2), print_result(r));
+	assert(check_result(r, 4, 4, 2), print_result(r));
 	assert(check_path(r, "DRDR"), print_path(r));
 	assert(check_cigar(r, "2M"), print_path(r));
 	assert(check_section(r->sec[0], s->arsec, 0, 1, s->brsec, 0, 1, 0, 2), print_section(r->sec[0]));
@@ -5420,13 +5425,32 @@ unittest(with_seq_pair("A", "A"))
 
 	/* forward-reverse traceback */
 	r = gaba_dp_trace(d, f, f, NULL);
-	assert(check_result(r, 8, 8, 24, 4), print_result(r));
+	assert(check_result(r, 8, 8, 4), print_result(r));
 	assert(check_path(r, "DRDRDRDR"), print_path(r));
 	assert(check_cigar(r, "4M"), print_path(r));
 	assert(check_section(r->sec[0], s->arsec, 0, 1, s->brsec, 0, 1, 0, 2), print_section(r->sec[0]));
 	assert(check_section(r->sec[1], s->arsec, 0, 1, s->brsec, 0, 1, 2, 2), print_section(r->sec[1]));
 	assert(check_section(r->sec[2], s->afsec, 0, 1, s->bfsec, 0, 1, 4, 2), print_section(r->sec[2]));
 	assert(check_section(r->sec[3], s->afsec, 0, 1, s->bfsec, 0, 1, 6, 2), print_section(r->sec[3]));
+
+	/* forward-reverse traceback with seed */
+	r = gaba_dp_trace(d, f, f, GABA_TRACE_PARAMS(
+		.sec = &((struct gaba_path_section_s){
+			.aid = 100, .bid = 102,
+			.apos = 0, .bpos = 0,
+			.alen = 14, .blen = 14,
+			.ppos = 0, .plen = 14
+		}),
+		.slen = 1,
+		.k = 14));
+	assert(check_result(r, 36, 36, 5), print_result(r));
+	assert(check_path(r, "DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"), print_path(r));
+	assert(check_cigar(r, "18M"), print_path(r));
+	assert(check_section(r->sec[0], s->arsec, 0, 1, s->brsec, 0, 1, 0, 2), print_section(r->sec[0]));
+	assert(check_section(r->sec[1], s->arsec, 0, 1, s->brsec, 0, 1, 2, 2), print_section(r->sec[1]));
+	assert(check_section(r->sec[2], s->assec, 0, 14, s->bssec, 0, 14, 4, 14), print_section(r->sec[2]));
+	assert(check_section(r->sec[3], s->afsec, 0, 1, s->bfsec, 0, 1, 18, 2), print_section(r->sec[3]));
+	assert(check_section(r->sec[4], s->afsec, 0, 1, s->bfsec, 0, 1, 20, 2), print_section(r->sec[4]));
 
 	gaba_dp_clean(d);
 }
@@ -5443,7 +5467,7 @@ unittest(with_seq_pair("ACGTACGTACGT", "ACGTACGTACGT"))
 
 	/* fw */
 	struct gaba_alignment_s *r = gaba_dp_trace(d, f, NULL, NULL);
-	assert(check_result(r, 48, 48, 16, 2), print_result(r));
+	assert(check_result(r, 48, 48, 2), print_result(r));
 	assert(check_path(r, "DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"), print_path(r));
 	assert(check_cigar(r, "24M"), print_path(r));
 	assert(check_section(r->sec[0], s->afsec, 0, 12, s->bfsec, 0, 12, 0, 24), print_section(r->sec[0]));
@@ -5451,7 +5475,7 @@ unittest(with_seq_pair("ACGTACGTACGT", "ACGTACGTACGT"))
 
 	/* rv */
 	r = gaba_dp_trace(d, NULL, f, NULL);
-	assert(check_result(r, 48, 48, 16, 2), print_result(r));
+	assert(check_result(r, 48, 48, 2), print_result(r));
 	assert(check_path(r, "DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"), print_path(r));
 	assert(check_cigar(r, "24M"), print_path(r));
 	assert(check_section(r->sec[0], s->arsec, 0, 12, s->brsec, 0, 12, 0, 24), print_section(r->sec[0]));
@@ -5459,7 +5483,7 @@ unittest(with_seq_pair("ACGTACGTACGT", "ACGTACGTACGT"))
 
 	/* fw-rv */
 	r = gaba_dp_trace(d, f, f, NULL);
-	assert(check_result(r, 96, 96, 0, 4), print_result(r));
+	assert(check_result(r, 96, 96, 4), print_result(r));
 	assert(check_path(r,
 		"DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"
 		"DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"),
@@ -5500,7 +5524,7 @@ unittest(with_seq_pair("ACGTACGTACGT", "ACGTACGTACGT"))
 
 	/* fw-rv */
 	struct gaba_alignment_s *r = gaba_dp_trace(d, f1, f2, NULL);
-	assert(check_result(r, 24, 24, 8, 1), print_result(r));
+	assert(check_result(r, 24, 24, 1), print_result(r));
 	assert(check_path(r, "DRDRDRDRDRDRDRDRDRDRDRDR"), print_path(r));
 	assert(check_cigar(r, "12M"), print_path(r));
 	assert(check_section(r->sec[0], s->afsec, 0, 12, s->bfsec, 0, 12, 0, 24), print_section(r->sec[0]));
@@ -5520,7 +5544,7 @@ unittest(with_seq_pair("GAAAAAAAA", "AAAAAAAA"))
 
 	/* fw */	
 	struct gaba_alignment_s *r = gaba_dp_trace(d, f, NULL, NULL);
-	assert(check_result(r, 22, 32, 0, 3), print_result(r));
+	assert(check_result(r, 22, 32, 3), print_result(r));
 	assert(check_path(r, "DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"), print_path(r));
 	assert(check_cigar(r, "16M"), print_path(r));
 	assert(check_section(r->sec[0], s->afsec, 0, 8, s->bfsec, 0, 8, 0, 16), print_section(r->sec[0]));
@@ -5529,7 +5553,7 @@ unittest(with_seq_pair("GAAAAAAAA", "AAAAAAAA"))
 
 	/* rv */
 	r = gaba_dp_trace(d, NULL, f, NULL);
-	assert(check_result(r, 22, 32, 0, 3), print_result(r));
+	assert(check_result(r, 22, 32, 3), print_result(r));
 	assert(check_path(r, "DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"), print_path(r));
 	assert(check_cigar(r, "16M"), print_path(r));
 	assert(check_section(r->sec[0], s->arsec, 2, 7, s->brsec, 0, 7, 0, 14), print_section(r->sec[0]));
@@ -5538,7 +5562,7 @@ unittest(with_seq_pair("GAAAAAAAA", "AAAAAAAA"))
 
 	/* fw-rv */
 	r = gaba_dp_trace(d, f, f, NULL);
-	assert(check_result(r, 44, 64, 0, 6), print_result(r));
+	assert(check_result(r, 44, 64, 6), print_result(r));
 	assert(check_path(r,
 		"DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"
 		"DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"),
@@ -5567,7 +5591,7 @@ unittest(with_seq_pair("TTTTTTTT", "CTTTTTTTT"))
 
 	/* fw */
 	struct gaba_alignment_s *r = gaba_dp_trace(d, f, NULL, NULL);
-	assert(check_result(r, 22, 32, 0, 3), print_result(r));
+	assert(check_result(r, 22, 32, 3), print_result(r));
 	assert(check_path(r, "DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"), print_path(r));
 	assert(check_cigar(r, "16M"), print_path(r));
 	assert(check_section(r->sec[0], s->afsec, 0, 8, s->bfsec, 0, 8, 0, 16), print_section(r->sec[0]));
@@ -5576,7 +5600,7 @@ unittest(with_seq_pair("TTTTTTTT", "CTTTTTTTT"))
 
 	/* rv */
 	r = gaba_dp_trace(d, NULL, f, NULL);
-	assert(check_result(r, 22, 32, 0, 3), print_result(r));
+	assert(check_result(r, 22, 32, 3), print_result(r));
 	assert(check_path(r, "DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"), print_path(r));
 	assert(check_cigar(r, "16M"), print_path(r));
 	assert(check_section(r->sec[0], s->arsec, 0, 7, s->brsec, 2, 7, 0, 14), print_section(r->sec[0]));
@@ -5585,7 +5609,7 @@ unittest(with_seq_pair("TTTTTTTT", "CTTTTTTTT"))
 
 	/* fw-rv */
 	r = gaba_dp_trace(d, f, f, NULL);
-	assert(check_result(r, 44, 64, 0, 6), print_result(r));
+	assert(check_result(r, 44, 64, 6), print_result(r));
 	assert(check_path(r,
 		"DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"
 		"DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"), print_path(r));
@@ -5612,7 +5636,7 @@ unittest(with_seq_pair("GACGTACGT", "ACGTACGT"))
 
 	/* fw */
 	struct gaba_alignment_s *r = gaba_dp_trace(d, f, NULL, NULL);
-	assert(check_result(r, 20, 34, 30, 2), print_result(r));
+	assert(check_result(r, 20, 34, 2), print_result(r));
 	assert(check_path(r, "RDRDRDRDRDRDRDRDRRDRDRDRDRDRDRDRDR"), print_path(r));
 	assert(check_cigar(r, "1D8M1D8M"), print_path(r));
 	assert(check_section(r->sec[0], s->afsec, 0, 9, s->bfsec, 0, 8, 0, 17), print_section(r->sec[0]));
@@ -5620,7 +5644,7 @@ unittest(with_seq_pair("GACGTACGT", "ACGTACGT"))
 
 	/* rv */
 	r = gaba_dp_trace(d, NULL, f, NULL);
-	assert(check_result(r, 20, 34, 30, 2), print_result(r));
+	assert(check_result(r, 20, 34, 2), print_result(r));
 	assert(check_path(r, "DRDRDRDRDRDRDRDRRDRDRDRDRDRDRDRDRR"), print_path(r));
 	assert(check_cigar(r, "8M1D8M1D"), print_path(r));
 	assert(check_section(r->sec[0], s->arsec, 0, 9, s->brsec, 0, 8, 0, 17), print_section(r->sec[0]));
@@ -5629,7 +5653,7 @@ unittest(with_seq_pair("GACGTACGT", "ACGTACGT"))
 	/* fw-rv */
 	r = gaba_dp_trace(d, f, f, NULL);
 	/* fixme!! continuous gaps at the root must be concatenated! */
-	assert(check_result(r, 40, 68, 28, 4), print_result(r));
+	assert(check_result(r, 40, 68, 4), print_result(r));
 	assert(check_path(r,
 		"DRDRDRDRDRDRDRDRRDRDRDRDRDRDRDRDRR"
 		"RDRDRDRDRDRDRDRDRRDRDRDRDRDRDRDRDR"), print_path(r));
@@ -5655,7 +5679,7 @@ unittest(with_seq_pair("ACGTACGT", "GACGTACGT"))
 
 	/* fw */
 	struct gaba_alignment_s *r = gaba_dp_trace(d, f, NULL, NULL);
-	assert(check_result(r, 20, 34, 30, 2), print_result(r));
+	assert(check_result(r, 20, 34, 2), print_result(r));
 	assert(check_path(r, "DDRDRDRDRDRDRDRDRDDRDRDRDRDRDRDRDR"), print_path(r));
 	assert(check_cigar(r, "1I8M1I8M"), print_path(r));
 	assert(check_section(r->sec[0], s->afsec, 0, 8, s->bfsec, 0, 9, 0, 17), print_section(r->sec[0]));
@@ -5663,7 +5687,7 @@ unittest(with_seq_pair("ACGTACGT", "GACGTACGT"))
 
 	/* rv */
 	r = gaba_dp_trace(d, NULL, f, NULL);
-	assert(check_result(r, 20, 34, 30, 2), print_result(r));
+	assert(check_result(r, 20, 34, 2), print_result(r));
 	assert(check_path(r, "DRDRDRDRDRDRDRDRDDRDRDRDRDRDRDRDRD"), print_path(r));
 	assert(check_cigar(r, "8M1I8M1I"), print_path(r));
 	assert(check_section(r->sec[0], s->arsec, 0, 8, s->brsec, 0, 9, 0, 17), print_section(r->sec[0]));
@@ -5671,7 +5695,7 @@ unittest(with_seq_pair("ACGTACGT", "GACGTACGT"))
 
 	/* fw-rv */
 	r = gaba_dp_trace(d, f, f, NULL);
-	assert(check_result(r, 40, 68, 28, 4), print_result(r));
+	assert(check_result(r, 40, 68, 4), print_result(r));
 	assert(check_path(r,
 		"DRDRDRDRDRDRDRDRDDRDRDRDRDRDRDRDRD"
 		"DDRDRDRDRDRDRDRDRDDRDRDRDRDRDRDRDR"), print_path(r));
