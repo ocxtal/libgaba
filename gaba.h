@@ -31,7 +31,7 @@
 /**
  * @enum gaba_error
  *
- * @brief (API) error flags. see gaba_init function and status member in the gaba_result structure for more details.
+ * @brief (API) error flags. see gaba_init function and status member in the gaba_alignment structure for more details.
  */
 enum gaba_error {
 	GABA_SUCCESS 				=  0,	/*!< success!! */
@@ -187,7 +187,9 @@ struct gaba_path_section_s {
 	uint32_t aid, bid;			/** (8) id of the sections */
 	uint32_t apos, bpos;		/** (8) pos in the sections */
 	uint32_t alen, blen;		/** (8) length of the segments */
-	uint32_t plen, ppos;		/** (8) path string position (offset) and length */
+	int64_t ppos;				/** (8) path string position (offset) */
+	uint32_t plen;				/** (4) path string length */
+	uint32_t reserved;			/** (4) */
 };
 typedef struct gaba_path_section_s gaba_path_section_t;
 
@@ -195,23 +197,23 @@ typedef struct gaba_path_section_s gaba_path_section_t;
  * @struct gaba_path_s
  */
 struct gaba_path_s {
-	uint32_t len;				/** (4) path length (= array bit length) */
-	uint32_t offset;			/** (4) offset at the head of the path */
+	int64_t len;				/** (8) path length (= array bit length) */
 	uint32_t array[];			/** () path array */
 };
 typedef struct gaba_path_s gaba_path_t;
 
 /**
- * @struct gaba_result_s
+ * @struct gaba_alignment_s
  */
-struct gaba_result_s {
+struct gaba_alignment_s {
+	void *lmm;
+	int64_t score;
+	int32_t reserved;
+	uint32_t slen;
 	struct gaba_path_section_s const *sec;
 	struct gaba_path_s const *path;
-	int64_t score;
-	uint32_t slen;
-	int32_t qual;
 };
-typedef struct gaba_result_s gaba_result_t;
+typedef struct gaba_alignment_s gaba_alignment_t;
 
 /**
  * @fn gaba_init
@@ -298,38 +300,48 @@ gaba_fill_t *gaba_dp_merge(
 	uint64_t sec_list_len);
 
 /**
- * @struct gaba_clip_params_s
+ * @struct gaba_trace_params_s
  */
-struct gaba_clip_params_s {
+struct gaba_trace_params_s {
+	void *lmm;
+	struct gaba_path_section_s const *sec;
+	uint16_t slen;
+	uint16_t k;
 	char seq_a_head_type;
 	char seq_a_tail_type;
 	char seq_b_head_type;
 	char seq_b_tail_type;
 };
-typedef struct gaba_clip_params_s gaba_clip_params_t;
+typedef struct gaba_trace_params_s gaba_trace_params_t;
 
 /**
- * @macro GABA_CLIP_PARAMS
+ * @macro GABA_TRACE_PARAMS
  */
-#define GABA_CLIP_PARAMS(...)		( &((struct gaba_clip_params_s const) { __VA_ARGS__ }) )
-#define GABA_CLIP_NONE				( NULL )
+#define GABA_TRACE_PARAMS(...)		( &((struct gaba_trace_params_s const) { __VA_ARGS__ }) )
+#define GABA_TRACE_NONE				( NULL )
 
 /**
- * @type gaba_result_writer
+ * @type gaba_alignment_writer
  * @brief pointer to putchar-compatible writer
  */
-typedef int (*gaba_result_writer)(int c);
+typedef int (*gaba_alignment_writer)(int c);
 
 /**
  * @fn gaba_dp_trace
  *
  * @brief generate alignment result string
  */
-gaba_result_t *gaba_dp_trace(
+gaba_alignment_t *gaba_dp_trace(
 	gaba_dp_t *this,
 	gaba_fill_t const *fw_tail,
 	gaba_fill_t const *rv_tail,
-	gaba_clip_params_t const *clip);
+	gaba_trace_params_t const *params);
+
+/**
+ * @fn gaba_dp_res_free
+ */
+void gaba_dp_res_free(
+	gaba_alignment_t *aln);
 
 /**
  * @fn gaba_dp_print_cigar
@@ -356,13 +368,6 @@ int64_t gaba_dp_dump_cigar(
 	uint32_t const *path,
 	uint32_t offset,
 	uint32_t len);
-
-/**
- * @fn gaba_dp_set_qual
- */
-void gaba_dp_set_qual(
-	gaba_result_t *res,
-	int32_t qual);
 
 #endif  /* #ifndef _GABA_H_INCLUDED */
 

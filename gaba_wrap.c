@@ -54,11 +54,11 @@ struct gaba_api_s {
 		uint64_t sec_list_len);
 
 	/* trace */
-	gaba_result_t *(*dp_trace)(
+	gaba_alignment_t *(*dp_trace)(
 		gaba_dp_t *this,
 		gaba_fill_t const *fw_tail,
 		gaba_fill_t const *rv_tail,
-		gaba_clip_params_t const *clip);
+		gaba_trace_params_t const *params);
 };
 _static_assert(sizeof(struct gaba_api_s) == 6 * sizeof(void *));
 #define _api(_ctx)				( (struct gaba_api_s const *)(_ctx) )
@@ -99,11 +99,13 @@ gaba_fill_t *gaba_dp_merge_linear(
 	gaba_dp_t *this,
 	gaba_fill_t const *sec_list,
 	uint64_t sec_list_len);
-gaba_result_t *gaba_dp_trace_linear(
+gaba_alignment_t *gaba_dp_trace_linear(
 	gaba_dp_t *this,
 	gaba_fill_t const *fw_tail,
 	gaba_fill_t const *rv_tail,
-	gaba_clip_params_t const *clip);
+	gaba_trace_params_t const *params);
+void gaba_dp_res_free_linear(
+	gaba_alignment_t *res);
 int64_t gaba_dp_print_cigar_linear(
 	gaba_dp_fprintf_t fprintf,
 	void *fp,
@@ -116,9 +118,6 @@ int64_t gaba_dp_dump_cigar_linear(
 	uint32_t const *path,
 	uint32_t offset,
 	uint32_t len);
-void gaba_dp_set_qual_linear(
-	gaba_result_t *res,
-	int32_t qual);
 
 /* affine */
 gaba_t *gaba_init_affine(
@@ -155,11 +154,13 @@ gaba_fill_t *gaba_dp_merge_affine(
 	gaba_dp_t *this,
 	gaba_fill_t const *sec_list,
 	uint64_t sec_list_len);
-gaba_result_t *gaba_dp_trace_affine(
+gaba_alignment_t *gaba_dp_trace_affine(
 	gaba_dp_t *this,
 	gaba_fill_t const *fw_tail,
 	gaba_fill_t const *rv_tail,
-	gaba_clip_params_t const *clip);
+	gaba_trace_params_t const *params);
+void gaba_dp_res_free_affine(
+	gaba_alignment_t *res);
 int64_t gaba_dp_print_cigar_affine(
 	gaba_dp_fprintf_t fprintf,
 	void *fp,
@@ -172,10 +173,6 @@ int64_t gaba_dp_dump_cigar_affine(
 	uint32_t const *path,
 	uint32_t offset,
 	uint32_t len);
-void gaba_dp_set_qual_affine(
-	gaba_result_t *res,
-	int32_t qual);
-
 
 
 
@@ -353,14 +350,25 @@ gaba_fill_t *gaba_dp_merge(
 /**
  * @fn gaba_dp_trace
  */
-gaba_result_t *gaba_dp_trace(
+gaba_alignment_t *gaba_dp_trace(
 	gaba_dp_t *this,
 	gaba_fill_t const *fw_tail,
 	gaba_fill_t const *rv_tail,
-	gaba_clip_params_t const *clip)
+	gaba_trace_params_t const *params)
 {
-	return(_api(this)->dp_trace(this, fw_tail, rv_tail, clip));
+	return(_api(this)->dp_trace(this, fw_tail, rv_tail, params));
 }
+
+/**
+ * @fn gaba_dp_res_free
+ */
+void gaba_dp_res_free(
+	gaba_alignment_t *res)
+{
+	gaba_dp_res_free_linear(res);
+	return;
+}
+
 
 /**
  * @fn gaba_dp_print_cigar
@@ -386,17 +394,6 @@ int64_t gaba_dp_dump_cigar(
 	uint32_t len)
 {
 	return(gaba_dp_dump_cigar_linear(buf, buf_size, path, offset, len));
-}
-
-/**
- * @fn gaba_dp_set_qual
- */
-void gaba_dp_set_qual(
-	gaba_result_t *res,
-	int32_t qual)
-{
-	gaba_dp_set_qual_linear(res, qual);
-	return;
 }
 
 
@@ -607,7 +604,7 @@ unittest(with_seq_pair("GGAAAAAAAA", "AAAAAAAA"))
 	assert(f->max == 6, "%lld", f->max);
 
 	/* check traceback function is callable */
-	gaba_result_t *r = gaba_dp_trace(d, f, NULL, NULL);
+	gaba_alignment_t *r = gaba_dp_trace(d, f, NULL, NULL);
 	assert(r != NULL);
 
 	gaba_dp_clean(d);
@@ -646,7 +643,7 @@ unittest(with_seq_pair("GGAAAAAAAA", "AAAAAAAA"))
 	assert(f->max == 5, "%lld", f->max);
 
 	/* check traceback function is callable */
-	gaba_result_t *r = gaba_dp_trace(d, f, NULL, NULL);
+	gaba_alignment_t *r = gaba_dp_trace(d, f, NULL, NULL);
 	assert(r != NULL);
 
 	gaba_dp_clean(d);

@@ -189,11 +189,11 @@ int main(int argc, char *argv[])
 		bench_end(fill);
 		
 		bench_start(trace);
-		struct gaba_result_s *r = gaba_dp_trace(dp, f, NULL, NULL);
+		struct gaba_alignment_s *r = gaba_dp_trace(dp, NULL, f, NULL);
 		bench_end(trace);
 
 		bench_start(parse);
-		gaba_dp_dump_cigar(c, p.len, r->path->array, r->path->offset, r->path->len);
+		gaba_dp_dump_cigar(c, p.len, r->path->array, 0, r->path->len);
 		bench_end(parse);
 
 		gaba_dp_clean(dp);
