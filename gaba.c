@@ -116,7 +116,7 @@ _static_assert(sizeof(struct gaba_section_s) == 16);
 _static_assert(sizeof(struct gaba_fill_s) == 64);
 _static_assert(sizeof(struct gaba_path_section_s) == 40);
 _static_assert(sizeof(struct gaba_path_s) == 8);
-_static_assert(sizeof(struct gaba_alignment_s) == 40);
+_static_assert(sizeof(struct gaba_alignment_s) == 48);
 _static_assert(sizeof(vec_masku_t) == 4);
 
 
@@ -3077,7 +3077,6 @@ struct gaba_path_s *trace_finalize_path(
 {
 	uint32_t *head = p.head, *tail = p.tail;
 	int64_t len = 32 * (p.tail - p.head) + p.tofs;	/* p.hofs must be zero */
-	uint32_t ofs = 0;
 
 	debug("head(%p), tail(%p), hofs(%u), tofs(%u)", p.head, p.tail, p.hofs, p.tofs);
 
@@ -3085,13 +3084,16 @@ struct gaba_path_s *trace_finalize_path(
 	/* add terminator at the end of path array */
 	*tail |= 0x01<<p.tofs;
 
+	#if 0
 	/* make the pointer 8byte aligned */
+	uint32_t ofs = 0;
 	if(((uint64_t)head & sizeof(uint32_t)) != 0) {
 		debug("fix pointer, %p, %p", head, head - 1);
 
 		head--;
 		ofs += 32;
 	}
+	#endif
 
 	/* create path object */
 	struct gaba_path_s *path = (struct gaba_path_s *)(
@@ -3289,6 +3291,11 @@ struct gaba_alignment_s *trace_refine_alignment(
 	struct gaba_result_s res,
 	struct gaba_trace_params_s const *params)
 {
+	/* set root section info */
+	struct gaba_alignment_s *aln = res.aln;
+	aln->rsec = res.rv_sec.tail - res.rv_sec.head;
+	aln->rpos = res.rv_sec.tail[-1].plen;
+
 	if(params->sec != NULL) {
 		/* append seed section */
 		trace_cat_section(this, &res.rv_sec, &((struct gaba_sec_arr_s const){
@@ -3311,7 +3318,6 @@ struct gaba_alignment_s *trace_refine_alignment(
 	trace_cat_path(this, &res.rv_path, &res.fw_path);
 
 	/* set pointer fields in aln object */
-	struct gaba_alignment_s *aln = res.aln;
 	aln->slen = res.rv_sec.tail - res.rv_sec.head;
 	aln->sec = res.rv_sec.head;
 	aln->path = trace_finalize_path(res.rv_path);

@@ -209,6 +209,8 @@ struct gaba_alignment_s {
 	void *lmm;
 	int64_t score;
 	int32_t reserved;
+	uint32_t rsec;				/** (4) gid of the root section */
+	uint32_t rpos;				/** (4) seed pos on the root section */
 	uint32_t slen;
 	struct gaba_path_section_s const *sec;
 	struct gaba_path_s const *path;
