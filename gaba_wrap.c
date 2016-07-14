@@ -16,8 +16,9 @@
 
 #include <stdint.h>				/* uint32_t, uint64_t, ... */
 #include "gaba.h"
-#include "arch/arch.h"
+#include "log.h"
 #include "sassert.h"
+#include "arch/arch.h"
 
 /* gap penalty model (linear or affine) */
 #define LINEAR 						1
