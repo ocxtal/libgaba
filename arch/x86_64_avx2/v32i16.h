@@ -9,7 +9,6 @@
 
 /* include header for intel / amd sse2 instruction sets */
 #include <x86intrin.h>
-#include "log.h"
 
 /* 8bit 32cell */
 typedef struct v32i16_s {
@@ -144,6 +143,7 @@ typedef struct v32i16_s {
 )
 
 /* debug print */
+#ifdef _LOG_H_INCLUDED
 #define _print_v32i16(a) { \
 	debug("(v32i16_t) %s(%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, " \
 				  "%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d)", \
@@ -181,6 +181,9 @@ typedef struct v32i16_s {
 		_ext_v32i16(a, 1), \
 		_ext_v32i16(a, 0)); \
 }
+#else
+#define _print_v32i16(x)	;
+#endif
 
 #endif /* _V32I16_H_INCLUDED */
 /**

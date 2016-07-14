@@ -49,16 +49,17 @@
 #include <stddef.h>				/* offsetof */
 #include <string.h>				/* memset, memcpy */
 #include "gaba.h"
-#include "arch/arch.h"
+#include "log.h"
+#include "lmm.h"
+#include "bench.h"
+#include "sassert.h"
 
+/* architecture dependent */
+#include "arch/arch.h"
 
 /* aliasing vector macros */
 #define _VECTOR_ALIAS_PREFIX		v32i8
 #include "arch/vector_alias.h"
-
-#include "lmm.h"
-#include "bench.h"
-#include "sassert.h"
 
 
 /* add suffix */
