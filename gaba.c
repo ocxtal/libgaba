@@ -5877,8 +5877,8 @@ unittest()
 			a, b, format_string_pair_diff(decode_path(r), n.path));
 
 		debug("score(%lld, %d), alen(%lld), blen(%lld)\n%s",
-			r1->score, n.score, n.alen, n.blen,
-			format_string_pair_diff(decode_path(r1), n.path));
+			r->score, n.score, n.alen, n.blen,
+			format_string_pair_diff(decode_path(r), n.path));
 
 		/* cleanup */
 		gaba_dp_clean(d);
