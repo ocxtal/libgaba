@@ -327,7 +327,7 @@ gaba_result_t *gaba_dp_trace(
 
 ### Utils
 
-#### gaba\_dp\_print\_cigar
+#### gaba\_dp\_print\_cigar\_forward, gaba\_dp\_print\_cigar\_reverse
 
 Convert path string and dump to `FILE *`.
 
@@ -341,7 +341,7 @@ int64_t gaba_dp_print_cigar(
 	uint32_t len);
 ```
 
-#### gaba\_dp\_dump\_cigar
+#### gaba\_dp\_dump\_cigar\_forward, gaba\_dp\_dump\_cigar\_reverse
 
 Convert path string and dump to a `buf`. `buf` must have enough room to store the cigar string.
 
