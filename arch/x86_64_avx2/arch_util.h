@@ -19,7 +19,7 @@
  * @macro popcnt
  */
 #if 1
-	#define popcnt(x)		_mm_popcnt_u64(x)
+	#define popcnt(x)		( (uint64_t)_mm_popcnt_u64(x) )
 #else
 	static inline
 	int popcnt(uint64_t n)
@@ -41,7 +41,7 @@
  */
 #if 1
 	/** immintrin.h is already included */
-	#define tzcnt(x)		_tzcnt_u64(x)
+	#define tzcnt(x)		( (uint64_t)_tzcnt_u64(x) )
 #else
 	static inline
 	int tzcnt(uint64_t n)
@@ -61,7 +61,7 @@
  * @brief leading zero count (count #continuous zeros from MSb)
  */
 #if 1
-	#define lzcnt(x)		_lzcnt_u64(x)
+	#define lzcnt(x)		( (uint64_t)_lzcnt_u64(x) )
 #else
 	static inline
 	int lzcnt(uint64_t n)
@@ -75,6 +75,12 @@
 		return(64-popcnt(n));
 	}
 #endif
+
+/**
+ * @macro _loadu_u64, _storeu_u64
+ */
+#define _loadu_u64(p)		( *((uint64_t *)(p)) )
+#define _storeu_u64(p, e)	{ *((uint64_t *)(p)) = (e); }
 
 /**
  * @macro _aligned_block_memcpy
@@ -91,14 +97,14 @@
 #define _ymm_wr_u(dst, n) _mm256_storeu_si256((__m256i *)(dst) + (n), (ymm##n))
 #define _memcpy_blk_intl(dst, src, size, _wr, _rd) { \
 	/** duff's device */ \
-	void *_src = (void *)(src), *_dst = (void *)(dst); \
+	uint8_t *_src = (uint8_t *)(src), *_dst = (uint8_t *)(dst); \
 	int64_t const _nreg = 16;		/** #ymm registers == 16 */ \
 	int64_t const _tcnt = (size) / sizeof(__m256i); \
 	int64_t const _offset = ((_tcnt - 1) & (_nreg - 1)) - (_nreg - 1); \
 	int64_t _jmp = _tcnt & (_nreg - 1); \
 	int64_t _lcnt = (_tcnt + _nreg - 1) / _nreg; \
-	__m256i register ymm0, ymm1, ymm2, ymm3, ymm4, ymm5, ymm6, ymm7; \
-	__m256i register ymm8, ymm9, ymm10, ymm11, ymm12, ymm13, ymm14, ymm15; \
+	register __m256i ymm0, ymm1, ymm2, ymm3, ymm4, ymm5, ymm6, ymm7; \
+	register __m256i ymm8, ymm9, ymm10, ymm11, ymm12, ymm13, ymm14, ymm15; \
 	_src += _offset * sizeof(__m256i); \
 	_dst += _offset * sizeof(__m256i); \
 	switch(_jmp) { \
@@ -147,7 +153,7 @@
 #define _memcpy_blk_ua(dst, src, len)		_memcpy_blk_intl(dst, src, len, _ymm_wr_u, _ymm_rd_a)
 #define _memcpy_blk_uu(dst, src, len)		_memcpy_blk_intl(dst, src, len, _ymm_wr_u, _ymm_rd_u)
 #define _memset_blk_intl(dst, a, size, _wr) { \
-	void *_dst = (void *)(dst); \
+	uint8_t *_dst = (uint8_t *)(dst); \
 	__m256i const ymm0 = _mm256_set1_epi8((int8_t)a); \
 	int64_t i; \
 	for(i = 0; i < size / sizeof(__m256i); i++) { \

@@ -14,10 +14,13 @@ def configure(conf):
 
 	conf.recurse('arch')
 
-	conf.env.append_value('CFLAGS', '-O3')
+
 	conf.env.append_value('CFLAGS', '-Wall')
+	conf.env.append_value('CFLAGS', '-Wno-unused-function')
+
+	conf.env.append_value('CFLAGS', '-O3')
 	conf.env.append_value('CFLAGS', '-std=c99')
-	# conf.env.append_value('CFLAGS', '-fPIC')
+	conf.env.append_value('CFLAGS', '-march=native')
 
 	if conf.env.CC_NAME == 'icc':
 		# FIXME: dirty hack to pass '-diag-disable remark', current waf does not support space-separated options
@@ -25,6 +28,8 @@ def configure(conf):
 		conf.env.append_value('CFLAGS', '-diag-disable')
 		conf.env.append_value('CFLAGS', 'remark')
 		conf.env.append_value('CFLAGS', '-inline-forceinline')
+		conf.env.append_value('CFLAGS', '-inline-max-size=20000')
+		conf.env.append_value('CFLAGS', '-inline-max-total-size=50000')
 	elif conf.env.CC_NAME == 'gcc':
 		conf.env.append_value('CFLAGS', '-Wno-unused-variable')
 		conf.env.append_value('CFLAGS', '-Wno-unused-but-set-variable')

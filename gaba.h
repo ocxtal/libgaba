@@ -181,6 +181,14 @@ enum gaba_status {
 };
 
 /**
+ * @struct gaba_pos_pair_s
+ */
+struct gaba_pos_pair_s {
+	uint32_t apos, bpos;
+};
+typedef struct gaba_pos_pair_s gaba_pos_pair_t;
+
+/**
  * @struct gaba_path_section_s
  */
 struct gaba_path_section_s {
@@ -188,10 +196,11 @@ struct gaba_path_section_s {
 	uint32_t apos, bpos;		/** (8) pos in the sections */
 	uint32_t alen, blen;		/** (8) length of the segments */
 	int64_t ppos;				/** (8) path string position (offset) */
-	uint32_t plen;				/** (4) path string length */
-	uint32_t reserved;			/** (4) */
+	// uint32_t plen;				/** (4) path string length */
+	// uint32_t reserved;			/** (4) */
 };
 typedef struct gaba_path_section_s gaba_path_section_t;
+#define gaba_plen(sec)		( (sec)->alen + (sec)->blen )
 
 /**
  * @struct gaba_path_s
@@ -208,9 +217,11 @@ typedef struct gaba_path_s gaba_path_t;
 struct gaba_alignment_s {
 	void *lmm;
 	int64_t score;
-	int32_t reserved;
-	uint32_t rsec;				/** (4) gid of the root section */
-	uint32_t rpos;				/** (4) seed pos on the root section */
+	uint32_t reserved1, reserved2;
+	uint32_t rapos, rbpos;
+	uint32_t rppos;				/** (4) local path index in the root section */
+	uint32_t rsidx;				/** (4) index of the root section */
+	uint32_t reserved3;
 	uint32_t slen;
 	struct gaba_path_section_s const *sec;
 	struct gaba_path_s const *path;
@@ -250,7 +261,7 @@ gaba_dp_t *gaba_dp_init(
  * @brief flush stack (flush all if NULL) 
  */
 void gaba_dp_flush(
-	gaba_dp_t *this,
+	gaba_dp_t *dp,
 	uint8_t const *alim,
 	uint8_t const *blim);
 
@@ -258,26 +269,26 @@ void gaba_dp_flush(
  * @fn gaba_dp_save_stack
  */
 gaba_stack_t const *gaba_dp_save_stack(
-	gaba_dp_t *this);
+	gaba_dp_t *dp);
 
 /**
  * @fn gaba_dp_flush_stack
  */
 void gaba_dp_flush_stack(
-	gaba_dp_t *this,
+	gaba_dp_t *dp,
 	gaba_stack_t const *stack);
 
 /**
  * @fn gaba_dp_clean
  */
 void gaba_dp_clean(
-	gaba_dp_t *this);
+	gaba_dp_t *dp);
 
 /**
  * @fn gaba_dp_fill_root
  */
 gaba_fill_t *gaba_dp_fill_root(
-	gaba_dp_t *this,
+	gaba_dp_t *dp,
 	gaba_section_t const *a,
 	uint32_t apos,
 	gaba_section_t const *b,
@@ -288,7 +299,7 @@ gaba_fill_t *gaba_dp_fill_root(
  * @brief fill dp matrix inside section pairs
  */
 gaba_fill_t *gaba_dp_fill(
-	gaba_dp_t *this,
+	gaba_dp_t *dp,
 	gaba_fill_t const *prev_sec,
 	gaba_section_t const *a,
 	gaba_section_t const *b);
@@ -297,9 +308,16 @@ gaba_fill_t *gaba_dp_fill(
  * @fn gaba_dp_merge
  */
 gaba_fill_t *gaba_dp_merge(
-	gaba_dp_t *this,
+	gaba_dp_t *dp,
 	gaba_fill_t const *sec_list,
 	uint64_t sec_list_len);
+
+/**
+ * @fn gaba_dp_search_max
+ */
+gaba_pos_pair_t gaba_dp_search_max(
+	gaba_dp_t *dp,
+	gaba_fill_t const *sec);
 
 /**
  * @struct gaba_trace_params_s
@@ -334,10 +352,22 @@ typedef int (*gaba_alignment_writer)(int c);
  * @brief generate alignment result string
  */
 gaba_alignment_t *gaba_dp_trace(
-	gaba_dp_t *this,
+	gaba_dp_t *dp,
 	gaba_fill_t const *fw_tail,
 	gaba_fill_t const *rv_tail,
 	gaba_trace_params_t const *params);
+
+/**
+ * @fn gaba_dp_recombine
+ *
+ * @brief recombine two alignments x and y at xsid and ysid.
+ */
+gaba_alignment_t *gaba_dp_recombine(
+	gaba_dp_t *dp,
+	gaba_alignment_t *x,
+	uint32_t xsid,
+	gaba_alignment_t *y,
+	uint32_t ysid);
 
 /**
  * @fn gaba_dp_res_free
@@ -346,7 +376,7 @@ void gaba_dp_res_free(
 	gaba_alignment_t *aln);
 
 /**
- * @fn gaba_dp_print_cigar
+ * @fn gaba_dp_print_cigar_forward
  *
  * @brief convert path string to cigar.
  * @detail
@@ -354,7 +384,7 @@ void gaba_dp_res_free(
  * otherwise can be ignored.
  */
 typedef int (*gaba_dp_fprintf_t)(void *, char const *, ...);
-int64_t gaba_dp_print_cigar(
+uint64_t gaba_dp_print_cigar_forward(
 	gaba_dp_fprintf_t fprintf,
 	void *fp,
 	uint32_t const *path,
@@ -362,9 +392,31 @@ int64_t gaba_dp_print_cigar(
 	uint32_t len);
 
 /**
- * @fn gaba_dp_dump_cigar
+ * @fn gaba_dp_print_cigar_reverse
+ *
+ * @brief convert path string to cigar in reverse direction
  */
-int64_t gaba_dp_dump_cigar(
+uint64_t gaba_dp_print_cigar_reverse(
+	gaba_dp_fprintf_t fprintf,
+	void *fp,
+	uint32_t const *path,
+	uint32_t offset,
+	uint32_t len);
+
+/**
+ * @fn gaba_dp_dump_cigar_forward
+ */
+uint64_t gaba_dp_dump_cigar_forward(
+	char *buf,
+	uint64_t buf_size,
+	uint32_t const *path,
+	uint32_t offset,
+	uint32_t len);
+
+/**
+ * @fn gaba_dp_dump_cigar_reverse
+ */
+uint64_t gaba_dp_dump_cigar_reverse(
 	char *buf,
 	uint64_t buf_size,
 	uint32_t const *path,

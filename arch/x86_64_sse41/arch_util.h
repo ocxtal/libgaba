@@ -18,11 +18,11 @@
  * @macro popcnt
  */
 #ifdef __POPCNT__
-	#define popcnt(x)		_mm_popcnt_u64(x)
+	#define popcnt(x)		( (uint64_t)_mm_popcnt_u64(x) )
 #else
 	// #warning "popcnt instruction is not enabled."
 	static inline
-	int popcnt(uint64_t n)
+	uint64_t popcnt(uint64_t n)
 	{
 		uint64_t c = 0;
 		c = (n & 0x5555555555555555) + ((n>>1) & 0x5555555555555555);
@@ -41,19 +41,23 @@
  */
 #ifdef __BMI__
 	/** immintrin.h is already included */
-	#define tzcnt(x)		_tzcnt_u64(x)
+	#define tzcnt(x)		( (uint64_t)_tzcnt_u64(x) )
 #else
 	// #warning "tzcnt instruction is not enabled."
 	static inline
-	int tzcnt(uint64_t n)
+	uint64_t tzcnt(uint64_t n)
 	{
-		n |= n<<1;
-		n |= n<<2;
-		n |= n<<4;
-		n |= n<<8;
-		n |= n<<16;
-		n |= n<<32;
-		return(64-popcnt(n));
+		#ifdef __POPCNT__
+			return(popcnt(~n & (n - 1)));
+		#else
+			if(n == 0) {
+				return(64);
+			} else {
+				int64_t res;
+				__asm__( "bsfq %1, %0" : "=r"(res) : "r"(n) );
+				return(res);
+			}
+		#endif
 	}
 #endif
 
@@ -62,28 +66,27 @@
  * @brief leading zero count (count #continuous zeros from MSb)
  */
 #ifdef __LZCNT__
-	#define lzcnt(x)		_lzcnt_u64(x)
+	#define lzcnt(x)		( (uint64_t)_lzcnt_u64(x) )
 #else
 	// #warning "lzcnt instruction is not enabled."
 	static inline
-	int lzcnt(uint64_t n)
+	uint64_t lzcnt(uint64_t n)
 	{
-		n |= n>>1;
-		n |= n>>2;
-		n |= n>>4;
-		n |= n>>8;
-		n |= n>>16;
-		n |= n>>32;
-		return(64-popcnt(n));
+		if(n == 0) {
+			return(64);
+		} else {
+			int64_t res;
+			__asm__( "bsrq %1, %0" : "=r"(res) : "r"(n) );
+			return(63 - res);
+		}
 	}
 #endif
 
 /**
- * @macro store_stream
+ * @macro _loadu_u64, _storeu_u64
  */
-#define store_stream(_ptr, _a) { \
-	_mm_stream_si64((int64_t *)(_ptr), (int64_t)(_a)); \
-}
+#define _loadu_u64(p)		( *((uint64_t *)(p)) )
+#define _storeu_u64(p, e)	{ *((uint64_t *)(p)) = (e); }
 
 /**
  * @macro _aligned_block_memcpy
@@ -100,14 +103,14 @@
 #define _xmm_wr_u(dst, n) _mm_storeu_si128((__m128i *)(dst) + (n), (xmm##n))
 #define _memcpy_blk_intl(dst, src, size, _wr, _rd) { \
 	/** duff's device */ \
-	void *_src = (void *)(src), *_dst = (void *)(dst); \
+	uint8_t *_src = (uint8_t *)(src), *_dst = (uint8_t *)(dst); \
 	int64_t const _nreg = 16;		/** #xmm registers == 16 */ \
 	int64_t const _tcnt = (size) / sizeof(__m128i); \
 	int64_t const _offset = ((_tcnt - 1) & (_nreg - 1)) - (_nreg - 1); \
 	int64_t _jmp = _tcnt & (_nreg - 1); \
 	int64_t _lcnt = (_tcnt + _nreg - 1) / _nreg; \
-	__m128i register xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7; \
-	__m128i register xmm8, xmm9, xmm10, xmm11, xmm12, xmm13, xmm14, xmm15; \
+	register __m128i xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7; \
+	register __m128i xmm8, xmm9, xmm10, xmm11, xmm12, xmm13, xmm14, xmm15; \
 	_src += _offset * sizeof(__m128i); \
 	_dst += _offset * sizeof(__m128i); \
 	switch(_jmp) { \
@@ -156,7 +159,7 @@
 #define _memcpy_blk_ua(dst, src, len)		_memcpy_blk_intl(dst, src, len, _xmm_wr_u, _xmm_rd_a)
 #define _memcpy_blk_uu(dst, src, len)		_memcpy_blk_intl(dst, src, len, _xmm_wr_u, _xmm_rd_u)
 #define _memset_blk_intl(dst, a, size, _wr) { \
-	void *_dst = (void *)(dst); \
+	uint8_t *_dst = (uint8_t *)(dst); \
 	__m128i const xmm0 = _mm_set1_epi8((int8_t)a); \
 	int64_t i; \
 	for(i = 0; i < size / sizeof(__m128i); i++) { \

@@ -49,10 +49,9 @@ struct gaba_api_s {
 		gaba_fill_t const *prev_sec,
 		gaba_section_t const *a,
 		gaba_section_t const *b);
-	gaba_fill_t *(*dp_merge)(
+	gaba_pos_pair_t (*dp_search_max)(
 		gaba_dp_t *this,
-		gaba_fill_t const *sec_list,
-		uint64_t sec_list_len);
+		gaba_fill_t const *sec);
 
 	/* trace */
 	gaba_alignment_t *(*dp_trace)(
@@ -100,20 +99,41 @@ gaba_fill_t *gaba_dp_merge_linear(
 	gaba_dp_t *this,
 	gaba_fill_t const *sec_list,
 	uint64_t sec_list_len);
+gaba_pos_pair_t gaba_dp_search_max_linear(
+	gaba_dp_t *this,
+	gaba_fill_t const *sec);
 gaba_alignment_t *gaba_dp_trace_linear(
 	gaba_dp_t *this,
 	gaba_fill_t const *fw_tail,
 	gaba_fill_t const *rv_tail,
 	gaba_trace_params_t const *params);
+gaba_alignment_t *gaba_dp_recombine_linear(
+	gaba_dp_t *this,
+	gaba_alignment_t *x,
+	uint32_t xsid,
+	gaba_alignment_t *y,
+	uint32_t ysid);
 void gaba_dp_res_free_linear(
 	gaba_alignment_t *res);
-int64_t gaba_dp_print_cigar_linear(
+int64_t gaba_dp_print_cigar_forward_linear(
 	gaba_dp_fprintf_t fprintf,
 	void *fp,
 	uint32_t const *path,
 	uint32_t offset,
 	uint32_t len);
-int64_t gaba_dp_dump_cigar_linear(
+int64_t gaba_dp_print_cigar_reverse_linear(
+	gaba_dp_fprintf_t fprintf,
+	void *fp,
+	uint32_t const *path,
+	uint32_t offset,
+	uint32_t len);
+int64_t gaba_dp_dump_cigar_forward_linear(
+	char *buf,
+	uint64_t buf_size,
+	uint32_t const *path,
+	uint32_t offset,
+	uint32_t len);
+int64_t gaba_dp_dump_cigar_reverse_linear(
 	char *buf,
 	uint64_t buf_size,
 	uint32_t const *path,
@@ -155,26 +175,46 @@ gaba_fill_t *gaba_dp_merge_affine(
 	gaba_dp_t *this,
 	gaba_fill_t const *sec_list,
 	uint64_t sec_list_len);
+gaba_pos_pair_t gaba_dp_search_max_affine(
+	gaba_dp_t *this,
+	gaba_fill_t const *sec);
 gaba_alignment_t *gaba_dp_trace_affine(
 	gaba_dp_t *this,
 	gaba_fill_t const *fw_tail,
 	gaba_fill_t const *rv_tail,
 	gaba_trace_params_t const *params);
+gaba_alignment_t *gaba_dp_recombine_affine(
+	gaba_dp_t *this,
+	gaba_alignment_t *x,
+	uint32_t xsid,
+	gaba_alignment_t *y,
+	uint32_t ysid);
 void gaba_dp_res_free_affine(
 	gaba_alignment_t *res);
-int64_t gaba_dp_print_cigar_affine(
+int64_t gaba_dp_print_cigar_forward_affine(
 	gaba_dp_fprintf_t fprintf,
 	void *fp,
 	uint32_t const *path,
 	uint32_t offset,
 	uint32_t len);
-int64_t gaba_dp_dump_cigar_affine(
+int64_t gaba_dp_print_cigar_reverse_affine(
+	gaba_dp_fprintf_t fprintf,
+	void *fp,
+	uint32_t const *path,
+	uint32_t offset,
+	uint32_t len);
+int64_t gaba_dp_dump_cigar_forward_affine(
 	char *buf,
 	uint64_t buf_size,
 	uint32_t const *path,
 	uint32_t offset,
 	uint32_t len);
-
+int64_t gaba_dp_dump_cigar_reverse_affine(
+	char *buf,
+	uint64_t buf_size,
+	uint32_t const *path,
+	uint32_t offset,
+	uint32_t len);
 
 
 /* function table */
@@ -185,7 +225,7 @@ struct gaba_api_s const api_table[] __attribute__(( aligned(16) )) = {
 		.clean = gaba_clean_linear,
 		.dp_fill_root = gaba_dp_fill_root_linear,
 		.dp_fill = gaba_dp_fill_linear,
-		.dp_merge = NULL /*gaba_dp_merge_linear*/,
+		.dp_search_max = gaba_dp_search_max_linear,
 		.dp_trace = gaba_dp_trace_linear
 	},
 	[AFFINE] = {
@@ -193,7 +233,7 @@ struct gaba_api_s const api_table[] __attribute__(( aligned(16) )) = {
 		.clean = gaba_clean_affine,
 		.dp_fill_root = gaba_dp_fill_root_affine,
 		.dp_fill = gaba_dp_fill_affine,
-		.dp_merge = NULL /*gaba_dp_merge_affine*/,
+		.dp_search_max = gaba_dp_search_max_affine,
 		.dp_trace = gaba_dp_trace_affine
 	}
 };
@@ -226,6 +266,7 @@ void *gaba_set_api(
 	void *ctx,
 	struct gaba_api_s const *api)
 {
+	if(ctx == NULL) { return(NULL); }
 	struct gaba_api_s *dst = (struct gaba_api_s *)ctx;
 	*dst = *api;
 	return((void *)dst);
@@ -278,7 +319,8 @@ void gaba_dp_flush(
 	uint8_t const *alim,
 	uint8_t const *blim)
 {
-	return(gaba_dp_flush_linear(this, alim, blim));
+	gaba_dp_flush_linear(this, alim, blim);
+	return;
 }
 
 /**
@@ -297,7 +339,8 @@ void gaba_dp_flush_stack(
 	gaba_dp_t *this,
 	gaba_stack_t const *stack)
 {
-	return(gaba_dp_flush_stack_linear(this, stack));
+	gaba_dp_flush_stack_linear(this, stack);
+	return;
 }
 
 /**
@@ -349,6 +392,16 @@ gaba_fill_t *gaba_dp_merge(
 }
 
 /**
+ * @fn gaba_dp_search_max
+ */
+gaba_pos_pair_t gaba_dp_search_max(
+	gaba_dp_t *this,
+	gaba_fill_t const *sec)
+{
+	return(_api(this)->dp_search_max(this, sec));
+}
+
+/**
  * @fn gaba_dp_trace
  */
 gaba_alignment_t *gaba_dp_trace(
@@ -358,6 +411,19 @@ gaba_alignment_t *gaba_dp_trace(
 	gaba_trace_params_t const *params)
 {
 	return(_api(this)->dp_trace(this, fw_tail, rv_tail, params));
+}
+
+/**
+ * @fn gaba_dp_recombine
+ */
+gaba_alignment_t *gaba_dp_recombine(
+	gaba_dp_t *this,
+	gaba_alignment_t *x,
+	uint32_t xsid,
+	gaba_alignment_t *y,
+	uint32_t ysid)
+{
+	return(gaba_dp_recombine_linear(this, x, xsid, y, ysid));
 }
 
 /**
@@ -372,31 +438,56 @@ void gaba_dp_res_free(
 
 
 /**
- * @fn gaba_dp_print_cigar
+ * @fn gaba_dp_print_cigar_forward
  */
-int64_t gaba_dp_print_cigar(
+uint64_t gaba_dp_print_cigar_forward(
 	gaba_dp_fprintf_t _fprintf,
 	void *fp,
 	uint32_t const *path,
 	uint32_t offset,
 	uint32_t len)
 {
-	return(gaba_dp_print_cigar_linear(_fprintf, fp, path, offset, len));
+	return(gaba_dp_print_cigar_forward_linear(_fprintf, fp, path, offset, len));
 }
 
 /**
- * @fn gaba_dp_dump_cigar
+ * @fn gaba_dp_print_cigar_reverse
  */
-int64_t gaba_dp_dump_cigar(
+uint64_t gaba_dp_print_cigar_reverse(
+	gaba_dp_fprintf_t _fprintf,
+	void *fp,
+	uint32_t const *path,
+	uint32_t offset,
+	uint32_t len)
+{
+	return(gaba_dp_print_cigar_reverse_linear(_fprintf, fp, path, offset, len));
+}
+
+/**
+ * @fn gaba_dp_dump_cigar_forward
+ */
+uint64_t gaba_dp_dump_cigar_forward(
 	char *buf,
 	uint64_t buf_size,
 	uint32_t const *path,
 	uint32_t offset,
 	uint32_t len)
 {
-	return(gaba_dp_dump_cigar_linear(buf, buf_size, path, offset, len));
+	return(gaba_dp_dump_cigar_forward_linear(buf, buf_size, path, offset, len));
 }
 
+/**
+ * @fn gaba_dp_dump_cigar_reverse
+ */
+uint64_t gaba_dp_dump_cigar_reverse(
+	char *buf,
+	uint64_t buf_size,
+	uint32_t const *path,
+	uint32_t offset,
+	uint32_t len)
+{
+	return(gaba_dp_dump_cigar_reverse_linear(buf, buf_size, path, offset, len));
+}
 
 
 /* unittests */
@@ -495,7 +586,7 @@ void *unittest_build_seqs(void *params)
 	uint32_t alen = atot - 20;
 	uint32_t blen = btot - 20;
 
-	int64_t margin = 64;
+	uint64_t margin = 64;
 	struct unittest_sections_s *sec = malloc(
 		sizeof(struct unittest_sections_s) + (atot + 1) + (btot + 1) + margin);
 
@@ -504,10 +595,10 @@ void *unittest_build_seqs(void *params)
 	uint8_t *cb = ca + atot + 1;
 	uint8_t *cm = cb + btot + 1;
 
-	for(int64_t i = 0; i < atot; i++) {
+	for(uint64_t i = 0; i < atot; i++) {
 		ca[i] = unittest_encode_base(a[i]);
 	}
-	for(int64_t i = 0; i < btot; i++) {
+	for(uint64_t i = 0; i < btot; i++) {
 		cb[i] = unittest_encode_base(b[i]);
 	}
 	ca[atot] = cb[btot] = '\0';

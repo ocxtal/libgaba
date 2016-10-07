@@ -5,6 +5,7 @@
  */
 #include <stdio.h>
 #include <stdint.h>
+#include <inttypes.h>
 #include <stdlib.h>
 #include <string.h>
 #include <getopt.h>
@@ -154,7 +155,7 @@ int main(int argc, char *argv[])
 		if(parse_args(&p, i, optarg) != 0) { exit(1); }
 	}
 
-	fprintf(stderr, "len\t%lld\ncnt\t%lld\nx\t%f\nd\t%f\n", p.len, p.cnt, p.x, p.d);
+	fprintf(stderr, "len\t%" PRId64 "\ncnt\t%" PRId64 "\nx\t%f\nd\t%f\n", p.len, p.cnt, p.x, p.d);
 
 	/** init sequence */
 	a = generate_random_sequence(p.len);
@@ -193,7 +194,7 @@ int main(int argc, char *argv[])
 		bench_end(trace);
 
 		bench_start(parse);
-		gaba_dp_dump_cigar(c, p.len, r->path->array, 0, r->path->len);
+		gaba_dp_dump_cigar_forward(c, p.len, r->path->array, 0, r->path->len);
 		bench_end(parse);
 
 		gaba_dp_clean(dp);
@@ -202,7 +203,7 @@ int main(int argc, char *argv[])
 	/**
 	 * print results.
 	 */
-	printf("%lld\t%lld\t%lld\t%lld\t%lld\n",
+	printf("%" PRId64 "\t%" PRId64 "\t%" PRId64 "\t%" PRId64 "\t%" PRId64 "\n",
 		bench_get(fill),
 		bench_get(trace),
 		bench_get(parse),

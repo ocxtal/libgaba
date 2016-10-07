@@ -18,6 +18,9 @@
 #ifndef _BENCH_H_INCLUDED
 #define _BENCH_H_INCLUDED
 
+#include <stdint.h>
+#include <string.h>
+
 /**
  * benchmark macros
  */
@@ -69,7 +72,7 @@ typedef struct _bench bench_t;
 #else /* #ifdef BENCH */
 
 /** disable bench */
-struct _bench {};
+struct _bench { uint64_t _unused; };
 typedef struct _bench bench_t;
 #define bench_init(b) 		;
 #define bench_start(b) 		;

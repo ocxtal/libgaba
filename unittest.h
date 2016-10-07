@@ -30,6 +30,7 @@
 #ifndef _BSD_SOURCE
 #define _BSD_SOURCE
 #endif
+
 /* end */
 
 #include <alloca.h>
@@ -229,6 +230,12 @@ struct ut_s {
 };
 
 /**
+ * @macro ut_unused
+ * @brief declare the variable is unused in the function
+ */
+#define ut_unused(x)						(void)(x);
+
+/**
  * @macro ut_null_replace
  * @brief replace pointer with "(null)"
  */
@@ -303,6 +310,8 @@ void ut_print_assertion_failed(
 	char const *fmt,
 	...)
 {
+	ut_unused(func);
+
 	va_list l;
 	va_start(l, fmt);
 
@@ -357,6 +366,9 @@ void ut_print_assertion_failed_json(
 	char const *fmt,
 	...)
 {
+	ut_unused(config);
+	ut_unused(func);
+
 	va_list l;
 	va_start(l, fmt);
 
@@ -381,6 +393,8 @@ void ut_print_footer_json(
 	struct ut_global_config_s const *gconf,
 	struct ut_group_config_s const *config)
 {
+	ut_unused(config);
+
 	fprintf(gconf->fp, "\t\t],\n");
 	fprintf(gconf->fp, "\t},\n");
 	return;
@@ -512,19 +526,19 @@ struct ut_printer_s ut_json_printer = {
 	char *_str = alloca(_size); \
 	char *_s = _str; \
 	/* make header */ \
-	_s += sprintf(_s, "\n`%s' len: %" PRId64 "\n", #ptr, (int64_t)len); \
+	_s += sprintf(_s, "\n`%s' len: %" PRIu64 "\n", #ptr, (uint64_t)len); \
 	_s += sprintf(_s, "                   "); \
-	for(int64_t i = 0; i < 16; i++) { \
+	for(uint64_t i = 0; i < 16; i++) { \
 		_s += sprintf(_s, " %02x", (uint8_t)i); \
 	} \
 	_s += sprintf(_s, "\n"); \
-	for(int64_t i = 0; i < ((len) + 15) / 16; i++) { \
+	for(uint64_t i = 0; i < ((len) + 15) / 16; i++) { \
 		_s += sprintf(_s, "0x%016" PRIx64 ":", (uint64_t)_ptr); \
-		for(int64_t j = 0; j < 16; j++) { \
+		for(uint64_t j = 0; j < 16; j++) { \
 			_s += sprintf(_s, " %02x", (uint8_t)_ptr[j]); \
 		} \
 		_s += sprintf(_s, "  "); \
-		for(int64_t j = 0; j < 16; j++) { \
+		for(uint64_t j = 0; j < 16; j++) { \
 			_s += sprintf(_s, "%c", isprint(_ptr[j]) ? _ptr[j] : ' '); \
 		} \
 		_s += sprintf(_s, "\n"); \
@@ -585,7 +599,7 @@ static inline
 char *ut_build_nm_cmd(
 	char const *filename)
 {
-	int64_t const filename_len_limit = 1024;
+	uint64_t const filename_len_limit = 1024;
 	char const *cmd_base = "nm ";
 
 	/* check the length of the filename */
@@ -666,7 +680,7 @@ struct ut_nm_result_s *ut_parse_nm_output(
 	utkvec_t(struct ut_nm_result_s) buf;
 
 	utkv_init(buf);
-	while(p != '\0') {
+	while(*p != '\0') {
 		struct ut_nm_result_s r;
 
 		/* check the sanity of the line */
@@ -749,21 +763,21 @@ struct ut_s *ut_get_unittest(
 	struct ut_nm_result_s const *res)
 {
 	/* extract offset */
-	uint64_t offset = -1;
+	uintptr_t offset = (uintptr_t)-1LL;
 	struct ut_nm_result_s const *r = res;
 	while(r->type != (char)0) {
 		if(ut_strcmp("main", r->name) == 0) {
-			offset = (void *)main - r->ptr;
+			offset = (uintptr_t)main - (uintptr_t)r->ptr;
 		}
 		r++;
 	}
 
-	if(offset == -1) {
+	if(offset == (uintptr_t)-1LL) {
 		return(NULL);
 	}
 
 	#define ut_get_info_call_func(_ptr, _offset) ( \
-		(struct ut_s (*)(void))((uint64_t)(_ptr) + (uint64_t)(_offset)) \
+		(struct ut_s (*)(void))((uintptr_t)(_ptr) + (uintptr_t)(_offset)) \
 	)
 
 	/* get info */
@@ -789,21 +803,21 @@ struct ut_group_config_s *ut_get_ut_config(
 	struct ut_nm_result_s const *res)
 {
 	/* extract offset */
-	uint64_t offset = -1;
+	uintptr_t offset = (uintptr_t)-1LL;
 	struct ut_nm_result_s const *r = res;
 	while(r->type != (char)0) {
 		if(ut_strcmp("main", r->name) == 0) {
-			offset = (void *)main - r->ptr;
+			offset = (uintptr_t)main - (uintptr_t)r->ptr;
 		}
 		r++;
 	}
 
-	if(offset == -1) {
+	if(offset == (uintptr_t)-1LL) {
 		return(NULL);
 	}
 
 	#define ut_get_config_call_func(_ptr, _offset) ( \
-		(struct ut_group_config_s (*)(void))((uint64_t)(_ptr) + (uint64_t)(_offset)) \
+		(struct ut_group_config_s (*)(void))((uintptr_t)(_ptr) + (uintptr_t)(_offset)) \
 	)
 
 	/* get info */
@@ -836,8 +850,8 @@ void ut_dump_test(
 			t->unique_id,
 			t->name,
 			t->depends_on[0],
-			t->init,
-			t->clean);
+			(void *)t->init,
+			(void *)t->clean);
 		t++;
 	}
 	return;
@@ -854,8 +868,8 @@ void ut_dump_config(
 			c->unique_id,
 			c->name,
 			c->depends_on[0],
-			c->init,
-			c->clean);
+			(void *)c->init,
+			(void *)c->clean);
 		c++;
 	}
 	return;
@@ -903,30 +917,30 @@ int ut_match(
 }
 
 static inline
-int64_t ut_get_total_test_count(
+uint64_t ut_get_total_test_count(
 	struct ut_s const *test)
 {
-	int64_t cnt = 0;
+	uint64_t cnt = 0;
 	struct ut_s const *t = test;
 	while(t->file != NULL) { t++; cnt++; }
 	return(cnt);
 }
 
 static inline
-int64_t ut_get_total_config_count(
+uint64_t ut_get_total_config_count(
 	struct ut_group_config_s const *config)
 {
-	int64_t cnt = 0;
+	uint64_t cnt = 0;
 	struct ut_group_config_s const *c = config;
 	while(c->file != NULL) { c++; cnt++; }
 	return(cnt);
 }
 
 static inline
-int64_t ut_get_total_file_count(
+uint64_t ut_get_total_file_count(
 	struct ut_s const *sorted_test)
 {
-	int64_t cnt = 1;
+	uint64_t cnt = 1;
 	struct ut_s const *t = sorted_test;
 
 	if(t++->file == NULL) {
@@ -963,11 +977,11 @@ void ut_sort(
 }
 
 static inline
-int64_t *ut_build_file_index(
+uint64_t *ut_build_file_index(
 	struct ut_s const *sorted_test)
 {
-	int64_t cnt = 1;
-	utkvec_t(int64_t) idx;
+	uint64_t cnt = 1;
+	utkvec_t(uint64_t) idx;
 	struct ut_s const *t = sorted_test;
 
 	utkv_init(idx);
@@ -1001,7 +1015,7 @@ struct ut_group_config_s *ut_compensate_config(
 	// ut_dump_test(sorted_test);
 	// ut_dump_config(sorted_config);
 
-	int64_t *file_idx = ut_build_file_index(sorted_test);
+	uint64_t *file_idx = ut_build_file_index(sorted_test);
 	utkvec_t(struct ut_group_config_s) compd_config;
 	utkv_init(compd_config);
 
@@ -1029,23 +1043,23 @@ struct ut_group_config_s *ut_compensate_config(
 static inline
 int ut_toposort_by_tag(
 	struct ut_s *sorted_test,
-	int64_t test_cnt)
+	uint64_t test_cnt)
 {
 	/* init dag */
-	utkvec_t(utkvec_t(int64_t)) dag;
+	utkvec_t(utkvec_t(uint64_t)) dag;
 	utkv_init(dag);
 	utkv_reserve(dag, test_cnt);
-	for(int64_t i = 0; i < test_cnt; i++) {
+	for(uint64_t i = 0; i < test_cnt; i++) {
 		utkv_init(utkv_at(dag, i));
 	}
 
 	/* build dag */
-	for(int64_t i = 0; i < test_cnt; i++) {
+	for(uint64_t i = 0; i < test_cnt; i++) {
 		/* enumerate depends_on */
 		char const *const *d = sorted_test[i].depends_on;
 		while(*d != NULL) {
 			/* enumerate tests */
-			for(int64_t j = 0; j < test_cnt; j++) {
+			for(uint64_t j = 0; j < test_cnt; j++) {
 				if(i == j) { continue; }
 				if(ut_strcmp(sorted_test[j].name, *d) == 0) {
 					// printf("edge found from node %" PRId64 " to node %" PRId64 "\n", j, i);
@@ -1059,7 +1073,7 @@ int ut_toposort_by_tag(
 	/* build mark */
 	utkvec_t(int8_t) mark;
 	utkv_init(mark);
-	for(int64_t i = 0; i < test_cnt; i++) {
+	for(uint64_t i = 0; i < test_cnt; i++) {
 		// printf("incoming edge count %" PRId64 " : %" PRId64 "\n", i, utkv_size(utkv_at(dag, i)));
 		utkv_push(mark, utkv_size(utkv_at(dag, i)));
 	}
@@ -1067,16 +1081,16 @@ int ut_toposort_by_tag(
 	/* sort */
 	utkvec_t(struct ut_s) res;
 	utkv_init(res);
-	for(int64_t i = 0; i < test_cnt; i++) {
-		int64_t node_id = -1;
-		for(int64_t j = 0; j < test_cnt; j++) {
+	for(uint64_t i = 0; i < test_cnt; i++) {
+		uint64_t node_id = (uint64_t)-1LL;
+		for(uint64_t j = 0; j < test_cnt; j++) {
 			/* check if the node has incoming edges or is already pushed */
 			if(utkv_at(mark, j) == 0) {
 				node_id = j; break;
 			}
 		}
 
-		if(node_id == -1) {
+		if(node_id == (uint64_t)-1LL) {
 			fprintf(stderr,
 				ut_color(UT_RED, "ERROR") ": detected circular dependency in the tests in `" ut_color(UT_MAGENTA, "%s") "'.\n",
 				sorted_test[0].file);
@@ -1091,10 +1105,10 @@ int ut_toposort_by_tag(
 		utkv_at(mark, node_id) = -1;
 
 		/* delete edges */
-		for(int64_t j = 0; j < test_cnt; j++) {
+		for(uint64_t j = 0; j < test_cnt; j++) {
 			if(node_id == j) { continue; }
 
-			for(int64_t k = 0; k < utkv_size(utkv_at(dag, j)); k++) {
+			for(uint64_t k = 0; k < utkv_size(utkv_at(dag, j)); k++) {
 				if(utkv_at(utkv_at(dag, j), k) == node_id) {
 					// printf("the node %" PRId64 " had edge from %" PRId64 "\n", j, node_id);
 					utkv_at(utkv_at(dag, j), k) = -1;
@@ -1113,12 +1127,12 @@ int ut_toposort_by_tag(
 	}
 
 	/* write back */
-	for(int64_t i = 0; i < test_cnt; i++) {
+	for(uint64_t i = 0; i < test_cnt; i++) {
 		sorted_test[i] = utkv_at(res, i);
 	}
 
 	/* cleanup */
-	for(int64_t i = 0; i < test_cnt; i++) {
+	for(uint64_t i = 0; i < test_cnt; i++) {
 		utkv_destroy(utkv_at(dag, i));
 	}
 	utkv_destroy(dag);
@@ -1131,26 +1145,26 @@ int ut_toposort_by_tag(
 static inline
 int ut_toposort_by_group(
 	struct ut_s *sorted_test,
-	int64_t test_cnt,
+	uint64_t test_cnt,
 	struct ut_group_config_s *sorted_config,
-	int64_t *file_idx,
-	int64_t file_cnt)
+	uint64_t *file_idx,
+	uint64_t file_cnt)
 {
 	/* init dag */
-	utkvec_t(utkvec_t(int64_t)) dag;
+	utkvec_t(utkvec_t(uint64_t)) dag;
 	utkv_init(dag);
 	utkv_reserve(dag, file_cnt);
-	for(int64_t i = 0; i < file_cnt; i++) {
+	for(uint64_t i = 0; i < file_cnt; i++) {
 		utkv_init(utkv_at(dag, i));
 	}
 
 	/* build dag */
-	for(int64_t i = 0; i < file_cnt; i++) {
+	for(uint64_t i = 0; i < file_cnt; i++) {
 		/* enumerate depends_on */
 		char const *const *d = sorted_config[i].depends_on;
 		while(*d != NULL) {
 			/* enumerate tests */
-			for(int64_t j = 0; j < file_cnt; j++) {
+			for(uint64_t j = 0; j < file_cnt; j++) {
 				if(i == j) { continue; }
 				if(ut_strcmp(sorted_config[j].name, *d) == 0) {
 					// printf("edge found from group %" PRId64 " to group %" PRId64 "\n", j, i);
@@ -1164,7 +1178,7 @@ int ut_toposort_by_group(
 	/* build mark */
 	utkvec_t(int8_t) mark;
 	utkv_init(mark);
-	for(int64_t i = 0; i < file_cnt; i++) {
+	for(uint64_t i = 0; i < file_cnt; i++) {
 		// printf("incoming edge count %" PRId64 " : %" PRId64 "\n", i, utkv_size(utkv_at(dag, i)));
 		utkv_push(mark, utkv_size(utkv_at(dag, i)));
 	}
@@ -1176,16 +1190,16 @@ int ut_toposort_by_group(
 	utkv_init(config_buf);
 	// utkvec_t(uint64_t) res;
 	// utkv_init(res);
-	for(int64_t i = 0; i < file_cnt; i++) {
-		int64_t file_id = -1;
-		for(int64_t j = 0; j < file_cnt; j++) {
+	for(uint64_t i = 0; i < file_cnt; i++) {
+		uint64_t file_id = (uint64_t)-1LL;
+		for(uint64_t j = 0; j < file_cnt; j++) {
 			/* check if the node has incoming edges or is already pushed */
 			if(utkv_at(mark, j) == 0) {
 				file_id = j; break;
 			}
 		}
 
-		if(file_id == -1) {
+		if(file_id == (uint64_t)-1LL) {
 			fprintf(stderr, ut_color(UT_RED, "ERROR") ": detected circular dependency between groups.\n");
 			return(-1);
 		}
@@ -1195,7 +1209,7 @@ int ut_toposort_by_group(
 		// utkv_push(res, file_id);
 
 		utkv_push(config_buf, sorted_config[file_id]);
-		for(int64_t j = file_idx[file_id]; j < file_idx[file_id + 1]; j++) {
+		for(uint64_t j = file_idx[file_id]; j < file_idx[file_id + 1]; j++) {
 			utkv_push(test_buf, sorted_test[j]);
 		}
 
@@ -1203,10 +1217,10 @@ int ut_toposort_by_group(
 		utkv_at(mark, file_id) = -1;
 
 		/* delete edges */
-		for(int64_t j = 0; j < file_cnt; j++) {
+		for(uint64_t j = 0; j < file_cnt; j++) {
 			if(file_id == j) { continue; }
 
-			for(int64_t k = 0; k < utkv_size(utkv_at(dag, j)); k++) {
+			for(uint64_t k = 0; k < utkv_size(utkv_at(dag, j)); k++) {
 				if(utkv_at(utkv_at(dag, j), k) == file_id) {
 					// printf("the node %" PRId64 " had edge from %" PRId64 "\n", j, file_id);
 					utkv_at(utkv_at(dag, j), k) = -1;
@@ -1223,15 +1237,15 @@ int ut_toposort_by_group(
 	}
 
 	/* write back */
-	for(int64_t i = 0; i < test_cnt; i++) {
+	for(uint64_t i = 0; i < test_cnt; i++) {
 		sorted_test[i] = utkv_at(test_buf, i);
 	}
-	for(int64_t i = 0; i < file_cnt; i++) {
+	for(uint64_t i = 0; i < file_cnt; i++) {
 		sorted_config[i] = utkv_at(config_buf, i);
 	}
 
 	/* cleanup */
-	for(int64_t i = 0; i < file_cnt; i++) {
+	for(uint64_t i = 0; i < file_cnt; i++) {
 		utkv_destroy(utkv_at(dag, i));
 	}
 	utkv_destroy(dag);
@@ -1388,14 +1402,14 @@ int ut_main_impl(int argc, char *argv[])
 	ut_sort(test, config);
 	struct ut_group_config_s *compd_config = ut_compensate_config(test, config);
 
-	int64_t test_cnt = ut_get_total_test_count(test);
-	int64_t *file_idx = ut_build_file_index(test);
-	int64_t file_cnt = ut_get_total_file_count(test);
+	uint64_t test_cnt = ut_get_total_test_count(test);
+	uint64_t *file_idx = ut_build_file_index(test);
+	uint64_t file_cnt = ut_get_total_file_count(test);
 
 	// printf("%" PRId64 "\n", file_cnt);
 
 	/* topological sort by tag */
-	for(int64_t i = 0; i < file_cnt; i++) {
+	for(uint64_t i = 0; i < file_cnt; i++) {
 		// printf("toposort %" PRId64 ", %" PRId64 "\n", file_idx[i], file_idx[i + 1]);
 		if(ut_toposort_by_tag(&test[file_idx[i]], file_idx[i + 1] - file_idx[i]) != 0) {
 			fprintf(stderr, ut_color(UT_RED, "ERROR") ": failed to order tests. check if the depends_on options are sane.\n");
@@ -1412,7 +1426,7 @@ int ut_main_impl(int argc, char *argv[])
 	}
 
 	/* rebuild file idx */
-	int64_t *sorted_file_idx = ut_build_file_index(test);
+	uint64_t *sorted_file_idx = ut_build_file_index(test);
 
 	/* init default params */
 	struct ut_global_config_s gconf = {
@@ -1431,7 +1445,7 @@ int ut_main_impl(int argc, char *argv[])
 	/* run tests */
 	utkvec_t(struct ut_result_s) res;
 	utkv_init(res);
-	for(int64_t i = 0; i < file_cnt; i++) {
+	for(uint64_t i = 0; i < file_cnt; i++) {
 		struct ut_result_s r = { 0 };
 
 		if(compd_config[i].exec == 0) { continue; }
@@ -1440,7 +1454,7 @@ int ut_main_impl(int argc, char *argv[])
 			gconf.printer.header(&gconf, &compd_config[i]);
 		}
 
-		for(int64_t j = sorted_file_idx[i]; j < sorted_file_idx[i + 1]; j++) {
+		for(uint64_t j = sorted_file_idx[i]; j < sorted_file_idx[i + 1]; j++) {
 
 			if(test[j].exec == 0) { continue; }
 

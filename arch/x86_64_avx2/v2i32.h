@@ -84,7 +84,7 @@ typedef struct v2i32_s {
 #define _zero_v2i32()		_a_v2i32x(setzero, _e_x, _unused)
 #define _seta_v2i32(x, y) ( \
 	(v2i32_t) { \
-		_mm_cvtsi64_si128((((uint64_t)(x))<<32) | ((uint64_t)(y))) \
+		_mm_cvtsi64_si128((((uint64_t)(x))<<32) | ((uint32_t)(y))) \
 	} \
 )
 #define _swap_v2i32(x) ( \
