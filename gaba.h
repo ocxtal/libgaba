@@ -196,8 +196,6 @@ struct gaba_path_section_s {
 	uint32_t apos, bpos;		/** (8) pos in the sections */
 	uint32_t alen, blen;		/** (8) length of the segments */
 	int64_t ppos;				/** (8) path string position (offset) */
-	// uint32_t plen;				/** (4) path string length */
-	// uint32_t reserved;			/** (4) */
 };
 typedef struct gaba_path_section_s gaba_path_section_t;
 #define gaba_plen(sec)		( (sec)->alen + (sec)->blen )
@@ -207,6 +205,7 @@ typedef struct gaba_path_section_s gaba_path_section_t;
  */
 struct gaba_path_s {
 	int64_t len;				/** (8) path length (= array bit length) */
+	// int64_t xcnt;				/** (8) #mismatchs */
 	uint32_t array[];			/** () path array */
 };
 typedef struct gaba_path_s gaba_path_t;
