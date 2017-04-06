@@ -28,7 +28,7 @@ Older version of the library (libsea) is available at
  */
 gaba_t *ctx = gaba_init(GABA_PARAMS(
 	.xdrop = 100,
-	.score_matrix = GABA_SCORE_SIMPLE(2, 3, 5, 1)));
+	GABA_SCORE_SIMPLE(2, 3, 5, 1)));
 
 /*
  * Create section info (gaba_build_section is a macro).
