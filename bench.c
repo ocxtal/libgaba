@@ -167,7 +167,7 @@ int main(int argc, char *argv[])
 	/** init context */
 	gaba_t *ctx = gaba_init(GABA_PARAMS(
 		.xdrop = 100,
-		.score_matrix = GABA_SCORE_SIMPLE(2, 3, 5, 1)));
+		GABA_SCORE_SIMPLE(2, 3, 5, 1)));
 	struct gaba_section_s asec = gaba_build_section(0, (uint8_t const *)a, strlen(a));
 	struct gaba_section_s bsec = gaba_build_section(2, (uint8_t const *)b, strlen(b));
 

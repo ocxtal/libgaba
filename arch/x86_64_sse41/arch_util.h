@@ -18,7 +18,7 @@
  * @macro popcnt
  */
 #ifdef __POPCNT__
-	#define popcnt(x)		( (uint64_t)_mm_popcnt_u64(x) )
+#  define popcnt(x)		( (uint64_t)_mm_popcnt_u64(x) )
 #else
 	// #warning "popcnt instruction is not enabled."
 	static inline
@@ -40,8 +40,12 @@
  * @brief trailing zero count (count #continuous zeros from LSb)
  */
 #ifdef __BMI__
-	/** immintrin.h is already included */
-	#define tzcnt(x)		( (uint64_t)_tzcnt_u64(x) )
+/** immintrin.h is already included */
+#  if defined(_ARCH_GCC_VERSION) && _ARCH_GCC_VERSION < 480
+#    define tzcnt(x)		( (uint64_t)__tzcnt_u64(x) )
+#  else
+#    define tzcnt(x)		( (uint64_t)_tzcnt_u64(x) )
+#  endif
 #else
 	// #warning "tzcnt instruction is not enabled."
 	static inline
@@ -66,7 +70,12 @@
  * @brief leading zero count (count #continuous zeros from MSb)
  */
 #ifdef __LZCNT__
-	#define lzcnt(x)		( (uint64_t)_lzcnt_u64(x) )
+/* __lzcnt_u64 in bmiintrin.h gcc-4.6, _lzcnt_u64 in lzcntintrin.h from gcc-4.7 */
+#  if defined(_ARCH_GCC_VERSION) && _ARCH_GCC_VERSION < 470
+#    define lzcnt(x)		( (uint64_t)__lzcnt_u64(x) )
+#  else
+#    define lzcnt(x)		( (uint64_t)_lzcnt_u64(x) )
+#  endif
 #else
 	// #warning "lzcnt instruction is not enabled."
 	static inline
@@ -214,6 +223,63 @@
 #define _load_ofsh(_scv)					( _from_v16i8(_load_gap((_scv).v2, 0xaa)) )
 #define _load_ofsv(_scv)					( _from_v16i8(_load_gap((_scv).v2, 0xff)) )
 
+
+
+/* cache line operation */
+#define WCR_BUF_SIZE		( 128 )		/** two cache lines in x86_64 */
+#define memcpy_buf(_dst, _src) { \
+	register __m128i *_s = (__m128i *)(_src); \
+	register __m128i *_d = (__m128i *)(_dst); \
+	__m128i xmm0 = _mm_load_si128(_s); \
+	__m128i xmm1 = _mm_load_si128(_s + 1); \
+	__m128i xmm2 = _mm_load_si128(_s + 2); \
+	__m128i xmm3 = _mm_load_si128(_s + 3); \
+	__m128i xmm4 = _mm_load_si128(_s + 4); \
+	__m128i xmm5 = _mm_load_si128(_s + 5); \
+	__m128i xmm6 = _mm_load_si128(_s + 6); \
+	__m128i xmm7 = _mm_load_si128(_s + 7); \
+	_mm_stream_si128(_d, xmm0); \
+	_mm_stream_si128(_d + 1, xmm1); \
+	_mm_stream_si128(_d + 2, xmm2); \
+	_mm_stream_si128(_d + 3, xmm3); \
+	_mm_stream_si128(_d + 4, xmm4); \
+	_mm_stream_si128(_d + 5, xmm5); \
+	_mm_stream_si128(_d + 6, xmm6); \
+	_mm_stream_si128(_d + 7, xmm7); \
+}
+
+/* 128bit register operation */
+#define elem_128_t			__m128i
+#define rd_128(_ptr)		( _mm_load_si128((__m128i *)(_ptr)) )
+#define wr_128(_ptr, _e)	{ _mm_store_si128((__m128i *)(_ptr), (_e)); }
+#define _ex_128(k, h)		( _mm_extract_epi64((elem_128_t)k, h) )
+#define ex_128(k, p)		( ((((p)>>3) ? _ex_128(k, 1) : (_ex_128(k, 0))>>(((p) & 0x07)<<3)) & (WCR_OCC_SIZE-1)) )
+#define p_128(v)			( _mm_cvtsi64_si128((uint64_t)(v)) )
+#define e_128(v)			( (uint64_t)_mm_cvtsi128_si64((__m128i)(v)) )
+
+
+
+/* compare and swap (cas) */
+#if defined(__GNUC__)
+#  if defined(_ARCH_GCC_VERSION) && _ARCH_GCC_VERSION < 470
+#    define cas(ptr, cmp, val) ({ \
+		uint8_t _res; \
+		__asm__ volatile ("lock cmpxchg %[src], %[dst]\n\tsete %[res]" \
+			: [dst]"+m"(*ptr), [res]"=a"(_res) \
+			: [src]"r"(val), "a"(*cmp) \
+			: "memory", "cc"); \
+		_res; \
+	})
+#    define fence() ({ \
+		__asm__ volatile ("mfence"); \
+	})
+#  else											/* > 4.7 */
+#    define cas(ptr, cmp, val)	__atomic_compare_exchange_n(ptr, cmp, val, 0, __ATOMIC_RELAXED, __ATOMIC_RELAXED)
+#    define fence()				__sync_synchronize()
+#  endif
+#else
+#  error "atomic compare-and-exchange is not supported in this version of compiler."
+#endif
 
 #endif /* #ifndef _ARCH_UTIL_H_INCLUDED */
 /**
