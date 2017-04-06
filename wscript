@@ -41,7 +41,7 @@ def configure(conf):
 		pass
 
 	conf.env.append_value('OBJ_GABA', ['gaba_wrap.o', 'gaba_linear.o', 'gaba_affine.o'])
-	conf.env.append_value('DEFINES', ['BIT={}'.format(conf.options.bit)])
+	conf.env.append_value('DEFINES', ['BIT=%s' % conf.options.bit])
 
 
 def build(bld):
