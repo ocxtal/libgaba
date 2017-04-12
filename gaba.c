@@ -22,6 +22,9 @@
 // #  define MODEL 					LINEAR
 #endif
 
+#ifndef USE_FILTER
+#  define USE_FILTER				0
+#endif
 
 /* import unittest */
 #ifndef UNITTEST_UNIQUE_ID
@@ -1104,9 +1107,11 @@ struct gaba_joint_block_s fill_create_phantom_block(
 		struct gaba_joint_block_s stat = fill_init_fetch(this, prev_tail, blk, ridx);
 
 		/* check if initial vector is filled */
-		if(prev_tail->psum + stat.p >= 0) {
-			stat.stat = fill_gapless_filter(this, stat.blk - 1, stat.stat);
-		}
+		#if USE_FILTER != 0
+			if(prev_tail->psum + stat.p >= 0) {
+				stat.stat = fill_gapless_filter(this, stat.blk - 1, stat.stat);
+			}
+		#endif
 		return(stat);
 	}
 }
