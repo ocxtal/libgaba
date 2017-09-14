@@ -94,6 +94,21 @@ char *generate_mutated_sequence(char *seq, int len, double x, double d, int bw)
 	return mutated_seq;
 }
 
+char *add_margin(char *a)
+{
+	int len = strlen(a);
+	char *b = malloc(len + 128);
+	memset(b, 0, 64);
+	memcpy(b + 64, a, len);
+	memset(b + 64 + len, 0, 64);
+	return(b + 64);
+}
+
+char *remove_margin(char *a)
+{
+	return(a - 64);
+}
+
 /**
  * @struct params
  */
@@ -158,8 +173,8 @@ int main(int argc, char *argv[])
 	fprintf(stderr, "len\t%" PRId64 "\ncnt\t%" PRId64 "\nx\t%f\nd\t%f\n", p.len, p.cnt, p.x, p.d);
 
 	/** init sequence */
-	a = generate_random_sequence(p.len);
-	b = generate_mutated_sequence(a, p.len, p.x, p.d, 8);
+	a = add_margin(generate_random_sequence(p.len));
+	b = add_margin(generate_mutated_sequence(a, p.len, p.x, p.d, 8));
 
 	/* init cigar string buffer */
 	c = (char *)malloc(p.len);
@@ -213,8 +228,8 @@ int main(int argc, char *argv[])
 	/**
 	 * clean malloc'd memories
 	 */
-	free(a);
-	free(b);
+	free(remove_margin(a));
+	free(remove_margin(b));
 	free(c);
 
 	gaba_clean(ctx);
