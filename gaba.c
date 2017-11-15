@@ -326,6 +326,15 @@ struct gaba_section_pair_s {
 };
 
 /**
+ * @struct gaba_tail_pair_s
+ * @brief used in merging vectors. keeps pointers to either of two merged tails, for each cell in two (the current and the previous) vectors.
+ */
+struct gaba_tail_pair_s {
+	struct gaba_joint_tail_s const *tail[2];/** (16) merged two tails */
+	uint64_t tail_idx_mask[2];			/** (16) 0/1 index array: [0] for the previous vector, [1] for the current vector (tail->md) */
+};
+
+/**
  * @struct gaba_joint_tail_s
  * @brief (internal) tail cap of a contiguous matrix blocks, contains a context of the blocks
  * (band) and can be connected to the next blocks.
@@ -336,7 +345,8 @@ struct gaba_joint_tail_s {
 	struct gaba_drop_s xd;				/** (16, 32, 64) */
 	struct gaba_middle_delta_s md;		/** (32, 64, 128) */
 
-	uint32_t unused, pridx;				/** (8) remaining p-length */
+	int8_t qdiff[2], unused[2];			/** (4) displacement of two merged vectors */
+	uint32_t pridx;						/** (4) remaining p-length */
 	uint32_t aridx, bridx;				/** (8) reverse indices for the tails */
 	uint32_t asridx, bsridx;			/** (8) start reverse indices (for internal use) */
 	int64_t offset;						/** (8) large offset */
@@ -345,8 +355,11 @@ struct gaba_joint_tail_s {
 	/* tail pointer */
 	struct gaba_joint_tail_s const *tail;/** (8) the previous tail */
 
-	/* section info */
-	struct gaba_section_pair_s s;		/** (32) */
+	/* section info or merged tails */
+	union {
+		struct gaba_section_pair_s s;	/** (32) */
+		struct gaba_tail_pair_s t;		/** (32) */
+	} u;
 };
 _static_assert((sizeof(struct gaba_joint_tail_s) % 32) == 0);
 #define TAIL_BASE				( offsetof(struct gaba_joint_tail_s, f) )
@@ -1024,7 +1037,7 @@ void fill_restore_fetch(
 	_memset_blk_a(self->w.r.bufa, 0, 2 * (BW_MAX + BLK));
 
 	/* fetch seq a */
-	fill_fetch_seq_a_n(self, _lo32(ofs), tail->s.atail - _lo32(cridx), _lo32(len));
+	fill_fetch_seq_a_n(self, _lo32(ofs), tail->u.s.atail - _lo32(cridx), _lo32(len));
 	if(_lo32(ofs) > 0) {
 		nvec_t ach = _and_n(_set_n(0x0f), _loadu_n(&prev_tail->ch));/* aligned to 16byte boundaries */
 		_print_n(ach);
@@ -1040,7 +1053,7 @@ void fill_restore_fetch(
 		_print_n(bch);
 		_storeu_n(_rd_bufb(self, 0, _hi32(ofs)), bch);				/* aligned store */
 	}
-	fill_fetch_seq_b_n(self, _hi32(ofs), tail->s.btail - _hi32(cridx), _hi32(len));
+	fill_fetch_seq_b_n(self, _hi32(ofs), tail->u.s.btail - _hi32(cridx), _hi32(len));
 	return;
 }
 
@@ -1204,7 +1217,6 @@ struct gaba_joint_tail_s *fill_create_tail(
 	_print_v2i32(sridx);
 
 	/* store scores */
-	tail->unused = 0;
 	tail->offset = offset;
 	tail->f.max = max;
 
@@ -1215,7 +1227,7 @@ struct gaba_joint_tail_s *fill_create_tail(
 	tail->f.scnt = prev_tail->f.scnt - _hi32(update) - _lo32(update);
 	tail->f.ppos = prev_tail->f.ppos + _hi32(adv) + _lo32(adv);
 	tail->tail = prev_tail;
-	_memcpy_blk_ua(&tail->s.atail, &self->w.r.s.atail, sizeof(struct gaba_section_pair_s));
+	_memcpy_blk_ua(&tail->u.s.atail, &self->w.r.s.atail, sizeof(struct gaba_section_pair_s));
 	return(tail);
 }
 
@@ -1966,7 +1978,7 @@ struct gaba_pos_pair_s _export(gaba_dp_search_max)(
 	while(_test_v2i32(_gt_v2i32(v11, gidx), v11)) {
 		/* load update flag and lengths */
 		v2i32_t flag = _set_v2i32(tail->f.stat);
-		v2i32_t len = _load_v2i32(&tail->s.alen);
+		v2i32_t len = _load_v2i32(&tail->u.s.alen);
 
 		/* add length if update flag is set, for each seq */
 		v2i32_t update = _eq_v2i32(_and_v2i32(flag, mask), mask);
@@ -1995,7 +2007,7 @@ void trace_reload_section(
 	static uint32_t const mask[2] = { GABA_UPDATE_A, GABA_UPDATE_B };
 
 	debug("load section %s, idx(%d), len(%d)",
-		i == 0 ? "a" : "b", _r(self->w.l.agidx, i), _r(_r(self->w.l.atail, i)->s.alen, i));
+		i == 0 ? "a" : "b", _r(self->w.l.agidx, i), _r(_r(self->w.l.atail, i)->u.s.alen, i));
 
 	/* load tail pointer (must be inited with leaf tail) */
 	struct gaba_joint_tail_s const *tail = _r(self->w.l.atail, i);
@@ -2005,7 +2017,7 @@ void trace_reload_section(
 	while(gidx <= 0) {
 		do {
 			gidx += _r(tail->asridx, i) - _r(tail->aridx, i);
-			debug("add len(%d), adv(%d), gidx(%d), stat(%x)", _r(tail->s.alen, i), _r(tail->asridx, i) - _r(tail->aridx, i), gidx, tail->f.stat);
+			debug("add len(%d), adv(%d), gidx(%d), stat(%x)", _r(tail->u.s.alen, i), _r(tail->asridx, i) - _r(tail->aridx, i), gidx, tail->f.stat);
 			tail = tail->tail;
 		} while((tail->f.stat & mask[i]) == 0);
 
@@ -2013,7 +2025,7 @@ void trace_reload_section(
 
 	/* reload finished, store section info */
 	_r(self->w.l.atail, i) = tail;		/* FIXME: is this correct?? */
-	_r(self->w.l.aid, i) = _r(tail->s.aid, i);
+	_r(self->w.l.aid, i) = _r(tail->u.s.aid, i);
 
 	_r(self->w.l.agidx, i) = gidx;
 	_r(self->w.l.asgidx, i) = gidx;
@@ -2105,11 +2117,18 @@ enum { ts_d = 0, ts_v0, ts_v1, ts_h0, ts_h1 };
  * @macro _trace_reload_tail
  * @brief reload tail, issued at each band-segment boundaries
  */
-#define _trace_reload_tail(t) { \
+#define _trace_reload_tail(t, _vec_idx) { \
 	/* store path (offset will be adjusted afterwards) */ \
 	_storeu_u64(path, path_array<<ofs); \
 	/* reload block pointer */ \
 	blk = _last_phantom(blk)->blk; \
+	while(blk->xstat & MERGE_HEAD) { \
+		struct gaba_joint_tail_s *tail = (void *)(blk + 1); \
+		uint64_t _tail_idx = (tail->u.t.tail_idx_mask[_vec_idx]>>q) & 0x01; \
+		struct gaba_joint_tail_s const *prev = tail->u.t.tail[_tail_idx]; \
+		q += tail->qdiff[_tail_idx]; blk = _last_block(prev);	/* adjust q, restore block pointer */ \
+		tail->tail = prev;	/* save prev pointer for use in section boundary detection */ \
+	} \
 	/* reload dir and mask pointer, adjust path offset */ \
 	uint64_t _cnt = blk->acnt + blk->bcnt; \
 	mask = &blk->mask[_cnt - 1]; \
@@ -2151,8 +2170,9 @@ enum { ts_d = 0, ts_v0, ts_v1, ts_h0, ts_h1 };
 
 /**
  * @macro _trace_*_load
+ * @brief set _state 0 when in diagonal loop, otherwise pass 1
  */
-#define _trace_bulk_load_n(t, _jump_to) { \
+#define _trace_bulk_load_n(t, _state, _jump_to) { \
 	if(_unlikely(mask < blk->mask)) { \
 		_trace_reload_block(); \
 		if(_unlikely(!_trace_test_bulk())) {	/* adjust gidx */ \
@@ -2163,12 +2183,12 @@ enum { ts_d = 0, ts_v0, ts_v1, ts_h0, ts_h1 };
 		} \
 	} \
 }
-#define _trace_tail_load_n(t, _jump_to) { \
+#define _trace_tail_load_n(t, _state, _jump_to) { \
 	if(_unlikely(mask < blk->mask)) { \
 		debug("test ph(%p), xstat(%x), ppos(%llu), path(%p, %p), ofs(%u)", \
 			_last_phantom(blk), _last_phantom(blk)->xstat, (path - self->w.l.aln->path) * 32 + ofs, path, self->w.l.aln->path, ofs); \
 		if(_last_phantom(blk)->xstat & HEAD) {	/* head (phantom) block is marked 0x4000 */ \
-			_trace_reload_tail(t);				/* fetch the previous tail */ \
+			_trace_reload_tail(t, _state);		/* fetch the previous tail */ \
 		} else { \
 			/* load dir and update mask pointer */ \
 			_trace_reload_block();				/* not reached the head yet */ \
@@ -2188,24 +2208,24 @@ static _force_inline
 void trace_core(
 	struct gaba_dp_context_s *self)
 {
-	#define _pop_vector(_c, _l, _jump_to) { \
+	#define _pop_vector(_c, _l, _state, _jump_to) { \
 		debug("go %s (%s, %s), dir(%x), mask_h(%x), mask_v(%x), p(%lld), q(%d), ptr(%p), path_array(%llx)", \
 			#_l, #_c, #_jump_to, dir_mask, mask->h.all, mask->v.all, (int64_t)(mask - blk->mask), (int32_t)q, mask, path_array); \
 		_trace_##_c##_##_l##_update_index(); \
 		_trace_##_l##_update_path_q(); \
-		_trace_##_c##_load_n(t, _jump_to); \
+		_trace_##_c##_load_n(t, _state, _jump_to); \
 	}
 	#define _trace_gap_loop(t, _c, _n, _l) { \
 		_trace_##_c##_##_l##_head: \
 			if(_trace_##_c##_##_l##_test_index()) { self->w.l.state = ts_##_l##0; goto _trace_term; } \
 			_trace_inc_gi();		/* increment #gap regions at the head */ \
-			_pop_vector(_c, _l, _trace_##_n##_##_l##_head); \
+			_pop_vector(_c, _l, 1, _trace_##_n##_##_l##_head); \
 			while(1) { \
 		_trace_##_c##_##_l##_mid: \
 				if(_trace_test_gap_##_l() == 0) { goto _trace_##_c##_d_head; } \
 				if(_trace_##_c##_##_l##_test_index()) { self->w.l.state = ts_##_l##1; goto _trace_term; } \
 				_trace_inc_ge();	/* increment #gap bases on every iter */ \
-				_pop_vector(_c, _l, _trace_##_n##_##_l##_head); \
+				_pop_vector(_c, _l, 1, _trace_##_n##_##_l##_head); \
 			} \
 	}
 	#define _trace_diag_loop(t, _c, _n) { \
@@ -2213,9 +2233,9 @@ void trace_core(
 		_trace_##_c##_d_head: \
 			if(_trace_test_diag_h() != 0) { goto _trace_##_c##_h_head; } \
 			if(_trace_##_c##_d_test_index()) { self->w.l.state = ts_d; goto _trace_term; } \
-			_pop_vector(_c, h, _trace_##_n##_d_mid); \
+			_pop_vector(_c, h, 0, _trace_##_n##_d_mid); \
 		_trace_##_c##_d_mid: \
-			_pop_vector(_c, v, _trace_##_n##_d_tail); \
+			_pop_vector(_c, v, 0, _trace_##_n##_d_tail); \
 		_trace_##_c##_d_tail: \
 			if(_trace_test_diag_v() != 0) { goto _trace_##_c##_v_head; } \
 		} \
@@ -2937,7 +2957,7 @@ void gaba_init_phantom(
 		.tail = NULL,
 		.aridx = 0,  .bridx = 0,
 		.asridx = 0, .bsridx = 0,
-		.s = { 0 },
+		.u = { .s = { 0 } },
 
 		/* score and vectors */
 		.offset = 0,
