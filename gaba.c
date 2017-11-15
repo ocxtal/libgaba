@@ -1866,7 +1866,7 @@ struct gaba_fill_s *_export(gaba_dp_merge)(
 	 * middle delta vector.
 	 *
 	 *	struct gaba_phantom_s {
-	 *		struct gaba_diff_vec_s diff;	// calculated from the merged middle delta vector
+	 *		struct gaba_diff_vec_s diff;	// calculated from the two merged middle delta vectors (the last and the second last vector)
 	 *		uint32_t reserved;
 	 *		int8_t acc, xstat;				// difference of the two edge cell values, MERGE_HEAD
 	 *		int8_t acnt, bcnt;				// 0, 0
