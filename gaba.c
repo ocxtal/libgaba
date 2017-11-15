@@ -591,8 +591,8 @@ enum GABA_BLK_STATUS {
 	UPDATE			= 0x01,
 	TERM			= 0x02,
 	STAT_MASK		= UPDATE | TERM | CONT,
-	HEAD			= 0x20,
-	MERGE_HEAD		= 0x80,				/* merged head and the corresponding block contains no actual vector (DP cell) */
+	HEAD			= 0x10,
+	MERGE_HEAD		= 0x20,				/* merged head and the corresponding block contains no actual vector (DP cell) */
 	ROOT			= 0x40				/* update flag will be combined set for the actual root */
 };
 _static_assert((int32_t)CONT<<8 == (int32_t)GABA_CONT);
