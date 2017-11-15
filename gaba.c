@@ -1825,6 +1825,22 @@ struct gaba_fill_s *_export(gaba_dp_fill)(
 }
 
 
+/* merge bands */
+/**
+ * @fn gaba_dp_merge
+ *
+ * @brief merge API (merge two bands)
+ */
+struct gaba_fill_s *_export(gaba_dp_merge)(
+	gaba_dp_t *dp,
+	struct gaba_fill_s const *fill1,
+	struct gaba_fill_s const *fill2,
+	int32_t qdiff)
+{
+	return(NULL);
+}
+
+
 /* max score search functions */
 /**
  * @fn leaf_load_max_mask
