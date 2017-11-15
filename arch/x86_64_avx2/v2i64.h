@@ -91,8 +91,6 @@ typedef struct v2i64_s {
 /* arithmetics */
 #define _add_v2i64(...)		_a_v2i64(add, _e_vv, __VA_ARGS__)
 #define _sub_v2i64(...)		_a_v2i64(sub, _e_vv, __VA_ARGS__)
-#define _adds_v2i64(...)	_a_v2i64(adds, _e_vv, __VA_ARGS__)
-#define _subs_v2i64(...)	_a_v2i64(subs, _e_vv, __VA_ARGS__)
 // #define _max_v2i64(...)		_a_v2i64(max, _e_vv, __VA_ARGS__)
 // #define _min_v2i64(...)		_a_v2i64(min, _e_vv, __VA_ARGS__)
 #define _max_v2i64(a, b)	( (v2i64_t) { _mm_max_epi32(a.v1, b.v1) } )
@@ -110,8 +108,10 @@ typedef struct v2i64_s {
 
 /* compare */
 #define _eq_v2i64(...)		_a_v2i64(cmpeq, _e_vv, __VA_ARGS__)
-#define _lt_v2i64(...)		_a_v2i64(cmplt, _e_vv, __VA_ARGS__)
 #define _gt_v2i64(...)		_a_v2i64(cmpgt, _e_vv, __VA_ARGS__)
+
+/* test: take mask and test if all zero */
+#define _test_v2i64(x, y)	_mm_test_all_zeros((x).v1, (y).v1)
 
 /* insert and extract */
 #define _ins_v2i64(a, val, imm) { \

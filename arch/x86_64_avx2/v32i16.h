@@ -10,7 +10,7 @@
 /* include header for intel / amd sse2 instruction sets */
 #include <x86intrin.h>
 
-/* 8bit 32cell */
+/* 16bit 32cell */
 typedef struct v32i16_s {
 	__m256i v1;
 	__m256i v2;
@@ -88,22 +88,19 @@ typedef struct v32i16_s {
 /* arithmetics */
 #define _add_v32i16(...)	_a_v32i16(add, _e_vv, __VA_ARGS__)
 #define _sub_v32i16(...)	_a_v32i16(sub, _e_vv, __VA_ARGS__)
-#define _adds_v32i16(...)	_a_v32i16(adds, _e_vv, __VA_ARGS__)
-#define _subs_v32i16(...)	_a_v32i16(subs, _e_vv, __VA_ARGS__)
 #define _max_v32i16(...)	_a_v32i16(max, _e_vv, __VA_ARGS__)
 #define _min_v32i16(...)	_a_v32i16(min, _e_vv, __VA_ARGS__)
 
 /* compare */
 #define _eq_v32i16(...)		_a_v32i16(cmpeq, _e_vv, __VA_ARGS__)
-#define _lt_v32i16(...)		_a_v32i16(cmplt, _e_vv, __VA_ARGS__)
 #define _gt_v32i16(...)		_a_v32i16(cmpgt, _e_vv, __VA_ARGS__)
 
 /* insert and extract */
 #define _ins_v32i16(a, val, imm) { \
 	if((imm) < sizeof(__m256i)/sizeof(int16_t)) { \
-		(a).v1 = _i_v32i8(insert)((a).v1, (val), (imm)); \
+		(a).v1 = _i_v32i16(insert)((a).v1, (val), (imm)); \
 	} else if((imm) < 2*sizeof(__m256i)/sizeof(int16_t)) { \
-		(a).v2 = _i_v32i8(insert)((a).v2, (val), (imm) - sizeof(__m256i)/sizeof(int16_t)); \
+		(a).v2 = _i_v32i16(insert)((a).v2, (val), (imm) - sizeof(__m256i)/sizeof(int16_t)); \
 	} \
 }
 #define _ext_v32i16(a, imm) ( \
@@ -123,16 +120,15 @@ typedef struct v32i16_s {
 
 /* horizontal max (reduction max) */
 #define _hmax_v32i16(a) ({ \
-	__m256i _vmax = _mm256_max_epi16((a).v1, (a).v2); \
-	_vmax = _mm256_max_epi16(_vmax, \
-		_mm256_castsi128_si256(_mm256_extracti128_si256(_vmax, 1))); \
-	_vmax = _mm256_max_epi16(_vmax, \
-		_mm256_srli_si256(_vmax, 8)); \
-	_vmax = _mm256_max_epi16(_vmax, \
-		_mm256_srli_si256(_vmax, 4)); \
-	_vmax = _mm256_max_epi16(_vmax, \
-		_mm256_srli_si256(_vmax, 2)); \
-	(int16_t)_mm256_extract_epi16(_vmax, 0); \
+	__m256i _s = _mm256_max_epi16((a).v1, (a).v2); \
+	__m128i _t = _mm_max_epi16( \
+		_mm256_castsi256_si128(_s), \
+		_mm256_extracti128_si256(_s, 1) \
+	); \
+	_t = _mm_max_epi16(_t, _mm_srli_si128(_t, 8)); \
+	_t = _mm_max_epi16(_t, _mm_srli_si128(_t, 4)); \
+	_t = _mm_max_epi16(_t, _mm_srli_si128(_t, 2)); \
+	(int16_t)_mm_extract_epi16(_t, 0); \
 })
 
 #define _cvt_v32i8_v32i16(a) ( \

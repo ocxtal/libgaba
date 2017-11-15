@@ -103,22 +103,22 @@ typedef struct v2i32_s {
 /* arithmetics */
 #define _add_v2i32(...)		_a_v2i32(add, _e_vv, __VA_ARGS__)
 #define _sub_v2i32(...)		_a_v2i32(sub, _e_vv, __VA_ARGS__)
-#define _adds_v2i32(...)	_a_v2i32(adds, _e_vv, __VA_ARGS__)
-#define _subs_v2i32(...)	_a_v2i32(subs, _e_vv, __VA_ARGS__)
 #define _max_v2i32(...)		_a_v2i32(max, _e_vv, __VA_ARGS__)
 #define _min_v2i32(...)		_a_v2i32(min, _e_vv, __VA_ARGS__)
 
-/* blend */
+/* blend: mask == 1 ? a : b */
 #define _sel_v2i32(mask, a, b) ( \
-	(v2i64_t) { \
+	(v2i32_t) { \
 		_mm_blendv_epi8((b).v1, (a).v1, (mask).v1) \
 	} \
 )
 
 /* compare */
 #define _eq_v2i32(...)		_a_v2i32(cmpeq, _e_vv, __VA_ARGS__)
-#define _lt_v2i32(...)		_a_v2i32(cmplt, _e_vv, __VA_ARGS__)
 #define _gt_v2i32(...)		_a_v2i32(cmpgt, _e_vv, __VA_ARGS__)
+
+/* test: take mask and test if all zero */
+#define _test_v2i32(x, y)	_mm_test_all_zeros((x).v1, (y).v1)
 
 /* insert and extract */
 #define _ins_v2i32(a, val, imm) { \
@@ -130,7 +130,7 @@ typedef struct v2i32_s {
 
 /* shift */
 #define _sal_v2i32(a, imm) ( \
-	(v2i32_t) {_i_v2i32(slai)((a).v1, (imm))} \
+	(v2i32_t) {_i_v2i32(slli)((a).v1, (imm))} \
 )
 #define _sar_v2i32(a, imm) ( \
 	(v2i32_t) {_i_v2i32(srai)((a).v1, (imm))} \
@@ -144,6 +144,25 @@ typedef struct v2i32_s {
 #define V2I32_MASK_01		( 0x0f )
 #define V2I32_MASK_10		( 0xf0 )
 #define V2I32_MASK_11		( 0xff )
+
+/* convert */
+typedef uint64_t v2i8_t;
+#define _load_v2i8(p) ({ \
+	uint8_t const *_p = (uint8_t const *)(p); \
+	*((uint16_t const *)(_p)); \
+})
+#define _store_v2i8(p, v) { \
+	uint8_t *_p = (uint8_t *)(p); \
+	*((uint16_t *)_p) = (v); \
+}
+#define _cvt_v2i8_v2i32(a) ( \
+	(v2i32_t) { \
+		_mm_cvtepi8_epi32(_mm_cvtsi64_si128(a)) \
+	} \
+)
+#define _cvt_v2i32_v2i8(a) ( \
+	(uint16_t)_mm_cvtsi128_si64(_mm_shuffle_epi8((a).v1, _mm_cvtsi64_si128(0x0400))) \
+)
 
 /* transpose */
 #define _lo_v2i32(a, b) ( \

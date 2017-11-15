@@ -114,7 +114,6 @@ typedef struct v32i8_s {
 
 /* compare */
 #define _eq_v32i8(...)		_a_v32i8(cmpeq, _e_vv, __VA_ARGS__)
-#define _lt_v32i8(...)		_a_v32i8(cmplt, _e_vv, __VA_ARGS__)
 #define _gt_v32i8(...)		_a_v32i8(cmpgt, _e_vv, __VA_ARGS__)
 
 /* insert and extract */
@@ -126,9 +125,11 @@ typedef struct v32i8_s {
 	} \
 }
 #define _ext_v32i8(a, imm) ( \
-	(int8_t)(((imm) < sizeof(__m128i)) \
-		? _i_v32i8(extract)((a).v1, (imm)) \
-		: _i_v32i8(extract)((a).v2, (imm) - sizeof(__m128i))) \
+	(int8_t)(((imm) < sizeof(__m128i)) ? ( \
+		_i_v32i8(extract)((a).v1, (imm)) \
+	) : ( \
+		_i_v32i8(extract)((a).v2, (imm) - sizeof(__m128i)) \
+	)) \
 )
 
 /* shift */

@@ -11,15 +11,6 @@
  *
  * @detail
  * a header for libgaba (libsea3): a fast banded seed-and-extend alignment library.
- * 
- * from C:
- * Include this header file as #include <gaba.h>. This will enable you to
- * use all the APIs in the gaba_init, and gaba_align form.
- *
- * from C++:
- * Include this header as #include <gaba.h>. The C APIs are wrapped with
- * namespace sea and the C++ class AlignmentContext and AlignmentResult
- * are added. See example.cpp for the detail of the usage in C++.
  */
 
 #ifndef _GABA_H_INCLUDED
@@ -29,33 +20,45 @@
 #include <stdint.h>		/** uint8_t, int32_t, int64_t */
 
 /**
- * @enum gaba_error
- *
- * @brief (API) error flags. see gaba_init function and status member in the gaba_alignment structure for more details.
+ * @macro GABA_EXPORT_LEVEL
  */
-enum gaba_error {
-	GABA_SUCCESS 				=  0,	/*!< success!! */
-	GABA_TERMINATED				=  1,	/*!< (internal code) success */
-	GABA_ERROR 					= -1,	/*!< unknown error */
-	/** errors which occur in an alignment function */
-	GABA_ERROR_INVALID_MEM 		= -2,	/*!< invalid pointer to memory */
-	GABA_ERROR_INVALID_CONTEXT 	= -3,	/*!< invalid pointer to the alignment context */
-	GABA_ERROR_OUT_OF_BAND 		= -4,	/*!< traceback failure. using wider band may resolve this type of error. */
-	GABA_ERROR_OUT_OF_MEM 		= -5,	/*!< out of memory error. mostly caused by exessively long queries. */
-	GABA_ERROR_OVERFLOW 			= -6, 	/*!< cell overflow error */
-	GABA_ERROR_INVALID_ARGS 		= -7,	/*!< inproper input arguments. */
-	/** errors which occur in an initialization function */
-	GABA_ERROR_UNSUPPORTED_ALG 	= -8,	/*!< unsupported combination of algorithm and processor options. use naive implementations instead. */
-	GABA_ERROR_INVALID_COST 		= -9	/*!< invalid alignment cost */
+#ifdef _GABA_WRAP_H_INCLUDED
+/* included from gaba_wrap.h */
+#  define GABA_EXPORT_LEVEL		static inline
+#else
+/* single, linked to an object compiled without -DSUFFIX */
+#  define GABA_EXPORT_LEVEL
+#endif
+
+/**
+ * @enum gaba_status
+ */
+enum gaba_status {
+	GABA_CONT 		= 0,		/* continue, call again the function with the same args (but rarely occurrs) */
+	GABA_UPDATE		= 0x100,	/* update either or both of the section(s) */
+	GABA_UPDATE_A 	= 0x0f,		/* update required on section a (always combined with GABA_UPDATE) */
+	GABA_UPDATE_B 	= 0xf0,		/* update required on section b (always combined with GABA_UPDATE) */
+	GABA_TERM		= 0x200,	/* extension terminated by X-drop */
+	GABA_OOM		= 0x400		/* out of memory (indicates malloc returned NULL) */
 };
 
 /**
- * @enum gaba_clip_type
+ * @type gaba_lmalloc_t, gaba_free_t
+ * @brief external malloc can be passed, otherwise system malloc will be used
  */
-enum gaba_clip_type {
-	GABA_CLIP_SOFT = 'S',
-	GABA_CLIP_HARD = 'H'
+typedef void *(*gaba_lmalloc_t)(void *opaque, size_t size);
+typedef void (*gaba_lfree_t)(void *opaque, void *ptr);
+
+/**
+ * @struct gaba_alloc_s
+ * @brief optional memory allocator, malloc and free pair must not be NULL.
+ */
+struct gaba_alloc_s {
+	void *opaque;				/** local memory arena */
+	gaba_lmalloc_t lmalloc;		/** local malloc; dedicated for alignment path generation */
+	gaba_lfree_t lfree;			/** local free */
 };
+typedef struct gaba_alloc_s gaba_alloc_t;
 
 /**
  * @struct gaba_params_s
@@ -63,17 +66,24 @@ enum gaba_clip_type {
  */
 struct gaba_params_s {
 	/** scoring parameters */
-	int8_t m, x, gi, ge;		/** match, mismatch, gap open, and gap extend, all in positive integer */
+	int8_t score_matrix[16];	/** score matrix (substitution matrix) max must not exceed 7 */
+	int8_t gi;					/** gap open penalty (0 for the linear-gap penalty; positive integer) */
+	int8_t ge;					/** gap extension penalty (positive integer) */
+	int8_t gfa, gfb;			/** linear-gap extension penalty for short indels (combined-gap penalty; gf > ge) */
 
 	/** score parameters */
-	int8_t xdrop;
+	int8_t xdrop;				/** X-drop threshold, positive, less than 128 */
 
 	/** filtering parameters */
 	uint8_t filter_thresh;		/** popcnt filter threshold, set zero if you want to disable it */
 
 	/** output options */
-	uint8_t head_margin;		/** margin at the head of gaba_res_t */
-	uint8_t tail_margin;		/** margin at the tail of gaba_res_t */
+	uint32_t head_margin;		/** margin at the head of gaba_res_t */
+	uint32_t tail_margin;		/** margin at the tail of gaba_res_t */
+
+	/* internal */
+	void *reserved;
+	uint64_t _pad;
 };
 typedef struct gaba_params_s gaba_params_t;
 
@@ -87,7 +97,7 @@ typedef struct gaba_params_s gaba_params_t;
  * @macro GABA_SCORE_SIMPLE
  * @brief utility macro for constructing score parameters.
  */
-#define GABA_SCORE_SIMPLE(_m, _x, _gi, _ge)		.m = (_m), .x = (_x), .gi = (_gi), .ge = (_ge)
+#define GABA_SCORE_SIMPLE(_m, _x, _gi, _ge)	.score_matrix = { (_m),-(_x),-(_x),-(_x),-(_x),(_m),-(_x),-(_x),-(_x),-(_x),(_m),-(_x),-(_x),-(_x),-(_x),(_m) }, .gi = (_gi), .ge = (_ge)
 
 /**
  * @type gaba_t
@@ -117,7 +127,7 @@ typedef struct gaba_section_s gaba_section_t;
 #define gaba_build_section(_id, _base, _len) ( \
 	(struct gaba_section_s){ \
 		.id = (_id), \
-		.base = (_base), \
+		.base = (uint8_t const *)(_base), \
 		.len = (_len) \
 	} \
 )
@@ -128,35 +138,20 @@ typedef struct gaba_section_s gaba_section_t;
  *
  * @brief an alias to `struct gaba_dp_context_s`.
  */
+#ifndef _GABA_WRAP_H_INCLUDED
 typedef struct gaba_dp_context_s gaba_dp_t;
+#endif
 
 /**
  * @struct gaba_fill_s
  */
 struct gaba_fill_s {
-	/* coordinates */
-	int64_t psum;				/** (8) global p-coordinate of the tail of the section */
-	int32_t p;					/** (4) local p-coordinate of the tail of the section */
-	uint32_t ssum;				/** (4) */
-
-	/* status and max scores */
-	int64_t max;				/** (8) max */
-	uint32_t status;			/** (4) */
-
-	uint8_t _pad[36];
+	int64_t max;				/** (8) max score in the entire band */
+	uint32_t stat;				/** (4) status (section update flags) */
+	uint32_t scnt;				/** (4) expected section count (== band-segment depth) */
+	int64_t ppos;				/** (8) #vectors from the head */
 };
 typedef struct gaba_fill_s gaba_fill_t;
-
-/**
- * @enum gaba_status
- */
-enum gaba_status {
-	GABA_STATUS_CONT 		= 0,
-	GABA_STATUS_UPDATE		= 0x100,
-	GABA_STATUS_UPDATE_A 	= 0x0f,
-	GABA_STATUS_UPDATE_B 	= 0xf0,
-	GABA_STATUS_TERM		= 0x200
-};
 
 /**
  * @struct gaba_pos_pair_s
@@ -167,40 +162,35 @@ struct gaba_pos_pair_s {
 typedef struct gaba_pos_pair_s gaba_pos_pair_t;
 
 /**
- * @struct gaba_path_section_s
+ * @struct gaba_segment_s
  */
-struct gaba_path_section_s {
+struct gaba_segment_s {
 	uint32_t aid, bid;			/** (8) id of the sections */
 	uint32_t apos, bpos;		/** (8) pos in the sections */
 	uint32_t alen, blen;		/** (8) lengths of the segments */
-	int64_t ppos;				/** (8) path string position (offset) */
+	uint64_t ppos;				/** (8) path string position (offset) */
 };
-typedef struct gaba_path_section_s gaba_path_section_t;
-#define gaba_plen(sec)		( (sec)->alen + (sec)->blen )
-
-/**
- * @struct gaba_path_s
- */
-struct gaba_path_s {
-	int64_t len;				/** (8) path length (= array bit length) */
-	uint32_t array[];			/** () path array */
-};
-typedef struct gaba_path_s gaba_path_t;
+typedef struct gaba_segment_s gaba_path_section_t;
+#define gaba_plen(seg)		( (seg)->alen + (seg)->blen )
 
 /**
  * @struct gaba_alignment_s
  */
 struct gaba_alignment_s {
-	void *lmm;
-	int64_t score, xcnt;		/** (16) score, #mismatchs */
-	int64_t gicnt, gecnt;		/** (16) #gap opens, #gap bases */
-	uint32_t rapos, rbpos;
-	uint32_t rppos;				/** (4) local path index in the root section */
-	uint32_t rsidx;				/** (4) index of the root section */
-	uint32_t reserved3;
-	uint32_t slen;
-	struct gaba_path_section_s const *sec;
-	struct gaba_path_s const *path;
+	/* reserved for internal use */
+	void *reserved1[2];
+	uint32_t reserved;
+
+	uint32_t slen;				/* section length */
+	struct gaba_segment_s const *seg;
+
+	uint64_t plen;				/* path length */
+
+	int64_t score;				/** score */
+	uint32_t mcnt, xcnt;		/** #matches, #mismatches */
+	uint32_t gicnt, gecnt;		/** #gap opens, #gap bases */
+
+	uint32_t path[];
 };
 typedef struct gaba_alignment_s gaba_alignment_t;
 
@@ -208,25 +198,23 @@ typedef struct gaba_alignment_s gaba_alignment_t;
  * @fn gaba_init
  * @brief (API) gaba_init new API
  */
+GABA_EXPORT_LEVEL
 gaba_t *gaba_init(gaba_params_t const *params);
 
 /**
  * @fn gaba_clean
- *
  * @brief (API) clean up the alignment context structure.
- *
- * @param[in] ctx : a pointer to the alignment structure.
- *
- * @return none.
- *
- * @sa gaba_init
  */
-void gaba_clean(
-	gaba_t *ctx);
+GABA_EXPORT_LEVEL
+void gaba_clean(gaba_t *ctx);
 
 /**
  * @fn gaba_dp_init
+ * @brief create thread-local context deriving the global context (ctx)
+ * with local memory arena and working buffers. alim and blim are respectively
+ * the tails of sequence arrays.
  */
+GABA_EXPORT_LEVEL
 gaba_dp_t *gaba_dp_init(
 	gaba_t const *ctx,
 	uint8_t const *alim,
@@ -236,6 +224,7 @@ gaba_dp_t *gaba_dp_init(
  * @fn gaba_dp_flush
  * @brief flush stack (flush all if NULL) 
  */
+GABA_EXPORT_LEVEL
 void gaba_dp_flush(
 	gaba_dp_t *dp,
 	uint8_t const *alim,
@@ -244,12 +233,14 @@ void gaba_dp_flush(
 /**
  * @fn gaba_dp_save_stack
  */
+GABA_EXPORT_LEVEL
 gaba_stack_t const *gaba_dp_save_stack(
 	gaba_dp_t *dp);
 
 /**
  * @fn gaba_dp_flush_stack
  */
+GABA_EXPORT_LEVEL
 void gaba_dp_flush_stack(
 	gaba_dp_t *dp,
 	gaba_stack_t const *stack);
@@ -257,12 +248,14 @@ void gaba_dp_flush_stack(
 /**
  * @fn gaba_dp_clean
  */
+GABA_EXPORT_LEVEL
 void gaba_dp_clean(
 	gaba_dp_t *dp);
 
 /**
  * @fn gaba_dp_fill_root
  */
+GABA_EXPORT_LEVEL
 gaba_fill_t *gaba_dp_fill_root(
 	gaba_dp_t *dp,
 	gaba_section_t const *a,
@@ -274,6 +267,7 @@ gaba_fill_t *gaba_dp_fill_root(
  * @fn gaba_dp_fill
  * @brief fill dp matrix inside section pairs
  */
+GABA_EXPORT_LEVEL
 gaba_fill_t *gaba_dp_fill(
 	gaba_dp_t *dp,
 	gaba_fill_t const *prev_sec,
@@ -281,71 +275,27 @@ gaba_fill_t *gaba_dp_fill(
 	gaba_section_t const *b);
 
 /**
- * @fn gaba_dp_merge
- */
-gaba_fill_t *gaba_dp_merge(
-	gaba_dp_t *dp,
-	gaba_fill_t const *sec_list,
-	uint64_t sec_list_len);
-
-/**
  * @fn gaba_dp_search_max
  */
+GABA_EXPORT_LEVEL
 gaba_pos_pair_t gaba_dp_search_max(
 	gaba_dp_t *dp,
 	gaba_fill_t const *sec);
 
 /**
- * @struct gaba_trace_params_s
- */
-struct gaba_trace_params_s {
-	void *lmm;
-	struct gaba_path_section_s const *sec;
-	uint16_t slen;				/* section length */
-	uint16_t k;					/* path length (k-mer length) */
-	uint16_t xcnt;				/* #mismatches */
-	uint16_t _pad;
-};
-typedef struct gaba_trace_params_s gaba_trace_params_t;
-
-/**
- * @macro GABA_TRACE_PARAMS
- */
-#define GABA_TRACE_PARAMS(...)		( &((struct gaba_trace_params_s const) { __VA_ARGS__ }) )
-#define GABA_TRACE_NONE				( NULL )
-
-/**
- * @type gaba_alignment_writer
- * @brief pointer to putchar-compatible writer
- */
-typedef int (*gaba_alignment_writer)(int c);
-
-/**
  * @fn gaba_dp_trace
- *
- * @brief generate alignment result string
+ * @brief generate alignment result string, alloc->malloc and alloc->free must not be NULL if alloc is not NULL.
  */
+GABA_EXPORT_LEVEL
 gaba_alignment_t *gaba_dp_trace(
 	gaba_dp_t *dp,
-	gaba_fill_t const *fw_tail,
-	gaba_fill_t const *rv_tail,
-	gaba_trace_params_t const *params);
-
-/**
- * @fn gaba_dp_recombine
- *
- * @brief recombine two alignments x and y at xsid and ysid.
- */
-gaba_alignment_t *gaba_dp_recombine(
-	gaba_dp_t *dp,
-	gaba_alignment_t *x,
-	uint32_t xsid,
-	gaba_alignment_t *y,
-	uint32_t ysid);
+	gaba_fill_t const *tail,
+	gaba_alloc_t const *alloc);
 
 /**
  * @fn gaba_dp_res_free
  */
+GABA_EXPORT_LEVEL
 void gaba_dp_res_free(
 	gaba_alignment_t *aln);
 
@@ -359,6 +309,7 @@ void gaba_dp_res_free(
  * void *fp is an opaque pointer to the context of the printer.
  */
 typedef int (*gaba_dp_printer_t)(void *, int64_t, char);
+GABA_EXPORT_LEVEL
 uint64_t gaba_dp_print_cigar_forward(
 	gaba_dp_printer_t printer,
 	void *fp,
@@ -371,6 +322,7 @@ uint64_t gaba_dp_print_cigar_forward(
  *
  * @brief convert path string to cigar in reverse direction
  */
+GABA_EXPORT_LEVEL
 uint64_t gaba_dp_print_cigar_reverse(
 	gaba_dp_printer_t printer,
 	void *fp,
@@ -381,6 +333,7 @@ uint64_t gaba_dp_print_cigar_reverse(
 /**
  * @fn gaba_dp_dump_cigar_forward
  */
+GABA_EXPORT_LEVEL
 uint64_t gaba_dp_dump_cigar_forward(
 	char *buf,
 	uint64_t buf_size,
@@ -391,6 +344,7 @@ uint64_t gaba_dp_dump_cigar_forward(
 /**
  * @fn gaba_dp_dump_cigar_reverse
  */
+GABA_EXPORT_LEVEL
 uint64_t gaba_dp_dump_cigar_reverse(
 	char *buf,
 	uint64_t buf_size,

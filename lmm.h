@@ -15,21 +15,25 @@
 #define _BSD_SOURCE
 #endif
 
+// #define LMM_DEBUG
+
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-
 
 /* roundup */
 #define _lmm_cutdown(x, base)		( (x) & ~((base) - 1) )
 #define _lmm_roundup(x, base)		( ((x) + (base) - 1) & ~((base) - 1) )
 
 /* constants */
+#define LMM_ALIGN_SIZE				( 16 )
+
 #define LMM_MIN_BASE_SIZE			( 128 )
 #define LMM_DEFAULT_BASE_SIZE		( 1024 )
 
-/* max */
+/* max and min */
 #define LMM_MAX2(x,y) 		( (x) > (y) ? (x) : (y) )
+#define LMM_MIN2(x,y) 		( (x) > (y) ? (y) : (x) )
 
 
 /**
@@ -37,9 +41,10 @@
  */
 struct lmm_s {
 	uint8_t need_free;
-	uint8_t pad[7];
+	uint8_t pad1[7];
 	void *ptr;
 	void *lim;
+	void *pad2;			/* make 16byte aligned */
 };
 typedef struct lmm_s lmm_t;
 
@@ -54,15 +59,15 @@ lmm_t *lmm_init(
 	if(base != NULL && base_size > LMM_MIN_BASE_SIZE) {
 		struct lmm_s *lmm = (struct lmm_s *)base;
 		lmm->need_free = 0;
-		lmm->ptr = base + sizeof(struct lmm_s);
-		lmm->lim = base + _lmm_cutdown(base_size, 16);
+		lmm->ptr = (void *)((uintptr_t)base + sizeof(struct lmm_s));
+		lmm->lim = (void *)((uintptr_t)base + _lmm_cutdown(base_size, LMM_ALIGN_SIZE));
 		return((lmm_t *)lmm);
 	} else {
 		base_size = LMM_MAX2(base_size, LMM_DEFAULT_BASE_SIZE);
 		struct lmm_s *lmm = (struct lmm_s *)malloc(base_size);
 		lmm->need_free = 1;
 		lmm->ptr = (void *)(lmm + 1);
-		lmm->lim = (void *)lmm + base_size;
+		lmm->lim = (void *)((uintptr_t)lmm + base_size);
 		return((lmm_t *)lmm);
 	}
 
@@ -74,13 +79,14 @@ lmm_t *lmm_init(
  * @fn lmm_clean
  */
 static inline
-void lmm_clean(
+void *lmm_clean(
 	lmm_t *lmm)
 {
 	if(lmm != NULL && lmm->need_free == 1) {
 		free(lmm);
+		return(NULL);
 	}
-	return;
+	return((void *)lmm);
 }
 
 /**
@@ -93,10 +99,10 @@ void *lmm_reserve_mem(
 	uint64_t size)
 {
 	uint64_t *sp = (uint64_t *)ptr;
-	size = _lmm_roundup(size, 16);
+	size = _lmm_roundup(size, LMM_ALIGN_SIZE);
 	*sp = size;
-	lmm->ptr = (void *)(sp + 1) + size;
-	return((void *)(sp + 1));
+	lmm->ptr = (void *)((uintptr_t)sp + LMM_ALIGN_SIZE + size);
+	return((void *)((uintptr_t)sp + LMM_ALIGN_SIZE));
 }
 
 /**
@@ -107,11 +113,20 @@ void *lmm_malloc(
 	lmm_t *lmm,
 	size_t size)
 {
-	if(lmm != NULL && lmm->ptr + size + sizeof(uint64_t) < lmm->lim) {
+#ifdef LMM_DEBUG
+
+	return(malloc(size));
+
+#else
+
+	if(lmm != NULL
+	&& ((uintptr_t)lmm->ptr + LMM_ALIGN_SIZE + size) < (uintptr_t)lmm->lim) {
 		return(lmm_reserve_mem(lmm, lmm->ptr, size));
 	} else {
 		return(malloc(size));
 	}
+
+#endif
 }
 
 /**
@@ -123,6 +138,12 @@ void *lmm_realloc(
 	void *ptr,
 	size_t size)
 {
+#ifdef LMM_DEBUG
+
+	return(realloc(ptr, size));
+
+#else
+
 	if(lmm == NULL) {
 		return(realloc(ptr, size));
 	}
@@ -130,9 +151,11 @@ void *lmm_realloc(
 	/* check if prev mem (ptr) is inside mm */
 	if((void *)lmm < ptr && ptr < lmm->lim) {
 		
-		uint64_t prev_size = *((uint64_t *)ptr - 1);
-		if(ptr + prev_size == lmm->ptr && ptr + size < lmm->lim) {
-			return(lmm_reserve_mem(lmm, ptr - sizeof(uint64_t), size));
+		uint64_t prev_size = *((uint64_t *)((uintptr_t)ptr - LMM_ALIGN_SIZE));
+		if((uintptr_t)ptr + prev_size == (uintptr_t)lmm->ptr
+		&& (uintptr_t)ptr + size < (uintptr_t)lmm->lim) {
+			return(lmm_reserve_mem(lmm,
+				(void *)((uintptr_t)ptr - LMM_ALIGN_SIZE), size));
 		}
 
 		void *np = malloc(size);
@@ -144,6 +167,8 @@ void *lmm_realloc(
 
 	/* pass to library realloc */
 	return(realloc(ptr, size));
+
+#endif
 }
 
 /**
@@ -154,17 +179,25 @@ void lmm_free(
 	lmm_t *lmm,
 	void *ptr)
 {
+#ifdef LMM_DEBUG
+
+	free(ptr);
+
+#else
+
 	if(lmm != NULL && (void *)lmm < ptr && ptr < lmm->lim) {
 		/* no need to free */
-		uint64_t prev_size = *((uint64_t *)ptr - 1);
-		if(ptr + prev_size == lmm->ptr) {
-			lmm->ptr = ptr - sizeof(uint64_t);
+		uint64_t prev_size = *((uint64_t *)((uintptr_t)ptr - LMM_ALIGN_SIZE));
+		if((uintptr_t)ptr + prev_size == (uintptr_t)lmm->ptr) {
+			lmm->ptr = (void *)((uintptr_t)ptr - LMM_ALIGN_SIZE);
 		}
 		return;
 	}
 
 	free(ptr);
 	return;
+
+#endif
 }
 
 /**
@@ -179,6 +212,195 @@ char *lmm_strdup(
 	char *s = lmm_malloc(lmm, len + 1);
 	memcpy(s, str, len + 1);
 	return(s);
+}
+
+
+/* object pool implementation */
+
+/**
+ * @struct lmm_pool_block_s
+ */
+struct lmm_pool_block_s {
+	struct lmm_pool_block_s *next;
+	struct lmm_pool_block_s *prev;
+	int64_t cnt;
+	int64_t pad;
+	uint8_t mem[];
+};
+
+/**
+ * @struct lmm_pool_object_s
+ */
+struct lmm_pool_object_s {
+	struct lmm_pool_object_s *next;
+};
+
+/**
+ * @struct lmm_pool_s
+ */
+struct lmm_pool_s {
+	lmm_t *lmm;
+	struct lmm_pool_block_s *curr;
+	struct lmm_pool_block_s *root;
+	struct lmm_pool_object_s *tail;
+	int64_t rem;
+	int64_t object_multiplier;
+};
+typedef struct lmm_pool_s lmm_pool_t;
+
+/**
+ * @fn lmm_pool_init
+ */
+static inline
+lmm_pool_t *lmm_pool_init(
+	lmm_t *lmm,
+	uint64_t object_size,
+	uint64_t init_object_cnt)
+{
+	object_size = _lmm_roundup(object_size, sizeof(struct lmm_pool_object_s));
+	struct lmm_pool_s *pool = lmm_malloc(lmm,
+		  sizeof(struct lmm_pool_s) + sizeof(struct lmm_pool_block_s)
+		+ init_object_cnt * object_size);
+	if(pool == NULL) {
+		return(NULL);
+	}
+
+	struct lmm_pool_block_s *blk = (struct lmm_pool_block_s *)(pool + 1);
+
+	/* init pool object */
+	pool->lmm = lmm;
+	pool->curr = blk;
+	pool->root = blk;
+	pool->tail = (struct lmm_pool_object_s *)blk->mem;
+	pool->rem = init_object_cnt;
+	pool->object_multiplier = object_size / sizeof(struct lmm_pool_object_s);
+
+	/* init first block */
+	blk->next = NULL;
+	blk->prev = NULL;
+	blk->cnt = init_object_cnt;
+
+	/* init free list */
+	pool->tail->next = NULL;
+
+	return((lmm_pool_t *)pool);
+}
+
+/**
+ * @fn lmm_pool_clean
+ */
+static inline
+void lmm_pool_clean(
+	lmm_pool_t *_pool)
+{
+	struct lmm_pool_s *pool = (struct lmm_pool_s *)_pool;
+	struct lmm_pool_block_s *blk = pool->root->next;
+	lmm_t *lmm = pool->lmm;
+
+	while(blk != NULL) {
+		struct lmm_pool_block_s *next_blk = blk->next;
+		lmm_free(lmm, blk); blk = next_blk;
+	}
+	lmm_free(lmm, pool);
+	return;
+}
+
+/**
+ * @fn lmm_pool_flush
+ */
+static inline
+void lmm_pool_flush(
+	lmm_pool_t *_pool)
+{
+	struct lmm_pool_s *pool = (struct lmm_pool_s *)_pool;
+	if(pool == NULL) { return; }
+
+	pool->curr = pool->root;
+	pool->tail = (struct lmm_pool_object_s *)pool->root->mem;
+	pool->rem = pool->root->cnt;
+	pool->tail->next = NULL;
+	return;
+}
+
+/**
+ * @fn lmm_pool_add_block
+ */
+static inline
+void lmm_pool_add_block(
+	struct lmm_pool_s *pool)
+{
+	if(pool->curr->next == NULL) {
+		int64_t next_cnt = 2 * pool->curr->cnt;
+		struct lmm_pool_block_s *blk = pool->curr->next =
+			(struct lmm_pool_block_s *)lmm_malloc(pool->lmm,
+				  sizeof(struct lmm_pool_block_s)
+				+ next_cnt * sizeof(struct lmm_pool_object_s) * pool->object_multiplier);
+		blk->next = NULL;
+		blk->prev = pool->curr;
+		blk->cnt = next_cnt;
+	}
+
+	pool->curr = pool->curr->next;
+	pool->tail = (struct lmm_pool_object_s *)pool->curr->mem;
+	pool->rem = pool->curr->cnt;
+	return;
+}
+
+/**
+ * @fn lmm_pool_create_object
+ */
+static inline
+void *lmm_pool_create_object(
+	lmm_pool_t *_pool)
+{
+#ifdef LMM_POOL_SEPARATE_NODE
+	struct lmm_pool_s *pool = (struct lmm_pool_s *)_pool;
+	return(malloc(sizeof(struct lmm_pool_object_s) * pool->object_multiplier));
+#else
+
+	struct lmm_pool_s *pool = (struct lmm_pool_s *)_pool;
+	struct lmm_pool_object_s *obj = NULL;
+
+	if(pool->tail->next != NULL) {
+		obj = pool->tail->next;
+		pool->tail->next = obj->next;
+	} else {
+		obj = pool->tail;
+		pool->tail += pool->object_multiplier;
+
+		if(--pool->rem <= 0) {
+			lmm_pool_add_block(pool);
+		}
+
+		*pool->tail = *obj;
+	}
+	return((void *)obj);
+
+#endif
+}
+
+/**
+ * @fn lmm_pool_delete_object
+ */
+static inline
+void lmm_pool_delete_object(
+	lmm_pool_t *_pool,
+	void *_obj)
+{
+#ifdef LMM_POOL_SEPARATE_NODE
+
+	free(_obj);
+
+#else
+
+	struct lmm_pool_s *pool = (struct lmm_pool_s *)_pool;
+	struct lmm_pool_object_s *obj = (struct lmm_pool_object_s *)_obj;
+
+	obj->next = pool->tail->next;
+	pool->tail->next = obj;
+	return;
+
+#endif
 }
 
 /**
@@ -268,8 +490,12 @@ int main() {
 #define lmm_kv_max(v)			( (v).m )
 
 #define lmm_kv_clear(lmm, v)	( (v).n = 0 )
-#define lmm_kv_resize(lmm, v, s) ( \
-	(v).m = (s), (v).a = lmm_realloc((lmm), (v).a, sizeof(*(v).a) * (v).m) )
+#define lmm_kv_resize(lmm, v, s) ({ \
+	uint64_t _size = LMM_MAX2(LMM_KVEC_INIT_SIZE, (s)); \
+	(v).m = _size; \
+	(v).n = LMM_MIN2((v).n, _size); \
+	(v).a = lmm_realloc((lmm), (v).a, sizeof(*(v).a) * (v).m); \
+})
 
 #define lmm_kv_reserve(lmm, v, s) ( \
 	(v).m > (s) ? 0 : ((v).m = (s), (v).a = lmm_realloc((lmm), (v).a, sizeof(*(v).a) * (v).m), 0) )
@@ -341,7 +567,6 @@ int main() {
 
 #define lmm_kv_hq_n(v, i) ( *((int64_t *)&v.a[i]) )
 #define lmm_kv_hq_push(lmm, v, x) { \
-	debug("push, n(%llu), m(%llu)", (v).n, (v).m); \
 	lmm_kv_push(lmm, v, x); \
 	uint64_t i = (v).n - 1; \
 	while(i > 1 && (lmm_kv_hq_n(v, i>>1) > lmm_kv_hq_n(v, i))) { \
@@ -352,7 +577,6 @@ int main() {
 	} \
 }
 #define lmm_kv_hq_pop(lmm, v) ({ \
-	debug("push, n(%llu), m(%llu)", (v).n, (v).m); \
 	uint64_t i = 1, j = 2; \
 	(v).a[0] = (v).a[i]; \
 	(v).a[i] = (v).a[--(v).n]; \
@@ -399,8 +623,12 @@ int main() {
 #define lmm_kpv_asize(v)			( ((v).n + lmm_kpv_elems(v) - 1) / lmm_kpv_elems(v) )
 
 #define lmm_kpv_clear(lmm, v)		( (v).n = 0 )
-#define lmm_kpv_resize(lmm, v, s) ( \
-	(v).m = (s), (v).a = lmm_realloc(lmm, (v).a, sizeof(*(v).a) * lmm_kpv_amax(v)) )
+#define lmm_kpv_resize(lmm, v, s) ({ \
+	uint64_t _size = LMM_MAX2(LMM_KVEC_INIT_SIZE, (s)); \
+	(v).m = _size; \
+	(v).n = LMM_MIN2((v).n, _size); \
+	(v).a = lmm_realloc((lmm), (v).a, sizeof(*(v).a) * lmm_kpv_amax(v)); \
+})
 
 #define lmm_kpv_reserve(lmm, v, s) ( \
 	(v).m > (s) ? 0 : ((v).m = (s), (v).a = lmm_realloc(lmm, (v).a, sizeof(*(v).a) * lmm_kpv_amax(v)), 0) )

@@ -6,6 +6,7 @@
  */
 #ifndef _ARCH_UTIL_H_INCLUDED
 #define _ARCH_UTIL_H_INCLUDED
+#define MM_ARCH			"AVX2"
 
 #include "vector.h"
 #include <x86intrin.h>
@@ -19,6 +20,18 @@
  * @macro popcnt
  */
 #define popcnt(x)		( (uint64_t)_mm_popcnt_u64(x) )
+
+/**
+ * @macro ZCNT_RESULT
+ * @brief workaround for a bug in gcc (<= 5), all the results of tzcnt / lzcnt macros must be modified by this label
+ */
+#ifndef ZCNT_RESULT
+#  if defined(_ARCH_GCC_VERSION) && _ARCH_GCC_VERSION < 600
+#    define ZCNT_RESULT		volatile
+#  else
+#    define ZCNT_RESULT
+#  endif
+#endif
 
 /**
  * @macro tzcnt
@@ -43,9 +56,18 @@
 #endif
 
 /**
+ * @macro _swap_u64
+ */
+#ifdef __clang__
+#  define _swap_u64(x)		({ uint64_t _x = (x); __asm__( "bswapq %0" : "+r"(_x) ); _x; })
+#else
+#  define _swap_u64(x)		( (uint64_t)_bswap64(x) )
+#endif
+
+/**
  * @macro _loadu_u64, _storeu_u64
  */
-#define _loadu_u64(p)		( *((uint64_t *)(p)) )
+#define _loadu_u64(p)		({ uint8_t const *_p = (uint8_t const *)(p); *((uint64_t const *)_p); })
 #define _storeu_u64(p, e)	{ *((uint64_t *)(p)) = (e); }
 
 /**
@@ -137,7 +159,7 @@
 #define _store_sb(_scv, sv16)				{ _store_v32i8((_scv).v1, _from_v16i8_v32i8(sv16)); }
 
 /* load */
-#define _load_sb(scv)						( _from_v32i8(_load_v32i8((scv).v1)) )
+#define _load_sb(scv)						( _from_v32i8_n(_load_v32i8((scv).v1)) )
 
 /**
  * gap penalty vector abstraction macros
@@ -172,10 +194,10 @@
 	(v32i8_t){ _mm256_shuffle_epi32(_mm256_load_si256((__m256i const *)(_ptr)), (_idx)) } \
 )
 
-#define _load_adjh(_scv)					( _from_v32i8(_load_gap((_scv).v3, 0x00)) )
-#define _load_adjv(_scv)					( _from_v32i8(_load_gap((_scv).v3, 0x55)) )
-#define _load_ofsh(_scv)					( _from_v32i8(_load_gap((_scv).v3, 0xaa)) )
-#define _load_ofsv(_scv)					( _from_v32i8(_load_gap((_scv).v3, 0xff)) )
+#define _load_adjh(_scv)					( _from_v32i8_n(_load_gap((_scv).v3, 0x00)) )
+#define _load_adjv(_scv)					( _from_v32i8_n(_load_gap((_scv).v3, 0x55)) )
+#define _load_ofsh(_scv)					( _from_v32i8_n(_load_gap((_scv).v3, 0xaa)) )
+#define _load_ofsv(_scv)					( _from_v32i8_n(_load_gap((_scv).v3, 0xff)) )
 
 
 

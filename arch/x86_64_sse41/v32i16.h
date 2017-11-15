@@ -10,7 +10,7 @@
 /* include header for intel / amd sse2 instruction sets */
 #include <x86intrin.h>
 
-/* 8bit 32cell */
+/* 16bit 32cell */
 typedef struct v32i16_s {
 	__m128i v1;
 	__m128i v2;
@@ -116,14 +116,11 @@ typedef struct v32i16_s {
 /* arithmetics */
 #define _add_v32i16(...)	_a_v32i16(add, _e_vv, __VA_ARGS__)
 #define _sub_v32i16(...)	_a_v32i16(sub, _e_vv, __VA_ARGS__)
-#define _adds_v32i16(...)	_a_v32i16(adds, _e_vv, __VA_ARGS__)
-#define _subs_v32i16(...)	_a_v32i16(subs, _e_vv, __VA_ARGS__)
 #define _max_v32i16(...)	_a_v32i16(max, _e_vv, __VA_ARGS__)
 #define _min_v32i16(...)	_a_v32i16(min, _e_vv, __VA_ARGS__)
 
 /* compare */
 #define _eq_v32i16(...)		_a_v32i16(cmpeq, _e_vv, __VA_ARGS__)
-#define _lt_v32i16(...)		_a_v32i16(cmplt, _e_vv, __VA_ARGS__)
 #define _gt_v32i16(...)		_a_v32i16(cmpgt, _e_vv, __VA_ARGS__)
 
 /* insert and extract */
