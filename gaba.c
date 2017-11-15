@@ -981,13 +981,13 @@ int64_t fill_init_fetch(
 
 	/* fetch, bounded by remaining sequence lengths and remaining head margins */
 	v2i32_t len = _min_v2i32(
-		rem,									/* if remaining head margin is the shortest */
 		_min_v2i32(
-			ridx,								/* if remaining sequence length is the shortest */
-			_add_v2i32(							/* if the opposite sequence length is the shortest */
-				_swap_v2i32(_sub_v2i32(ridx, rem)),
-				_add_v2i32(adj, rem)
-			)
+			rem,								/* if remaining head margin is the shortest */
+			ridx								/* if remaining sequence length is the shortest */
+		),
+		_add_v2i32(								/* if the opposite sequence length is the shortest */
+			_swap_v2i32(_sub_v2i32(ridx, rem)),
+			_add_v2i32(adj, rem)
 		)
 	);
 	debug("ppos(%lld)", ppos);
