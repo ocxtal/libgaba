@@ -1837,6 +1837,58 @@ struct gaba_fill_s *_export(gaba_dp_merge)(
 	struct gaba_fill_s const *fill2,
 	int32_t qdiff)
 {
+	/**
+	 * FIXME: NOTE:
+	 *
+	 * This function creates a new tail object from the two input
+	 * tail objects (fill1 and fill2) by ``merging'' them. The two
+	 * tails must be aligned on the same anti-diagonal line, that is,
+	 * they must have the same (local) p-coordinates. The last
+	 * argument qdiff is the distance between the two tails,
+	 * defined as fill2->qpos - fill1->qpos. The absolute distance,
+	 * |qdiff|, must not be larger than BW because non-overlapping
+	 * vectors cannot be merged. (undefined return value is reasonable
+	 * for now, I think.)
+	 *
+	 * Internal structure of the tail object:
+	 * Two structs, gaba_phantom_s and gaba_joint_tail_s, adjoins
+	 * on memory. Each fill pointer points to the `struct gaba_fill_s f`
+	 * member. So pointers to the two structs (objects) can be restored
+	 * by subtracting a certain offsets.
+	 *
+	 * Merging algorithm (tentative):
+	 * The middle_delta array contains the actual (offsetted) cell values
+	 * of the last vector of the band. So the two vectors can be merged
+	 * by max-ing cell values at each lane. The second last vectors are
+	 * also merged by max-ing each value. The actual values of the second
+	 * last vector is restored by subtracting the difference vector
+	 * (either dv or dh, depends on the last advancing direction) from the
+	 * middle delta vector.
+	 *
+	 *	struct gaba_phantom_s {
+	 *		struct gaba_diff_vec_s diff;	// calculated from the merged middle delta vector
+	 *		uint32_t reserved;
+	 *		int8_t acc, xstat;				// difference of the two edge cell values, MERGE_HEAD
+	 *		int8_t acnt, bcnt;				// 0, 0
+	 *		struct gaba_block_s const *blk;	// NULL
+	 *	};
+	 *	struct gaba_joint_tail_s {
+	 *		struct gaba_char_vec_s ch;		// copied from the input tails
+	 *		struct gaba_drop_s xd;			// MAX(fill1->xd, fill2->xd)
+	 *		struct gaba_middle_delta_s md;	// MAX(fill1->md + fill1->offset, fill2->md + fill2->offset) - new_offset
+	 *		int8_t qdiff[2], unused[2];		// TBD
+	 *		uint32_t pridx;					// MIN(fill1->pridx, fill2->pridx)
+	 *		uint32_t aridx, bridx;			// TBD
+	 *		uint32_t asridx, bsridx;		// aridx, bridx above
+	 *		int64_t offset;					// new_offset (TBD)
+	 *		struct gaba_fill_s f;			// (max, stat, scnt, ppos) = (calculated from the new_offset, copied? (TBD), MAX(fill1->scnt, fill2->scnt), MAX(fill1->ppos, fill2->ppos))
+	 *		struct gaba_joint_tail_s const *tail;// left NULL
+	 *		union {
+	 *			struct gaba_section_pair_s s;// unused
+	 *			struct gaba_tail_pair_s t;	// (tail[2], tail_idx_mask[2]) = ({ fill1, fill2 }, { max_mask1, max_mask2 })
+	 *		} u;
+	 *	};
+	 */
 	return(NULL);
 }
 
