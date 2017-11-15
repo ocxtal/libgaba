@@ -275,6 +275,18 @@ gaba_fill_t *gaba_dp_fill(
 	gaba_section_t const *b);
 
 /**
+ * @fn gaba_dp_merge
+ * @brief merge two sections. sec1 and sec2 must be aligned on the same ppos,
+ * and qdiff must be the q-distance of the two fill objects.
+ */
+GABA_EXPORT_LEVEL
+gaba_fill_t *gaba_dp_merge(
+	gaba_dp_t *dp,
+	gaba_fill_t const *sec1,
+	gaba_fill_t const *sec2,
+	int32_t qdiff);
+
+/**
  * @fn gaba_dp_search_max
  */
 GABA_EXPORT_LEVEL

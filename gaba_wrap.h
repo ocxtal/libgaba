@@ -14,6 +14,9 @@
 #ifndef _GABA_WRAP_H_INCLUDED
 #define _GABA_WRAP_H_INCLUDED
 
+/* combined gap penalty is not implemented yet */
+#define DISABLE_COMBINED
+
 /* import unittest */
 #ifndef UNITTEST_UNIQUE_ID
 #  define UNITTEST_UNIQUE_ID		30
@@ -58,7 +61,6 @@ _static_assert(_dp_ctx_index(64) == 0);		/* assume 64-cell has the smallest inde
 #define AFFINE						2
 #define COMBINED					3
 
-
 /**
  * @struct gaba_api_s
  *
@@ -78,6 +80,13 @@ struct gaba_api_s {
 		gaba_section_t const *a,
 		gaba_section_t const *b);
 
+	/* merge two sections */
+	gaba_fill_t *(*dp_merge)(
+		gaba_dp_t *dp,
+		gaba_fill_t const *sec1,
+		gaba_fill_t const *sec2,
+		int32_t qdiff);
+
 	/* max score and pos search */
 	gaba_pos_pair_t (*dp_search_max)(
 		gaba_dp_t *self,
@@ -88,8 +97,10 @@ struct gaba_api_s {
 		gaba_dp_t *self,
 		gaba_fill_t const *tail,
 		gaba_alloc_t const *alloc);
+
+	void *unused[3];
 };
-_static_assert(sizeof(struct gaba_api_s) == 4 * sizeof(void *));		/* must be consistent to gaba_opaque_s */
+_static_assert(sizeof(struct gaba_api_s) == 8 * sizeof(void *));		/* must be consistent to gaba_opaque_s */
 #define _api(_dp)				( (struct gaba_api_s const *)(_dp) )
 #define _api_array(_ctx)		( (struct gaba_api_s const (*)[DP_CTX_MAX])(_ctx) )
 
@@ -133,6 +144,7 @@ struct gaba_api_s const api_table[][DP_CTX_MAX] __attribute__(( aligned(32) )) =
 	#define _table_elems(_model, _bw) { \
 		.dp_fill_root = _import(_decl_cat3(gaba_dp_fill_root, _model, _bw)), \
 		.dp_fill = _import(_decl_cat3(gaba_dp_fill, _model, _bw)), \
+		.dp_merge = _import(_decl_cat3(gaba_dp_merge, _model, _bw)), \
 		.dp_search_max = _import(_decl_cat3(gaba_dp_search_max, _model, _bw)), \
 		.dp_trace = _import(_decl_cat3(gaba_dp_trace, _model, _bw)) \
 	}
@@ -147,11 +159,13 @@ struct gaba_api_s const api_table[][DP_CTX_MAX] __attribute__(( aligned(32) )) =
 		[_dp_ctx_index(32)] = _table_elems(affine, 32),
 		[_dp_ctx_index(64)] = _table_elems(affine, 64)
 	},
+	#if DISABLE_COMBINED
 	[COMBINED] = {
 		[_dp_ctx_index(16)] = _table_elems(combined, 16),
 		[_dp_ctx_index(32)] = _table_elems(combined, 32),
 		[_dp_ctx_index(64)] = _table_elems(combined, 64)
 	}
+	#endif
 
 	#undef _table_elems
 };
@@ -217,11 +231,13 @@ gaba_t *gaba_init(
 			[_dp_ctx_index(32)] = _import(gaba_init_affine_32),
 			[_dp_ctx_index(64)] = _import(gaba_init_affine_64)
 		},
+		#if DISABLE_COMBINED
 		[COMBINED] = {
 			[_dp_ctx_index(16)] = _import(gaba_init_combined_16),
 			[_dp_ctx_index(32)] = _import(gaba_init_combined_32),
 			[_dp_ctx_index(64)] = _import(gaba_init_combined_64)
 		}
+		#endif
 	};
 
 	/* create context */
