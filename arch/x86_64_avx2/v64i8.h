@@ -135,7 +135,7 @@ typedef struct v64i8_s {
 	(int8_t)(((imm) < sizeof(__m256i)) ? ( \
 		_i_v64i8(extract)((a).v1, (imm)) \
 	) : ( \
-		_i_v64i8(extract)((a).v1, (imm) - sizeof(__m256i)) \
+		_i_v64i8(extract)((a).v2, (imm) - sizeof(__m256i)) \
 	)) \
 )
 
@@ -144,24 +144,22 @@ typedef struct v64i8_s {
 	(v64i8_t) { \
 		_mm256_alignr_epi8( \
 			(a).v1, \
-			_mm256_permute2x128_si256((a).v1, (a).v1, 0x08), \
+			_mm256_permute2x128_si256((a).v1, (a).v2, 0x04), \
 			15), \
 		_mm256_alignr_epi8( \
 			(a).v2, \
-			_mm256_permute2x128_si256((a).v2, (a).v2, 0x08), \
+			_mm256_permute2x128_si256((a).v1, (a).v2, 0x21), \
 			15) \
 	} \
 )
 #define _bsr_v64i8(a, imm) ( \
 	(v64i8_t) { \
 		_mm256_alignr_epi8( \
-			_mm256_castsi128_si256( \
-				_mm256_extracti128_si256((a).v1, 1)), \
+			_mm256_permute2x128_si256((a).v1, (a).v2, 0x21), \
 			(a).v1, \
 			1), \
 		_mm256_alignr_epi8( \
-			_mm256_castsi128_si256( \
-				_mm256_extracti128_si256((a).v2, 1)), \
+			_mm256_castsi128_si256(_mm256_extracti128_si256((a).v2, 1)), \
 			(a).v2, \
 			1) \
 	} \
@@ -203,8 +201,8 @@ typedef struct v64i8_s {
 #ifdef _LOG_H_INCLUDED
 #define _print_v64i8(a) { \
 	debug("(v64i8_t) %s(%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, " \
-				 "%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, ", \
-				 "%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, ", \
+				 "%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, " \
+				 "%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, " \
 				 "%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d)", \
 		#a, \
 		_ext_v64i8(a, 32 + 31), \
