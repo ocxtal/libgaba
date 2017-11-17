@@ -11,9 +11,9 @@ native:
 	$(MAKE) -f Makefile.core CC=$(CC) CFLAGS='$(CFLAGS) $(ARCHFLAGS)'
 	$(AR) rcs $(TARGET) gaba.*.o
 
-unittest:
+unittest: unittest.c gaba.*.o
 	$(MAKE) -f Makefile.core CC=$(CC) CFLAGS='$(CFLAGS) $(ARCHFLAGS)'
 	$(CC) -o unittest unittest.c gaba.*.o
 
 clean:
-	rm -rf *.o $(TARGET) *~ *.a *.dSYM session*
+	rm -rf *.o $(TARGET) unittest *~ *.a *.dSYM session*
