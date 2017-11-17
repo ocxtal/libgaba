@@ -1485,13 +1485,11 @@ static _force_inline
 int64_t fill_bulk_test_idx(
 	struct gaba_dp_context_s const *self)
 {
-	debug("test(%lld, %lld, %lld), len(%u, %u, %u)",
-		(int64_t)self->w.r.aridx - BW,
-		(int64_t)self->w.r.bridx - BW,
-		(int64_t)(uint64_t)self->w.r.pridx - BLK,
-		self->w.r.aridx, self->w.r.bridx, self->w.r.pridx);
 	#define _test(_label, _ofs)	( (uint64_t)self->w.r._label - (uint64_t)(_ofs) )
-	return((int64_t)(_test(aridx, BW) | _test(bridx, BW) | _test(pridx, BLK)));
+	debug("test(%lld, %lld, %lld), len(%u, %u, %u)",
+		(int64_t)_test(aridx, BLK), (int64_t)_test(bridx, BLK), (int64_t)_test(pridx, BLK),
+		self->w.r.aridx, self->w.r.bridx, self->w.r.pridx);
+	return((int64_t)(_test(aridx, BLK) | _test(bridx, BLK) | _test(pridx, BLK)));
 	#undef _test
 }
 
