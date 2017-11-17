@@ -794,7 +794,6 @@ static uint8_t const comp_mask[16] __attribute__(( aligned(16) )) = {
 
 #endif
 
-
 /**
  * @fn fill_fetch_seq_a
  */
@@ -1022,7 +1021,7 @@ void fill_restore_fetch(
 	/* load segment head info */
 	struct gaba_joint_tail_s const *prev_tail = tail->tail;
 	// v2i32_t sridx = _load_v2i32(&tail->asridx);
-	v2i32_t sridx = _sub_v2i32(_load_v2i32(&tail->aridx), _load_v2i32(&tail->aadv));
+	v2i32_t sridx = _add_v2i32(_load_v2i32(&tail->aridx), _load_v2i32(&tail->aadv));
 	_print_v2i32(ridx); _print_v2i32(sridx);
 
 	/* calc fetch positions and lengths */
