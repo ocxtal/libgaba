@@ -395,7 +395,7 @@ struct gaba_reader_work_s {
 	struct gaba_section_pair_s s;		/** (32) section pair */
 	int32_t pridx, ofsd;				/** (4) delta of large offset */
 	uint32_t aridx, bridx;				/** (8) current ridx */
-	uint32_t asridx, bsridx;			/** (8) start ridx */
+	uint32_t asridx, bsridx;			/** (8) start ridx (converted to (badv, aadv) in fill_create_tail) */
 	struct gaba_joint_tail_s const *tail;	/** (8) previous tail */
 	/** 64 */
 
@@ -2089,7 +2089,6 @@ void trace_reload_section(
 			debug("add len(%d), adv(%d), gidx(%d), stat(%x)", _r(tail->u.s.alen, i), _r(tail->asridx, i) - _r(tail->aridx, i), gidx, tail->f.stat);
 			tail = tail->tail;
 		} while((tail->f.stat & mask[i]) == 0);
-
 	}
 
 	/* reload finished, store section info */
