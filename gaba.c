@@ -2039,15 +2039,19 @@ struct gaba_pos_pair_s _export(gaba_dp_search_max)(
 
 	v2i32_t const v11 = _set_v2i32(1);
 	v2i32_t const mask = _seta_v2i32(GABA_UPDATE_B, GABA_UPDATE_A);
-	v2i32_t gidx = _load_v2i32(&self->w.l.agidx);
+	v2i32_t gidx = _load_v2i32(&self->w.l.agidx), acc = _zero_v2i32();
 	while(_test_v2i32(_gt_v2i32(v11, gidx), v11)) {
-		/* load update flag and lengths */
-		v2i32_t flag = _set_v2i32(tail->f.stat);
-		v2i32_t len = _load_v2i32(&tail->u.s.alen);
+		/* accumulate advanced lengths */
+		v2i32_t adv = _sub_v2i32(_load_v2i32(&tail->aridx), _load_v2i32(&tail->asridx));
+		acc = _add_v2i32(acc, adv);
 
-		/* add length if update flag is set, for each seq */
+		/* load update flag and calculate update mask */
+		v2i32_t flag = _set_v2i32(tail->f.stat);
 		v2i32_t update = _eq_v2i32(_and_v2i32(flag, mask), mask);
-		gidx = _add_v2i32(gidx, _and_v2i32(update, len));
+
+		/* add advanced lengths */
+		gidx = _add_v2i32(gidx, _and_v2i32(update, adv));
+		adv = _andn_v2i32(update, adv);
 
 		/* fetch prev */
 		tail = tail->tail;
