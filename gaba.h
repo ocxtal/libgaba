@@ -261,7 +261,8 @@ gaba_fill_t *gaba_dp_fill_root(
 	gaba_section_t const *a,
 	uint32_t apos,
 	gaba_section_t const *b,
-	uint32_t bpos);
+	uint32_t bpos,
+	uint32_t pridx);
 
 /**
  * @fn gaba_dp_fill
@@ -272,7 +273,8 @@ gaba_fill_t *gaba_dp_fill(
 	gaba_dp_t *dp,
 	gaba_fill_t const *prev_sec,
 	gaba_section_t const *a,
-	gaba_section_t const *b);
+	gaba_section_t const *b,
+	uint32_t pridx);
 
 /**
  * @fn gaba_dp_merge
