@@ -1064,9 +1064,8 @@ static _force_inline
 void fill_load_section(
 	struct gaba_dp_context_s *self,
 	struct gaba_section_s const *a,
-	uint32_t aridx,
 	struct gaba_section_s const *b,
-	uint32_t bridx,
+	uint64_t _ridx,								/* (bridx, aridx) */
 	uint32_t pridx)
 {
 	/* load current section lengths */
@@ -1093,7 +1092,7 @@ void fill_load_section(
 	_store_v2i32(&self->w.r.s.aid, id);
 
 	/* calc ridx */
-	v2i32_t ridx = _seta_v2i32(bridx, aridx);
+	v2i32_t ridx = _cvt_u64_v2i32(_ridx);
 	ridx = _sel_v2i32(_eq_v2i32(ridx, _zero_v2i32()),/* if ridx is zero (occurs when section is updated) */
 		len,									/* load the next section */
 		ridx									/* otherwise use the same section as the previous */
@@ -1137,13 +1136,12 @@ struct gaba_block_s *fill_load_tail(
 	struct gaba_dp_context_s *self,
 	struct gaba_joint_tail_s const *tail,
 	struct gaba_section_s const *a,
-	uint32_t aridx,
 	struct gaba_section_s const *b,
-	uint32_t bridx,
+	uint64_t ridx,								/* (bridx, aridx) */
 	uint32_t pridx)
 {
 	/* load sequences and sections */
-	fill_load_section(self, a, aridx, b, bridx, pridx);
+	fill_load_section(self, a, b, ridx, pridx);
 	self->w.r.tail = tail;
 
 	/* clear offset */
@@ -1767,10 +1765,10 @@ struct gaba_fill_s *_export(gaba_dp_fill_root)(
 	self = _restore_dp_context(self);
 
 	/* load sections and extract the last block pointer */
+	v2i32_t pos = _seta_v2i32(bpos, apos), len = _seta_v2i32(b->len, a->len);
 	struct gaba_block_s *blk = fill_load_tail(
-		self, _root(self),
-		a, a->len - apos,
-		b, b->len - bpos,
+		self, _root(self), a, b,
+		_cvt_v2i32_u64(_sub_v2i32(len, pos)),
 		pridx == 0 ? UINT32_MAX : pridx /* UINT32_MAX */
 	);
 
@@ -1804,9 +1802,8 @@ struct gaba_fill_s *_export(gaba_dp_fill)(
 	_print_v2i32(_load_v2i32(&_tail(fill)->aridx));
 	_print_v2i32(_load_v2i32(&_tail(fill)->asridx));
 	struct gaba_block_s *blk = fill_load_tail(
-		self, _tail(fill),
-		a, _tail(fill)->aridx,
-		b, _tail(fill)->bridx,
+		self, _tail(fill), a, b,
+		_loadu_u64(&_tail(fill)->aridx),
 		pridx == 0 ? _tail(fill)->pridx : pridx /* UINT32_MAX */
 	);
 
