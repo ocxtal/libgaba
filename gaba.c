@@ -1977,10 +1977,6 @@ void leaf_detect_pos(
 	return;
 }
 
-#undef _LOG_H_INCLUDED
-#define DEBUG
-#include "log.h"
-
 /**
  * @fn leaf_search
  * @brief returns resulting path length
