@@ -73,12 +73,14 @@ struct gaba_api_s {
 		gaba_section_t const *a,
 		uint32_t apos,
 		gaba_section_t const *b,
-		uint32_t bpos);
+		uint32_t bpos,
+		uint32_t pridx);
 	gaba_fill_t *(*dp_fill)(
 		gaba_dp_t *self,
 		gaba_fill_t const *prev_sec,
 		gaba_section_t const *a,
-		gaba_section_t const *b);
+		gaba_section_t const *b,
+		uint32_t pridx);
 
 	/* merge two sections */
 	gaba_fill_t *(*dp_merge)(
@@ -126,8 +128,8 @@ _decl(void, gaba_dp_flush, gaba_dp_t *self, uint8_t const *alim, uint8_t const *
 _decl(gaba_stack_t const *, gaba_dp_save_stack, gaba_dp_t *self);
 _decl(void, gaba_dp_flush_stack, gaba_dp_t *self, gaba_stack_t const *stack);
 _decl(void, gaba_dp_clean, gaba_dp_t *self);
-_decl(gaba_fill_t *, gaba_dp_fill_root, gaba_dp_t *self, gaba_section_t const *a, uint32_t apos, gaba_section_t const *b, uint32_t bpos);
-_decl(gaba_fill_t *, gaba_dp_fill, gaba_dp_t *self, gaba_fill_t const *prev_sec, gaba_section_t const *a, gaba_section_t const *b);
+_decl(gaba_fill_t *, gaba_dp_fill_root, gaba_dp_t *self, gaba_section_t const *a, uint32_t apos, gaba_section_t const *b, uint32_t bpos, uint32_t pridx);
+_decl(gaba_fill_t *, gaba_dp_fill, gaba_dp_t *self, gaba_fill_t const *prev_sec, gaba_section_t const *a, gaba_section_t const *b, uint32_t pridx);
 _decl(gaba_pos_pair_t, gaba_dp_search_max, gaba_dp_t *self, gaba_fill_t const *sec);
 _decl(gaba_alignment_t *, gaba_dp_trace, gaba_dp_t *self, gaba_fill_t const *tail, gaba_alloc_t const *alloc);
 _decl(void, gaba_dp_res_free, gaba_alignment_t *res);
@@ -331,9 +333,10 @@ gaba_fill_t *gaba_dp_fill_root(
 	gaba_section_t const *a,
 	uint32_t apos,
 	gaba_section_t const *b,
-	uint32_t bpos)
+	uint32_t bpos,
+	uint32_t pridx)
 {
-	return(_api(self)->dp_fill_root(self, a, apos, b, bpos));
+	return(_api(self)->dp_fill_root(self, a, apos, b, bpos, pridx));
 }
 
 /**
@@ -345,9 +348,10 @@ gaba_fill_t *gaba_dp_fill(
 	gaba_dp_t *self,
 	gaba_fill_t const *prev_sec,
 	gaba_section_t const *a,
-	gaba_section_t const *b)
+	gaba_section_t const *b,
+	uint32_t pridx)
 {
-	return(_api(self)->dp_fill(self, prev_sec, a, b));
+	return(_api(self)->dp_fill(self, prev_sec, a, b, pridx));
 }
 
 /**
@@ -653,9 +657,9 @@ unittest(with_seq_pair("GGAAAAAAAA", "AAAAAAAA"))
 
 
 	/* check fill functions and resulting scores */
-	gaba_fill_t *f = gaba_dp_fill_root(d, &s->afsec, 0, &s->bfsec, 0);
-	f = gaba_dp_fill(d, f, &s->afsec, &s->bftail);
-	f = gaba_dp_fill(d, f, &s->aftail, &s->bftail);
+	gaba_fill_t *f = gaba_dp_fill_root(d, &s->afsec, 0, &s->bfsec, 0, 0);
+	f = gaba_dp_fill(d, f, &s->afsec, &s->bftail, 0);
+	f = gaba_dp_fill(d, f, &s->aftail, &s->bftail, 0);
 	assert(f->max == 6, "%lld", f->max);
 
 	/* check traceback function is callable */
@@ -690,9 +694,9 @@ unittest(with_seq_pair("GGAAAAAAAA", "AAAAAAAA"))
 
 
 	/* check fill functions and resulting scores */
-	gaba_fill_t *f = gaba_dp_fill_root(d, &s->afsec, 0, &s->bfsec, 0);
-	f = gaba_dp_fill(d, f, &s->afsec, &s->bftail);
-	f = gaba_dp_fill(d, f, &s->aftail, &s->bftail);
+	gaba_fill_t *f = gaba_dp_fill_root(d, &s->afsec, 0, &s->bfsec, 0, 0);
+	f = gaba_dp_fill(d, f, &s->afsec, &s->bftail, 0);
+	f = gaba_dp_fill(d, f, &s->aftail, &s->bftail, 0);
 	assert(f->max == 5, "%lld", f->max);
 
 	/* check traceback function is callable */

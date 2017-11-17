@@ -1760,8 +1760,8 @@ struct gaba_fill_s *_export(gaba_dp_fill_root)(
 	struct gaba_section_s const *a,
 	uint32_t apos,
 	struct gaba_section_s const *b,
-	uint32_t bpos
-	/*, uint32_t pridx*/)
+	uint32_t bpos,
+	uint32_t pridx)
 {
 	/* restore dp context pointer by adding offset */
 	self = _restore_dp_context(self);
@@ -1771,7 +1771,7 @@ struct gaba_fill_s *_export(gaba_dp_fill_root)(
 		self, _root(self),
 		a, a->len - apos,
 		b, b->len - bpos,
-		UINT32_MAX/* pridx == 0 ? UINT32_MAX : pridx */
+		pridx == 0 ? UINT32_MAX : pridx /* UINT32_MAX */
 	);
 
 	/* init fetch */
@@ -1795,8 +1795,8 @@ struct gaba_fill_s *_export(gaba_dp_fill)(
 	struct gaba_dp_context_s *self,
 	struct gaba_fill_s const *fill,
 	struct gaba_section_s const *a,
-	struct gaba_section_s const *b
-	/*, uint32_t pridx*/)
+	struct gaba_section_s const *b,
+	uint32_t pridx)
 {
 	self = _restore_dp_context(self);
 
@@ -1807,7 +1807,7 @@ struct gaba_fill_s *_export(gaba_dp_fill)(
 		self, _tail(fill),
 		a, _tail(fill)->aridx,
 		b, _tail(fill)->bridx,
-		UINT32_MAX/* pridx == 0 ? _tail(fill)->pridx : pridx */
+		pridx == 0 ? _tail(fill)->pridx : pridx /* UINT32_MAX */
 	);
 
 	/* check if still in the init (head) state */
