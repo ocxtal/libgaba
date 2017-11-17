@@ -4314,7 +4314,7 @@ struct gaba_fill_s const *unittest_dp_extend(
 {
 	/* fill root */
 	struct gaba_section_s const *a = p->a, *b = p->b;
-	struct gaba_fill_s const *f = _export(gaba_dp_fill_root)(dp, a, p->apos, b, p->bpos);
+	struct gaba_fill_s const *f = _export(gaba_dp_fill_root)(dp, a, p->apos, b, p->bpos, 0);
 
 	gaba_fill_t const *m = f;
 	while((f->stat & GABA_TERM) == 0) {
@@ -4327,7 +4327,7 @@ struct gaba_fill_s const *unittest_dp_extend(
 			debug("update b(%u, %u, %s)", b->id, b->len, b->base);
 		}
 		if(a->base == NULL || b->base == NULL) { break; }
-		f = _export(gaba_dp_fill)(dp, f, a, b);
+		f = _export(gaba_dp_fill)(dp, f, a, b, 0);
 		m = f->max > m->max ? f : m;
 	}
 	return(m);									/* never be null */
