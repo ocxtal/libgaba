@@ -246,7 +246,7 @@ struct gaba_middle_delta_s {
 _static_assert(sizeof(struct gaba_middle_delta_s) == sizeof(int16_t) * BW);
 
 /**
- * @struct gaba_mask_pair_u
+ * @struct gaba_mask_pair_s
  */
 #if MODEL == LINEAR
 struct gaba_mask_pair_s {
@@ -317,21 +317,31 @@ _static_assert(sizeof(struct gaba_phantom_s) % 16 == 0);
 #define _last_phantom(x)			( (struct gaba_phantom_s *)(x) - 1 )
 
 /**
+ * @struct gaba_merge_s
+ */
+struct gaba_merge_s {
+	uint8_t pad[BLK * sizeof(struct gaba_mask_pair_s) + sizeof(struct gaba_diff_vec_s) - 2 * BW - sizeof(void *)];	/* padding */
+	int64_t tail[1];					/** (8) accessed by [tail_idx[vec][q]] */
+	int8_t tail_idx[2][BW];				/** (32, 64, 128) lanewise index array */
+	int8_t reserved1[5], xstat, reserved2[10];
+};
+_static_assert(sizeof(struct gaba_merge_s) == sizeof(struct gaba_block_s));
+#define _merge_tail(x)				( (struct gaba_merge_s *)(x) )
+
+/**
  * @struct gaba_section_pair_s
  */
 struct gaba_section_pair_s {
 	uint8_t const *atail, *btail;		/** (16) tail of the current section */
-	// uint32_t alen, blen;				/** (8) lengths of the current section */
 	uint32_t aid, bid;					/** (8) ids */
 };
 
 /**
  * @struct gaba_tail_pair_s
- * @brief used in merging vectors. keeps pointers to either of two merged tails, for each cell in two (the current and the previous) vectors.
+ * @brief used in merging vectors. pointer arrays are stores before this object in the reverse order.
  */
 struct gaba_tail_pair_s {
-	struct gaba_joint_tail_s const *tail[2];/** (16) merged two tails */
-	uint64_t tail_idx_mask[2];			/** (16) 0/1 index array: [0] for the previous vector, [1] for the current vector (tail->md) */
+	uint8_t tail_idx_mask[2][64];		/** (128) 0/1 index array: [0] for the previous vector, [1] for the current vector (tail->md) */
 };
 
 /**
@@ -357,7 +367,6 @@ struct gaba_joint_tail_s {
 
 	/* section info or merged tails */
 	struct gaba_section_pair_s s;		/** (24) */
-	// struct gaba_tail_pair_s t;		/** (32) */
 	uint64_t abrk, bbrk;				/** (16) breakpoint masks */
 };
 _static_assert((sizeof(struct gaba_joint_tail_s) % 32) == 0);
@@ -1038,7 +1047,7 @@ void fill_restore_fetch(
 	_memset_blk_a(self->w.r.bufa, 0, 2 * (BW_MAX + BLK));
 
 	/* fetch seq a */
-	fill_fetch_seq_a_n(self, _lo32(ofs), tail->u.s.atail - _lo32(cridx), _lo32(len));
+	fill_fetch_seq_a_n(self, _lo32(ofs), tail->s.atail - _lo32(cridx), _lo32(len));
 	if(_lo32(ofs) > 0) {
 		nvec_t ach = _and_n(_set_n(0x0f), _loadu_n(&prev_tail->ch));/* aligned to 16byte boundaries */
 		_print_n(ach);
@@ -1054,7 +1063,7 @@ void fill_restore_fetch(
 		_print_n(bch);
 		_storeu_n(_rd_bufb(self, 0, _hi32(ofs)), bch);				/* aligned store */
 	}
-	fill_fetch_seq_b_n(self, _hi32(ofs), tail->u.s.btail - _hi32(cridx), _hi32(len));
+	fill_fetch_seq_b_n(self, _hi32(ofs), tail->s.btail - _hi32(cridx), _hi32(len));
 	return;
 }
 
@@ -1228,9 +1237,9 @@ struct gaba_joint_tail_s *fill_create_tail(
 	tail->f.scnt = prev_tail->f.scnt - _hi32(update) - _lo32(update);
 	tail->f.ppos = prev_tail->f.ppos + _hi32(adv) + _lo32(adv);
 	tail->tail = prev_tail;
-	// _memcpy_blk_ua(&tail->u.s.atail, &self->w.r.s.atail, sizeof(struct gaba_section_pair_s));
-	_storeu_v2i64(&tail->u.s.atail, _load_v2i64(&self->w.r.s.atail));
-	_storeu_v2i32(&tail->u.s.aid, _load_v2i32(&self->w.r.s.aid));
+	// _memcpy_blk_ua(&tail->s.atail, &self->w.r.s.atail, sizeof(struct gaba_section_pair_s));
+	_storeu_v2i64(&tail->s.atail, _load_v2i64(&self->w.r.s.atail));
+	_storeu_v2i32(&tail->s.aid, _load_v2i32(&self->w.r.s.aid));
 	return(tail);
 }
 
@@ -2095,7 +2104,7 @@ void trace_reload_section(
 	static uint32_t const mask[2] = { GABA_UPDATE_A, GABA_UPDATE_B };
 
 	debug("load section %s, idx(%d), len(%d)",
-		i == 0 ? "a" : "b", _r(self->w.l.agidx, i), _r(_r(self->w.l.atail, i)->u.s.alen, i));
+		i == 0 ? "a" : "b", _r(self->w.l.agidx, i), _r(_r(self->w.l.atail, i)->s.alen, i));
 
 	/* load tail pointer (must be inited with leaf tail) */
 	struct gaba_joint_tail_s const *tail = _r(self->w.l.atail, i);
@@ -2105,14 +2114,14 @@ void trace_reload_section(
 	while(gidx <= 0) {
 		do {
 			gidx += _r(tail->aadv, i);
-			debug("add len(%d), adv(%d), gidx(%d), stat(%x)", _r(tail->u.s.alen, i), _r(tail->aadv, i), gidx, tail->f.stat);
+			debug("add len(%d), adv(%d), gidx(%d), stat(%x)", _r(tail->s.alen, i), _r(tail->aadv, i), gidx, tail->f.stat);
 			tail = tail->tail;
 		} while((tail->f.stat & mask[i]) == 0);
 	}
 
 	/* reload finished, store section info */
 	_r(self->w.l.atail, i) = tail;		/* FIXME: is this correct?? */
-	_r(self->w.l.aid, i) = _r(tail->u.s.aid, i);
+	_r(self->w.l.aid, i) = _r(tail->s.aid, i);
 
 	_r(self->w.l.agidx, i) = gidx;
 	_r(self->w.l.asgidx, i) = gidx;
@@ -2210,11 +2219,10 @@ enum { ts_d = 0, ts_v0, ts_v1, ts_h0, ts_h1 };
 	/* reload block pointer */ \
 	blk = _last_phantom(blk)->blk; \
 	while(blk->xstat & MERGE_HEAD) { \
-		struct gaba_joint_tail_s *tail = (void *)(blk + 1); \
-		uint64_t _tail_idx = (tail->u.t.tail_idx_mask[_vec_idx]>>q) & 0x01; \
-		struct gaba_joint_tail_s const *prev = tail->u.t.tail[_tail_idx]; \
-		q += tail->qdiff[_tail_idx]; blk = _last_block(prev);	/* adjust q, restore block pointer */ \
-		tail->tail = prev;	/* save prev pointer for use in section boundary detection */ \
+		struct gaba_merge_s const *_mg = _merge_tail(blk); \
+		int64_t _t = _mg->tail[_mg->tail_idx[_vec_idx][q]];		/* use int64_t to keep the pointer cannonical */ \
+		struct gaba_joint_tail_s const *prev = _tail(_t>>8); \
+		q += (int8_t)(_t & 0xff); blk = _last_block(prev);		/* adjust q, restore block pointer; FIXME: tail pointer must be saved somewhere */ \
 	} \
 	/* reload dir and mask pointer, adjust path offset */ \
 	uint64_t _cnt = blk->acnt + blk->bcnt; \
@@ -3045,7 +3053,7 @@ void gaba_init_phantom(
 		.tail = NULL,
 		.aridx = 0, .bridx = 0,
 		.aadv = 0,  .badv = 0,
-		.u = { .s = { 0 } },
+		.s = { 0 },
 
 		/* score and vectors */
 		.mdrop = 0,
