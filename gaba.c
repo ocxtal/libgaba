@@ -345,7 +345,8 @@ struct gaba_joint_tail_s {
 	struct gaba_drop_s xd;				/** (16, 32, 64) */
 	struct gaba_middle_delta_s md;		/** (32, 64, 128) */
 
-	int8_t qdiff[2], unused[2];			/** (4) displacement of two merged vectors */
+	int8_t qdiff[2];					/** (2) displacement of two merged vectors */
+	int16_t mdrop;						/** (2) drop from m.max (offset) */
 	uint32_t pridx;						/** (4) remaining p-length */
 	uint32_t aridx, bridx;				/** (8) reverse indices for the tails */
 	// uint32_t asridx, bsridx;			/** (8) start reverse indices (for internal use) */
@@ -1205,9 +1206,8 @@ struct gaba_joint_tail_s *fill_create_tail(
 
 	/* search max section */
 	md = _add_w(md, _cvt_n_w(xd));					/* xd holds drop from max */
-	int64_t offset = prev_tail->offset + self->w.r.ofsd;
-	int64_t max = ((int16_t)_hmax_w(md)) + offset;
-	debug("prev_offset(%lld), offset(%lld), max(%d, %lld)", prev_tail->offset, offset, _hmax_w(md), max);
+	int16_t mdrop = _hmax_w(md);
+	tail->mdrop = mdrop;
 
 	/* reverse indices */
 	tail->pridx = self->w.r.pridx;
@@ -1220,9 +1220,10 @@ struct gaba_joint_tail_s *fill_create_tail(
 	_print_v2i32(sridx);
 	_print_v2i32(adv);
 
-	/* store scores */
-	tail->offset = offset;
-	tail->f.max = max;
+	/* store max */
+	tail->f.max = prev_tail->f.max - prev_tail->mdrop + mdrop + self->w.r.ofsd;
+	debug("prev_offset(%lld), offset(%lld), max(%d, %lld)",
+		prev_tail->f.max - prev_tail->mdrop, prev_tail->f.max - prev_tail->mdrop + self->w.r.ofsd, mdrop, tail->f.max);
 
 	/* status flags, coordinates, link pointer, and sections */
 	v2i32_t update = _eq_v2i32(ridx, _zero_v2i32());
@@ -1262,8 +1263,8 @@ struct gaba_joint_tail_s *fill_create_tail(
 	register nvec_t delta = _zero_n(); \
 	register nvec_t drop = _load_n(self->w.r.xd.drop); \
 	_print_n(drop); \
-	_print_w(_add_w(_load_w(&self->w.r.md), _add_w(_cvt_n_w(delta), _set_w(self->w.r.tail->offset + self->w.r.ofsd - 128)))); \
-	_print_w(_add_w(_add_w(_load_w(&self->w.r.md), _cvt_n_w(delta)), _add_w(_cvt_n_w(drop), _set_w(self->w.r.tail->offset + self->w.r.ofsd)))); \
+	_print_w(_add_w(_load_w(&self->w.r.md), _add_w(_cvt_n_w(delta), _set_w(self->w.r.tail->f.max - self->w.r.tail->mdrop + self->w.r.ofsd - 128)))); \
+	_print_w(_add_w(_add_w(_load_w(&self->w.r.md), _cvt_n_w(delta)), _add_w(_cvt_n_w(drop), _set_w(self->w.r.tail->f.max - self->w.r.tail->mdrop + self->w.r.ofsd)))); \
 	/* load direction determiner */ \
 	struct gaba_dir_s dir = _dir_init((_blk) - 1);
 #else	/* AFFINE and COMBINED */
@@ -1287,8 +1288,8 @@ struct gaba_joint_tail_s *fill_create_tail(
 	register nvec_t delta = _zero_n(); \
 	register nvec_t drop = _load_n(self->w.r.xd.drop); \
 	_print_n(drop); \
-	_print_w(_add_w(_load_w(&self->w.r.md), _add_w(_cvt_n_w(delta), _set_w(self->w.r.tail->offset + self->w.r.ofsd - 128)))); \
-	_print_w(_add_w(_add_w(_load_w(&self->w.r.md), _cvt_n_w(delta)), _add_w(_cvt_n_w(drop), _set_w(self->w.r.tail->offset + self->w.r.ofsd)))); \
+	_print_w(_add_w(_load_w(&self->w.r.md), _add_w(_cvt_n_w(delta), _set_w(self->w.r.tail->f.max - self->w.r.tail->mdrop + self->w.r.ofsd - 128)))); \
+	_print_w(_add_w(_add_w(_load_w(&self->w.r.md), _cvt_n_w(delta)), _add_w(_cvt_n_w(drop), _set_w(self->w.r.tail->f.max - self->w.r.tail->mdrop + self->w.r.ofsd)))); \
 	/* load direction determiner */ \
 	struct gaba_dir_s dir = _dir_init((_blk) - 1);
 #endif
@@ -1385,8 +1386,8 @@ struct gaba_joint_tail_s *fill_create_tail(
 	drop = _op_subs(drop, _t); \
 	_dir_update(dir, _vector, _sign); \
 	_print_n(drop); \
-	_print_w(_add_w(_load_w(&self->w.r.md), _add_w(_cvt_n_w(delta), _set_w(self->w.r.tail->offset + self->w.r.ofsd - 128)))); \
-	_print_w(_add_w(_add_w(_load_w(&self->w.r.md), _cvt_n_w(delta)), _add_w(_cvt_n_w(drop), _set_w(self->w.r.tail->offset + self->w.r.ofsd)))); \
+	_print_w(_add_w(_load_w(&self->w.r.md), _add_w(_cvt_n_w(delta), _set_w(self->w.r.tail->f.max - self->w.r.tail->mdrop + self->w.r.ofsd - 128)))); \
+	_print_w(_add_w(_add_w(_load_w(&self->w.r.md), _cvt_n_w(delta)), _add_w(_cvt_n_w(drop), _set_w(self->w.r.tail->f.max - self->w.r.tail->mdrop + self->w.r.ofsd)))); \
 }
 
 /**
@@ -1911,19 +1912,19 @@ uint64_t leaf_load_max_mask(
 	struct gaba_dp_context_s *self,
 	struct gaba_joint_tail_s const *tail)
 {
-	debug("ppos(%lld), scnt(%d), offset(%lld)", tail->f.ppos, tail->f.scnt, tail->offset);
+	debug("ppos(%lld), scnt(%d), offset(%lld)", tail->f.ppos, tail->f.scnt, tail->f.max - tail->mdrop);
 
 	/* load max vector, create mask */
 	nvec_t drop = _loadu_n(tail->xd.drop);
 	wvec_t md = _loadu_w(tail->md.delta);
 	uint64_t max_mask = ((nvec_masku_t){
 		.mask = _mask_w(_eq_w(
-			_set_w(tail->f.max - tail->offset),
+			_set_w(tail->mdrop),
 			_add_w(md, _cvt_n_w(drop))
 		))
 	}).all;
 	debug("max_mask(%llx)", max_mask);
-	_print_w(_set_w(tail->f.max - tail->offset));
+	_print_w(_set_w(tail->mdrop));
 	_print_w(_add_w(md, _cvt_n_w(drop)));
 	return(max_mask);
 }
@@ -3050,14 +3051,14 @@ void gaba_init_phantom(
 		.u = { .s = { 0 } },
 
 		/* score and vectors */
-		.offset = 0,
+		.mdrop = 0,
 		.ch.w = { [0] = _max_match_base(p), [BW-1] = _max_match_base(p)<<4 },
 		.xd.drop = { [BW / 2] = _max_match(p) - _gap_v(p, 1) },
 		.md = gaba_init_middle_delta(p)
 	};
 
 	/* add offsets */
-	ph->tail.offset += 128;
+	ph->tail.mdrop -= 128;
 	_store_n(&ph->tail.xd.drop,
 		_add_n(_load_n(&ph->tail.xd.drop), _set_n(-128))
 	);
