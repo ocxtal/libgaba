@@ -321,7 +321,7 @@ _static_assert(sizeof(struct gaba_phantom_s) % 16 == 0);
  */
 struct gaba_section_pair_s {
 	uint8_t const *atail, *btail;		/** (16) tail of the current section */
-	uint32_t alen, blen;				/** (8) lengths of the current section */
+	// uint32_t alen, blen;				/** (8) lengths of the current section */
 	uint32_t aid, bid;					/** (8) ids */
 };
 
@@ -393,7 +393,8 @@ struct gaba_reader_work_s {
 	/** 256 */
 
 	/** 64byte alidned */
-	struct gaba_section_pair_s s;		/** (32) section pair */
+	struct gaba_section_pair_s s;		/** (24) section pair */
+	uint64_t pad;
 	uint32_t pridx;						/** (4) remaining p-length (unsigned!) */
 	int32_t ofsd;						/** (4) delta of large offset */
 	uint32_t aridx, bridx;				/** (8) current ridx */
@@ -1090,7 +1091,7 @@ void fill_load_section(
 
 	/* store sections */
 	_store_v2i64(&self->w.r.s.atail, tail);
-	_store_v2i32(&self->w.r.s.alen, len);
+	// _store_v2i32(&self->w.r.s.alen, len);
 	_store_v2i32(&self->w.r.s.aid, id);
 
 	/* calc ridx */
