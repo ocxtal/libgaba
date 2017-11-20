@@ -394,7 +394,7 @@ struct gaba_reader_work_s {
 
 	/** 64byte alidned */
 	struct gaba_section_pair_s s;		/** (24) section pair */
-	uint64_t pad;
+	uint32_t arem, brem;
 	uint32_t pridx;						/** (4) remaining p-length (unsigned!) */
 	int32_t ofsd;						/** (4) delta of large offset */
 	uint32_t aridx, bridx;				/** (8) current ridx */
@@ -1230,7 +1230,9 @@ struct gaba_joint_tail_s *fill_create_tail(
 	tail->f.scnt = prev_tail->f.scnt - _hi32(update) - _lo32(update);
 	tail->f.ppos = prev_tail->f.ppos + _hi32(adv) + _lo32(adv);
 	tail->tail = prev_tail;
-	_memcpy_blk_ua(&tail->u.s.atail, &self->w.r.s.atail, sizeof(struct gaba_section_pair_s));
+	// _memcpy_blk_ua(&tail->u.s.atail, &self->w.r.s.atail, sizeof(struct gaba_section_pair_s));
+	_storeu_v2i64(&tail->u.s.atail, _load_v2i64(&self->w.r.s.atail));
+	_storeu_v2i32(&tail->u.s.aid, _load_v2i32(&self->w.r.s.aid));
 	return(tail);
 }
 
