@@ -349,19 +349,16 @@ struct gaba_joint_tail_s {
 	int16_t mdrop;						/** (2) drop from m.max (offset) */
 	uint32_t pridx;						/** (4) remaining p-length */
 	uint32_t aridx, bridx;				/** (8) reverse indices for the tails */
-	// uint32_t asridx, bsridx;			/** (8) start reverse indices (for internal use) */
 	uint32_t aadv, badv;				/** (8) advanced lengths */
-	int64_t offset;						/** (8) large offset */
 	struct gaba_fill_s f;				/** (24) */
 
 	/* tail pointer */
 	struct gaba_joint_tail_s const *tail;/** (8) the previous tail */
 
 	/* section info or merged tails */
-	union {
-		struct gaba_section_pair_s s;	/** (32) */
-		struct gaba_tail_pair_s t;		/** (32) */
-	} u;
+	struct gaba_section_pair_s s;		/** (24) */
+	// struct gaba_tail_pair_s t;		/** (32) */
+	uint64_t abrk, bbrk;				/** (16) breakpoint masks */
 };
 _static_assert((sizeof(struct gaba_joint_tail_s) % 32) == 0);
 #define TAIL_BASE				( offsetof(struct gaba_joint_tail_s, f) )
