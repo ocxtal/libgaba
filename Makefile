@@ -11,7 +11,7 @@ native:
 	$(MAKE) -f Makefile.core CC=$(CC) CFLAGS='$(CFLAGS) $(ARCHFLAGS)'
 	$(AR) rcs $(TARGET) gaba.*.o
 
-unittest: unittest.c gaba.*.o
+unittest: unittest.c gaba.c
 	$(MAKE) -f Makefile.core CC=$(CC) CFLAGS='$(CFLAGS) $(ARCHFLAGS)'
 	$(CC) -o unittest unittest.c gaba.*.o
 
