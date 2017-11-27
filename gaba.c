@@ -401,7 +401,7 @@ struct gaba_reader_work_s {
 
 	/** 64byte alidned */
 	struct gaba_section_pair_s s;		/** (24) section pair */
-	uint32_t arem, brem;
+	uint32_t arlim, brlim;				/** (8) */
 	uint32_t pridx;						/** (4) remaining p-length (unsigned!) */
 	int32_t ofsd;						/** (4) delta of large offset */
 	uint32_t aridx, bridx;				/** (8) current ridx */
@@ -1098,7 +1098,6 @@ void fill_load_section(
 
 	/* store sections */
 	_store_v2i64(&self->w.r.s.atail, tail);
-	// _store_v2i32(&self->w.r.s.alen, len);
 	_store_v2i32(&self->w.r.s.aid, id);
 
 	/* calc ridx */
@@ -1237,9 +1236,12 @@ struct gaba_joint_tail_s *fill_create_tail(
 	tail->f.scnt = prev_tail->f.scnt - _hi32(update) - _lo32(update);
 	tail->f.ppos = prev_tail->f.ppos + _hi32(adv) + _lo32(adv);
 	tail->tail = prev_tail;
-	// _memcpy_blk_ua(&tail->s.atail, &self->w.r.s.atail, sizeof(struct gaba_section_pair_s));
 	_storeu_v2i64(&tail->s.atail, _load_v2i64(&self->w.r.s.atail));
 	_storeu_v2i32(&tail->s.aid, _load_v2i32(&self->w.r.s.aid));
+
+	/* adjust breakpoint masks */
+	// v2i64_t brk = _shrv(_loadu_v2i64(&prev_tail->abrk), _cvt_v2i32_v2i64(adv));
+	// _storeu_v2i64(&tail->abrk, brk);
 	return(tail);
 }
 
@@ -2063,6 +2065,7 @@ struct gaba_pos_pair_s _export(gaba_dp_search_max)(
 	v2i32_t const v11 = _set_v2i32(1);
 	v2i32_t const mask = _seta_v2i32(GABA_UPDATE_B, GABA_UPDATE_A);
 	v2i32_t gidx = _load_v2i32(&self->w.l.agidx), acc = _zero_v2i32();
+	debug("gidx(%d, %d), acc(%d, %d)", _hi32(gidx), _lo32(gidx), _hi32(acc), _lo32(acc));
 	while(_test_v2i32(_gt_v2i32(v11, gidx), v11)) {
 		/* accumulate advanced lengths */
 		v2i32_t adv = _load_v2i32(&tail->aadv);
@@ -2073,9 +2076,9 @@ struct gaba_pos_pair_s _export(gaba_dp_search_max)(
 		v2i32_t update = _eq_v2i32(_and_v2i32(flag, mask), mask);
 
 		/* add advanced lengths */
-		fprintf(stderr, "gidx(%d, %d), update(%d, %d), adv(%d, %d)", _hi32(gidx), _lo32(gidx), _hi32(update), _lo32(update), _hi32(adv), _lo32(adv));
-		gidx = _add_v2i32(gidx, _and_v2i32(update, adv));
-		adv = _andn_v2i32(update, adv);
+		debug("gidx(%d, %d), update(%d, %d), acc(%d, %d), adv(%d, %d)", _hi32(gidx), _lo32(gidx), _hi32(update), _lo32(update), _hi32(acc), _lo32(acc), _hi32(adv), _lo32(adv));
+		gidx = _add_v2i32(gidx, _and_v2i32(update, acc));
+		acc = _andn_v2i32(update, acc);
 
 		/* fetch prev */
 		tail = tail->tail;
@@ -2107,7 +2110,7 @@ void trace_reload_section(
 		i == 0 ? "a" : "b", _r(self->w.l.agidx, i), _r(_r(self->w.l.atail, i)->s.alen, i));
 
 	/* load tail pointer (must be inited with leaf tail) */
-	struct gaba_joint_tail_s const *tail = _r(self->w.l.atail, i);
+	struct gaba_joint_tail_s const *tail = _r(self->w.l.atail, i), *prev_tail = tail;
 	int32_t gidx = _r(self->w.l.agidx, i);
 	debug("base gidx(%d)", gidx);
 
@@ -2115,13 +2118,13 @@ void trace_reload_section(
 		do {
 			gidx += _r(tail->aadv, i);
 			debug("add len(%d), adv(%d), gidx(%d), stat(%x)", _r(tail->s.alen, i), _r(tail->aadv, i), gidx, tail->f.stat);
-			tail = tail->tail;
+			prev_tail = tail; tail = tail->tail;
 		} while((tail->f.stat & mask[i]) == 0);
 	}
 
 	/* reload finished, store section info */
 	_r(self->w.l.atail, i) = tail;		/* FIXME: is this correct?? */
-	_r(self->w.l.aid, i) = _r(tail->s.aid, i);
+	_r(self->w.l.aid, i) = _r(prev_tail->s.aid, i);
 
 	_r(self->w.l.agidx, i) = gidx;
 	_r(self->w.l.asgidx, i) = gidx;

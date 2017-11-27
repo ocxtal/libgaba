@@ -121,6 +121,14 @@ typedef struct v2i64_s {
 	(int64_t)_i_v2i64(extract)((a).v1, (imm)) \
 )
 
+/* shift */
+#define _shlv_v2i64(a, n) ( \
+	(v2i64_t) {_i_v2i64(sll)((a).v1, (n).v1)} \
+)
+#define _shrv_v2i64(a, n) ( \
+	(v2i64_t) {_i_v2i64(srl)((a).v1, (n).v1)} \
+)
+
 /* mask */
 #define _mask_v2i64(a) ( \
 	(uint32_t) (_mm_movemask_epi8((a).v1)) \
