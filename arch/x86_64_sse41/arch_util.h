@@ -117,7 +117,7 @@
  * @macro _loadu_u64, _storeu_u64
  */
 #define _loadu_u64(p)		({ uint8_t const *_p = (uint8_t const *)(p); *((uint64_t const *)_p); })
-#define _storeu_u64(p, e)	{ *((uint64_t *)(p)) = (e); }
+#define _storeu_u64(p, e)	{ uint8_t *_p = (uint8_t *)(p); *((uint64_t *)(_p)) = (e); }
 
 /**
  * @macro _aligned_block_memcpy
