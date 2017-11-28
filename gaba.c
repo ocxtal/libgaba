@@ -1912,6 +1912,25 @@ struct gaba_fill_s *_export(gaba_dp_merge)(
 	 *		} u;
 	 *	};
 	 */
+
+	#if 0
+	struct gaba_joint_tail_s const *btail = _tail(*fill);
+	int64_t max_pos = -1, base = btail->offset;
+	for(uint64_t i = 0; i < tcnt; i++) {
+		struct gaba_joint_tail_s const *t = _tail(fill[i]);
+		max_pos = MAX2(max_pos, (t->f.max + t->offset - base)<<32 | lzcnt(tail_calc_max_mask(t)));
+	}
+	struct gaba_joint_tail_s const *t1 = _tail(fill1), *t2 = _tail(fill2);
+	/* determine new center */
+	uint64_t pos1 = lzcnt(tail_calc_max_mask(t1)), pos2 = lzcnt(tail_calc_max_mask(t2));
+	/* determine new offset */
+	int64_t offset = MAX2(t1->offset, t2->offset);
+	/* load middle vectors, adjust offset */
+	wvec_t md1 = _loadu_w(&t1->md), md2 = _loadu_w(&t2->md);
+	md1 = _sub_w(md1, _set_w(offset - t1->offset));
+	md2 = _sub_w(md2, _set_w(offset - t2->offset));
+	wvec_t md = _max_w(md1, md2);
+	#endif
 	return(NULL);
 }
 
