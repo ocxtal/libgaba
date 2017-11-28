@@ -4302,7 +4302,7 @@ int unittest_check_section(
 		if(aln->seg[i].blen != sec[i].blen) { rc = 0; }
 		if(aln->seg[i].ppos != sec[i].ppos) { rc = 0; }
 	}
-	return(1);
+	return(rc);
 }
 
 unittest()
