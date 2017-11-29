@@ -148,8 +148,8 @@ typedef struct gaba_dp_context_s gaba_dp_t;
 struct gaba_fill_s {
 	int64_t max;				/** (8) max score in the entire band */
 	uint32_t stat;				/** (4) status (section update flags) */
-	uint32_t scnt;				/** (4) expected section count (== band-segment depth) */
-	int64_t ppos;				/** (8) #vectors from the head */
+	int32_t ppos;				/** (8) #vectors from the head (FIXME: should be 64bit int) */
+	uint32_t ascnt, bscnt;		/** (4) aligned section counts */
 };
 typedef struct gaba_fill_s gaba_fill_t;
 
@@ -278,15 +278,16 @@ gaba_fill_t *gaba_dp_fill(
 
 /**
  * @fn gaba_dp_merge
- * @brief merge two sections. sec1 and sec2 must be aligned on the same ppos,
- * and qdiff must be the q-distance of the two fill objects.
+ * @brief merge multiple sections. all the vectors (tail objects) must be aligned on the same ppos,
+ * and qofs are the q-distance of the two fill objects.
  */
+#define MAX_MERGE_COUNT				( 14 )
 GABA_EXPORT_LEVEL
 gaba_fill_t *gaba_dp_merge(
 	gaba_dp_t *dp,
-	gaba_fill_t const *sec1,
-	gaba_fill_t const *sec2,
-	int32_t qdiff);
+	gaba_fill_t const **sec,
+	int32_t const *qofs,
+	uint32_t cnt);
 
 /**
  * @fn gaba_dp_search_max

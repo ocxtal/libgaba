@@ -222,20 +222,12 @@ struct gaba_dp_context_s;
 
 
 /**
- * @struct gaba_small_delta_s
- */
-struct gaba_small_delta_s {
-	int8_t delta[BW];					/** (32) small delta */
-};
-_static_assert(sizeof(struct gaba_small_delta_s) == BW);
-
-/**
  * @struct gaba_drop_s
  */
 struct gaba_drop_s {
 	int8_t drop[BW];					/** (32) max */
 };
-_static_assert(sizeof(struct gaba_small_delta_s) == BW);
+_static_assert(sizeof(struct gaba_drop_s) == BW);
 
 /**
  * @struct gaba_middle_delta_s
@@ -299,16 +291,16 @@ _static_assert(sizeof(struct gaba_char_vec_s) == BW);
 struct gaba_block_s {
 	struct gaba_mask_pair_s mask[BLK];	/** (256 / 512) traceback capability flag vectors (set if transition to the ajdacent cell is possible) */
 	struct gaba_diff_vec_s diff; 		/** (64, 128, 256) diff variables of the last vector */
-	uint32_t dir_mask;					/** (4) extension direction bit array */
 	int8_t acc, xstat;					/** (2) accumulator, and xdrop status (term detected when xstat < 0) */
 	int8_t acnt, bcnt;					/** (2) forwarded lengths */
+	uint32_t dir_mask;					/** (4) extension direction bit array */
 	uint64_t max_mask;					/** (8) lanewise update mask (set if the lane contains the current max) */
 };
 struct gaba_phantom_s {
 	struct gaba_diff_vec_s diff; 		/** (64, 128, 256) diff variables of the last (just before the head) vector */
-	uint32_t reserved;					/** (4) overlaps with dir_mask */
 	int8_t acc, xstat;					/** (2) accumulator, and xdrop status (term detected when xstat < 0) */
 	int8_t acnt, bcnt;					/** (4) prefetched sequence lengths (only effective at the root, otherwise zero) */
+	uint32_t reserved;					/** (4) overlaps with dir_mask */
 	struct gaba_block_s const *blk;		/** (8) link to the previous block (overlaps with max_mask) */
 };
 _static_assert(sizeof(struct gaba_block_s) % 16 == 0);
@@ -320,20 +312,25 @@ _static_assert(sizeof(struct gaba_phantom_s) % 16 == 0);
  * @struct gaba_merge_s
  */
 struct gaba_merge_s {
-	uint8_t pad[BLK * sizeof(struct gaba_mask_pair_s) + sizeof(struct gaba_diff_vec_s) - 2 * BW - sizeof(void *)];	/* padding */
-	int64_t tail[1];					/** (8) accessed by [tail_idx[vec][q]] */
-	int8_t tail_idx[2][BW];				/** (32, 64, 128) lanewise index array */
-	int8_t reserved1[5], xstat, reserved2[10];
+	uint64_t reserved1;					/** (8) keep aligned to 16byte boundary */
+	struct gaba_block_s const *blk[1];	/** (8) addressed by [tail_idx[vec][q]] */
+	int8_t tidx[2][BW];					/** (32, 64, 128) lanewise index array */
+	struct gaba_diff_vec_s diff; 		/** (64, 128, 256) diff variables of the last (just before the head) vector */
+	int8_t acc, xstat;					/** (2) acc and xstat are reserved for block_s */
+	int8_t reserved2[13], qofs[1];		/*+ (14) displacement of vectors in the q-direction */
 };
-_static_assert(sizeof(struct gaba_merge_s) == sizeof(struct gaba_block_s));
-#define _merge_tail(x)				( (struct gaba_merge_s *)(x) )
+#define MERGE_TAIL_OFFSET 			( BLK * sizeof(struct gaba_mask_pair_s) - 2 * BW - 2 * sizeof(void *) )
+#define _merge(x)					( (struct gaba_merge_s *)((uint8_t *)(x) + MERGE_TAIL_OFFSET) )
+_static_assert(sizeof(struct gaba_merge_s) % 16 == 0);
+_static_assert(sizeof(struct gaba_merge_s) + MERGE_TAIL_OFFSET == sizeof(struct gaba_block_s));
+_static_assert(MAX_MERGE_COUNT <= 14);
 
 /**
  * @struct gaba_section_pair_s
  */
 struct gaba_section_pair_s {
-	uint8_t const *atptr, *btptr;		/** (16) tail of the current section */
 	uint32_t aid, bid;					/** (8) ids */
+	uint8_t const *atptr, *btptr;		/** (16) tail of the current section */
 };
 
 /**
@@ -355,8 +352,7 @@ struct gaba_joint_tail_s {
 	struct gaba_drop_s xd;				/** (16, 32, 64) */
 	struct gaba_middle_delta_s md;		/** (32, 64, 128) */
 
-	int8_t qdiff[2];					/** (2) displacement of two merged vectors */
-	int16_t mdrop;						/** (2) drop from m.max (offset) */
+	int32_t mdrop;						/** (2) drop from m.max (offset) */
 	uint32_t pridx;						/** (4) remaining p-length */
 	uint32_t aridx, bridx;				/** (8) reverse indices for the tails */
 	uint32_t aadv, badv;				/** (8) advanced lengths */
@@ -365,7 +361,7 @@ struct gaba_joint_tail_s {
 	/* tail pointer */
 	struct gaba_joint_tail_s const *tail;/** (8) the previous tail */
 
-	/* section info or merged tails */
+	/* section */
 	struct gaba_section_pair_s s;		/** (24) */
 	uint64_t abrk, bbrk;				/** (16) breakpoint masks */
 };
@@ -373,6 +369,7 @@ _static_assert((sizeof(struct gaba_joint_tail_s) % 32) == 0);
 #define TAIL_BASE				( offsetof(struct gaba_joint_tail_s, f) )
 #define _tail(x)				( (struct gaba_joint_tail_s *)((uint8_t *)(x) - TAIL_BASE) )
 #define _fill(x)				( (struct gaba_fill_s *)((uint8_t *)(x) + TAIL_BASE) )
+#define _offset(x)				( (x)->f.max - (x)->mdrop )
 
 /**
  * @struct gaba_root_block_s
@@ -400,8 +397,8 @@ struct gaba_reader_work_s {
 	/** 256 */
 
 	/** 64byte alidned */
-	struct gaba_section_pair_s s;		/** (24) section pair */
 	uint32_t arlim, brlim;				/** (8) asridx - aadv = aridx + arlim */
+	struct gaba_section_pair_s s;		/** (24) section pair */
 	uint32_t pridx;						/** (4) remaining p-length (unsigned!) */
 	int32_t ofsd;						/** (4) delta of large offset */
 	uint32_t arem, brem;				/** (8) current ridx (redefined as rem, ridx == rem + rlim) */
@@ -678,7 +675,7 @@ void gaba_free(
  */
 struct gaba_dir_s {
 	uint32_t mask;
-	int8_t acc;
+	int32_t acc;					/* use 32bit int to avoid (sometimes inefficient) 8bit and 16bit operations on x86_64 GP registers */
 };
 
 /**
@@ -729,7 +726,6 @@ struct gaba_dir_s {
 /**
  * @macro _dir_load
  */
-#if 1
 #define _dir_mask_load(_blk, _cnt)	( (_blk)->dir_mask>>(BLK - (_cnt)) )
 #define _dir_load(_blk, _cnt) ( \
 	(struct gaba_dir_s){ \
@@ -738,17 +734,6 @@ struct gaba_dir_s {
 	} \
 	/*debug("load dir cnt(%d), mask(%x), shifted mask(%x)", (int32_t)_filled_count, _d.mask, _d.mask>>(BLK - (_filled_count)));*/ \
 )
-#else
-#define _dir_load(_blk, _local_idx) ({ \
-	struct gaba_dir_s _d = (struct gaba_dir_s){ \
-		.mask = (_blk)->dir_mask, \
-		.acc = 0 \
-	}; \
-	debug("load dir idx(%d), mask(%x), shifted mask(%x)", (int32_t)_local_idx, _d.mask, _d.mask>>(BLK - (_local_idx) - 1)); \
-	_d.mask >>= (BLK - (_local_idx) - 1); \
-	_d; \
-})
-#endif
 
 /**
  * seqreader macros
@@ -1105,9 +1090,9 @@ void fill_load_section(
 	_print_v2i64(tptr);
 
 	/* save all */
-	_store_v2i64(&self->w.r.s.atptr, tptr);
-	_store_v2i32(&self->w.r.s.aid, id);
 	_store_v2i32(&self->w.r.arlim, rlim);
+	_store_v2i32(&self->w.r.s.aid, id);
+	_store_v2i64(&self->w.r.s.atptr, tptr);
 	_storeu_u64(&self->w.r.pridx, pridx);		/* (pridx, ofsd) = (remaining p length, 0) */
 	_store_v2i32(&self->w.r.arem, rem);
 	_store_v2i32(&self->w.r.asridx, ridx);
@@ -1129,10 +1114,10 @@ struct gaba_block_s *fill_create_phantom(
 
 	/* head sequence buffers are already filled, continue to body fill-in (first copy phantom block) */
 	_memcpy_blk_uu(&ph->diff, &prev_blk->diff, sizeof(struct gaba_diff_vec_s));
-	ph->reserved = 0;							/* overlaps with mask */
 	ph->acc = prev_blk->acc;					/* just copy */
 	ph->xstat = (prev_blk->xstat & (ROOT | UPDATE)) | HEAD;	/* propagate root-update flag and mark head */
 	ph->acnt = ph->bcnt = 0;					/* clear counter (a and b sequences are aligned at the head of the buffer) FIXME: intermediate seq fetch breaks consistency */
+	ph->reserved = 0;							/* overlaps with mask */
 	ph->blk = prev_blk;
 	debug("ph(%p), xstat(%x)", ph, ph->xstat);
 	return((struct gaba_block_s *)(ph + 1) - 1);
@@ -1190,7 +1175,7 @@ struct gaba_joint_tail_s *fill_create_tail(
 	self->stack.top = (void *)(tail + 1);	/* write back stack_top */
 	debug("end stack_top(%p), stack_end(%p), blk(%p)", self->stack.top, self->stack.end, blk);
 
-	int16_t mdrop;
+	int32_t mdrop;
 	/* vectors */ {
 		/* store char vector */
 		nvec_t ach = _loadu_n(_rd_bufa(self, blk->acnt, BW));
@@ -1213,9 +1198,9 @@ struct gaba_joint_tail_s *fill_create_tail(
 	}
 
 	/* section */ {
+		v2i32_t rlim = _load_v2i32(&self->w.r.arlim);
 		v2i32_t id = _load_v2i32(&self->w.r.s.aid);
 		v2i64_t tptr = _load_v2i64(&self->w.r.s.atptr);
-		v2i32_t rlim = _load_v2i32(&self->w.r.arlim);
 		tptr = _add_v2i64(tptr, _cvt_v2i32_v2i64(rlim));
 		_print_v2i32(rlim); _print_v2i32(_load_v2i32(&self->w.r.arem));
 
@@ -1230,18 +1215,21 @@ struct gaba_joint_tail_s *fill_create_tail(
 
 		/* store max */
 		struct gaba_joint_tail_s const *prev_tail = self->w.r.tail;
-		tail->f.max = prev_tail->f.max - prev_tail->mdrop + mdrop + self->w.r.ofsd;
+		tail->f.max = _offset(prev_tail) + self->w.r.ofsd + mdrop;
 		debug("prev_offset(%lld), offset(%lld), max(%d, %lld)",
-			prev_tail->f.max - prev_tail->mdrop, prev_tail->f.max - prev_tail->mdrop + self->w.r.ofsd, mdrop, tail->f.max);
+			_offset(prev_tail), _offset(prev_tail) + self->w.r.ofsd, mdrop, tail->f.max);
 
 		/* status flags, coordinates, link pointer, and sections */
 		v2i32_t update = _eq_v2i32(ridx, _zero_v2i32());
 		tail->f.stat = ((uint32_t)(blk->xstat & (UPDATE | TERM | CONT))<<8) | _mask_v2i32(update);
-		tail->f.scnt = prev_tail->f.scnt - _hi32(update) - _lo32(update);
+		_store_v2i32(&tail->f.ascnt, _sub_v2i32(
+			_load_v2i32(&prev_tail->f.ascnt),			/* aligned section counts */
+			update										/* increment by one if the pointer reached the end of the current section */
+		));
 		tail->f.ppos = prev_tail->f.ppos + _hi32(adv) + _lo32(adv);
 		tail->tail = prev_tail;
-		_storeu_v2i64(&tail->s.atptr, tptr);
 		_storeu_v2i32(&tail->s.aid, id);
+		_storeu_v2i64(&tail->s.atptr, tptr);
 
 		/* adjust breakpoint masks */
 		v2i64_t brk = _shrv_v2i64(_loadu_v2i64(&prev_tail->abrk), _cvt_v2i32_v2i64(adv));
@@ -1276,8 +1264,8 @@ struct gaba_joint_tail_s *fill_create_tail(
 	register nvec_t delta = _zero_n(); \
 	register nvec_t drop = _load_n(self->w.r.xd.drop); \
 	_print_n(drop); \
-	_print_w(_add_w(_load_w(&self->w.r.md), _add_w(_cvt_n_w(delta), _set_w(self->w.r.tail->f.max - self->w.r.tail->mdrop + self->w.r.ofsd - 128)))); \
-	_print_w(_add_w(_add_w(_load_w(&self->w.r.md), _cvt_n_w(delta)), _add_w(_cvt_n_w(drop), _set_w(self->w.r.tail->f.max - self->w.r.tail->mdrop + self->w.r.ofsd)))); \
+	_print_w(_add_w(_load_w(&self->w.r.md), _add_w(_cvt_n_w(delta), _set_w(_offset(self->w.r.tail) + self->w.r.ofsd - 128)))); \
+	_print_w(_add_w(_add_w(_load_w(&self->w.r.md), _cvt_n_w(delta)), _add_w(_cvt_n_w(drop), _set_w(_offset(self->w.r.tail) + self->w.r.ofsd)))); \
 	/* load direction determiner */ \
 	struct gaba_dir_s dir = _dir_init((_blk) - 1);
 #else	/* AFFINE and COMBINED */
@@ -1301,8 +1289,8 @@ struct gaba_joint_tail_s *fill_create_tail(
 	register nvec_t delta = _zero_n(); \
 	register nvec_t drop = _load_n(self->w.r.xd.drop); \
 	_print_n(drop); \
-	_print_w(_add_w(_load_w(&self->w.r.md), _add_w(_cvt_n_w(delta), _set_w(self->w.r.tail->f.max - self->w.r.tail->mdrop + self->w.r.ofsd - 128)))); \
-	_print_w(_add_w(_add_w(_load_w(&self->w.r.md), _cvt_n_w(delta)), _add_w(_cvt_n_w(drop), _set_w(self->w.r.tail->f.max - self->w.r.tail->mdrop + self->w.r.ofsd)))); \
+	_print_w(_add_w(_load_w(&self->w.r.md), _add_w(_cvt_n_w(delta), _set_w(_offset(self->w.r.tail) + self->w.r.ofsd - 128)))); \
+	_print_w(_add_w(_add_w(_load_w(&self->w.r.md), _cvt_n_w(delta)), _add_w(_cvt_n_w(drop), _set_w(_offset(self->w.r.tail) + self->w.r.ofsd)))); \
 	/* load direction determiner */ \
 	struct gaba_dir_s dir = _dir_init((_blk) - 1);
 #endif
@@ -1399,8 +1387,8 @@ struct gaba_joint_tail_s *fill_create_tail(
 	drop = _op_subs(drop, _t); \
 	_dir_update(dir, _vector, _sign); \
 	_print_n(drop); \
-	_print_w(_add_w(_load_w(&self->w.r.md), _add_w(_cvt_n_w(delta), _set_w(self->w.r.tail->f.max - self->w.r.tail->mdrop + self->w.r.ofsd - 128)))); \
-	_print_w(_add_w(_add_w(_load_w(&self->w.r.md), _cvt_n_w(delta)), _add_w(_cvt_n_w(drop), _set_w(self->w.r.tail->f.max - self->w.r.tail->mdrop + self->w.r.ofsd)))); \
+	_print_w(_add_w(_load_w(&self->w.r.md), _add_w(_cvt_n_w(delta), _set_w(_offset(self->w.r.tail) + self->w.r.ofsd - 128)))); \
+	_print_w(_add_w(_add_w(_load_w(&self->w.r.md), _cvt_n_w(delta)), _add_w(_cvt_n_w(drop), _set_w(_offset(self->w.r.tail) + self->w.r.ofsd)))); \
 }
 
 /**
@@ -1850,88 +1838,150 @@ struct gaba_fill_s *_export(gaba_dp_fill)(
 
 /* merge bands */
 /**
+ * @fn gaba_dp_merge_core
+ * @brief merging functionality implementation
+ */
+static _force_inline
+struct gaba_joint_tail_s *gaba_dp_merge_core(
+	struct gaba_dp_context_s *self,
+	struct gaba_fill_s const **fill,
+	int32_t const *qofs,
+	uint32_t cnt)
+{
+	static uint8_t const window_mask[3*BW] = { [BW ... 2*BW-1] = 0xff };	/* FIXME: avoid gcc extension */
+
+	/* allocate merge-tail object */
+	uint64_t arr_size = _roundup(cnt * sizeof(int64_t), MEM_ALIGN_SIZE);
+	struct gaba_merge_s *mg = (ptrdiff_t)arr_size + gaba_dp_malloc(self,
+		arr_size + sizeof(struct gaba_merge_s) + sizeof(struct gaba_joint_tail_s)
+	);
+	struct gaba_joint_tail_s *mt = _tail(mg + 1);
+
+	/* init the new vectors */
+	#if MODEL == LINEAR
+		_storeu_n(&mg->diff.dh, _zero_n());
+		_storeu_n(&mg->diff.dv, _zero_n());
+	#elif MODEL == AFFINE
+		_storeu_n(&mg->diff.dh, _zero_n());
+		_storeu_n(&mg->diff.dv, _zero_n());
+		_storeu_n(&mg->diff.de, _zero_n());
+		_storeu_n(&mg->diff.df, _zero_n());
+	#endif
+	_storeu_n(&mt->ch.w, _zero_n());
+	_storeu_n(&mt->xd.drop, _zero_n());
+	_storeu_n(&mt->md.delta, _zero_w());
+
+	/* init section info */
+	mt->pridx = UINT32_MAX;							/* updated in the loop */
+	_store_v2i32(&mt->aridx, _zero_v2i32());		/* updated later (section) */
+	_store_v2i32(&mt->aadv, _zero_v2i32());			/* always zero */
+	mt->tail = NULL;								/* always NULL */ 
+	_store_v2i32(&mt->s.aid, _zero_v2i32());		/* later (section) */
+	_store_v2i64(&mt->s.atptr, _zero_v2i64());		/* later (section) */
+	_store_v2i64(&mt->abrk, _zero_v2i64());			/* later (section) */
+	mt->f.max = -1;									/* updated in the loop */
+	mt->f.stat = 0;									/* later */
+	mt->f.ppos = -1;								/* in the loop */
+	_store_v2i32(&mt->f.ascnt, _zero_v2i32());		/* later (section) */
+
+	/* compute max and center of the merged vector */
+	int64_t sc_pos = -1, offset = _offset(_tail(fill[0]));
+	for(uint64_t i = 0; i < cnt; i++) {
+		struct gaba_joint_tail_s const *tail = _tail(fill[i]);
+
+		/* find max in the vector */
+		wvec_t md = _loadu_w(&tail->md.delta);
+		int32_t mmd = _hmax_w(md);
+		sc_pos = MAX2(sc_pos,						/* (offset, qofs), NOTE: is a kind of weighted average better? */
+			  (mmd + _offset(tail) - offset)<<32
+			| (lzcnt(((nvec_masku_t){ .mask = _mask_w(_eq_w(md, _set_w(mmd))) }).all) + qofs[i])
+		);
+
+		mt->pridx = MIN2(mt->pridx, tail->pridx);
+		mt->f.max = MAX2(mt->f.max, tail->f.max);
+		mt->f.ppos = MAX2(mt->f.ppos, tail->f.ppos);
+	}
+	offset += sc_pos>>32;
+	mt->mdrop = mt->f.max - offset;
+
+	/* init tail pointer array and q-offset array */
+	int32_t qbase = (int32_t)sc_pos - BW / 2;		/* extract lower 32bit as signed, move the max cell to center */
+	for(uint64_t i = 0; i < cnt; i++) {
+		mg->blk[-i] = _last_block(_tail(fill[i]));
+		mg->qofs[-i] = qofs[i] - qbase;
+	}
+
+	mg->acc = 0;
+	mg->xstat = MERGE_HEAD;
+
+	/* read-modify-write template */
+	#define _merge_n(_dst, _src, _elem, _q, _mask, _mod) { \
+		nvec_t d = _loadu_n((_dst)->_elem);							/* read dst */ \
+		nvec_t s = _and_n(_mask, _loadu_n(&((_src)->_elem)[-_q]));	/* read src */ \
+		d = (_mod); _storeu_n((_dst)->_elem, d);					/* modify-write */ \
+	}
+	#define _merge_w(_dst, _src, _elem, _q, _mask, _mod) { \
+		wvec_t d = _loadu_w((_dst)->_elem);							/* read dst */ \
+		wvec_t s = _and_w(_mask, _loadu_w(&((_src)->_elem)[-_q]));	/* read src */ \
+		d = (_mod); _storeu_w((_dst)->_elem, d);					/* modify-write */ \
+	}
+
+	/* merging loop */
+	for(uint64_t i = 0; i < cnt; i++) {
+		int32_t q = qofs[i] - qbase;
+		if((uint32_t)(q + BW) >= 2 * BW) { continue; }
+
+		struct gaba_joint_tail_s const *tail = _tail(fill[i]);
+		struct gaba_block_s const *blk = _last_block(tail);
+
+		/* load mask */
+		nvec_t nmask = _loadu_n(&window_mask[-q + BW]);
+
+		/* merge diff vectors */
+		#if MODEL == LINEAR
+			_merge_n(mg, blk, diff.dh, q, nmask, { _min_n(d, s); });
+			_merge_n(mg, blk, diff.dv, q, nmask, { _min_n(d, s); });
+		#elif MODEL == AFFINE
+			_merge_n(mg, blk, diff.dh, q, nmask, { _min_n(d, s); });
+			_merge_n(mg, blk, diff.dv, q, nmask, { _min_n(d, s); });
+			_merge_n(mg, blk, diff.dh, q, nmask, { _min_n(d, s); });
+			_merge_n(mg, blk, diff.df, q, nmask, { _min_n(d, s); });
+		#endif
+
+		/* merge char vector; char vector must have consensus on overlapped regions (so that they can be merged by just OR'ing vectors) */
+		_merge_n(mt, tail, ch.w, q, nmask, { _or_n(d, s); });
+
+		/* merge max vector */
+		_merge_n(mt, tail, xd.drop, q, nmask, {		/* select larger one */
+			/* adjust offset: old_xd + old_max - new_max */
+			_max_n(d, _add_n(s, _set_n(tail->f.max - mt->f.max)));
+		});
+
+		/* merge middle delta vector */
+		wvec_t wmask = _cvt_n_w(nmask);
+		_merge_w(mt, tail, md.delta, q, wmask, {	/* select larger one */
+			/* adjust offset: old_md + old_offset - new_offset */
+			d = _max_w(d, _add_w(s, _set_w(_offset(tail) - offset)));
+			/* calculate index */
+			;
+		});
+	}
+	return((struct gaba_joint_tail_s *)mt);
+}
+
+/**
  * @fn gaba_dp_merge
  *
- * @brief merge API (merge two bands)
+ * @brief merging functionality (merge multiple banded matrices aligning on the same anti-diagonal)
  */
 struct gaba_fill_s *_export(gaba_dp_merge)(
-	gaba_dp_t *dp,
-	struct gaba_fill_s const *fill1,
-	struct gaba_fill_s const *fill2,
-	int32_t qdiff)
+	struct gaba_dp_context_s *self,
+	struct gaba_fill_s const **fill,
+	int32_t const *qofs,
+	uint32_t cnt)
 {
-	/**
-	 * FIXME: NOTE:
-	 *
-	 * This function creates a new tail object from the two input
-	 * tail objects (fill1 and fill2) by ``merging'' them. The two
-	 * tails must be aligned on the same anti-diagonal line, that is,
-	 * they must have the same (local) p-coordinates. The last
-	 * argument qdiff is the distance between the two tails,
-	 * defined as fill2->qpos - fill1->qpos. The absolute distance,
-	 * |qdiff|, must not be larger than BW because non-overlapping
-	 * vectors cannot be merged. (undefined return value is reasonable
-	 * for now, I think.)
-	 *
-	 * Internal structure of the tail object:
-	 * Two structs, gaba_phantom_s and gaba_joint_tail_s, adjoins
-	 * on memory. Each fill pointer points to the `struct gaba_fill_s f`
-	 * member. So pointers to the two structs (objects) can be restored
-	 * by subtracting a certain offsets.
-	 *
-	 * Merging algorithm (tentative):
-	 * The middle_delta array contains the actual (offsetted) cell values
-	 * of the last vector of the band. So the two vectors can be merged
-	 * by max-ing cell values at each lane. The second last vectors are
-	 * also merged by max-ing each value. The actual values of the second
-	 * last vector is restored by subtracting the difference vector
-	 * (either dv or dh, depends on the last advancing direction) from the
-	 * middle delta vector.
-	 *
-	 *	struct gaba_phantom_s {
-	 *		struct gaba_diff_vec_s diff;	// calculated from the two merged middle delta vectors (the last and the second last vector)
-	 *		uint32_t reserved;
-	 *		int8_t acc, xstat;				// difference of the two edge cell values, MERGE_HEAD
-	 *		int8_t acnt, bcnt;				// 0, 0
-	 *		struct gaba_block_s const *blk;	// NULL
-	 *	};
-	 *	struct gaba_joint_tail_s {
-	 *		struct gaba_char_vec_s ch;		// copied from the input tails
-	 *		struct gaba_drop_s xd;			// MAX(fill1->xd, fill2->xd)
-	 *		struct gaba_middle_delta_s md;	// MAX(fill1->md + fill1->offset, fill2->md + fill2->offset) - new_offset
-	 *		int8_t qdiff[2], unused[2];		// TBD
-	 *		uint32_t pridx;					// MIN(fill1->pridx, fill2->pridx)
-	 *		uint32_t aridx, bridx;			// TBD
-	 *		uint32_t asridx, bsridx;		// aridx, bridx above
-	 *		int64_t offset;					// new_offset (TBD)
-	 *		struct gaba_fill_s f;			// (max, stat, scnt, ppos) = (calculated from the new_offset, copied? (TBD), MAX(fill1->scnt, fill2->scnt), MAX(fill1->ppos, fill2->ppos))
-	 *		struct gaba_joint_tail_s const *tail;// left NULL
-	 *		union {
-	 *			struct gaba_section_pair_s s;// unused
-	 *			struct gaba_tail_pair_s t;	// (tail[2], tail_idx_mask[2]) = ({ fill1, fill2 }, { max_mask1, max_mask2 })
-	 *		} u;
-	 *	};
-	 */
-
-	#if 0
-	struct gaba_joint_tail_s const *btail = _tail(*fill);
-	int64_t max_pos = -1, base = btail->offset;
-	for(uint64_t i = 0; i < tcnt; i++) {
-		struct gaba_joint_tail_s const *t = _tail(fill[i]);
-		max_pos = MAX2(max_pos, (t->f.max + t->offset - base)<<32 | lzcnt(tail_calc_max_mask(t)));
-	}
-	struct gaba_joint_tail_s const *t1 = _tail(fill1), *t2 = _tail(fill2);
-	/* determine new center */
-	uint64_t pos1 = lzcnt(tail_calc_max_mask(t1)), pos2 = lzcnt(tail_calc_max_mask(t2));
-	/* determine new offset */
-	int64_t offset = MAX2(t1->offset, t2->offset);
-	/* load middle vectors, adjust offset */
-	wvec_t md1 = _loadu_w(&t1->md), md2 = _loadu_w(&t2->md);
-	md1 = _sub_w(md1, _set_w(offset - t1->offset));
-	md2 = _sub_w(md2, _set_w(offset - t2->offset));
-	wvec_t md = _max_w(md1, md2);
-	#endif
-	return(NULL);
+	self = _restore_dp_context(self);
+	return(_fill(gaba_dp_merge_core(self, fill, qofs, cnt)));
 }
 
 
@@ -2245,10 +2295,9 @@ enum { ts_d = 0, ts_v0, ts_v1, ts_h0, ts_h1 };
 	/* reload block pointer */ \
 	blk = _last_phantom(blk)->blk; \
 	while(blk->xstat & MERGE_HEAD) { \
-		struct gaba_merge_s const *_mg = _merge_tail(blk); \
-		int64_t _t = _mg->tail[_mg->tail_idx[_vec_idx][q]];		/* use int64_t to keep the pointer cannonical */ \
-		struct gaba_joint_tail_s const *prev = _tail(_t>>8); \
-		q += (int8_t)(_t & 0xff); blk = _last_block(prev);		/* adjust q, restore block pointer; FIXME: tail pointer must be saved somewhere */ \
+		struct gaba_merge_s const *_mg = _merge(blk); \
+		blk = _mg->blk[_mg->tidx[_vec_idx][q]]; \
+		q += _mg->qofs[_mg->tidx[_vec_idx][q]];	/* adjust q, restore block pointer; FIXME: tail pointer must be saved somewhere */ \
 	} \
 	/* reload dir and mask pointer, adjust path offset */ \
 	uint64_t _cnt = blk->acnt + blk->bcnt; \
@@ -2477,7 +2526,7 @@ void trace_init(
 	self->w.l.btail = tail;
 
 	/* malloc container */
-	uint64_t sn = 2 * tail->f.scnt, pn = (plen + 31) / 32 + 2;
+	uint64_t sn = tail->f.ascnt + tail->f.bscnt, pn = (plen + 31) / 32 + 2;
 	uint64_t size = (
 		  sizeof(struct gaba_alignment_s)				/* base */
 		+ sizeof(uint32_t) * _roundup(pn, 8)			/* path array and its margin */
@@ -3071,8 +3120,8 @@ void gaba_init_phantom(
 		.f = {
 			.max = 0,
 			.stat = CONT | GABA_UPDATE_A | GABA_UPDATE_B,
-			.scnt = 0,
-			.ppos = GP_INIT - BW,
+			.ascnt = 0, .bscnt = 0,
+			.ppos = GP_INIT - BW
 		},
 
 		/* section info */
