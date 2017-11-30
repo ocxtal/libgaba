@@ -429,7 +429,7 @@ struct gaba_merge_work_s {
 	uint64_t abrk[4];					/** (32) */
 	uint64_t bbrk[4];					/** (32) */
 	uint8_t buf[MERGE_BUFFER_LENGTH];	/** (32, 64, 128) */
-	int16_t wbuf[4 * MERGE_BUFFER_LENGTH];/** (256, 512, 1024) */
+	int16_t wbuf[5 * MERGE_BUFFER_LENGTH];/** (320, 640, 1280) */
 };
 _static_assert((sizeof(struct gaba_merge_work_s) % 64) == 0);
 
@@ -1864,9 +1864,11 @@ struct gaba_fill_s *_export(gaba_dp_fill)(
  * @brief buffer accessor macros: wb[i] -> _wb(self, i)
  */
 #define _wb(_t, _i)				( &(_t)->w.m.buf[_i] )		/* char buffer is allocated at the head */
-#define _cb(_t, _i)				( &(_t)->w.m.buf[    MERGE_BUFFER_LENGTH + sizeof(int16_t) * (_i)] )
-#define _mb(_t, _i)				( &(_t)->w.m.buf[2 * MERGE_BUFFER_LENGTH + sizeof(int16_t) * (_i)] )
-#define _pb(_t, _i)				( &(_t)->w.m.buf[3 * MERGE_BUFFER_LENGTH + sizeof(int16_t) * (_i)] )
+#define _cb(_t, _i)				( &(_t)->w.m.buf[1 * MERGE_BUFFER_LENGTH + sizeof(int16_t) * (_i)] )
+#define _mb(_t, _i)				( &(_t)->w.m.buf[3 * MERGE_BUFFER_LENGTH + sizeof(int16_t) * (_i)] )
+#define _pb(_t, _i)				( &(_t)->w.m.buf[5 * MERGE_BUFFER_LENGTH + sizeof(int16_t) * (_i)] )
+#define _eb(_t, _i)				( &(_t)->w.m.buf[7 * MERGE_BUFFER_LENGTH + sizeof(int16_t) * (_i)] )
+#define _fb(_t, _i)				( &(_t)->w.m.buf[9 * MERGE_BUFFER_LENGTH + sizeof(int16_t) * (_i)] )
 
 /**
  * @fn merge_calc_qspan
