@@ -1922,7 +1922,15 @@ void merge_init_work(
 
 	/* fill INT16_MIN */
 	v16i16_t v = _set_v16i16(INT16_MIN);
-	for(uint64_t i = 0; i < 3 * MERGE_BUFFER_LENGTH; i += 64) {
+	#if MODEL == LINEAR
+		uint64_t init_size = 3 * MERGE_BUFFER_LENGTH;
+	#elif MODEL == AFFINE
+		uint64_t init_size = 5 * MERGE_BUFFER_LENGTH;
+	#else
+		uint64_t init_size = 5 * MERGE_BUFFER_LENGTH;
+	#endif
+
+	for(uint64_t i = 0; i < init_size; i += 64) {
 		_store_v16i16(_cb(self, i     ), v);		/* 4x unrolled vmovdqa */
 		_store_v16i16(_cb(self, i + 16), v);
 		_store_v16i16(_cb(self, i + 32), v);
@@ -1957,9 +1965,39 @@ void merge_paste_score_vectors(
 
 	/* previous */
 	struct gaba_block_s const *blk = _last_block(tail);
-	nvec_t dh = _loadu_n(blk->diff.dh);
-	wvec_t pv = _add_w(cv, _cvt_n_w(_sub_n(_load_ofsh(self->scv), dh)));
-	_storeu_w(_pb(self, q), _max_w(_loadu_w(_pb(self, q)), pv));
+	#if MODEL == LINEAR
+		/* dh is not negated for linear: cv - dh; offset is ignored */
+		nvec_t dh = _loadu_n(blk->diff.dh);
+		wvec_t pv = _sub_w(cv, _cvt_n_w(dh));
+		_storeu_w(_pb(self, q), _max_w(
+			_loadu_w(_pb(self, q)),
+			pv
+		));
+	#elif MODEL == AFFINE
+		/* negated for affine: cv + -dh */
+		nvec_t dh = _loadu_n(blk->diff.dh);
+		wvec_t pv = _add_w(cv, _cvt_n_w(dh));
+		_storeu_w(_pb(self, q), _max_w(
+			_loadu_w(_pb(self, q)),
+			pv
+		));
+
+		/* \delta E */
+		nvec_t de = _loadu_n(blk->diff.de);
+		wvec_t ev = _sub_w(cv, _cvt_n_w(de));
+		_storeu_w(_eb(self, q), _max_w(
+			_loadu_w(_eb(self, q)),
+			ev
+		));
+
+		/* \delta F */
+		nvec_t df = _loadu_n(blk->diff.df);
+		wvec_t fv = _sub_w(cv, _cvt_n_w(df));
+		_storeu_w(_eb(self, q), _max_w(
+			_loadu_w(_eb(self, q)),
+			fv
+		));
+	#endif
 	return;
 }
 
@@ -2066,19 +2104,25 @@ int32_t merge_slice_vectors(
 
 	/* calc diff vectors */
 	#if MODEL == LINEAR
-		wvec_t pv = _loadu_w(_pb(self, q));
-		nvec_t dh = _add_n(
-			_cvt_w_n(_sub_w(cv, pv)),
-			_load_ofsh(self->scv)
-		);
+		/* dh is not negated for linear-gap impl */
+		wvec_t dh = _sub_w(cv, _loadu_w(_pb(self, q)));
+		_storeu_n(mg->diff.dh, _cvt_w_n(dh));
 
-		pv = _loadu_w(_pb(self, q - 1));			/* shift left to align vertically adjacent cells */
-		nvec_t dv = _add_n(
-			_cvt_w_n(_sub_w(cv, pv)),
-			_load_ofsv(self->scv)
-		);
+		wvec_t dv = _sub_w(cv, _loadu_w(_pb(self, q - 1)));	/* q - 1 to make the cells in each lane vertically aligned */
+		_storeu_n(mg->diff.dv, _cvt_w_n(dv));
 	#elif MODEL == AFFINE
-		;
+		/* dh is negated for affine */
+		wvec_t dh = _sub_w(_loadu_w(_pb(self, q)), cv);
+		_storeu_n(mg->diff.dh, _cvt_w_n(dh));
+
+		wvec_t dv = _sub_w(cv, _loadu_w(_pb(self, q - 1)));	/* q - 1 to make the cells in each lane vertically aligned */
+		_storeu_n(mg->diff.dv, _cvt_w_n(dv));
+
+		wvec_t de = _sub_w(cv, _loadu_w(_eb(self, q)));
+		_storeu_n(mg->diff.de, _cvt_w_n(de));
+
+		wvec_t df = _sub_w(cv, _loadu_w(_fb(self, q)));
+		_storeu_n(mg->diff.df, _cvt_w_n(df));
 	#endif
 	return(mdrop);
 }
