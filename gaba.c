@@ -1989,8 +1989,8 @@ void merge_paste_score_vectors(
 		/* \delta F */
 		nvec_t df = _loadu_n(blk->diff.df);
 		wvec_t fv = _sub_w(cv, _cvt_n_w(df));
-		_storeu_w(_eb(self, q), _max_w(
-			_loadu_w(_eb(self, q)),
+		_storeu_w(_fb(self, q), _max_w(
+			_loadu_w(_fb(self, q)),
 			fv
 		));
 	#endif
