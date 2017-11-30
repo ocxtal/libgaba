@@ -285,7 +285,7 @@ gaba_fill_t *gaba_dp_fill(
 GABA_EXPORT_LEVEL
 gaba_fill_t *gaba_dp_merge(
 	gaba_dp_t *dp,
-	gaba_fill_t const **sec,
+	gaba_fill_t const *const *sec,
 	uint8_t const *qofs,
 	uint32_t cnt);
 

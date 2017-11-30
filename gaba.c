@@ -2228,7 +2228,7 @@ struct gaba_joint_tail_s *merge_create_tail(
  */
 struct gaba_fill_s *_export(gaba_dp_merge)(
 	struct gaba_dp_context_s *self,
-	struct gaba_fill_s const **fill,
+	struct gaba_fill_s const *const *fill,
 	uint8_t const *qofs,
 	uint32_t cnt)
 {
