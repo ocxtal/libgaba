@@ -197,6 +197,18 @@ typedef struct v64i8_s {
 	} \
 )
 
+/* convert */
+#define _cvt_v64i16_v64i8(a) ( \
+	(v64i8_t) { \
+		_mm256_packs_epi16( \
+			_mm256_permute2x128_si256((a).v1, (a).v2, 0x20), \
+			_mm256_permute2x128_si256((a).v1, (a).v2, 0x31)), \
+		_mm256_packs_epi16( \
+			_mm256_permute2x128_si256((a).v3, (a).v4, 0x20), \
+			_mm256_permute2x128_si256((a).v3, (a).v4, 0x31)) \
+	} \
+)
+
 /* debug print */
 #ifdef _LOG_H_INCLUDED
 #define _print_v64i8(a) { \

@@ -231,6 +231,16 @@ typedef struct v64i8_s {
 	} \
 )
 
+/* convert */
+#define _cvt_v64i16_v64i8(a) ( \
+	(v64i8_t) { \
+		_mm_packs_epi16((a).v1, (a).v2), \
+		_mm_packs_epi16((a).v3, (a).v4), \
+		_mm_packs_epi16((a).v5, (a).v6), \
+		_mm_packs_epi16((a).v7, (a).v8) \
+	} \
+)
+
 /* debug print */
 #ifdef _LOG_H_INCLUDED
 #define _print_v64i8(a) { \

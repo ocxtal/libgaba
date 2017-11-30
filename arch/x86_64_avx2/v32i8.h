@@ -158,6 +158,13 @@ typedef struct v32i8_s {
 	} \
 )
 
+/* convert */
+#define _cvt_v32i16_v32i8(a) ( \
+	(v32i8_t) { \
+		_mm256_permute4x64_epi64(_mm256_packs_epi16((a).v1, (a).v2), 0xd8) \
+	} \
+)
+
 /* debug print */
 #ifdef _LOG_H_INCLUDED
 #define _print_v32i8(a) { \
