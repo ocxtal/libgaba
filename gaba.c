@@ -2027,8 +2027,8 @@ uint64_t merge_detect_maxpos(
 	/* calc index */
 	uint64_t qmax = MERGE_BUFFER_LENGTH;
 	for(uint64_t i = 0; i < MERGE_BUFFER_LENGTH; i += 32) {
-		uint64_t q = lzcnt(((nvec_masku_t){
-			.mask = _mask_w(_eq_w(cmaxv, _load_v32i16(_cb(self, i))))
+		uint64_t q = lzcnt(((v32i8_masku_t){
+			.mask = _mask_v32i16(_eq_v32i16(cmaxv, _load_v32i16(_cb(self, i))))
 		}).all);
 		qmax = MIN2(qmax, i + (q >= 64 ? MERGE_BUFFER_LENGTH : q));
 	}
