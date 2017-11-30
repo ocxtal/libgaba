@@ -523,18 +523,12 @@ _static_assert(sizeof(struct gaba_stack_s) == 24);
  * @brief (internal) container for dp implementations
  */
 struct gaba_dp_context_s {
-	/* working buffers */
-	union gaba_work_s {
-		struct gaba_reader_work_s r;	/** (192) */
-		struct gaba_writer_work_s l;	/** (192) */
-	} w;
-	/** 64byte aligned */
-
 	/** loaded on init */
-	struct gaba_score_vec_s scv;		/** (80) substitution matrix and gaps */
+	struct gaba_joint_tail_s const *root[4];	/** (32) root tail (phantom vectors) */
 
-	/* tail-of-userland pointers */
-	uint8_t const *alim, *blim;			/** (16) max index of seq array */
+	/* memory management */
+	struct gaba_mem_block_s mem;		/** (24) root memory block */
+	struct gaba_stack_s stack;			/** (24) current stack */
 
 	/* scores */
 	int8_t tx;							/** (1) xdrop threshold */
@@ -542,21 +536,27 @@ struct gaba_dp_context_s {
 	uint8_t _pad1[6];
 
 	/** output options */
-	uint32_t head_margin;				/** (1) margin at the head of gaba_res_t */
-	uint32_t tail_margin;				/** (1) margin at the tail of gaba_res_t */
+	uint32_t head_margin;				/** (4) margin at the head of gaba_res_t */
+	uint32_t tail_margin;				/** (4) margin at the tail of gaba_res_t */
 
-	/* memory management */
-	struct gaba_mem_block_s mem;		/** (24) root memory block */
-	struct gaba_stack_s stack;			/** (24) current stack */
+	/* score constants */
+	struct gaba_score_vec_s scv;		/** (80) substitution matrix and gaps */
+
+	/* tail-of-userland pointers */
+	uint8_t const *alim, *blim;			/** (16) max index of seq array */
+	/** 192; 64byte aligned */
+
+	/* working buffers */
+	union gaba_work_s {
+		struct gaba_reader_work_s r;	/** (192) */
+		struct gaba_merge_work_s m;		/** (4096) */
+		struct gaba_writer_work_s l;	/** (192) */
+	} w;
 	/** 64byte aligned */
-	
-	/** phantom vectors */
-	struct gaba_joint_tail_s const *root[4];	/** (32) root tail */
-	/** 128; 64byte aligned */
 };
 _static_assert((sizeof(struct gaba_dp_context_s) % 64) == 0);
-#define GABA_DP_CONTEXT_LOAD_OFFSET	( offsetof(struct gaba_dp_context_s, scv) )
-#define GABA_DP_CONTEXT_LOAD_SIZE	( sizeof(struct gaba_dp_context_s) - GABA_DP_CONTEXT_LOAD_OFFSET )
+#define GABA_DP_CONTEXT_LOAD_OFFSET	( 0 )
+#define GABA_DP_CONTEXT_LOAD_SIZE	( offsetof(struct gaba_dp_context_s, w) )
 _static_assert((GABA_DP_CONTEXT_LOAD_OFFSET % 64) == 0);
 _static_assert((GABA_DP_CONTEXT_LOAD_SIZE % 64) == 0);
 #define _root(_t)					( (_t)->root[_dp_ctx_index(BW)] )
@@ -1204,36 +1204,40 @@ struct gaba_joint_tail_s *fill_create_tail(
 		tptr = _add_v2i64(tptr, _cvt_v2i32_v2i64(rlim));
 		_print_v2i32(rlim); _print_v2i32(_load_v2i32(&self->w.r.arem));
 
-		/* reverse indices */
+		/* adjust reversed indices */
 		tail->pridx = self->w.r.pridx;
 		v2i32_t ridx = _add_v2i32(_load_v2i32(&self->w.r.arem), rlim);
 		v2i32_t sridx = _load_v2i32(&self->w.r.asridx);
 		v2i32_t adv = _sub_v2i32(sridx, ridx);
+
+		/* adjust breakpoint masks */
+		struct gaba_joint_tail_s const *prev_tail = self->w.r.tail;
+		v2i64_t brk = _shrv_v2i64(_loadu_v2i64(&prev_tail->abrk), _cvt_v2i32_v2i64(adv));
+
+		/* save section info */
+		_store_v2i32(&tail->s.aid, id);
+		_store_v2i64(&tail->s.atptr, tptr);
+		_store_v2i64(&tail->abrk, brk);
 		_store_v2i32(&tail->aridx, ridx);
 		_store_v2i32(&tail->aadv, adv);
+		tail->tail = prev_tail;
 		_print_v2i32(ridx); _print_v2i32(sridx); _print_v2i32(adv);
 
-		/* store max */
-		struct gaba_joint_tail_s const *prev_tail = self->w.r.tail;
-		tail->f.max = _offset(prev_tail) + self->w.r.ofsd + mdrop;
-		debug("prev_offset(%lld), offset(%lld), max(%d, %lld)",
-			_offset(prev_tail), _offset(prev_tail) + self->w.r.ofsd, mdrop, tail->f.max);
-
-		/* status flags, coordinates, link pointer, and sections */
+		/* calc end-of-section flag and section count */
 		v2i32_t update = _eq_v2i32(ridx, _zero_v2i32());
-		tail->f.stat = ((uint32_t)(blk->xstat & (UPDATE | TERM | CONT))<<8) | _mask_v2i32(update);
 		_store_v2i32(&tail->f.ascnt, _sub_v2i32(
 			_load_v2i32(&prev_tail->f.ascnt),			/* aligned section counts */
 			update										/* increment by one if the pointer reached the end of the current section */
 		));
-		tail->f.ppos = prev_tail->f.ppos + _hi32(adv) + _lo32(adv);
-		tail->tail = prev_tail;
-		_storeu_v2i32(&tail->s.aid, id);
-		_storeu_v2i64(&tail->s.atptr, tptr);
 
-		/* adjust breakpoint masks */
-		v2i64_t brk = _shrv_v2i64(_loadu_v2i64(&prev_tail->abrk), _cvt_v2i32_v2i64(adv));
-		_storeu_v2i64(&tail->abrk, brk);
+		/* store max */
+		tail->f.max = _offset(prev_tail) + self->w.r.ofsd + mdrop;
+		debug("prev_offset(%lld), offset(%lld), max(%d, %lld)",
+			_offset(prev_tail), _offset(prev_tail) + self->w.r.ofsd, mdrop, tail->f.max);
+
+		/* status flag and p-coordinate */
+		tail->f.stat = ((uint32_t)(blk->xstat & (UPDATE | TERM | CONT))<<8) | _mask_v2i32(update);
+		tail->f.ppos = prev_tail->f.ppos + _hi32(adv) + _lo32(adv);
 	}
 	return(tail);
 }
