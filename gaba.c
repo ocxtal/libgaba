@@ -354,16 +354,12 @@ struct gaba_joint_tail_s {
 
 	int32_t mdrop;						/** (2) drop from m.max (offset) */
 	uint32_t pridx;						/** (4) remaining p-length */
-	uint32_t aridx, bridx;				/** (8) reverse indices for the tails */
-	uint32_t aadv, badv;				/** (8) advanced lengths */
-	struct gaba_fill_s f;				/** (24) */
-
-	/* tail pointer */
-	struct gaba_joint_tail_s const *tail;/** (8) the previous tail */
-
-	/* section */
 	struct gaba_section_pair_s s;		/** (24) */
 	uint64_t abrk, bbrk;				/** (16) breakpoint masks */
+	uint32_t aridx, bridx;				/** (8) reverse indices for the tails */
+	uint32_t aadv, badv;				/** (8) advanced lengths */
+	struct gaba_joint_tail_s const *tail;/** (8) the previous tail */
+	struct gaba_fill_s f;				/** (24) */
 };
 _static_assert((sizeof(struct gaba_joint_tail_s) % 32) == 0);
 #define TAIL_BASE				( offsetof(struct gaba_joint_tail_s, f) )
@@ -567,7 +563,7 @@ struct gaba_dp_context_s {
 	/* working buffers */
 	union gaba_work_s {
 		struct gaba_reader_work_s r;	/** (192) */
-		struct gaba_merge_work_s m;		/** (4096) */
+		struct gaba_merge_work_s m;		/** (4096?) */
 		struct gaba_writer_work_s l;	/** (192) */
 	} w;
 	/** 64byte aligned */
