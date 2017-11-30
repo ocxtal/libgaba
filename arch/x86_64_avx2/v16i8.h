@@ -179,7 +179,7 @@ typedef struct v16i8_s {
 /* convert */
 #define _cvt_v16i16_v16i8(a) ( \
 	(v16i8_t) { \
-		_mm256_packs_epi16((a).v1, _mm256_castsi128_si256(_mm256_extracti128_si256((a).v1, 1))) \
+		_mm_packs_epi16(_mm256_castsi256_si128((a).v1), _mm256_extracti128_si256((a).v1, 1)) \
 	} \
 )
 
