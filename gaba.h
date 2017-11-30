@@ -146,10 +146,10 @@ typedef struct gaba_dp_context_s gaba_dp_t;
  * @struct gaba_fill_s
  */
 struct gaba_fill_s {
+	uint32_t ascnt, bscnt;		/** (4) aligned section counts */
 	int64_t max;				/** (8) max score in the entire band */
 	uint32_t stat;				/** (4) status (section update flags) */
 	int32_t ppos;				/** (8) #vectors from the head (FIXME: should be 64bit int) */
-	uint32_t ascnt, bscnt;		/** (4) aligned section counts */
 };
 typedef struct gaba_fill_s gaba_fill_t;
 
@@ -286,7 +286,7 @@ GABA_EXPORT_LEVEL
 gaba_fill_t *gaba_dp_merge(
 	gaba_dp_t *dp,
 	gaba_fill_t const **sec,
-	int32_t const *qofs,
+	uint8_t const *qofs,
 	uint32_t cnt);
 
 /**

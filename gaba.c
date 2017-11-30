@@ -317,7 +317,7 @@ struct gaba_merge_s {
 	int8_t tidx[2][BW];					/** (32, 64, 128) lanewise index array */
 	struct gaba_diff_vec_s diff; 		/** (64, 128, 256) diff variables of the last (just before the head) vector */
 	int8_t acc, xstat;					/** (2) acc and xstat are reserved for block_s */
-	int8_t reserved2[13], qofs[1];		/*+ (14) displacement of vectors in the q-direction */
+	uint8_t reserved2[13], qofs[1];		/** (14) displacement of vectors in the q-direction */
 };
 #define MERGE_TAIL_OFFSET 			( BLK * sizeof(struct gaba_mask_pair_s) - 2 * BW - 2 * sizeof(void *) )
 #define _merge(x)					( (struct gaba_merge_s *)((uint8_t *)(x) + MERGE_TAIL_OFFSET) )
@@ -414,6 +414,24 @@ struct gaba_reader_work_s {
 	struct gaba_middle_delta_s md;		/** (32, 64, 128) */
 };
 _static_assert((sizeof(struct gaba_reader_work_s) % 64) == 0);
+
+/**
+ * @struct gaba_merge_work_s
+ */
+#define MERGE_BUFFER_LENGTH		( 2 * BW )
+struct gaba_merge_work_s {
+	uint8_t qofs[16];					/** (16) q-offset array */
+	uint32_t qw, _pad1;					/** (8) */
+	uint32_t lidx, uidx;				/** (8) */
+#if BW != 16
+	uint8_t _pad2[32];					/** padding to align to 64-byte boundary */
+#endif
+	uint64_t abrk[4];					/** (32) */
+	uint64_t bbrk[4];					/** (32) */
+	uint8_t buf[MERGE_BUFFER_LENGTH];	/** (32, 64, 128) */
+	int16_t wbuf[4 * MERGE_BUFFER_LENGTH];/** (256, 512, 1024) */
+};
+_static_assert((sizeof(struct gaba_merge_work_s) % 64) == 0);
 
 /**
  * @struct gaba_aln_intl_s
@@ -1842,18 +1860,280 @@ struct gaba_fill_s *_export(gaba_dp_fill)(
 
 /* merge bands */
 /**
- * @fn gaba_dp_merge_core
- * @brief merging functionality implementation
+ * @macro _wb, _cb, _mb, _pb
+ * @brief buffer accessor macros: wb[i] -> _wb(self, i)
+ */
+#define _wb(_t, _i)				( &(_t)->w.m.buf[_i] )		/* char buffer is allocated at the head */
+#define _cb(_t, _i)				( &(_t)->w.m.buf[    MERGE_BUFFER_LENGTH + sizeof(int16_t) * (_i)] )
+#define _mb(_t, _i)				( &(_t)->w.m.buf[2 * MERGE_BUFFER_LENGTH + sizeof(int16_t) * (_i)] )
+#define _pb(_t, _i)				( &(_t)->w.m.buf[3 * MERGE_BUFFER_LENGTH + sizeof(int16_t) * (_i)] )
+
+/**
+ * @fn merge_calc_qspan
+ * @brief read qofs array (q-coordinate displacements), extract max and min
+ * (and corresponding indices), and store them to working buffers.
  */
 static _force_inline
-struct gaba_joint_tail_s *gaba_dp_merge_core(
+int64_t merge_calc_qspan(
 	struct gaba_dp_context_s *self,
-	struct gaba_fill_s const **fill,
-	int32_t const *qofs,
+	uint8_t const *qofs,
 	uint32_t cnt)
 {
-	static uint8_t const window_mask[3*BW] = { [BW ... 2*BW-1] = 0xff };	/* FIXME: avoid gcc extension */
+	/* load offset vector */
+	v16i8_t qv = _loadu_v16i8(qofs);
 
+	/* suppress invalid elements after the last element */
+	static uint8_t const mask_base[16] __attribute__(( aligned(16) )) = {
+		-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16
+	};
+	v16i8_t mask = _add_v16i8(_load_v16i8(mask_base), _set_v16i8(cnt));
+	qv = _sel_v16i8(qv, _set_v16i8(-127), mask);
+
+	/* calc max, min */
+	int8_t qub = _hmax_v16i8(qv), qlb = -_hmax_v16i8(_sub_v16i8(_zero_v16i8(), qv));
+	if(qub - qlb > MERGE_BUFFER_LENGTH) { return(1); }
+	self->w.m.qw = qub - qlb;
+
+	/* calc max and min indices */
+	self->w.m.uidx = lzcnt(((v16i8_masku_t){
+		.mask = _mask_v16i8(_eq_v16i8(qv, _set_v16i8(qub)))
+	}).all);
+	self->w.m.lidx = lzcnt(((v16i8_masku_t){
+		.mask = _mask_v16i8(_eq_v16i8(qv, _set_v16i8(qlb)))
+	}).all);
+
+	/* save the offsetted vector */
+	_store_v16i8(&self->w.m.qofs, _sub_v16i8(qv, _set_v16i8(qlb)));
+	return(0);
+}
+
+/**
+ * @fn merge_init_work
+ * @brief clear working buffers
+ */
+static _force_inline
+void merge_init_work(
+	struct gaba_dp_context_s *self)
+{
+	/* clear char vector */
+	_memset_blk_a(_wb(self, 0), 0, sizeof(uint8_t) * MERGE_BUFFER_LENGTH);		/* 4x vmovdqa */
+
+	/* fill INT16_MIN */
+	v16i16_t v = _set_v16i16(INT16_MIN);
+	for(uint64_t i = 0; i < 3 * MERGE_BUFFER_LENGTH; i += 64) {
+		_store_v16i16(_cb(self, i     ), v);		/* 4x unrolled vmovdqa */
+		_store_v16i16(_cb(self, i + 16), v);
+		_store_v16i16(_cb(self, i + 32), v);
+		_store_v16i16(_cb(self, i + 48), v);
+	}
+	return;
+}
+
+/**
+ * @fn merge_paste_score_vectors
+ * @brief read score vectors from the tail and paste them at position q of the working vectors
+ */
+static _force_inline
+void merge_paste_score_vectors(
+	struct gaba_dp_context_s *self,
+	struct gaba_joint_tail_s const *tail,
+	int64_t offset,
+	uint64_t q)
+{
+	/* char (just copy) */
+	_storeu_n(_wb(self, q), _loadu_n(tail->ch.w));
+
+	/* front vector (read-modify-write) */
+	wvec_t md = _loadu_w(tail->md.delta);
+	wvec_t cv = _add_w(md, _set_w(_offset(tail) - offset));
+	_storeu_w(_cb(self, q), _max_w(_loadu_w(_cb(self, q)), cv));
+
+	/* max */
+	nvec_t xv = _loadu_n(tail->xd.drop);
+	wvec_t mv = _add_w(cv, _cvt_n_w(xv));
+	_storeu_w(_mb(self, q), _max_w(_loadu_w(_mb(self, q)), mv));
+
+	/* previous */
+	struct gaba_block_s const *blk = _last_block(tail);
+	nvec_t dh = _loadu_n(blk->diff.dh);
+	wvec_t pv = _add_w(cv, _cvt_n_w(_sub_n(_load_ofsh(self->scv), dh)));
+	_storeu_w(_pb(self, q), _max_w(_loadu_w(_pb(self, q)), pv));
+	return;
+}
+
+/**
+ * @fn merge_paste_mask_vectors
+ * @brief the same as merge_paste_score_vectors for breakpoint masks
+ */
+static _force_inline
+void merge_paste_mask_vectors(
+	struct gaba_dp_context_s *self,
+	struct gaba_joint_tail_s const *tail,
+	uint64_t q)
+{
+	uint64_t abrk = tail->abrk;
+	uint64_t aidx = (self->w.m.qw - q) / 64, arem = (self->w.m.qw - q) % 64;
+	self->w.m.abrk[aidx    ] = self->w.m.abrk[aidx    ] | abrk<<arem;
+	self->w.m.abrk[aidx + 1] = self->w.m.abrk[aidx + 1] | (abrk>>(63 - arem))>>1;
+
+	uint64_t bbrk = tail->bbrk;
+	uint64_t bidx = q / 64, brem = q % 64;
+	self->w.m.bbrk[bidx    ] = self->w.m.bbrk[bidx    ] | bbrk<<brem;
+	self->w.m.bbrk[bidx + 1] = self->w.m.bbrk[bidx + 1] | (bbrk>>(63 - brem))>>1;
+	return;
+}
+
+/**
+ * @fn merge_paste_vectors
+ * @brief iterate over tail objects to paste vectors to working buffers
+ */
+static _force_inline
+void merge_paste_vectors(
+	struct gaba_dp_context_s *self,
+	struct gaba_fill_s const *const *fill,
+	uint32_t cnt)
+{
+	int64_t offset = _offset(_tail(fill[0]));
+
+	/* calc max: read-modify-write loop */
+	for(uint64_t i = 0; i < cnt; i++) {
+		struct gaba_joint_tail_s const *tail = _tail(fill[i]);
+		uint64_t q = self->w.m.qofs[i];
+
+		/* score vectors */
+		merge_paste_score_vectors(self, tail, offset, q);
+
+		/* breakpoint masks */
+		merge_paste_mask_vectors(self, tail, q);
+	}
+	return;
+}
+
+/**
+ * @fn merge_detect_maxpos
+ * @brief find maximum-scoring cell and the corresponding index in the working score vector (the pasted forefront vector)
+ */
+static _force_inline
+uint64_t merge_detect_maxpos(
+	struct gaba_dp_context_s *self)
+{
+	/* extract max value from the cv vector */
+	v32i16_t cmaxv = _load_v32i16(_cb(self, 0));
+	for(uint64_t i = 32; i < MERGE_BUFFER_LENGTH; i += 32) {
+		cmaxv = _max_v32i16(cmaxv, _load_v32i16(_cb(self, i)));
+	}
+	cmaxv = _set_v32i16(_hmax_v32i16(cmaxv));
+
+	/* calc index */
+	uint64_t qmax = MERGE_BUFFER_LENGTH;
+	for(uint64_t i = 0; i < MERGE_BUFFER_LENGTH; i += 32) {
+		uint64_t q = lzcnt(((nvec_masku_t){
+			.mask = _mask_w(_eq_w(cmaxv, _load_v32i16(_cb(self, i))))
+		}).all);
+		qmax = MIN2(qmax, i + (q >= 64 ? MERGE_BUFFER_LENGTH : q));
+	}
+
+	/* determine span to be sliced */
+	uint64_t const ofs = BW / 2, ub = MERGE_BUFFER_LENGTH - BW;
+	qmax = MIN2(ub, qmax - ofs);					/* shift and clip at ub */
+	qmax = (qmax < ub) ? qmax : 0;					/* clip negative val */
+	return(qmax);
+}
+
+/**
+ * @fn merge_slice_vectors
+ */
+static _force_inline
+int32_t merge_slice_vectors(
+	struct gaba_dp_context_s *self,
+	struct gaba_merge_s *mg,
+	uint64_t q)
+{
+	struct gaba_joint_tail_s *mt = _tail(mg + 1);
+
+	/* copy char vector */
+	_storeu_n(mt->ch.w, _loadu_n(_wb(self, q)));
+
+	/* max vector */
+	wvec_t mv = _loadu_w(_mb(self, q));
+	int32_t mdrop = _hmax_w(mv);					/* extract max */
+
+	wvec_t cv = _loadu_w(_cb(self, q));
+	_storeu_n(mt->xd.drop, _cvt_w_n(_sub_w(mv, cv)));
+	_storeu_w(mt->md.delta, cv);
+
+	/* calc diff vectors */
+	#if MODEL == LINEAR
+		wvec_t pv = _loadu_w(_pb(self, q));
+		nvec_t dh = _add_n(
+			_cvt_w_n(_sub_w(cv, pv)),
+			_load_ofsh(self->scv)
+		);
+
+		pv = _loadu_w(_pb(self, q - 1));			/* shift left to align vertically adjacent cells */
+		nvec_t dv = _add_n(
+			_cvt_w_n(_sub_w(cv, pv)),
+			_load_ofsv(self->scv)
+		);
+	#elif MODEL == AFFINE
+		;
+	#endif
+	return(mdrop);
+}
+
+/**
+ * @fn merge_restore_section
+ * @brief follow the section links (tail object links) to restore (section, ridx) pair for the new vector
+ */
+static _force_inline
+struct gaba_joint_tail_s const *merge_restore_section(
+	struct gaba_dp_context_s *self,
+	struct gaba_joint_tail_s *mt,
+	struct gaba_joint_tail_s const *tail,
+	uint32_t q,
+	uint64_t i)
+{
+	#define _r(_x, _idx)		( (&(_x))[(_idx)] )
+
+	/* slice breakpoint mask vector */
+	uint64_t cidx = (self->w.m.qw - q) / 64, bidx = (self->w.m.qw - q) % 64;
+	uint64_t brk = (
+		   _r(self->w.m.abrk, i)[cidx    ]>>bidx
+		| (_r(self->w.m.abrk, i)[cidx + 1]<<(63 - bidx))<<1
+	);
+
+	/* calc ridx */
+	int32_t rem = q;
+	uint32_t scnt = _r(tail->f.ascnt, i);
+	while(rem > _r(tail->aadv, i)) {
+		rem -= _r(tail->aadv, i);
+		scnt -= _r(tail->aridx, i) == 0;
+		tail = tail->tail;
+	}
+
+	/* copy section info */
+	_r(mt->s.aid, i) = _r(tail->s.aid, i);
+	_r(mt->s.atptr, i) = _r(tail->s.atptr, i);
+	_r(mt->abrk, i) = brk;
+
+	/* save ridx */
+	_r(mt->aridx, i) = _r(tail->aridx, i) + rem;
+	_r(mt->aadv, i) = 0;							/* always zero */
+	_r(mt->f.ascnt, i) = scnt;
+
+	#undef _r
+	return(tail);
+}
+
+/**
+ * @fn merge_create_tail
+ */
+static _force_inline
+struct gaba_joint_tail_s *merge_create_tail(
+	struct gaba_dp_context_s *self,
+	struct gaba_fill_s const *const *fill,
+	uint32_t cnt)
+{
 	/* allocate merge-tail object */
 	uint64_t arr_size = _roundup(cnt * sizeof(int64_t), MEM_ALIGN_SIZE);
 	struct gaba_merge_s *mg = (ptrdiff_t)arr_size + gaba_dp_malloc(self,
@@ -1861,116 +2141,43 @@ struct gaba_joint_tail_s *gaba_dp_merge_core(
 	);
 	struct gaba_joint_tail_s *mt = _tail(mg + 1);
 
-	/* init the new vectors */
-	#if MODEL == LINEAR
-		_storeu_n(&mg->diff.dh, _zero_n());
-		_storeu_n(&mg->diff.dv, _zero_n());
-	#elif MODEL == AFFINE
-		_storeu_n(&mg->diff.dh, _zero_n());
-		_storeu_n(&mg->diff.dv, _zero_n());
-		_storeu_n(&mg->diff.de, _zero_n());
-		_storeu_n(&mg->diff.df, _zero_n());
-	#endif
-	_storeu_n(&mt->ch.w, _zero_n());
-	_storeu_n(&mt->xd.drop, _zero_n());
-	_storeu_n(&mt->md.delta, _zero_w());
-
-	/* init section info */
-	mt->pridx = UINT32_MAX;							/* updated in the loop */
-	_store_v2i32(&mt->aridx, _zero_v2i32());		/* updated later (section) */
-	_store_v2i32(&mt->aadv, _zero_v2i32());			/* always zero */
-	mt->tail = NULL;								/* always NULL */ 
-	_store_v2i32(&mt->s.aid, _zero_v2i32());		/* later (section) */
-	_store_v2i64(&mt->s.atptr, _zero_v2i64());		/* later (section) */
-	_store_v2i64(&mt->abrk, _zero_v2i64());			/* later (section) */
-	mt->f.max = -1;									/* updated in the loop */
-	mt->f.stat = 0;									/* later */
-	mt->f.ppos = -1;								/* in the loop */
-	_store_v2i32(&mt->f.ascnt, _zero_v2i32());		/* later (section) */
-
-	/* compute max and center of the merged vector */
-	int64_t sc_pos = -1, offset = _offset(_tail(fill[0]));
+	/* copy tail pointer array */
+	uint32_t pridx = UINT32_MAX;
+	int64_t max = -1, ppos = -1;
 	for(uint64_t i = 0; i < cnt; i++) {
-		struct gaba_joint_tail_s const *tail = _tail(fill[i]);
-
-		/* find max in the vector */
-		wvec_t md = _loadu_w(&tail->md.delta);
-		int32_t mmd = _hmax_w(md);
-		sc_pos = MAX2(sc_pos,						/* (offset, qofs), NOTE: is a kind of weighted average better? */
-			  (mmd + _offset(tail) - offset)<<32
-			| (lzcnt(((nvec_masku_t){ .mask = _mask_w(_eq_w(md, _set_w(mmd))) }).all) + qofs[i])
-		);
-
-		mt->pridx = MIN2(mt->pridx, tail->pridx);
-		mt->f.max = MAX2(mt->f.max, tail->f.max);
-		mt->f.ppos = MAX2(mt->f.ppos, tail->f.ppos);
-	}
-	offset += sc_pos>>32;
-	mt->mdrop = mt->f.max - offset;
-
-	/* init tail pointer array and q-offset array */
-	int32_t qbase = (int32_t)sc_pos - BW / 2;		/* extract lower 32bit as signed, move the max cell to center */
-	for(uint64_t i = 0; i < cnt; i++) {
-		mg->blk[-i] = _last_block(_tail(fill[i]));
-		mg->qofs[-i] = qofs[i] - qbase;
+		struct gaba_joint_tail_s *const tail = _tail(fill[i]);
+		mg->blk[-i] = _last_block(tail);
+		pridx = MIN2(pridx, tail->pridx);
+		max = MAX2(max, tail->f.max);
+		ppos = MAX2(ppos, tail->f.ppos);
 	}
 
-	mg->acc = 0;
-	mg->xstat = MERGE_HEAD;
+	/* save scores */
+	mt->tail = NULL;					/* always NULL */
+	mt->pridx = pridx;
+	mt->f.max = max;
+	mt->f.ppos = ppos;
 
-	/* read-modify-write template */
-	#define _merge_n(_dst, _src, _elem, _q, _mask, _mod) { \
-		nvec_t d = _loadu_n((_dst)->_elem);							/* read dst */ \
-		nvec_t s = _and_n(_mask, _loadu_n(&((_src)->_elem)[-_q]));	/* read src */ \
-		d = (_mod); _storeu_n((_dst)->_elem, d);					/* modify-write */ \
-	}
-	#define _merge_w(_dst, _src, _elem, _q, _mask, _mod) { \
-		wvec_t d = _loadu_w((_dst)->_elem);							/* read dst */ \
-		wvec_t s = _and_w(_mask, _loadu_w(&((_src)->_elem)[-_q]));	/* read src */ \
-		d = (_mod); _storeu_w((_dst)->_elem, d);					/* modify-write */ \
-	}
+	/* determine center cell */
+	uint64_t q = merge_detect_maxpos(self);
 
-	/* merging loop */
-	for(uint64_t i = 0; i < cnt; i++) {
-		int32_t q = qofs[i] - qbase;
-		if((uint32_t)(q + BW) >= 2 * BW) { continue; }
+	/* convert q vector to relative offset from qmax then store to the new tail */
+	_store_v16i8(&mg->acc,
+		_swap_v16i8(_sub_v16i8(
+			_load_v16i8(self->w.m.qofs),
+			_set_v16i8(q)
+		))
+	);
+	mg->acc = _cb(self, q + BW - 1) - _cb(self, q);
+	mg->xstat = MERGE_HEAD;				/* always MERGE_HEAD; ROOT, HEAD, and TERM flags are not propagated (must be handled before the merge function is called) */
 
-		struct gaba_joint_tail_s const *tail = _tail(fill[i]);
-		struct gaba_block_s const *blk = _last_block(tail);
+	/* copy vectors from the working buffer */
+	mt->mdrop = merge_slice_vectors(self, mg, q);
 
-		/* load mask */
-		nvec_t nmask = _loadu_n(&window_mask[-q + BW]);
-
-		/* merge diff vectors */
-		#if MODEL == LINEAR
-			_merge_n(mg, blk, diff.dh, q, nmask, { _min_n(d, s); });
-			_merge_n(mg, blk, diff.dv, q, nmask, { _min_n(d, s); });
-		#elif MODEL == AFFINE
-			_merge_n(mg, blk, diff.dh, q, nmask, { _min_n(d, s); });
-			_merge_n(mg, blk, diff.dv, q, nmask, { _min_n(d, s); });
-			_merge_n(mg, blk, diff.dh, q, nmask, { _min_n(d, s); });
-			_merge_n(mg, blk, diff.df, q, nmask, { _min_n(d, s); });
-		#endif
-
-		/* merge char vector; char vector must have consensus on overlapped regions (so that they can be merged by just OR'ing vectors) */
-		_merge_n(mt, tail, ch.w, q, nmask, { _or_n(d, s); });
-
-		/* merge max vector */
-		_merge_n(mt, tail, xd.drop, q, nmask, {		/* select larger one */
-			/* adjust offset: old_xd + old_max - new_max */
-			_max_n(d, _add_n(s, _set_n(tail->f.max - mt->f.max)));
-		});
-
-		/* merge middle delta vector */
-		wvec_t wmask = _cvt_n_w(nmask);
-		_merge_w(mt, tail, md.delta, q, wmask, {	/* select larger one */
-			/* adjust offset: old_md + old_offset - new_offset */
-			d = _max_w(d, _add_w(s, _set_w(_offset(tail) - offset)));
-			/* calculate index */
-			;
-		});
-	}
-	return((struct gaba_joint_tail_s *)mt);
+	/* restore section boundary info */
+	merge_restore_section(self, mt, _tail(fill[self->w.m.lidx]),                q, 0);
+	merge_restore_section(self, mt, _tail(fill[self->w.m.uidx]), self->w.m.qw - q, 1);
+	return(mt);
 }
 
 /**
@@ -1981,11 +2188,22 @@ struct gaba_joint_tail_s *gaba_dp_merge_core(
 struct gaba_fill_s *_export(gaba_dp_merge)(
 	struct gaba_dp_context_s *self,
 	struct gaba_fill_s const **fill,
-	int32_t const *qofs,
+	uint8_t const *qofs,
 	uint32_t cnt)
 {
 	self = _restore_dp_context(self);
-	return(_fill(gaba_dp_merge_core(self, fill, qofs, cnt)));
+
+	/* clear working buffer */
+	if(merge_calc_qspan(self, qofs, cnt) != 0) {
+		return(NULL);					/* fill contains unmergable tail object */
+	}
+	merge_init_work(self);
+
+	/* paste vectors */
+	merge_paste_vectors(self, fill, cnt);
+
+	/* slice vectors and copy them to a new tail */
+	return(_fill(merge_create_tail(self, fill, cnt)));
 }
 
 

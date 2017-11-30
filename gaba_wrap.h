@@ -86,7 +86,7 @@ struct gaba_api_s {
 	gaba_fill_t *(*dp_merge)(
 		gaba_dp_t *dp,
 		gaba_fill_t const **sec,
-		int32_t const *qofs,
+		uint8_t const *qofs,
 		uint32_t cnt);
 
 	/* max score and pos search */
@@ -130,7 +130,7 @@ _decl(void, gaba_dp_flush_stack, gaba_dp_t *self, gaba_stack_t const *stack);
 _decl(void, gaba_dp_clean, gaba_dp_t *self);
 _decl(gaba_fill_t *, gaba_dp_fill_root, gaba_dp_t *self, gaba_section_t const *a, uint32_t apos, gaba_section_t const *b, uint32_t bpos, uint32_t pridx);
 _decl(gaba_fill_t *, gaba_dp_fill, gaba_dp_t *self, gaba_fill_t const *prev_sec, gaba_section_t const *a, gaba_section_t const *b, uint32_t pridx);
-_decl(gaba_fill_t *, gaba_dp_merge, gaba_dp_t *self, gaba_fill_t const **sec, int32_t const *qofs, uint32_t cnt);
+_decl(gaba_fill_t *, gaba_dp_merge, gaba_dp_t *self, gaba_fill_t const **sec, uint8_t const *qofs, uint32_t cnt);
 _decl(gaba_pos_pair_t, gaba_dp_search_max, gaba_dp_t *self, gaba_fill_t const *sec);
 _decl(gaba_alignment_t *, gaba_dp_trace, gaba_dp_t *self, gaba_fill_t const *tail, gaba_alloc_t const *alloc);
 _decl(void, gaba_dp_res_free, gaba_alignment_t *res);
@@ -362,7 +362,7 @@ static inline
 gaba_fill_t *gaba_dp_merge(
 	gaba_dp_t *self,
 	gaba_fill_t const **sec,
-	int32_t const *qofs,
+	uint8_t const *qofs,
 	uint32_t cnt)
 {
 	return(_api(self)->dp_merge(self, sec, qofs, cnt));
