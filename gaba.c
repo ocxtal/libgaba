@@ -1867,7 +1867,8 @@ struct gaba_fill_s *_export(gaba_dp_fill)(
 
 /**
  * @fn merge_calc_qspan
- * @brief read qofs array (q-coordinate displacements), extract max and min
+ * @brief detect the toprightmost and bottomleftmost vectors.
+ * read qofs array (q-coordinate displacements), extract max and min
  * (and corresponding indices), and store them to working buffers.
  */
 static _force_inline
