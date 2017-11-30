@@ -424,8 +424,7 @@ struct gaba_merge_work_s {
 #endif
 	uint64_t abrk[4];					/** (32) */
 	uint64_t bbrk[4];					/** (32) */
-	uint8_t buf[MERGE_BUFFER_LENGTH];	/** (32, 64, 128) */
-	int16_t wbuf[5 * MERGE_BUFFER_LENGTH];/** (320, 640, 1280) */
+	uint8_t buf[MERGE_BUFFER_LENGTH + 5 * sizeof(int16_t) * MERGE_BUFFER_LENGTH];	/** (32, 64, 128) + (320, 640, 1280) */
 };
 _static_assert((sizeof(struct gaba_merge_work_s) % 64) == 0);
 
