@@ -2181,7 +2181,7 @@ void trace_reload_section(
 	uint64_t i)
 {
 	#define _r(_x, _idx)		( (&(_x))[(_idx)] )
-	static uint32_t const mask[2] = { GABA_UPDATE_A, GABA_UPDATE_B };
+	// static uint32_t const mask[2] = { GABA_UPDATE_A, GABA_UPDATE_B };
 
 	debug("load section %s, idx(%d), len(%d)",
 		i == 0 ? "a" : "b", _r(self->w.l.agidx, i), _r(_r(self->w.l.atail, i)->s.alen, i));
@@ -2196,7 +2196,8 @@ void trace_reload_section(
 			gidx += _r(tail->aadv, i);
 			debug("add ridx(%d), adv(%d), gidx(%d), stat(%x)", _r(tail->aridx, i), _r(tail->aadv, i), gidx, tail->f.stat);
 			prev_tail = tail; tail = tail->tail;
-		} while((tail->f.stat & mask[i]) == 0);
+		// } while((tail->f.stat & mask[i]) == 0);
+		} while(_r(tail->aridx, i) != 0);
 	}
 
 	/* reload finished, store section info */
