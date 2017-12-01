@@ -969,14 +969,12 @@ int64_t fill_init_fetch(
 	struct gaba_dp_context_s *self,
 	struct gaba_block_s *blk,
 	v2i64_t pos)
-	// int64_t ppos)								/* ppos can be loaded from self->w.r.tail->ppos */
 {
 	/* calc irem (length until the init_fetch breakpoint; restore remaining head margin lengths) */
 	v2i32_t const adj = _seta_v2i32(1, 0);
-	// v2i32_t irem = _sar_v2i32(_sub_v2i32(_set_v2i32(-ppos), adj), 1);
 	v2i32_t irem = _sub_v2i32(
 		_seta_v2i32(INIT_FETCH_BPOS, INIT_FETCH_APOS),
-		_seta_v2i32(_hi64(pos), _lo64(pos))
+		_cvt_v2i64_v2i32(pos)
 	);
 
 	/* load srem (length until the next breakpoint): no need to update srem since advance counters are always zero */
