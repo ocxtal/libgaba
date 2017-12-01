@@ -8,7 +8,11 @@
  * @date 2016/1/11
  * @license Apache v2
  */
-// #define DEBUG
+
+#ifdef DEBUG
+#  define REDEFINE_DEBUG
+#endif
+
 /* make sure POSIX APIs are properly activated */
 #if defined(__linux__) && !defined(_POSIX_C_SOURCE)
 #  define _POSIX_C_SOURCE		200112L
@@ -1258,11 +1262,6 @@ struct gaba_joint_tail_s *fill_create_tail(
 	return(tail);
 }
 
-
-#undef _LOG_H_INCLUDED
-#undef DEBUG
-#include "log.h"
-
 /**
  * @macro _fill_load_context
  * @brief load vectors onto registers
@@ -1401,8 +1400,8 @@ struct gaba_joint_tail_s *fill_create_tail(
  * @macro _fill_update_delta
  * @brief update small delta vector and max vector
  */
-#define _fill_update_delta(_op_add, _op_subs, _vector, _offset, _sign) { \
-	nvec_t _t = _add_n(_vector, _offset); \
+#define _fill_update_delta(_op_add, _op_subs, _vector, _ofs, _sign) { \
+	nvec_t _t = _add_n(_vector, _ofs); \
 	delta = _op_add(delta, _t); \
 	drop = _op_subs(drop, _t); \
 	_dir_update(dir, _vector, _sign); \
@@ -1518,10 +1517,6 @@ int64_t fill_bulk_test_idx(
 	#undef _test
 }
 
-#undef _LOG_H_INCLUDED
-#undef DEBUG
-#include "log.h"
-
 /**
  * @fn fill_cap_test_idx
  * @brief returns negative if ij-bound (for the cap fill) is invaded
@@ -1534,6 +1529,10 @@ int64_t fill_bulk_test_idx(
 	debug("arem(%zd), brem(%zd), prem(%zd)", aptr - alim, blim - bptr, plim - bptr + aptr); \
 	((int64_t)aptr - (int64_t)alim) | ((int64_t)blim - (int64_t)bptr) | ((int64_t)plim - (int64_t)bptr + (int64_t)aptr); \
 })
+
+#undef DEBUG
+#undef _LOG_H_INCLUDED
+#include "log.h"
 
 /**
  * @fn fill_bulk_block
@@ -1675,6 +1674,12 @@ struct gaba_block_s *fill_cap_seq_bounded(
 	debug("return, blk(%p), xstat(%x)", blk, blk->xstat);
 	return(blk);
 }
+
+#ifdef REDEFINE_DEBUG
+#  define DEBUG
+#  undef _LOG_H_INCLUDED
+#  include "log.h"
+#endif
 
 /**
  * @fn max_blocks_mem
@@ -2282,8 +2287,8 @@ uint64_t leaf_load_max_mask(
 	return(max_mask);
 }
 
-#undef _LOG_H_INCLUDED
 #undef DEBUG
+#undef _LOG_H_INCLUDED
 #include "log.h"
 
 /**
@@ -2331,6 +2336,12 @@ void leaf_detect_pos(
 	debug("p(%u), q(%u)", self->w.l.p, self->w.l.q);
 	return;
 }
+
+#ifdef REDEFINE_DEBUG
+#  undef _LOG_H_INCLUDED
+#  define DEBUG
+#  include "log.h"
+#endif
 
 /**
  * @fn leaf_search
@@ -2432,10 +2443,6 @@ struct gaba_pos_pair_s _export(gaba_dp_search_max)(
 	return(pos);
 }
 
-#undef _LOG_H_INCLUDED
-#undef DEBUG
-#include "log.h"
-
 
 /* path trace functions */
 /**
@@ -2450,8 +2457,8 @@ void trace_reload_section(
 	#define _r(_x, _idx)		( (&(_x))[(_idx)] )
 	// static uint32_t const mask[2] = { GABA_UPDATE_A, GABA_UPDATE_B };
 
-	debug("load section %s, idx(%d), len(%d)",
-		i == 0 ? "a" : "b", _r(self->w.l.agidx, i), _r(_r(self->w.l.atail, i)->s.alen, i));
+	debug("load section %s, idx(%d), adv(%d)",
+		i == 0 ? "a" : "b", _r(self->w.l.agidx, i), _r(_r(self->w.l.atail, i)->aadv, i));
 
 	/* load tail pointer (must be inited with leaf tail) */
 	struct gaba_joint_tail_s const *tail = _r(self->w.l.atail, i), *prev_tail = tail;
@@ -2643,6 +2650,10 @@ enum { ts_d = 0, ts_v0, ts_v1, ts_h0, ts_h1 };
 	} \
 }
 
+#undef DEBUG
+#undef _LOG_H_INCLUDED
+#include "log.h"
+
 /**
  * @fn trace_core
  */
@@ -2750,6 +2761,11 @@ _trace_term:;
 	return;
 }
 
+#ifdef REDEFINE_DEBUG
+#  undef _LOG_H_INCLUDED
+#  define DEBUG
+#  include "log.h"
+#endif
 
 /**
  * @fn trace_push_segment
@@ -3395,8 +3411,8 @@ void gaba_init_phantom(
 			.ascnt = 0, .bscnt = 0,
 			// .apos = (GP_INIT - BW) / 2,
 			// .bpos = (GP_INIT - BW) / 2
-			.apos = -BW/2 - INIT_FETCH_APOS,
-			.bpos = -BW/2 - INIT_FETCH_BPOS
+			.apos = -BW/2,
+			.bpos = -BW/2
 		},
 
 		/* section info */
@@ -4739,6 +4755,7 @@ unittest()
 		assert(nr.path != NULL);
 
 		/* fill-in sections */
+		debug("a(%s), b(%s)", a, b);
 		struct unittest_sec_pair_s *s = unittest_build_section(
 			&pairs[i],
 			unittest_build_section_forward
