@@ -1249,6 +1249,8 @@ struct gaba_joint_tail_s *fill_create_tail(
 			_load_v2i64(&prev_tail->f.apos),
 			_cvt_v2i32_v2i64(adv)
 		));
+		_print_v2i32(_load_v2i32(&tail->f.ascnt));
+		_print_v2i64(_load_v2i64(&tail->f.apos));
 
 		/* store max */
 		tail->f.max = _offset(prev_tail) + self->w.r.ofsd + mdrop;
@@ -2402,9 +2404,10 @@ uint64_t leaf_search(
 	/* calc plen */
 	v2i32_t eridx = _load_v2i32(&tail->aridx);
 	v2i32_t rem = _sub_v2i32(ridx, eridx);
+	uint64_t plen = tail->f.apos + tail->f.bpos - (INIT_FETCH_APOS + INIT_FETCH_BPOS) + BW - _hi32(rem) - _lo32(rem);
 	_print_v2i32(eridx); _print_v2i32(rem);
-	debug("path length: %lld", tail->f.apos + tail->f.bpos + (BW + 1) - _hi32(rem) - _lo32(rem));
-	return(tail->f.apos + tail->f.bpos + (BW + 1) - _hi32(rem) - _lo32(rem));
+	debug("path length: %lld", plen);
+	return(plen);
 }
 
 /**
