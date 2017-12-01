@@ -334,14 +334,6 @@ struct gaba_section_pair_s {
 };
 
 /**
- * @struct gaba_tail_pair_s
- * @brief used in merging vectors. pointer arrays are stores before this object in the reverse order.
- */
-struct gaba_tail_pair_s {
-	uint8_t tail_idx_mask[2][64];		/** (128) 0/1 index array: [0] for the previous vector, [1] for the current vector (tail->md) */
-};
-
-/**
  * @struct gaba_joint_tail_s
  * @brief (internal) tail cap of a contiguous matrix blocks, contains a context of the blocks
  * (band) and can be connected to the next blocks.
