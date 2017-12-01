@@ -1004,7 +1004,6 @@ int64_t fill_init_fetch(
 	/* save fetch length for use in the next block fill / tail construction */
 	_store_v2i8(&blk->acnt, _cvt_v2i32_v2i8(len));
 	_store_v2i32(&self->w.r.arem, _sub_v2i32(srem, len));
-	// return(ppos + _lo32(len) + _hi32(len));
 	return(_hi64(pos) + _hi32(len));
 }
 
@@ -1257,7 +1256,6 @@ struct gaba_joint_tail_s *fill_create_tail(
 
 		/* status flag and p-coordinate */
 		tail->f.stat = ((uint32_t)(blk->xstat & (UPDATE | TERM | CONT))<<8) | _mask_v2i32(update);
-		// tail->f.ppos = prev_tail->f.ppos + _hi32(adv) + _lo32(adv);
 	}
 	return(tail);
 }
@@ -4181,7 +4179,7 @@ struct unittest_naive_result_s unittest_naive(
 		max = (struct unittest_pos_score_s){ 0, 0, 0 };
 	}
 
-	debug("max(%d), apos(%lld), bpos(%lld)", max.score, max.apos, max.bpos);
+	debug("max(%lld), apos(%lld), bpos(%lld)", max.score, max.apos, max.bpos);
 
 	struct unittest_naive_result_s result = {
 		.score = max.score,
