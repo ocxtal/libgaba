@@ -124,7 +124,7 @@ _static_assert(sizeof(struct gaba_api_s) == 8 * sizeof(void *));		/* must be con
 _decl(gaba_t *, gaba_init, gaba_params_t const *params);
 _decl(void, gaba_clean, gaba_t *ctx);
 _decl(gaba_dp_t *, gaba_dp_init, gaba_t const *ctx, uint8_t const *alim, uint8_t const *blim);
-_decl(void, gaba_dp_flush, gaba_dp_t *self, uint8_t const *alim, uint8_t const *blim);
+_decl(void, gaba_dp_flush, gaba_dp_t *self);
 _decl(gaba_stack_t const *, gaba_dp_save_stack, gaba_dp_t *self);
 _decl(void, gaba_dp_flush_stack, gaba_dp_t *self, gaba_stack_t const *stack);
 _decl(void, gaba_dp_clean, gaba_dp_t *self);
@@ -284,11 +284,9 @@ gaba_dp_t *gaba_dp_init(
  */
 static inline
 void gaba_dp_flush(
-	gaba_dp_t *self,
-	uint8_t const *alim,
-	uint8_t const *blim)
+	gaba_dp_t *self)
 {
-	_import(gaba_dp_flush_linear_32)(self, alim, blim);
+	_import(gaba_dp_flush_linear_32)(self);
 	return;
 }
 

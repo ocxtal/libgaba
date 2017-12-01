@@ -52,6 +52,12 @@ typedef void (*gaba_lfree_t)(void *opaque, void *ptr);
 /**
  * @struct gaba_alloc_s
  * @brief optional memory allocator, malloc and free pair must not be NULL.
+ * memory block must be freed when size == 0:
+ *
+ *	void *alloc(void *opaque, void *ptr, size_t size) {
+ *		if(size == 0) { free(ptr); }
+ *		return(realloc(ptr, size));
+ *	}
  */
 struct gaba_alloc_s {
 	void *opaque;				/** local memory arena */
@@ -228,9 +234,7 @@ gaba_dp_t *gaba_dp_init(
  */
 GABA_EXPORT_LEVEL
 void gaba_dp_flush(
-	gaba_dp_t *dp,
-	uint8_t const *alim,
-	uint8_t const *blim);
+	gaba_dp_t *dp);
 
 /**
  * @fn gaba_dp_save_stack

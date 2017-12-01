@@ -3590,16 +3590,10 @@ int64_t gaba_dp_add_stack(
  * @fn gaba_dp_flush
  */
 void _export(gaba_dp_flush)(
-	struct gaba_dp_context_s *self,
-	uint8_t const *alim,
-	uint8_t const *blim)
+	struct gaba_dp_context_s *self)
 {
 	/* restore dp context pointer by adding offset */
 	self = _restore_dp_context(self);
-
-	/* init seq lims */
-	self->alim = alim;
-	self->blim = blim;
 
 	self->stack.mem = &self->mem;
 	self->stack.top = (uint8_t *)_roundup((uintptr_t)(self->stack.mem + 1), MEM_ALIGN_SIZE);
