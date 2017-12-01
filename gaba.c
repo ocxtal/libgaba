@@ -3596,8 +3596,8 @@ void _export(gaba_dp_flush)(
 	self = _restore_dp_context(self);
 
 	self->stack.mem = &self->mem;
-	self->stack.top = (uint8_t *)_roundup((uintptr_t)(self->stack.mem + 1), MEM_ALIGN_SIZE);
-	self->stack.end = (uint8_t *)self + self->mem.size;
+	self->stack.top = (uint8_t *)(self + 1);
+	self->stack.end = (uint8_t *)self + MEM_INIT_SIZE;
 	return;
 }
 
