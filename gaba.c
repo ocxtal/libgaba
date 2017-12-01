@@ -154,8 +154,9 @@ _static_assert(_dp_ctx_index(BW) == DP_CTX_INDEX);
 #define MEM_ALIGN_SIZE				( 32 )		/* 32byte aligned for AVX2 environments */
 #define MEM_INIT_SIZE				( (uint64_t)256 * 1024 * 1024 )
 #define MEM_MARGIN_SIZE				( 2048 )	/* tail margin of internal memory blocks */
-#define GP_INIT						( 1 )		/* global p coordinate where total fetched sequence length becomes BW */
-#define GP_ROOT						( -1 )		/* global p coordinate for the first vector of the first block */
+// #define GP_INIT						( 1 )		/* global p coordinate where total fetched sequence length becomes BW */
+#define INIT_FETCH_APOS				( -1 )
+#define INIT_FETCH_BPOS				( -1 )
 
 /* test consistency of exported macros */
 _static_assert(V2I32_MASK_01 == GABA_UPDATE_A);
@@ -182,7 +183,7 @@ _static_assert(sizeof(void *) == 8);
 /** check size of structs declared in gaba.h */
 _static_assert(sizeof(struct gaba_params_s) == 48);
 _static_assert(sizeof(struct gaba_section_s) == 16);
-_static_assert(sizeof(struct gaba_fill_s) == 24);
+// _static_assert(sizeof(struct gaba_fill_s) == 24);
 _static_assert(sizeof(struct gaba_segment_s) == 32);
 _static_assert(sizeof(struct gaba_alignment_s) == 64);
 _static_assert(sizeof(nvec_masku_t) == BW / 8);
@@ -367,10 +368,10 @@ struct gaba_root_block_s {
 	struct gaba_phantom_s blk;
 	struct gaba_joint_tail_s tail;
 #if BW != 64
-	uint8_t _pad2[352 - sizeof(struct gaba_joint_tail_s)];
+	uint8_t _pad2[352 + 32 - sizeof(struct gaba_joint_tail_s)];
 #endif
 };
-_static_assert(sizeof(struct gaba_root_block_s) == 640);
+_static_assert(sizeof(struct gaba_root_block_s) == 640 + 32);
 _static_assert(sizeof(struct gaba_root_block_s) >= sizeof(struct gaba_phantom_s) + sizeof(struct gaba_joint_tail_s));
 
 /**
@@ -963,11 +964,16 @@ static _force_inline
 int64_t fill_init_fetch(
 	struct gaba_dp_context_s *self,
 	struct gaba_block_s *blk,
-	int64_t ppos)								/* ppos can be loaded from self->w.r.tail->ppos */
+	v2i64_t pos)
+	// int64_t ppos)								/* ppos can be loaded from self->w.r.tail->ppos */
 {
 	/* calc irem (length until the init_fetch breakpoint; restore remaining head margin lengths) */
 	v2i32_t const adj = _seta_v2i32(1, 0);
-	v2i32_t irem = _sar_v2i32(_sub_v2i32(_set_v2i32(-ppos), adj), 1);
+	// v2i32_t irem = _sar_v2i32(_sub_v2i32(_set_v2i32(-ppos), adj), 1);
+	v2i32_t irem = _sub_v2i32(
+		_seta_v2i32(INIT_FETCH_BPOS, INIT_FETCH_APOS),
+		_seta_v2i32(_hi64(pos), _lo64(pos))
+	);
 
 	/* load srem (length until the next breakpoint): no need to update srem since advance counters are always zero */
 	v2i32_t srem = _load_v2i32(&self->w.r.arem);
@@ -983,7 +989,7 @@ int64_t fill_init_fetch(
 			_add_v2i32(adj, irem)
 		)
 	);
-	debug("ppos(%lld)", ppos);
+	debug("pos(%lld, %lld)", (int64_t)_hi64(pos), (int64_t)_lo64(pos));
 	_print_v2i32(irem);
 	_print_v2i32(srem);
 	_print_v2i32(len);
@@ -996,7 +1002,8 @@ int64_t fill_init_fetch(
 	/* save fetch length for use in the next block fill / tail construction */
 	_store_v2i8(&blk->acnt, _cvt_v2i32_v2i8(len));
 	_store_v2i32(&self->w.r.arem, _sub_v2i32(srem, len));
-	return(ppos + _lo32(len) + _hi32(len));
+	// return(ppos + _lo32(len) + _hi32(len));
+	return(_hi64(pos) + _hi32(len));
 }
 
 /**
@@ -1228,11 +1235,15 @@ struct gaba_joint_tail_s *fill_create_tail(
 		tail->tail = prev_tail;
 		_print_v2i32(ridx); _print_v2i32(sridx); _print_v2i32(adv);
 
-		/* calc end-of-section flag and section count */
+		/* calc end-of-section flag, section counts, and base counts */
 		v2i32_t update = _eq_v2i32(ridx, _zero_v2i32());
 		_store_v2i32(&tail->f.ascnt, _sub_v2i32(
 			_load_v2i32(&prev_tail->f.ascnt),			/* aligned section counts */
 			update										/* increment by one if the pointer reached the end of the current section */
+		));
+		_store_v2i64(&tail->f.apos, _add_v2i64(
+			_load_v2i64(&prev_tail->f.apos),
+			_cvt_v2i32_v2i64(adv)
 		));
 
 		/* store max */
@@ -1242,7 +1253,7 @@ struct gaba_joint_tail_s *fill_create_tail(
 
 		/* status flag and p-coordinate */
 		tail->f.stat = ((uint32_t)(blk->xstat & (UPDATE | TERM | CONT))<<8) | _mask_v2i32(update);
-		tail->f.ppos = prev_tail->f.ppos + _hi32(adv) + _lo32(adv);
+		// tail->f.ppos = prev_tail->f.ppos + _hi32(adv) + _lo32(adv);
 	}
 	return(tail);
 }
@@ -1796,7 +1807,7 @@ struct gaba_fill_s *_export(gaba_dp_fill_root)(
 	);
 
 	/* init fetch */
-	if(fill_init_fetch(self, blk, _root(self)->f.ppos) < GP_ROOT) {
+	if(fill_init_fetch(self, blk, _load_v2i64(&_root(self)->f.apos)) < INIT_FETCH_BPOS) {
 		return(_fill(fill_create_tail(self, blk)));
 	}
 
@@ -1831,8 +1842,8 @@ struct gaba_fill_s *_export(gaba_dp_fill)(
 	);
 
 	/* check if still in the init (head) state */
-	if(_tail(fill)->f.ppos < GP_ROOT) {
-		if(fill_init_fetch(self, blk, _tail(fill)->f.ppos) < GP_ROOT) {
+	if((int64_t)_tail(fill)->f.bpos < INIT_FETCH_BPOS) {
+		if(fill_init_fetch(self, blk, _load_v2i64(&_tail(fill)->f.apos)) < INIT_FETCH_BPOS) {
 			return(_fill(fill_create_tail(self, blk)));
 		}
 		/* init fetch done, issue ungapped extension here if filter is needed */
@@ -2177,20 +2188,21 @@ struct gaba_joint_tail_s *merge_create_tail(
 
 	/* copy tail pointer array */
 	uint32_t pridx = UINT32_MAX;
-	int64_t max = -1, ppos = -1;
+	int64_t max = -1;
+	// int64_t ppos = -1;
 	for(uint64_t i = 0; i < cnt; i++) {
 		struct gaba_joint_tail_s *const tail = _tail(fill[i]);
 		mg->blk[-i] = _last_block(tail);
 		pridx = MIN2(pridx, tail->pridx);
 		max = MAX2(max, tail->f.max);
-		ppos = MAX2(ppos, tail->f.ppos);
+		// ppos = MAX2(ppos, tail->f.ppos);
 	}
 
 	/* save scores */
 	mt->tail = NULL;					/* always NULL */
 	mt->pridx = pridx;
 	mt->f.max = max;
-	mt->f.ppos = ppos;
+	// mt->f.ppos = ppos;
 
 	/* determine center cell */
 	uint64_t q = merge_detect_maxpos(self);
@@ -2250,7 +2262,10 @@ uint64_t leaf_load_max_mask(
 	struct gaba_dp_context_s *self,
 	struct gaba_joint_tail_s const *tail)
 {
-	debug("ppos(%lld), scnt(%d), offset(%lld)", tail->f.ppos, tail->f.scnt, tail->f.max - tail->mdrop);
+	debug("pos(%llu, %llu), scnt(%u, %u), offset(%lld)",
+		tail->f.apos, tail->f.bpos,
+		tail->f.ascnt, tail->f.bscnt,
+		tail->f.max - tail->mdrop);
 
 	/* load max vector, create mask */
 	nvec_t drop = _loadu_n(tail->xd.drop);
@@ -2377,8 +2392,8 @@ uint64_t leaf_search(
 	v2i32_t eridx = _load_v2i32(&tail->aridx);
 	v2i32_t rem = _sub_v2i32(ridx, eridx);
 	_print_v2i32(eridx); _print_v2i32(rem);
-	debug("path length: %lld", tail->f.ppos + (BW + 1) - _hi32(rem) - _lo32(rem));
-	return(tail->f.ppos + (BW + 1) - _hi32(rem) - _lo32(rem));
+	debug("path length: %lld", tail->f.apos + tail->f.bpos + (BW + 1) - _hi32(rem) - _lo32(rem));
+	return(tail->f.apos + tail->f.bpos + (BW + 1) - _hi32(rem) - _lo32(rem));
 }
 
 /**
@@ -2900,7 +2915,7 @@ struct gaba_alignment_s *_export(gaba_dp_trace)(
 
 	/* search and trace */
 	return(trace_body(self, _tail(fill), alloc,
-		fill->ppos < GP_ROOT ? 0 : leaf_search(self, _tail(fill))
+		(int64_t)fill->bpos < INIT_FETCH_BPOS ? 0 : leaf_search(self, _tail(fill))
 	));
 }
 
@@ -3378,7 +3393,10 @@ void gaba_init_phantom(
 			.max = 0,
 			.stat = CONT | GABA_UPDATE_A | GABA_UPDATE_B,
 			.ascnt = 0, .bscnt = 0,
-			.ppos = GP_INIT - BW
+			// .apos = (GP_INIT - BW) / 2,
+			// .bpos = (GP_INIT - BW) / 2
+			.apos = -BW/2 - INIT_FETCH_APOS,
+			.bpos = -BW/2 - INIT_FETCH_BPOS
 		},
 
 		/* section info */
