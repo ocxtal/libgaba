@@ -4462,14 +4462,14 @@ uint8_t unittest_encode_base(char c)
 }
 
 static
-char *unittest_cat_seq(char const **p)
+char *unittest_cat_seq(char const *const *p)
 {
 	uint64_t len = 0;
-	for(char const **q = p; *q != NULL; q++) {
+	for(char const *const *q = p; *q != NULL; q++) {
 		len += strlen(*q);
 	}
 	char *b = malloc(sizeof(char) * (len + 1)), *s = b;
-	for(char const **q = p; *q != NULL; q++) {
+	for(char const *const *q = p; *q != NULL; q++) {
 		memcpy(s, *q, strlen(*q)); s += strlen(*q);
 	}
 	*s = '\0';
@@ -4477,13 +4477,13 @@ char *unittest_cat_seq(char const **p)
 }
 
 static
-uint64_t *unittest_build_section_array(char const **p)
+uint64_t *unittest_build_section_array(char const *const *p)
 {
 	uint64_t cnt = 0;
-	for(char const **q = p; *q != NULL; q++) { cnt++; }
+	for(char const *const *q = p; *q != NULL; q++) { cnt++; }
 	uint64_t *b = malloc(sizeof(uint64_t) * (cnt + 2)), *s = b;
 	uint64_t acc = 0; *s++ = acc;
-	for(char const **q = p; *q != NULL; q++) {
+	for(char const *const *q = p; *q != NULL; q++) {
 		acc += strlen(*q); *s++ = acc;
 	}
 	*s = 0;
@@ -4491,12 +4491,12 @@ uint64_t *unittest_build_section_array(char const **p)
 }
 
 static
-struct gaba_section_s *unittest_build_section_forward(char const **p)
+struct gaba_section_s *unittest_build_section_forward(char const *const *p)
 {
 	struct gaba_section_s *s = calloc(UNITTEST_MAX_SEQ_CNT + 1, sizeof(struct gaba_section_s));
 
 	uint64_t len = 256;
-	for(char const **q = p; *q != NULL; q++) { len += strlen(*q) + 1; }
+	for(char const *const *q = p; *q != NULL; q++) { len += strlen(*q) + 1; }
 	char *b = calloc(1, len), *a = b; a += 128;
 	uint64_t i = 0;
 	while(p[i] != NULL) {
@@ -4512,12 +4512,12 @@ struct gaba_section_s *unittest_build_section_forward(char const **p)
 }
 
 static
-struct gaba_section_s *unittest_build_section_reverse(char const **p)
+struct gaba_section_s *unittest_build_section_reverse(char const *const *p)
 {
 	struct gaba_section_s *s = calloc(UNITTEST_MAX_SEQ_CNT + 1, sizeof(struct gaba_section_s));
 
 	uint64_t len = 256;
-	for(char const **q = p; *q != NULL; q++) { len += strlen(*q) + 1; }
+	for(char const *const *q = p; *q != NULL; q++) { len += strlen(*q) + 1; }
 	char *b = calloc(1, len), *a = b; a += 128;
 	uint64_t i = 0;
 	while(p[i] != NULL) {
@@ -4544,8 +4544,8 @@ void unittest_clean_section(struct unittest_sec_pair_s *s)
 
 static
 struct unittest_sec_pair_s *unittest_build_section(
-	struct unittest_seq_pair_s *p,
-	struct gaba_section_s *(*build_section)(char const **))
+	struct unittest_seq_pair_s const *p,
+	struct gaba_section_s *(*build_section)(char const *const *))
 {
 	struct unittest_sec_pair_s *s = malloc(sizeof(struct unittest_sec_pair_s));
 	s->a = build_section(p->a); s->apos = rand() % 64; s->a[0].base -= s->apos; s->a[0].len += s->apos;
@@ -4657,6 +4657,51 @@ int unittest_check_section(
 	return(rc);
 }
 
+static
+void unittest_test_pair(
+	UNITTEST_ARG_DECL,
+	struct gaba_dp_context_s *dp,
+	struct unittest_seq_pair_s const *pair)
+{
+	/* test naive implementations */
+	char *a = unittest_cat_seq(pair->a);
+	char *b = unittest_cat_seq(pair->b);
+	uint64_t *asec = unittest_build_section_array(pair->a);
+	uint64_t *bsec = unittest_build_section_array(pair->b);
+	struct unittest_naive_result_s nr = unittest_naive(unittest_default_params, a, b, asec, bsec);
+
+	assert(nr.score >= 0);
+	assert(nr.path_length >= 0);
+	assert(nr.path != NULL);
+
+	/* fill-in sections */
+	debug("a(%s), b(%s)", a, b);
+	struct unittest_sec_pair_s *s = unittest_build_section(
+		pair,
+		unittest_build_section_forward
+	);
+	struct gaba_fill_s const *m = unittest_dp_extend(dp, s);
+
+	assert(m != NULL);
+	assert(m->max == nr.score, "m->max(%lld), nr.score(%d)", m->max, nr.score);
+
+	/* test path */
+	struct gaba_alignment_s const *r = _export(gaba_dp_trace)(dp, m, NULL);
+
+	assert(r != NULL);
+	assert(r->plen == nr.path_length, "a(%s), b(%s), m->plen(%llu), nr.path_length(%u)", a, b, r->plen, nr.path_length);
+	assert(unittest_check_path(r, nr.path), "a(%s), b(%s), r->path(%s), nr.path(%s)", a, b, unittest_decode_path(r), nr.path);
+	assert(unittest_check_section(r, nr.sec, nr.scnt), "a(%s), b(%s)", a, b);
+
+	unittest_clean_section(s);
+
+	free(a);
+	free(b);
+	free(asec);
+	free(bsec);
+	return;
+}
+
 unittest()
 {
 	struct unittest_seq_pair_s pairs[] = {
@@ -4735,45 +4780,9 @@ unittest()
 	struct gaba_dp_context_s *dp = _export(gaba_dp_init)(c, lim, lim);
 
 	for(uint64_t i = 0; i < sizeof(pairs) / sizeof(struct unittest_seq_pair_s); i++) {
-
-		/* test naive implementations */
-		char *a = unittest_cat_seq(pairs[i].a);
-		char *b = unittest_cat_seq(pairs[i].b);
-		uint64_t *asec = unittest_build_section_array(pairs[i].a);
-		uint64_t *bsec = unittest_build_section_array(pairs[i].b);
-		struct unittest_naive_result_s nr = unittest_naive(unittest_default_params, a, b, asec, bsec);
-
-		assert(nr.score >= 0);
-		assert(nr.path_length >= 0);
-		assert(nr.path != NULL);
-
-		/* fill-in sections */
-		debug("a(%s), b(%s)", a, b);
-		struct unittest_sec_pair_s *s = unittest_build_section(
-			&pairs[i],
-			unittest_build_section_forward
-		);
-		struct gaba_fill_s const *m = unittest_dp_extend(dp, s);
-
-		assert(m != NULL);
-		assert(m->max == nr.score, "m->max(%lld), nr.score(%d)", m->max, nr.score);
-
-		/* test path */
-		struct gaba_alignment_s const *r = _export(gaba_dp_trace)(dp, m, NULL);
-
-		assert(r != NULL);
-		assert(r->plen == nr.path_length, "a(%s), b(%s), m->plen(%llu), nr.path_length(%u)", a, b, r->plen, nr.path_length);
-		assert(unittest_check_path(r, nr.path), "a(%s), b(%s), r->path(%s), nr.path(%s)", a, b, unittest_decode_path(r), nr.path);
-		assert(unittest_check_section(r, nr.sec, nr.scnt), "a(%s), b(%s)", a, b);
-
-		unittest_clean_section(s);
-
-		free(a);
-		free(b);
-		free(asec);
-		free(bsec);
+		gaba_dp_flush(dp);
+		unittest_test_pair(UNITTEST_ARG_LIST, dp, &pairs[i]);
 	}
-
 	_export(gaba_dp_clean)(dp);
 }
 
@@ -4840,6 +4849,41 @@ char *unittest_generate_mutated_sequence(
 	}
 	mutated_seq[len] = '\0';
 	return mutated_seq;
+}
+
+unittest()
+{
+	uint64_t const cnt = 50;
+
+	uint8_t const *lim = (uint8_t const *)0x800000000000;
+	struct gaba_context_s const *c = (struct gaba_context_s const *)gctx;
+	struct gaba_dp_context_s *dp = _export(gaba_dp_init)(c, lim, lim);
+
+	for(uint64_t i = 0; i < cnt; i++) {
+		struct unittest_seq_pair_s pair = {
+			.a = {
+				// unittest_generate_random_sequence((rand() % 128) + 1),
+				// unittest_generate_random_sequence((rand() % 128) + 1),
+				// unittest_generate_random_sequence((rand() % 128) + 1),
+				// unittest_generate_random_sequence((rand() % 128) + 1),
+				// unittest_generate_random_sequence((rand() % 128) + 1),
+				unittest_generate_random_sequence((rand() % 128) + 1)
+			}
+		};
+
+		for(uint64_t j = 0; pair.a[j] != NULL; j++) {
+			pair.b[j] = strdup(pair.a[j]);
+			// pair.b[j] = unittest_generate_mutated_sequence(pair.a[j], 0, 0, BW);
+		}
+
+		unittest_test_pair(UNITTEST_ARG_LIST, dp, &pair);
+
+		for(uint64_t j = 0; pair.a[j] != NULL; j++) {
+			free((void *)pair.a[j]);
+			free((void *)pair.b[j]);
+		}
+	}
+	_export(gaba_dp_clean)(dp);
 }
 
 /**
