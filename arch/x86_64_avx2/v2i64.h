@@ -76,8 +76,8 @@ typedef struct v2i64_s {
 #define _zero_v2i64()		_a_v2i64x(setzero, _e_x, _unused)
 #define _seta_v2i64(x, y)	( (v2i64_t) { _mm_set_epi64x(x, y) } )
 #define _swap_v2i64(x) ( \
-	(v2i32_t) { \
-		_mm_shuffle_epi32((x).v1, 0x1b) \
+	(v2i64_t) { \
+		_mm_shuffle_epi32((x).v1, 0x4e) \
 	} \
 )
 
