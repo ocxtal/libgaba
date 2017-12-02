@@ -4786,7 +4786,7 @@ unittest()
 	struct gaba_dp_context_s *dp = _export(gaba_dp_init)(c, lim, lim);
 
 	for(uint64_t i = 0; i < sizeof(pairs) / sizeof(struct unittest_seq_pair_s); i++) {
-		gaba_dp_flush(dp);
+		_export(gaba_dp_flush)(dp);
 		unittest_test_pair(UNITTEST_ARG_LIST, dp, &pairs[i]);
 	}
 	_export(gaba_dp_clean)(dp);
