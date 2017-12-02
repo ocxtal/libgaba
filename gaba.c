@@ -4713,7 +4713,7 @@ void unittest_test_pair(
 	free(bsec);
 	return;
 }
-/*
+
 unittest()
 {
 	struct unittest_seq_pair_s pairs[] = {
@@ -4801,7 +4801,7 @@ unittest()
 	}
 	_export(gaba_dp_clean)(dp);
 }
-*/
+
 /**
  * @fn unittest_random_base
  */
@@ -4878,11 +4878,11 @@ unittest()
 	for(uint64_t i = 0; i < cnt; i++) {
 		struct unittest_seq_pair_s pair = {
 			.a = {
-				// unittest_generate_random_sequence((rand() % 128) + 1),
-				// unittest_generate_random_sequence((rand() % 128) + 1),
-				// unittest_generate_random_sequence((rand() % 128) + 1),
-				// unittest_generate_random_sequence((rand() % 128) + 1),
-				// unittest_generate_random_sequence((rand() % 128) + 1),
+				unittest_generate_random_sequence((rand() % 128) + 1),
+				unittest_generate_random_sequence((rand() % 128) + 1),
+				unittest_generate_random_sequence((rand() % 128) + 1),
+				unittest_generate_random_sequence((rand() % 128) + 1),
+				unittest_generate_random_sequence((rand() % 128) + 1),
 				unittest_generate_random_sequence((rand() % 128) + 200)
 			}
 		};
