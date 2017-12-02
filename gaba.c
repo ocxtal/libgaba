@@ -1530,9 +1530,9 @@ int64_t fill_bulk_test_idx(
 	((int64_t)aptr - (int64_t)alim) | ((int64_t)blim - (int64_t)bptr) | ((int64_t)plim - (int64_t)bptr + (int64_t)aptr); \
 })
 
-#undef DEBUG
-#undef _LOG_H_INCLUDED
-#include "log.h"
+// #undef DEBUG
+// #undef _LOG_H_INCLUDED
+// #include "log.h"
 
 /**
  * @fn fill_bulk_block
