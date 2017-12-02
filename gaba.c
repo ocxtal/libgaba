@@ -615,18 +615,20 @@ _static_assert((sizeof(struct gaba_dp_context_s) % 64) == 0);
 
 /**
  * @enum GABA_BLK_STATUS
+ * head states and intermediate states are exclusive
  */
 enum GABA_BLK_STATUS {
-	CONT			= 0,
-	UPDATE			= 0x01,
-	TERM			= 0x02,
-	STAT_MASK		= UPDATE | TERM | CONT,
-	HEAD			= 0x10,
-	MERGE_HEAD		= 0x20,				/* merged head and the corresponding block contains no actual vector (DP cell) */
-	ROOT			= 0x40				/* update flag will be combined set for the actual root */
+	/* intermediate states */
+	CONT			= 0,				/* continue */
+	ZERO			= 0x01,				/* internal use */
+	TERM			= 0x80,				/* sign bit */
+	STAT_MASK		= ZERO | TERM | CONT,
+	/* head states */
+	HEAD			= 0x20,
+	MERGE_HEAD		= 0x40				/* merged head and the corresponding block contains no actual vector (DP cell) */
 };
+_static_assert((int8_t)TERM < 0);		/* make sure TERM is recognezed as a negative value */
 _static_assert((int32_t)CONT<<8 == (int32_t)GABA_CONT);
-_static_assert((int32_t)UPDATE<<8 == (int32_t)GABA_UPDATE);
 _static_assert((int32_t)TERM<<8 == (int32_t)GABA_TERM);
 
 
@@ -1130,7 +1132,8 @@ struct gaba_block_s *fill_create_phantom(
 	/* head sequence buffers are already filled, continue to body fill-in (first copy phantom block) */
 	_memcpy_blk_uu(&ph->diff, &prev_blk->diff, sizeof(struct gaba_diff_vec_s));
 	ph->acc = prev_blk->acc;					/* just copy */
-	ph->xstat = (prev_blk->xstat & (ROOT | UPDATE)) | HEAD;	/* propagate root-update flag and mark head */
+	// ph->xstat = (prev_blk->xstat & UPDATE) | HEAD;	/* propagate root-update flag and mark head */
+	ph->xstat = HEAD;							/* mark head */
 	ph->acnt = ph->bcnt = 0;					/* clear counter (a and b sequences are aligned at the head of the buffer) FIXME: intermediate seq fetch breaks consistency */
 	ph->reserved = 0;							/* overlaps with mask */
 	ph->blk = prev_blk;
@@ -1185,16 +1188,19 @@ struct gaba_joint_tail_s *fill_create_tail(
 	struct gaba_dp_context_s *self,
 	struct gaba_block_s *blk)
 {
+	/* inspect fetched base counts */
+	uint16_t cnt = *((uint16_t const *)&blk->acnt);
+
 	/* create joint_tail */
-	struct gaba_joint_tail_s *tail = (struct gaba_joint_tail_s *)(blk + 1);
+	struct gaba_joint_tail_s *tail = (struct gaba_joint_tail_s *)(blk + (cnt != 0));
 	self->stack.top = (void *)(tail + 1);	/* write back stack_top */
 	debug("end stack_top(%p), stack_end(%p), blk(%p)", self->stack.top, self->stack.end, blk);
 
 	int32_t mdrop;
 	/* vectors */ {
 		/* store char vector */
-		nvec_t ach = _loadu_n(_rd_bufa(self, blk->acnt, BW));
-		nvec_t bch = _loadu_n(_rd_bufb(self, blk->bcnt, BW));
+		nvec_t ach = _loadu_n(_rd_bufa(self, cnt & 0xff, BW));
+		nvec_t bch = _loadu_n(_rd_bufb(self, cnt>>8, BW));
 		_print_n(ach); _print_n(bch);
 		_storeu_n(&tail->ch, _or_n(ach, _shl_n(bch, 4)));
 
@@ -1257,7 +1263,7 @@ struct gaba_joint_tail_s *fill_create_tail(
 			_offset(prev_tail), _offset(prev_tail) + self->w.r.ofsd, mdrop, tail->f.max);
 
 		/* status flag and p-coordinate */
-		tail->f.stat = ((uint32_t)(blk->xstat & (UPDATE | TERM | CONT))<<8) | _mask_v2i32(update);
+		tail->f.stat = ((uint32_t)(blk->xstat & (TERM | CONT))<<8) | _mask_v2i32(update);
 	}
 	return(tail);
 }
@@ -1327,7 +1333,7 @@ struct gaba_joint_tail_s *fill_create_tail(
 	t = _max_n(dv, t); \
 	ptr->h.mask = _mask_n(_eq_n(t, dv)); \
 	ptr->v.mask = _mask_n(_eq_n(t, dh)); \
-	debug("mask(%x, %x)", ptr->h.all, ptr->v.all); \
+	debug("mask(%lx, %lx)", (uint64_t)ptr->h.all, (uint64_t)ptr->v.all); \
 	ptr++; \
 	nvec_t _dv = _sub_n(t, dh); \
 	dh = _sub_n(t, dv); \
@@ -1345,7 +1351,7 @@ struct gaba_joint_tail_s *fill_create_tail(
 	t = _max_n(df, t); \
 	ptr->h.mask = _mask_n(_eq_n(t, de)); \
 	ptr->v.mask = _mask_n(_eq_n(t, df)); \
-	debug("mask(%x, %x)", ptr->h.all, ptr->v.all); \
+	debug("mask(%lx, %lx)", (uint64_t)ptr->h.all, (uint64_t)ptr->v.all); \
 	/* update de and dh */ \
 	de = _add_n(de, _load_adjh(self->scv)); \
 	nvec_t te = _max_n(de, t); \
@@ -1459,11 +1465,11 @@ struct gaba_joint_tail_s *fill_create_tail(
  * @macro _fill_store_context
  * @brief store vectors at the end of the block
  */
-#define _fill_store_context_intl(_blk) ({ \
+#define _fill_store_context_intl(_blk) { \
 	/* store direction array */ \
 	_dir_save(_blk, dir); \
 	/* update xdrop status and offsets */ \
-	int8_t _xstat = (_blk)->xstat = (self->tx - _ext_n(drop, BW/2)) & 0x80; \
+	(_blk)->xstat = (self->tx - _ext_n(drop, BW/2)) & TERM; \
 	int32_t cofs = _ext_n(delta, BW/2); \
 	/* store cnt */ \
 	int32_t acnt = _rd_bufa(self, 0, BW) - aptr; \
@@ -1483,22 +1489,21 @@ struct gaba_joint_tail_s *fill_create_tail(
 	wvec_t md = _load_w(&self->w.r.md); \
 	md = _add_w(md, _cvt_n_w(_sub_n(delta, _set_n(cofs)))); \
 	_store_w(&self->w.r.md, md); \
-	_xstat; \
-})
+}
 #if MODEL == LINEAR
-#define _fill_store_context(_blk) ({ \
+#define _fill_store_context(_blk) { \
 	_storeu_n((_blk)->diff.dh, dh); _print_n(dh); \
 	_storeu_n((_blk)->diff.dv, dv); _print_n(dv); \
 	_fill_store_context_intl(_blk); \
-})
+}
 #else	/* AFFINE and COMBINED */
-#define _fill_store_context(_blk) ({ \
+#define _fill_store_context(_blk) { \
 	_storeu_n((_blk)->diff.dh, dh); _print_n(dh); \
 	_storeu_n((_blk)->diff.dv, dv); _print_n(dv); \
 	_storeu_n((_blk)->diff.de, de); _print_n(de); \
 	_storeu_n((_blk)->diff.df, df); _print_n(df); \
 	_fill_store_context_intl(_blk); \
-})
+}
 #endif
 
 /**
@@ -1531,9 +1536,9 @@ int64_t fill_bulk_test_idx(
 	((int64_t)aptr - (int64_t)alim) | ((int64_t)blim - (int64_t)bptr) | ((int64_t)plim - (int64_t)bptr + (int64_t)aptr); \
 })
 
-// #undef DEBUG
-// #undef _LOG_H_INCLUDED
-// #include "log.h"
+#undef DEBUG
+#undef _LOG_H_INCLUDED
+#include "log.h"
 
 /**
  * @fn fill_bulk_block
@@ -1580,6 +1585,12 @@ void fill_bulk_block(
 	return;
 }
 
+#ifdef REDEFINE_DEBUG
+#  define DEBUG
+#  undef _LOG_H_INCLUDED
+#  include "log.h"
+#endif
+
 /**
  * @fn fill_bulk_k_blocks
  * @brief fill <cnt> contiguous blocks without ij-bound test
@@ -1597,9 +1608,6 @@ struct gaba_block_s *fill_bulk_k_blocks(
 		debug("blk(%p)", blk + 1);
 		fill_bulk_block(self, ++blk);
 	}
-
-	/* fix status flag (move MSb to TERM) and pridx */
-	blk->xstat = blk->xstat < 0 ? TERM : ((blk->xstat & ~STAT_MASK) | CONT);
 	debug("return, blk(%p), xstat(%x), pridx(%u)", blk, blk->xstat, self->w.r.pridx);
 	return(blk);
 }
@@ -1618,12 +1626,13 @@ struct gaba_block_s *fill_bulk_seq_bounded(
 		debug("blk(%p)", blk + 1);
 		fill_bulk_block(self, ++blk);
 	}
-
-	/* fix status flag (move MSb to TERM) */
-	blk->xstat = blk->xstat < 0 ? TERM : ((blk->xstat & ~STAT_MASK) | CONT);
 	debug("return, blk(%p), xstat(%x)", blk, blk->xstat);
 	return(blk);
 }
+
+#undef DEBUG
+#undef _LOG_H_INCLUDED
+#include "log.h"
 
 /**
  * @fn fill_cap_seq_bounded
@@ -1667,11 +1676,8 @@ struct gaba_block_s *fill_cap_seq_bounded(
 		self->w.r.pridx -= i;				/* update remaining p-length */
 		_dir_adjust_remainder(dir, i);		/* adjust dir remainder */
 		_fill_store_context(blk);			/* store mask and vectors */
-		if(i != BLK) { blk -= i == 0; break; }/* break if not filled full length */
+		if(_unlikely(i != BLK)) { break; }	/* reached the end */
 	}
-
-	/* fix status flag (move MSb to TERM) */
-	blk->xstat = blk->xstat < 0 ? TERM : ((blk->xstat & ~STAT_MASK) | UPDATE);
 	debug("return, blk(%p), xstat(%x)", blk, blk->xstat);
 	return(blk);
 }
@@ -2365,8 +2371,8 @@ uint64_t leaf_search(
 	v2i32_t ridx = _load_v2i32(&tail->aridx);
 	_print_v2i32(ridx);
 	do {
-		if((--b)->xstat & ROOT) { debug("reached root, xstat(%x)", b->xstat); return(0); }	/* actually unnecessary but placed as a sentinel */
-		if(b->xstat & HEAD) { b = _last_phantom(b + 1)->blk; }
+		// if((--b)->xstat & ROOT) { debug("reached root, xstat(%x)", b->xstat); return(0); }	/* actually unnecessary but placed as a sentinel */
+		if((--b)->xstat & HEAD) { b = _last_phantom(b + 1)->blk; }
 
 		/* first adjust ridx to the head of this block then test mask was updated in this block */
 		v2i8_t cnt = _load_v2i8(&b->acnt);
@@ -2606,11 +2612,12 @@ enum { ts_d = 0, ts_v0, ts_v1, ts_h0, ts_h1 };
  * adjust gidx to the next base and return 0 if bulk loop can be continued,
  * otherwise gidx will not updated. must be called just after reload_ptr or reload_tail.
  */
-#if 1
+#if 0
 #define _trace_test_bulk() ({ \
 	v2i8_t _cnt = _load_v2i8(&blk->acnt); \
 	v2i32_t _gidx = _sub_v2i32(gidx, _cvt_v2i8_v2i32(_cnt)); \
-	debug("test bulk, _cnt(%d, %d), _gidx(%d, %d), test(%d)", \
+	debug("test bulk, xstat(%x), save(%u), _cnt(%d, %d), _gidx(%d, %d), test(%d)", \
+		blk->xstat, save, \
 		_hi32(_cvt_v2i8_v2i32(_cnt)), _lo32(_cvt_v2i8_v2i32(_cnt)), _hi32(_gidx), _lo32(_gidx), \
 		_test_v2i32(_gt_v2i32(bw, _gidx), v11) ? 1 : 0); \
 	_test_v2i32(_gt_v2i32(bw, _gidx), v11) ? (gidx = _gidx, 1) : 0;	/* agidx >= BW && bgidx >= BW */ \
@@ -2623,13 +2630,15 @@ enum { ts_d = 0, ts_v0, ts_v1, ts_h0, ts_h1 };
  * @macro _trace_*_load
  * @brief set _state 0 when in diagonal loop, otherwise pass 1
  */
+#define TRACE_HEAD_CNT			( BW / BLK )
 #define _trace_bulk_load_n(t, _state, _jump_to) { \
 	if(_unlikely(mask < blk->mask)) { \
 		_trace_reload_block(); \
 		if(_unlikely(!_trace_test_bulk())) {	/* adjust gidx */ \
-			gidx = _add_v2i32(gidx, _seta_v2i32(q - qsave, qsave - q)); \
+			gidx = _add_v2i32(gidx, _seta_v2i32(q - save, save - q)); \
 			debug("jump to %s, adjust gidx, q(%d), prev_q(%d), adj(%d, %d), gidx(%u, %u)", #_jump_to, \
-				q, self->w.l.q, q - qsave, qsave - q, _hi32(gidx), _lo32(gidx)); \
+				q, self->w.l.q, q - save, save - q, _hi32(gidx), _lo32(gidx)); \
+			save = TRACE_HEAD_CNT; \
 			goto _jump_to;						/* jump to tail loop */ \
 		} \
 	} \
@@ -2643,18 +2652,18 @@ enum { ts_d = 0, ts_v0, ts_v1, ts_h0, ts_h1 };
 		} else { \
 			/* load dir and update mask pointer */ \
 			_trace_reload_block();				/* not reached the head yet */ \
-			if(_trace_test_bulk()) {			/* adjust gidx */ \
+			if(_trace_test_bulk() & (--save >= TRACE_HEAD_CNT)) {	/* adjust gidx, NOTE: both must be evalueted every time */ \
 				debug("save q(%d)", q); \
-				qsave = q; \
+				save = q; \
 				goto _jump_to;					/* dispatch again (bulk loop) */ \
 			} \
 		} \
 	} \
 }
 
-#undef DEBUG
-#undef _LOG_H_INCLUDED
-#include "log.h"
+// #undef DEBUG
+// #undef _LOG_H_INCLUDED
+// #include "log.h"
 
 /**
  * @fn trace_core
@@ -2714,7 +2723,7 @@ void trace_core(
 	/* load pointers and coordinates */
 	struct gaba_block_s const *blk = self->w.l.blk;
 	struct gaba_mask_pair_s const *mask = &blk->mask[self->w.l.p];
-	uint32_t q = self->w.l.q, qsave = q;
+	uint32_t q = self->w.l.q, save = TRACE_HEAD_CNT;
 	uint32_t dir_mask = _trace_load_block_rem(self->w.l.p + 1);
 
 	/* load grid indices; assigned for each of N+1 boundaries of length-N sequence */
@@ -3398,7 +3407,7 @@ void gaba_init_phantom(
 {
 	/* 192 bytes are reserved for phantom block */
 	*_last_phantom(&ph->tail) = (struct gaba_phantom_s){
-		.acc = 0,  .xstat = ROOT | UPDATE | HEAD,
+		.acc = 0,  .xstat = HEAD,
 		.acnt = 0, .bcnt = 0,
 		.blk = NULL,
 		.diff = gaba_init_diff_vectors(p)
@@ -4704,11 +4713,11 @@ void unittest_test_pair(
 	free(bsec);
 	return;
 }
-
+/*
 unittest()
 {
 	struct unittest_seq_pair_s pairs[] = {
-/*		{
+		{
 			.a = { "" },
 			.b = { "" }
 		},
@@ -4775,7 +4784,7 @@ unittest()
 		{
 			.a = { "ACGTACGT", "ACGTACGT", "ACGTACGT", "ACGTACGT" },
 			.b = { "ACGTACGT", "ACGTACGTG", "TACGTACGT", "ACGTACGT" }
-		},*/
+		},
 		{
 			.a = { "AAGGGTCGCCAATTG" },
 			.b = { "AAGGGTCGCCAATTG" }
@@ -4792,7 +4801,7 @@ unittest()
 	}
 	_export(gaba_dp_clean)(dp);
 }
-
+*/
 /**
  * @fn unittest_random_base
  */
@@ -4860,7 +4869,7 @@ char *unittest_generate_mutated_sequence(
 
 unittest()
 {
-	uint64_t const cnt = 50;
+	uint64_t const cnt = 500;
 
 	uint8_t const *lim = (uint8_t const *)0x800000000000;
 	struct gaba_context_s const *c = (struct gaba_context_s const *)gctx;
@@ -4874,20 +4883,20 @@ unittest()
 				// unittest_generate_random_sequence((rand() % 128) + 1),
 				// unittest_generate_random_sequence((rand() % 128) + 1),
 				// unittest_generate_random_sequence((rand() % 128) + 1),
-				unittest_generate_random_sequence((rand() % 128) + 1)
+				unittest_generate_random_sequence((rand() % 128) + 200)
 			}
 		};
 
 		for(uint64_t j = 0; pair.a[j] != NULL; j++) {
-			pair.b[j] = pair.a[j];
-			// pair.b[j] = unittest_generate_mutated_sequence(pair.a[j], 0, 0, BW);
+			// pair.b[j] = pair.a[j];
+			pair.b[j] = unittest_generate_mutated_sequence(pair.a[j], 0, 0, BW);
 		}
 
 		unittest_test_pair(UNITTEST_ARG_LIST, dp, &pair);
 
 		for(uint64_t j = 0; pair.a[j] != NULL; j++) {
 			free((void *)pair.a[j]);
-			// free((void *)pair.b[j]);
+			free((void *)pair.b[j]);
 		}
 	}
 	_export(gaba_dp_clean)(dp);

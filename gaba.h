@@ -35,11 +35,10 @@
  */
 enum gaba_status {
 	GABA_CONT 		= 0,		/* continue, call again the function with the same args (but rarely occurrs) */
-	GABA_UPDATE		= 0x100,	/* update either or both of the section(s) */
-	GABA_UPDATE_A 	= 0x0f,		/* update required on section a (always combined with GABA_UPDATE) */
-	GABA_UPDATE_B 	= 0xf0,		/* update required on section b (always combined with GABA_UPDATE) */
-	GABA_TERM		= 0x200,	/* extension terminated by X-drop */
-	GABA_OOM		= 0x400		/* out of memory (indicates malloc returned NULL) */
+	GABA_UPDATE_A 	= 0x000f,	/* update required on section a (always combined with GABA_UPDATE) */
+	GABA_UPDATE_B 	= 0x00f0,	/* update required on section b (always combined with GABA_UPDATE) */
+	GABA_TERM		= 0x8000,	/* extension terminated by X-drop */
+	GABA_OOM		= 0x0400	/* out of memory (indicates malloc returned NULL) */
 };
 
 /**
