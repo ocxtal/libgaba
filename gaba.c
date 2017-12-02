@@ -940,6 +940,8 @@ void fill_fetch_core(
 	nvec_t b = _loadu_n(_rd_bufb(self, bcnt, BW));		/* unaligned */
 	_store_n(_rd_bufb(self, 0, BW), b);					/* always aligned */
 	fill_fetch_seq_b(self, self->w.r.s.btptr - self->w.r.brem, blen);
+
+	_print_n(a); _print_n(b);
 	return;
 }
 
@@ -998,8 +1000,8 @@ int64_t fill_init_fetch(
 
 	/* fetch sequence and store at (0, 0), then save newly loaded sequence lengths */
 	fill_fetch_core(self, 0, _lo32(len), 0, _hi32(len));
-	_print_n(_load_n(_rd_bufa(self, 0, BW)));
-	_print_n(_load_n(_rd_bufb(self, 0, BW)));
+	_print_n(_loadu_n(_rd_bufa(self, _lo32(len), BW)));
+	_print_n(_loadu_n(_rd_bufb(self, _hi32(len), BW)));
 
 	/* save fetch length for use in the next block fill / tail construction */
 	_store_v2i8(&blk->acnt, _cvt_v2i32_v2i8(len));
@@ -4705,7 +4707,7 @@ void unittest_test_pair(
 unittest()
 {
 	struct unittest_seq_pair_s pairs[] = {
-		{
+/*		{
 			.a = { "" },
 			.b = { "" }
 		},
@@ -4772,7 +4774,11 @@ unittest()
 		{
 			.a = { "ACGTACGT", "ACGTACGT", "ACGTACGT", "ACGTACGT" },
 			.b = { "ACGTACGT", "ACGTACGTG", "TACGTACGT", "ACGTACGT" }
-		},
+		},*/
+		{
+			.a = { "AAGGGTCGCCAATTG" },
+			.b = { "AAGGGTCGCCAATTG" }
+		}
 	};
 
 	uint8_t const *lim = (uint8_t const *)0x800000000000;
