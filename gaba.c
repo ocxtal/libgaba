@@ -2612,7 +2612,7 @@ enum { ts_d = 0, ts_v0, ts_v1, ts_h0, ts_h1 };
  * adjust gidx to the next base and return 0 if bulk loop can be continued,
  * otherwise gidx will not updated. must be called just after reload_ptr or reload_tail.
  */
-#if 0
+#if 1
 #define _trace_test_bulk() ({ \
 	v2i8_t _cnt = _load_v2i8(&blk->acnt); \
 	v2i32_t _gidx = _sub_v2i32(gidx, _cvt_v2i8_v2i32(_cnt)); \
@@ -2652,7 +2652,7 @@ enum { ts_d = 0, ts_v0, ts_v1, ts_h0, ts_h1 };
 		} else { \
 			/* load dir and update mask pointer */ \
 			_trace_reload_block();				/* not reached the head yet */ \
-			if(_trace_test_bulk() & (--save >= TRACE_HEAD_CNT)) {	/* adjust gidx, NOTE: both must be evalueted every time */ \
+			if(--save >= TRACE_HEAD_CNT && _trace_test_bulk()) {	/* adjust gidx, NOTE: both must be evalueted every time */ \
 				debug("save q(%d)", q); \
 				save = q; \
 				goto _jump_to;					/* dispatch again (bulk loop) */ \
