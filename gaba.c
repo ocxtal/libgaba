@@ -4878,7 +4878,7 @@ unittest()
 		};
 
 		for(uint64_t j = 0; pair.a[j] != NULL; j++) {
-			pair.b[j] = strdup(pair.a[j]);
+			pair.b[j] = pair.a[j];
 			// pair.b[j] = unittest_generate_mutated_sequence(pair.a[j], 0, 0, BW);
 		}
 
@@ -4886,7 +4886,7 @@ unittest()
 
 		for(uint64_t j = 0; pair.a[j] != NULL; j++) {
 			free((void *)pair.a[j]);
-			free((void *)pair.b[j]);
+			// free((void *)pair.b[j]);
 		}
 	}
 	_export(gaba_dp_clean)(dp);
