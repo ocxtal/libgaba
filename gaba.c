@@ -4711,6 +4711,8 @@ void unittest_test_pair(
 	free(b);
 	free(asec);
 	free(bsec);
+	free(nr.path);
+	free(nr.sec);
 	return;
 }
 
