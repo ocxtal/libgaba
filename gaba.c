@@ -4245,26 +4245,26 @@ unittest()
 	/* all matches */
 	n = unittest_naive(p, "AAAA", "AAAA", (uint64_t const []){ 0, 4, 0 }, (uint64_t const []){ 0, 4, 0 });
 	assert(check_naive_result(n, 8, "DRDRDRDR"), print_naive_result(n));
-	free(n.path);
+	free(n.path); free(n.sec);
 
 	/* mismatch */
 	n = unittest_naive(p, "AAAAAAAA", "TAAAAAAAA", (uint64_t const []){ 0, 8, 0 }, (uint64_t const []){ 0, 9, 0 });
 	assert(check_naive_result(n, 11, "DRDRDRDRDRDRDRDR"), print_naive_result(n));
-	free(n.path);
+	free(n.path); free(n.sec);
 
 	n = unittest_naive(p, "GTTTTTTTT", "TTTTTTTT", (uint64_t const []){ 0, 9, 0 }, (uint64_t const []){ 0, 8, 0 });
 	assert(check_naive_result(n, 11, "DRDRDRDRDRDRDRDR"), print_naive_result(n));
-	free(n.path);
+	free(n.path); free(n.sec);
 
 	/* with deletions */
 	n = unittest_naive(p, "TTTTACGTACGT", "TTACGTACGT", (uint64_t const []){ 0, 12, 0 }, (uint64_t const []){ 0, 10, 0 });
 	assert(check_naive_result(n, 8, "DRDRRRDRDRDRDRDRDRDRDR"), print_naive_result(n));
-	free(n.path);
+	free(n.path); free(n.sec);
 
 	/* with insertions */
 	n = unittest_naive(p, "TTACGTACGT", "TTTTACGTACGT", (uint64_t const []){ 0, 10, 0 }, (uint64_t const []){ 0, 12, 0 });
 	assert(check_naive_result(n, 8, "DRDRDDDRDRDRDRDRDRDRDR"), print_naive_result(n));
-	free(n.path);
+	free(n.path); free(n.sec);
 }
 
 #else /* MODEL == AFFINE */
@@ -4400,31 +4400,31 @@ unittest()
 	/* all matches */
 	n = unittest_naive(p, "AAAA", "AAAA", (uint64_t const []){ 0, 4, 0 }, (uint64_t const []){ 0, 4, 0 });
 	assert(check_naive_result(n, 8, "DRDRDRDR"), print_naive_result(n));
-	free(n.path);
+	free(n.path); free(n.sec);
 
 	/* mismatch */
 	n = unittest_naive(p, "AAAAAAAA", "TAAAAAAAA", (uint64_t const []){ 0, 8, 0 }, (uint64_t const []){ 0, 9, 0 });
 	assert(check_naive_result(n, 11, "DRDRDRDRDRDRDRDR"), print_naive_result(n));
-	free(n.path);
+	free(n.path); free(n.sec);
 
 	n = unittest_naive(p, "GTTTTTTTT", "TTTTTTTT", (uint64_t const []){ 0, 9, 0 }, (uint64_t const []){ 0, 8, 0 });
 	assert(check_naive_result(n, 11, "DRDRDRDRDRDRDRDR"), print_naive_result(n));
-	free(n.path);
+	free(n.path); free(n.sec);
 
 	/* with deletions */
 	n = unittest_naive(p, "TTTTACGTACGT", "TTACGTACGT", (uint64_t const []){ 0, 12, 0 }, (uint64_t const []){ 0, 10, 0 });
 	assert(check_naive_result(n, 13, "DRDRRRDRDRDRDRDRDRDRDR"), print_naive_result(n));
-	free(n.path);
+	free(n.path); free(n.sec);
 
 	/* with insertions */
 	n = unittest_naive(p, "TTACGTACGT", "TTTTACGTACGT", (uint64_t const []){ 0, 10, 0 }, (uint64_t const []){ 0, 12, 0 });
 	assert(check_naive_result(n, 13, "DRDRDDDRDRDRDRDRDRDRDR"), print_naive_result(n));
-	free(n.path);
+	free(n.path); free(n.sec);
 
 	/* ins-match-del */
 	n = unittest_naive(p, "ATGAAGCTGCGAGGC", "TGATGGCTTGCGAGGC", (uint64_t const []){ 0, 15, 0 }, (uint64_t const []){ 0, 16, 0 });
 	assert(check_naive_result(n, 6, "DDDRDRDRRRDRDRDRDDRDRDRDRDRDRDR"), print_naive_result(n));
-	free(n.path);
+	free(n.path); free(n.sec);
 }
 #endif /* MODEL */
 
@@ -4686,6 +4686,7 @@ void unittest_test_pair(
 	assert(nr.score >= 0);
 	assert(nr.path_length >= 0);
 	assert(nr.path != NULL);
+	assert(nr.sec != NULL);
 
 	/* fill-in sections */
 	debug("a(%s), b(%s)", a, b);
