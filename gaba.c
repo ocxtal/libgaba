@@ -2372,7 +2372,7 @@ uint64_t leaf_search(
 	_print_v2i32(ridx);
 	// if((b[-1].xstat & ROOT_HEAD) == ROOT_HEAD) { debug("reached root, xstat(%x)", b[-1].xstat); return(0); }	/* actually unnecessary but placed as a sentinel */
 	do {
-		if(((b--)->xstat & ROOT) == ROOT) { debug("reached root, xstat(%x)", b->xstat); return(0); }	/* actually unnecessary but placed as a sentinel */
+		if(((--b)->xstat & ROOT) == ROOT) { debug("reached root, xstat(%x)", b->xstat); return(0); }	/* actually unnecessary but placed as a sentinel */
 		if(b->xstat & HEAD) { b = _last_phantom(b + 1)->blk; }
 
 		/* first adjust ridx to the head of this block then test mask was updated in this block */
