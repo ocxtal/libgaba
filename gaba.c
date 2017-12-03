@@ -625,7 +625,8 @@ enum GABA_BLK_STATUS {
 	STAT_MASK		= ZERO | TERM | CONT,
 	/* head states */
 	HEAD			= 0x20,
-	MERGE_HEAD		= 0x40				/* merged head and the corresponding block contains no actual vector (DP cell) */
+	MERGE			= 0x40,				/* merged head and the corresponding block contains no actual vector (DP cell) */
+	ROOT			= HEAD | MERGE
 };
 _static_assert((int8_t)TERM < 0);		/* make sure TERM is recognezed as a negative value */
 _static_assert((int32_t)CONT<<8 == (int32_t)GABA_CONT);
@@ -1132,8 +1133,7 @@ struct gaba_block_s *fill_create_phantom(
 	/* head sequence buffers are already filled, continue to body fill-in (first copy phantom block) */
 	_memcpy_blk_uu(&ph->diff, &prev_blk->diff, sizeof(struct gaba_diff_vec_s));
 	ph->acc = prev_blk->acc;					/* just copy */
-	// ph->xstat = (prev_blk->xstat & UPDATE) | HEAD;	/* propagate root-update flag and mark head */
-	ph->xstat = HEAD;							/* mark head */
+	ph->xstat = (prev_blk->xstat & ROOT) | HEAD;/* propagate root-update flag and mark head */
 	ph->acnt = ph->bcnt = 0;					/* clear counter (a and b sequences are aligned at the head of the buffer) FIXME: intermediate seq fetch breaks consistency */
 	ph->reserved = 0;							/* overlaps with mask */
 	ph->blk = prev_blk;
@@ -2227,7 +2227,7 @@ struct gaba_joint_tail_s *merge_create_tail(
 		))
 	);
 	mg->acc = _cb(self, q + BW - 1) - _cb(self, q);
-	mg->xstat = MERGE_HEAD;				/* always MERGE_HEAD; ROOT, HEAD, and TERM flags are not propagated (must be handled before the merge function is called) */
+	mg->xstat = MERGE;					/* always MERGE; the other flags are not propagated (must be handled before the merge function is called) */
 
 	/* copy vectors from the working buffer */
 	mt->mdrop = merge_slice_vectors(self, mg, q);
@@ -2370,9 +2370,10 @@ uint64_t leaf_search(
 	 */
 	v2i32_t ridx = _load_v2i32(&tail->aridx);
 	_print_v2i32(ridx);
+	// if((b[-1].xstat & ROOT_HEAD) == ROOT_HEAD) { debug("reached root, xstat(%x)", b[-1].xstat); return(0); }	/* actually unnecessary but placed as a sentinel */
 	do {
-		// if((--b)->xstat & ROOT) { debug("reached root, xstat(%x)", b->xstat); return(0); }	/* actually unnecessary but placed as a sentinel */
-		if((--b)->xstat & HEAD) { b = _last_phantom(b + 1)->blk; }
+		if(((b--)->xstat & ROOT) == ROOT) { debug("reached root, xstat(%x)", b->xstat); return(0); }	/* actually unnecessary but placed as a sentinel */
+		if(b->xstat & HEAD) { b = _last_phantom(b + 1)->blk; }
 
 		/* first adjust ridx to the head of this block then test mask was updated in this block */
 		v2i8_t cnt = _load_v2i8(&b->acnt);
@@ -2581,7 +2582,7 @@ enum { ts_d = 0, ts_v0, ts_v1, ts_h0, ts_h1 };
 	_storeu_u64(path, path_array<<ofs); \
 	/* reload block pointer */ \
 	blk = _last_phantom(blk)->blk; \
-	while(blk->xstat & MERGE_HEAD) { \
+	while(blk->xstat & MERGE) { \
 		struct gaba_merge_s const *_mg = _merge(blk); \
 		blk = _mg->blk[_mg->tidx[_vec_idx][q]]; \
 		q += _mg->qofs[_mg->tidx[_vec_idx][q]];	/* adjust q, restore block pointer; FIXME: tail pointer must be saved somewhere */ \
@@ -3407,7 +3408,7 @@ void gaba_init_phantom(
 {
 	/* 192 bytes are reserved for phantom block */
 	*_last_phantom(&ph->tail) = (struct gaba_phantom_s){
-		.acc = 0,  .xstat = HEAD,
+		.acc = 0,  .xstat = ROOT,
 		.acnt = 0, .bcnt = 0,
 		.blk = NULL,
 		.diff = gaba_init_diff_vectors(p)
