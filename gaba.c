@@ -552,7 +552,7 @@ struct gaba_dp_context_s {
 	/* working buffers */
 	union gaba_work_s {
 		struct gaba_reader_work_s r;	/** (192) */
-		struct gaba_merge_work_s m;		/** (4096?) */
+		struct gaba_merge_work_s m;		/** (2048?) */
 		struct gaba_writer_work_s l;	/** (192) */
 	} w;
 	/** 64byte aligned */
@@ -568,7 +568,7 @@ _static_assert((GABA_DP_CONTEXT_LOAD_SIZE % 64) == 0);
  * @struct gaba_opaque_s
  */
 struct gaba_opaque_s {
-	void *api[4];
+	void *api[8];
 };
 #define _export_dp_context(_t) ( \
 	(struct gaba_dp_context_s *)(((struct gaba_opaque_s *)(_t)) - DP_CTX_MAX + _dp_ctx_index(BW)) \
@@ -597,13 +597,14 @@ struct gaba_context_s {
 
 	/** templates */
 	struct gaba_dp_context_s dp;		/** template of thread-local context */
+	uint8_t _pad[2048 - sizeof(struct gaba_dp_context_s) - 4 * sizeof(struct gaba_opaque_s)];
 	/** 64byte aligned */
 
 	/** phantom vectors */
 	struct gaba_root_block_s ph[3];		/** (768) template of root vectors, [0] for 16-cell, [1] for 32-cell, [2] for 64-cell */
 	/** 64byte aligned */
 };
-_static_assert((sizeof(struct gaba_dp_context_s) % 64) == 0);
+_static_assert(offsetof(struct gaba_context_s, ph) == 2048);
 #define _proot(_c, _bw)				( &(_c)->ph[_dp_ctx_index(_bw)] )
 
 /**
@@ -3494,6 +3495,7 @@ gaba_t *_export(gaba_init)(
 	}
 
 	/* load default phantom objects */
+	debug("init BW(%u), proot(%p, %p), root(%p), ctx(%p)", BW, _proot(ctx, BW), &_proot(ctx, BW)->tail, ctx->dp.root[_dp_ctx_index(BW)], ctx);
 	gaba_init_phantom(_proot(ctx, BW), &pi);
 	return((gaba_t *)ctx);
 }

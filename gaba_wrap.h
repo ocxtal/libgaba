@@ -162,7 +162,7 @@ struct gaba_api_s const api_table[][DP_CTX_MAX] __attribute__(( aligned(32) )) =
 		[_dp_ctx_index(32)] = _table_elems(affine, 32),
 		[_dp_ctx_index(64)] = _table_elems(affine, 64)
 	},
-	#if DISABLE_COMBINED
+	#ifndef DISABLE_COMBINED
 	[COMBINED] = {
 		[_dp_ctx_index(16)] = _table_elems(combined, 16),
 		[_dp_ctx_index(32)] = _table_elems(combined, 32),
@@ -234,7 +234,7 @@ gaba_t *gaba_init(
 			[_dp_ctx_index(32)] = _import(gaba_init_affine_32),
 			[_dp_ctx_index(64)] = _import(gaba_init_affine_64)
 		},
-		#if DISABLE_COMBINED
+		#ifndef DISABLE_COMBINED
 		[COMBINED] = {
 			[_dp_ctx_index(16)] = _import(gaba_init_combined_16),
 			[_dp_ctx_index(32)] = _import(gaba_init_combined_32),
@@ -263,7 +263,7 @@ void gaba_clean(
 	gaba_t *ctx)
 {
 	// _api(ctx)->clean(ctx);
-	_import(gaba_clean_linear_32)(ctx);
+	_import(gaba_clean_linear_64)(ctx);
 	return;
 }
 
@@ -276,7 +276,7 @@ gaba_dp_t *gaba_dp_init(
 	uint8_t const *alim,
 	uint8_t const *blim)
 {
-	return((gaba_dp_t *)gaba_set_api((void *)_import(gaba_dp_init_linear_32)(ctx, alim, blim), _api_array(ctx)));
+	return((gaba_dp_t *)gaba_set_api((void *)_import(gaba_dp_init_linear_64)(ctx, alim, blim), _api_array(ctx)));
 }
 
 /**
@@ -286,7 +286,7 @@ static inline
 void gaba_dp_flush(
 	gaba_dp_t *self)
 {
-	_import(gaba_dp_flush_linear_32)(self);
+	_import(gaba_dp_flush_linear_64)(self);
 	return;
 }
 
@@ -297,7 +297,7 @@ static inline
 gaba_stack_t const *gaba_dp_save_stack(
 	gaba_dp_t *self)
 {
-	return(_import(gaba_dp_save_stack_linear_32)(self));
+	return(_import(gaba_dp_save_stack_linear_64)(self));
 }
 
 /**
@@ -308,7 +308,7 @@ void gaba_dp_flush_stack(
 	gaba_dp_t *self,
 	gaba_stack_t const *stack)
 {
-	_import(gaba_dp_flush_stack_linear_32)(self, stack);
+	_import(gaba_dp_flush_stack_linear_64)(self, stack);
 	return;
 }
 
@@ -319,7 +319,7 @@ static inline
 void gaba_dp_clean(
 	gaba_dp_t *self)
 {
-	_import(gaba_dp_clean_linear_32)(self);
+	_import(gaba_dp_clean_linear_64)(self);
 	return;
 }
 
@@ -397,7 +397,7 @@ static inline
 void gaba_dp_res_free(
 	gaba_alignment_t *res)
 {
-	_import(gaba_dp_res_free_linear_32)(res);
+	_import(gaba_dp_res_free_linear_64)(res);
 	return;
 }
 
@@ -413,7 +413,7 @@ uint64_t gaba_dp_print_cigar_forward(
 	uint32_t offset,
 	uint32_t len)
 {
-	return(_import(gaba_dp_print_cigar_forward_linear_32)(printer, fp, path, offset, len));
+	return(_import(gaba_dp_print_cigar_forward_linear_64)(printer, fp, path, offset, len));
 }
 
 /**
@@ -427,7 +427,7 @@ uint64_t gaba_dp_print_cigar_reverse(
 	uint32_t offset,
 	uint32_t len)
 {
-	return(_import(gaba_dp_print_cigar_reverse_linear_32)(printer, fp, path, offset, len));
+	return(_import(gaba_dp_print_cigar_reverse_linear_64)(printer, fp, path, offset, len));
 }
 
 /**
@@ -441,7 +441,7 @@ uint64_t gaba_dp_dump_cigar_forward(
 	uint32_t offset,
 	uint32_t len)
 {
-	return(_import(gaba_dp_dump_cigar_forward_linear_32)(buf, buf_size, path, offset, len));
+	return(_import(gaba_dp_dump_cigar_forward_linear_64)(buf, buf_size, path, offset, len));
 }
 
 /**
@@ -455,7 +455,7 @@ uint64_t gaba_dp_dump_cigar_reverse(
 	uint32_t offset,
 	uint32_t len)
 {
-	return(_import(gaba_dp_dump_cigar_reverse_linear_32)(buf, buf_size, path, offset, len));
+	return(_import(gaba_dp_dump_cigar_reverse_linear_64)(buf, buf_size, path, offset, len));
 }
 
 
