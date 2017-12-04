@@ -156,7 +156,7 @@ struct gaba_fill_s {
 	int64_t max;				/** (8) max score in the entire band */
 	uint32_t stat;				/** (4) status (section update flags) */
 	// int32_t ppos;				/** (8) #vectors from the head (FIXME: should be 64bit int) */
-	uint32_t _pad[5];
+	uint32_t reserved[5];
 };
 typedef struct gaba_fill_s gaba_fill_t;
 
