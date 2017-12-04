@@ -1184,9 +1184,9 @@ struct gaba_joint_tail_s *fill_create_tail(
 	/* inspect fetched base counts */
 	uint16_t cnt = *((uint16_t const *)&blk->acnt);
 
-	/* create joint_tail */
+	/* create joint_tail: squash the last block if no vector was filled */
 	struct gaba_joint_tail_s *tail = (struct gaba_joint_tail_s *)(blk + (cnt != 0));
-	self->stack.top = (void *)(tail + 1);	/* write back stack_top */
+	self->stack.top = (void *)(tail + 1);				/* write back stack_top */
 	debug("end stack_top(%p), stack_end(%p), blk(%p)", self->stack.top, self->stack.end, blk);
 
 	int32_t mdrop;
