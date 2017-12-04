@@ -32,8 +32,8 @@ int main(int argc, char *argv[]) {
 	/* create thread-local object */
 	void const *lim = (void const *)0x800000000000;		/* end-of-userland pointer */
 	gaba_dp_t *dp = gaba_dp_init(ctx, lim, lim);		/* dp[0] holds a 64-cell-wide context */
-	gaba_dp_t *dp_32 = &dp[_dp_ctx_index(32)];			/* dp[1] and dp[2] are narrower ones */
-	gaba_dp_t *dp_16 = &dp[_dp_ctx_index(16)];
+	// gaba_dp_t *dp_32 = &dp[_dp_ctx_index(32)];			/* dp[1] and dp[2] are narrower ones */
+	// gaba_dp_t *dp_16 = &dp[_dp_ctx_index(16)];
 
 	/* init section pointers */
 	struct gaba_section_s const *ap = &asec, *bp = &bsec;
