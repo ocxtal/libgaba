@@ -2635,7 +2635,7 @@ enum { ts_d = 0, ts_v0, ts_v1, ts_h0, ts_h1 };
 }
 #define _trace_tail_load_n(t, _state, _jump_to) { \
 	if(_unlikely(mask < blk->mask)) { \
-		debug("test ph(%p), xstat(%x), ppos(%lu), path(%p, %p), ofs(%u)", \
+		debug("test ph(%p), xstat(%x), ppos(%lu), path(%p, %p), ofs(%lu)", \
 			_last_phantom(blk), _last_phantom(blk)->xstat, (path - self->w.l.aln->path) * 32 + ofs, path, self->w.l.aln->path, ofs); \
 		if(_last_phantom(blk)->xstat & HEAD) {	/* head (phantom) block is marked 0x4000 */ \
 			_trace_reload_tail(t, _state);		/* fetch the previous tail */ \
@@ -2663,8 +2663,8 @@ void trace_core(
 	struct gaba_dp_context_s *self)
 {
 	#define _pop_vector(_c, _l, _state, _jump_to) { \
-		debug("go %s (%s, %s), dir(%x), mask_h(%x), mask_v(%x), p(%ld), q(%d), ptr(%p), path_array(%lx)", \
-			#_l, #_c, #_jump_to, dir_mask, mask->h.all, mask->v.all, (int64_t)(mask - blk->mask), (int32_t)q, mask, path_array); \
+		debug("go %s (%s, %s), dir(%x), mask_h(%lx), mask_v(%lx), p(%ld), q(%d), ptr(%p), path_array(%lx)", \
+			#_l, #_c, #_jump_to, dir_mask, (uint64_t)mask->h.all, (uint64_t)mask->v.all, (int64_t)(mask - blk->mask), (int32_t)q, mask, path_array); \
 		_trace_##_c##_##_l##_update_index(); \
 		_trace_##_l##_update_path_q(); \
 		_trace_##_c##_load_n(t, _state, _jump_to); \
