@@ -200,16 +200,16 @@ int main(int argc, char *argv[])
 		gaba_dp_t *dp = gaba_dp_init(ctx, lim, lim);
 
 		bench_start(fill);
-		struct gaba_fill_s *f = gaba_dp_fill_root(dp, &asec, 0, &bsec, 0);
+		struct gaba_fill_s *f = gaba_dp_fill_root(dp, &asec, 0, &bsec, 0, 0);
 		score += f->max;
 		bench_end(fill);
 		
 		bench_start(trace);
-		struct gaba_alignment_s *r = gaba_dp_trace(dp, NULL, f, NULL);
+		struct gaba_alignment_s *r = gaba_dp_trace(dp, f, NULL);
 		bench_end(trace);
 
 		bench_start(parse);
-		gaba_dp_dump_cigar_forward(c, p.len, r->path->array, 0, r->path->len);
+		gaba_dp_dump_cigar_forward(c, p.len, r->path, 0, r->plen);
 		bench_end(parse);
 
 		gaba_dp_clean(dp);
