@@ -58,8 +58,6 @@ struct gaba_gbfs_fill_s {
 	uint32_t stat;				/** (4) status (section update flags) */
 	// int32_t ppos;				/** (8) #vectors from the head (FIXME: should be 64bit int) */
 	uint32_t reserved[5];
-
-	// struct gaba_gbfs_
 };
 _static_assert(sizeof(struct gaba_gbfs_fill_s) == sizeof(struct gaba_fill_s));
 _static_assert(offsetof(struct gaba_gbfs_fill_s, ascnt) == offsetof(struct gaba_fill_s, ascnt));
@@ -68,7 +66,7 @@ _static_assert(offsetof(struct gaba_gbfs_fill_s, apos) == offsetof(struct gaba_f
 _static_assert(offsetof(struct gaba_gbfs_fill_s, bpos) == offsetof(struct gaba_fill_s, bpos));
 _static_assert(offsetof(struct gaba_gbfs_fill_s, max) == offsetof(struct gaba_fill_s, max));
 _static_assert(offsetof(struct gaba_gbfs_fill_s, stat) == offsetof(struct gaba_fill_s, stat));
-#define _wfill(x)				( (struct gaba_gbfs_fill_s *)(x) )
+#define _gfill(x)				( (struct gaba_gbfs_fill_s *)(x) )
 
 /**
  * @struct gaba_gbfs_qfill_s
@@ -83,21 +81,10 @@ void hq_push(hq_t *hq, qfill_t e) { return; }
 qfill_t hq_pop(hq_t *hq) { return; }
 
 
+#define _is_merge(_f)			( 0 )
 #define _is_p_break(_f)			( (_f)->f.stat == CONT )/* not (UPDATE_A or UPDATE_B) and CONT */
 #define _is_a_break(_f)			( (_f)->f.stat & GABA_UPDATE_A )
 #define _is_b_break(_f)			( (_f)->f.stat & GABA_UPDATE_B )
-
-/**
- * @fn gaba_gbfs_merge_tails
- */
-static inline
-void gaba_gbfs_merge_tails(
-	gdp_t *gdp,
-	struct gaba_gbfs_fill_s *f)
-{
-	struct gaba_gbfs_fill_s **warr = get_meta(tail->f);	/* what is the difference between coordinates? */
-	return;
-}
 
 /**
  * @fn gaba_gbfs_set_break
@@ -118,14 +105,45 @@ void gaba_gbfs_set_break(
 	 * here the tail is aligned to the others at the same coordinate
 	 * so the off-diagonal distance (qofs) is equals to the distance on the other side.
 	 */
-	int64_t p = f->apos + f->bpos;
 	int64_t q = (i == 0 ? -1 : 1) * _r(f->apos, 1 - i);
 
-	struct gaba_gbfs_merge_s *mg = gdp->get_meta(f->s.);
-
-	return;
+	struct gaba_gbfs_merge_s *mg = gdp->get_meta(f->s.aid);
+	mg->ppos = MAX2(mg->ppos, f->apos + f->bpos);
+	mg->farr[mg->fcnt++] = f;
+	return((struct gaba_gbfs_qnode_s){
+		.ppos = mg->ppos,
+		.f = mg
+	});
 
 	#undef _r
+}
+
+/**
+ * @fn gaba_gbfs_merge_tails
+ */
+static inline
+struct gaba_fill_s *gaba_gbfs_merge_tails(
+	gdp_t *gdp,
+	struct gaba_gbfs_merge_s *mg)
+{
+	if(mg->fcnt == 1) { return(mg->farr[0]); }
+
+	/* sort tails by ppos */
+	radix_sort_128(mg->farr, mg->fcnt);
+
+	/* cluster qpos */
+
+	if(mcnt == mg->fcnt) {
+		for(uint64_t i = 1; i < mg->fcnt; i++) {
+			;
+		}
+		return(mg->farr[0]);
+	}
+	/* extend */
+
+	/* create qofs array */
+
+	return;
 }
 
 /**
@@ -141,18 +159,16 @@ struct gaba_fill_s *gaba_gbfs_extend(
 	uint32_t bpos)
 {
 	/* fill root */ {
-		struct gaba_gbfs_fill_s *f = _tail(gaba_dp_fill_root(gdp->dp, asec, apos, bsec, bpos));
-		if(_is_a_break(f)) { gaba_gbfs_set_break(gdp, f, 0); }
-		if(_is_b_break(f)) { gaba_gbfs_set_break(gdp, f, 1); }
-		kv_hq_push(gdp->q, (struct gaba_gbfs_qfill_s){
-			.ppos = f->ppos,							/* sorted by ppos */
-			.f = f
-		});
+		struct gaba_gbfs_fill_s *f = _gfill(gaba_dp_fill_root(gdp->dp, asec, apos, bsec, bpos, 0));
+		struct gaba_gbfs_qnode_s n = { .ppos = f->apos + f->bpos, .f = f };
+		if(_is_a_break(f)) { n = gaba_gbfs_set_break(gdp, n.f, 0); }
+		if(_is_b_break(f)) { n = gaba_gbfs_set_break(gdp, n.f, 1); }
+		kv_hq_push(gdp->q, n);
 	}
 
 	while(!hq_is_empty(gdp->q)) {
-		struct gaba_gbfs_fill_s *f = kv_hq_pop(gdp->q).f;
-		if(_is_p_break(f)) { gaba_gbfs_merge_tails(gdp, f); }
+		struct gaba_gbfs_qnode_s n = kv_hq_pop(gdp->q);
+		if(_is_merge(n)) { n = gaba_gbfs_merge_tails(gdp, n.f, n.ppos); }
 
 		struct gaba_gbfs_link_s alink = ((f->stat & UPDATE_A)
 			? gdp->get_link(gdp->g, f->s.aid)
@@ -164,12 +180,10 @@ struct gaba_fill_s *gaba_gbfs_extend(
 		);
 		for(uint64_t i = 0; i < alink.cnt; i++) {
 			for(uint64_t j = 0; j < blink.cnt; j++) {
-				gdp->q.push(gaba_dp_fill(gdp->dp, f, alink.sec[i], blink.sec[j]));
+				gdp->q.push(gaba_dp_fill(gdp->dp, f, alink.sec[i], blink.sec[j], UINT32_MAX));
 			}
 		}
 	}
-
-
 	return(fill);
 }
 
