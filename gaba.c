@@ -4672,7 +4672,7 @@ void unittest_test_pair(
 	struct unittest_naive_result_s nr = unittest_naive(unittest_default_params, a, b, asec, bsec);
 
 	assert(nr.score >= 0);
-	assert(nr.path_length >= 0);
+	assert(nr.path_length <= strlen(a) + strlen(b));
 	assert(nr.path != NULL);
 	assert(nr.sec != NULL);
 
