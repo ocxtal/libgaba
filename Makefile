@@ -3,9 +3,9 @@ AR = ar
 GIT = git
 ARCHFLAGS = -march=native
 CFLAGS = -O3 -Wall -Wno-unused-function -Wno-unused-label -std=c99 -pipe
-TARGET = libgaba.o
+TARGET = libgaba.a
 
-all: native unittest bench
+all: native example unittest bench
 
 native:
 	$(MAKE) -f Makefile.core CC=$(CC) CFLAGS='$(CFLAGS) $(ARCHFLAGS)'
