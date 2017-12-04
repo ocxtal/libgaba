@@ -2620,7 +2620,7 @@ enum { ts_d = 0, ts_v0, ts_v1, ts_h0, ts_h1 };
  * @macro _trace_*_load
  * @brief set _state 0 when in diagonal loop, otherwise pass 1
  */
-#define TRACE_HEAD_CNT			( BW / BLK )
+#define TRACE_HEAD_CNT			( BW / BLK + (BW == 16) )
 #define _trace_bulk_load_n(t, _state, _jump_to) { \
 	if(_unlikely(mask < blk->mask)) { \
 		_trace_reload_block(); \
