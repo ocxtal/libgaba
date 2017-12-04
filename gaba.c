@@ -331,14 +331,6 @@ _static_assert(sizeof(struct gaba_merge_s) + MERGE_TAIL_OFFSET == sizeof(struct 
 _static_assert(MAX_MERGE_COUNT <= 14);
 
 /**
- * @struct gaba_section_pair_s
- */
-struct gaba_section_pair_s {
-	uint32_t aid, bid;					/** (8) ids */
-	uint8_t const *atptr, *btptr;		/** (16) tail of the current section */
-};
-
-/**
  * @struct gaba_joint_tail_s
  * @brief (internal) tail cap of a contiguous matrix blocks, contains a context of the blocks
  * (band) and can be connected to the next blocks.
@@ -351,7 +343,8 @@ struct gaba_joint_tail_s {
 
 	int32_t mdrop;						/** (2) drop from m.max (offset) */
 	uint32_t pridx;						/** (4) remaining p-length */
-	struct gaba_section_pair_s s;		/** (24) */
+	uint32_t aid, bid;					/** (8) ids */
+	uint8_t const *atptr, *btptr;		/** (16) tail of the current section */
 	uint64_t abrk, bbrk;				/** (16) breakpoint masks */
 	uint32_t aridx, bridx;				/** (8) reverse indices for the tails */
 	uint32_t aadv, badv;				/** (8) advanced lengths */
@@ -391,7 +384,8 @@ struct gaba_reader_work_s {
 
 	/** 64byte alidned */
 	uint32_t arlim, brlim;				/** (8) asridx - aadv = aridx + arlim */
-	struct gaba_section_pair_s s;		/** (24) section pair */
+	uint32_t aid, bid;					/** (8) ids */
+	uint8_t const *atptr, *btptr;		/** (16) tail of the current section */
 	uint32_t pridx;						/** (4) remaining p-length (unsigned!) */
 	int32_t ofsd;						/** (4) delta of large offset */
 	uint32_t arem, brem;				/** (8) current ridx (redefined as rem, ridx == rem + rlim) */
@@ -936,13 +930,13 @@ void fill_fetch_core(
 {
 	/* fetch seq a */
 	nvec_t a = _loadu_n(_rd_bufa(self, acnt, BW));		/* unaligned */
-	fill_fetch_seq_a(self, self->w.r.s.atptr - self->w.r.arem, alen);
+	fill_fetch_seq_a(self, self->w.r.atptr - self->w.r.arem, alen);
 	_store_n(_rd_bufa(self, 0, BW), a);					/* always aligned */
 
 	/* fetch seq b */
 	nvec_t b = _loadu_n(_rd_bufb(self, bcnt, BW));		/* unaligned */
 	_store_n(_rd_bufb(self, 0, BW), b);					/* always aligned */
-	fill_fetch_seq_b(self, self->w.r.s.btptr - self->w.r.brem, blen);
+	fill_fetch_seq_b(self, self->w.r.btptr - self->w.r.brem, blen);
 
 	_print_n(a); _print_n(b);
 	return;
@@ -1043,7 +1037,7 @@ void fill_restore_fetch(
 	_memset_blk_a(self->w.r.bufa, 0, 2 * (BW_MAX + BLK));
 
 	/* fetch seq a */
-	fill_fetch_seq_a_n(self, _lo32(ofs), tail->s.atptr - _lo32(cridx), _lo32(len));
+	fill_fetch_seq_a_n(self, _lo32(ofs), tail->atptr - _lo32(cridx), _lo32(len));
 	if(_lo32(ofs) > 0) {
 		nvec_t ach = _and_n(_set_n(0x0f), _loadu_n(&prev_tail->ch));/* aligned to 16byte boundaries */
 		_print_n(ach);
@@ -1059,7 +1053,7 @@ void fill_restore_fetch(
 		_print_n(bch);
 		_storeu_n(_rd_bufb(self, 0, _hi32(ofs)), bch);				/* aligned store */
 	}
-	fill_fetch_seq_b_n(self, _hi32(ofs), tail->s.btptr - _hi32(cridx), _hi32(len));
+	fill_fetch_seq_b_n(self, _hi32(ofs), tail->btptr - _hi32(cridx), _hi32(len));
 	return;
 }
 
@@ -1109,8 +1103,8 @@ void fill_load_section(
 
 	/* save all */
 	_store_v2i32(&self->w.r.arlim, rlim);
-	_store_v2i32(&self->w.r.s.aid, id);
-	_store_v2i64(&self->w.r.s.atptr, tptr);
+	_store_v2i32(&self->w.r.aid, id);
+	_store_v2i64(&self->w.r.atptr, tptr);
 	_storeu_u64(&self->w.r.pridx, pridx);		/* (pridx, ofsd) = (remaining p length, 0) */
 	_store_v2i32(&self->w.r.arem, rem);
 	_store_v2i32(&self->w.r.asridx, ridx);
@@ -1220,8 +1214,8 @@ struct gaba_joint_tail_s *fill_create_tail(
 
 	/* section */ {
 		v2i32_t rlim = _load_v2i32(&self->w.r.arlim);
-		v2i32_t id = _load_v2i32(&self->w.r.s.aid);
-		v2i64_t tptr = _load_v2i64(&self->w.r.s.atptr);
+		v2i32_t id = _load_v2i32(&self->w.r.aid);
+		v2i64_t tptr = _load_v2i64(&self->w.r.atptr);
 		tptr = _add_v2i64(tptr, _cvt_v2i32_v2i64(rlim));
 		_print_v2i32(rlim); _print_v2i32(_load_v2i32(&self->w.r.arem));
 
@@ -1236,8 +1230,8 @@ struct gaba_joint_tail_s *fill_create_tail(
 		v2i64_t brk = _shrv_v2i64(_loadu_v2i64(&prev_tail->abrk), _cvt_v2i32_v2i64(adv));
 
 		/* save section info */
-		_store_v2i32(&tail->s.aid, id);
-		_store_v2i64(&tail->s.atptr, tptr);
+		_store_v2i32(&tail->aid, id);
+		_store_v2i64(&tail->atptr, tptr);
 		_store_v2i64(&tail->abrk, brk);
 		_store_v2i32(&tail->aridx, ridx);
 		_store_v2i32(&tail->aadv, adv);
@@ -2169,8 +2163,8 @@ struct gaba_joint_tail_s const *merge_restore_section(
 	}
 
 	/* copy section info */
-	_r(mt->s.aid, i) = _r(tail->s.aid, i);
-	_r(mt->s.atptr, i) = _r(tail->s.atptr, i);
+	_r(mt->aid, i) = _r(tail->aid, i);
+	_r(mt->atptr, i) = _r(tail->atptr, i);
 	_r(mt->abrk, i) = brk;
 
 	/* save ridx */
@@ -2464,8 +2458,6 @@ void trace_reload_section(
 	uint64_t i)
 {
 	#define _r(_x, _idx)		( (&(_x))[(_idx)] )
-	// static uint32_t const mask[2] = { GABA_UPDATE_A, GABA_UPDATE_B };
-
 	debug("load section %s, idx(%d), adv(%d)",
 		i == 0 ? "a" : "b", _r(self->w.l.agidx, i), _r(_r(self->w.l.atail, i)->aadv, i));
 
@@ -2479,13 +2471,12 @@ void trace_reload_section(
 			gidx += _r(tail->aadv, i);
 			debug("add ridx(%d), adv(%d), gidx(%d), stat(%x)", _r(tail->aridx, i), _r(tail->aadv, i), gidx, tail->f.stat);
 			prev_tail = tail; tail = tail->tail;
-		// } while((tail->f.stat & mask[i]) == 0);
 		} while(_r(tail->aridx, i) != 0);
 	}
 
 	/* reload finished, store section info */
 	_r(self->w.l.atail, i) = tail;		/* FIXME: is this correct?? */
-	_r(self->w.l.aid, i) = _r(prev_tail->s.aid, i);
+	_r(self->w.l.aid, i) = _r(prev_tail->aid, i);
 
 	_r(self->w.l.agidx, i) = gidx;
 	_r(self->w.l.asgidx, i) = gidx;
@@ -3420,19 +3411,17 @@ void gaba_init_phantom(
 		.f = {
 			.max = 0,
 			.stat = CONT | GABA_UPDATE_A | GABA_UPDATE_B,
-			.ascnt = 0, .bscnt = 0,
-			// .apos = (GP_INIT - BW) / 2,
-			// .bpos = (GP_INIT - BW) / 2
-			.apos = -BW/2,
-			.bpos = -BW/2
+			.ascnt = 0,    .bscnt = 0,
+			.apos = -BW/2, .bpos = -BW/2
 		},
 
 		/* section info */
 		.tail = NULL,
-		.aridx = 0, .bridx = 0,
-		.aadv = 0,  .badv = 0,
-		.s = { 0 },
-		.abrk = 0, .bbrk = 0,		/* no breakpoint set */
+		.aridx = 0,    .bridx = 0,
+		.aadv = 0,     .badv = 0,
+		.aid = 0,      .bid = 0,
+		.atptr = NULL, .btptr = NULL,
+		.abrk = 0,     .bbrk = 0,		/* no breakpoint set */
 
 		/* score and vectors */
 		.mdrop = 0,
