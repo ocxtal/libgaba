@@ -1003,6 +1003,7 @@ int64_t fill_init_fetch(
 	/* save fetch length for use in the next block fill / tail construction */
 	_store_v2i8(&blk->acnt, _cvt_v2i32_v2i8(len));
 	_store_v2i32(&self->w.r.arem, _sub_v2i32(srem, len));
+
 	return(_hi64(pos) + _hi32(len));
 }
 
@@ -1199,7 +1200,7 @@ struct gaba_joint_tail_s *fill_create_tail(
 		_storeu_n(&tail->ch, _or_n(ach, _shl_n(bch, 4)));
 
 		/* copy delta vectors */
-		nvec_t xd = _load_n(&self->w.r.xd);
+		nvec_t xd = _load_n(&self->w.r.xd);				/* gcc-4.8 w/ -mavx2 -mbmi2 has an optimization bug with vpmovsxbw */
 		wvec_t md = _load_w(&self->w.r.md);
 		_storeu_n(&tail->xd, xd);
 		_storeu_w(&tail->md, md);
