@@ -18,6 +18,7 @@
 
 #include <stdint.h>							/* uint32_t, uint64_t, ... */
 #include "gaba.h"
+#include "sassert.h"
 
 
 /* external (callback) functions */
@@ -48,20 +49,33 @@ struct gaba_gbfs_link_s {
 };
 
 /**
- * @struct gaba_gbfs_wfill_s
+ * @struct gaba_gbfs_fill_s
  */
-struct gaba_gbfs_wfill_s {
-	struct gaba_fill_s f;
-	/* with plim */
+struct gaba_gbfs_fill_s {
+	uint32_t ascnt, bscnt;		/** (8) aligned section counts */
+	uint64_t apos, bpos;		/** (16) #fetched bases from the head (ppos = apos + bpos) */
+	int64_t max;				/** (8) max score in the entire band */
+	uint32_t stat;				/** (4) status (section update flags) */
+	// int32_t ppos;				/** (8) #vectors from the head (FIXME: should be 64bit int) */
+	uint32_t reserved[5];
+
+	// struct gaba_gbfs_
 };
-#define _wfill(x)				( (struct gaba_gbfs_wfill_s *)(x) )
+_static_assert(sizeof(struct gaba_gbfs_fill_s) == sizeof(struct gaba_fill_s));
+_static_assert(offsetof(struct gaba_gbfs_fill_s, ascnt) == offsetof(struct gaba_fill_s, ascnt));
+_static_assert(offsetof(struct gaba_gbfs_fill_s, bscnt) == offsetof(struct gaba_fill_s, bscnt));
+_static_assert(offsetof(struct gaba_gbfs_fill_s, apos) == offsetof(struct gaba_fill_s, apos));
+_static_assert(offsetof(struct gaba_gbfs_fill_s, bpos) == offsetof(struct gaba_fill_s, bpos));
+_static_assert(offsetof(struct gaba_gbfs_fill_s, max) == offsetof(struct gaba_fill_s, max));
+_static_assert(offsetof(struct gaba_gbfs_fill_s, stat) == offsetof(struct gaba_fill_s, stat));
+#define _wfill(x)				( (struct gaba_gbfs_fill_s *)(x) )
 
 /**
  * @struct gaba_gbfs_qfill_s
  */
 struct gaba_gbfs_qfill_s {
 	int64_t ppos;
-	struct gaba_joint_tail_s const *tail;				/* user-defined metadata after this */
+	struct gaba_gbfs_fill_s const *f;				/* user-defined metadata after this */
 };
 
 
@@ -76,36 +90,43 @@ qfill_t hq_pop(hq_t *hq) { return; }
 /**
  * @fn gaba_gbfs_merge_tails
  */
+static inline
 void gaba_gbfs_merge_tails(
 	gdp_t *gdp,
-	struct gaba_joint_tail_s *tail)
+	struct gaba_gbfs_fill_s *f)
 {
-	struct gaba_joint_tail_s **warr = get_meta(tail->f);	/* what is the difference between coordinates? */
+	struct gaba_gbfs_fill_s **warr = get_meta(tail->f);	/* what is the difference between coordinates? */
 	return;
 }
 
 /**
- * @fn gaba_gbfs_set_break_a, gaba_gbfs_set_break_b
+ * @fn gaba_gbfs_set_break
  * @brief set p-break
  */
-void gaba_gbfs_set_break_a(
+static inline
+void gaba_gbfs_set_break(
 	gdp_t *gdp,
-	struct gaba_joint_tail_s *tail)
+	struct gaba_gbfs_fill_s *f,
+	uint64_t i)
 {
-	tail->abrk |= 0x01ULL<<(BW - 1);
+	#define _r(_x, _idx)		( (&(_x))[(_idx)] )
 
-	/* */
+	/* mark breakpoint */
+	_r(f->abrk, i) |= 0x01ULL<<(BW - 1);
+
+	/*
+	 * here the tail is aligned to the others at the same coordinate
+	 * so the off-diagonal distance (qofs) is equals to the distance on the other side.
+	 */
+	int64_t p = f->apos + f->bpos;
+	int64_t q = (i == 0 ? -1 : 1) * _r(f->apos, 1 - i);
+
+	struct gaba_gbfs_merge_s *mg = gdp->get_meta(f->s.);
 
 	return;
-}
-void gaba_gbfs_set_break_b(
-	gdp_t *gdp,
-	struct gaba_joint_tail_s *tail)
-{
-	tail->bbrk |= 0x01ULL<<(BW - 1);
-	return;
-}
 
+	#undef _r
+}
 
 /**
  * @fn gaba_gbfs_extend
@@ -114,32 +135,32 @@ void gaba_gbfs_set_break_b(
 static
 struct gaba_fill_s *gaba_gbfs_extend(
 	gdp_t *gdp,
-	gaba_section_t const *asec,
+	struct gaba_section_s const *asec,
 	uint32_t apos,
-	gaba_section_t const *bsec,
+	struct gaba_section_s const *bsec,
 	uint32_t bpos)
 {
 	/* fill root */ {
-		struct gaba_joint_tail_s *tail = _tail(gaba_dp_fill_root(gdp->dp, asec, apos, bsec, bpos));
+		struct gaba_gbfs_fill_s *f = _tail(gaba_dp_fill_root(gdp->dp, asec, apos, bsec, bpos));
+		if(_is_a_break(f)) { gaba_gbfs_set_break(gdp, f, 0); }
+		if(_is_b_break(f)) { gaba_gbfs_set_break(gdp, f, 1); }
 		kv_hq_push(gdp->q, (struct gaba_gbfs_qfill_s){
-			.ppos = tail->ppos,							/* sorted by ppos */
-			.tail = tail
+			.ppos = f->ppos,							/* sorted by ppos */
+			.f = f
 		});
 	}
 
 	while(!hq_is_empty(gdp->q)) {
-		struct gaba_joint_tail_s *tail = kv_hq_pop(gdp->q).tail;/* pop a tail with the shortest path */
-		if(_is_p_break(tail)) { gaba_gbfs_merge_tails(gdp, tail); }
-		if(_is_a_break(tail)) { gaba_gbfs_set_break_a(gdp, tail); }
-		if(_is_b_break(tail)) { gaba_gbfs_set_break_b(gdp, tail); }
+		struct gaba_gbfs_fill_s *f = kv_hq_pop(gdp->q).f;
+		if(_is_p_break(f)) { gaba_gbfs_merge_tails(gdp, f); }
 
-		struct gaba_gbfs_link_s alink = ((tail->f.stat & UPDATE_A)
-			? gdp->get_link(gdp->g, tail->s.aid)
-			: (struct gaba_gbfs_link_s){ .cnt = 1, .sec = &tail->a }
+		struct gaba_gbfs_link_s alink = ((f->stat & UPDATE_A)
+			? gdp->get_link(gdp->g, f->s.aid)
+			: (struct gaba_gbfs_link_s){ .cnt = 1, .sec = &f->a }
 		);
-		struct gaba_gbfs_link_s blink = ((tail->stat & UPDATE_B)
-			? gdp->get_link(gdp->g, tail->s.bid)
-			: (struct gaba_gbfs_link_s){ .cnt = 1, .sec = &tail->b }
+		struct gaba_gbfs_link_s blink = ((f->stat & UPDATE_B)
+			? gdp->get_link(gdp->g, f->s.bid)
+			: (struct gaba_gbfs_link_s){ .cnt = 1, .sec = &f->b }
 		);
 		for(uint64_t i = 0; i < alink.cnt; i++) {
 			for(uint64_t j = 0; j < blink.cnt; j++) {
