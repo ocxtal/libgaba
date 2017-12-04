@@ -341,14 +341,13 @@ struct gaba_joint_tail_s {
 	struct gaba_drop_s xd;				/** (16, 32, 64) */
 	struct gaba_middle_delta_s md;		/** (32, 64, 128) */
 
-	int32_t mdrop;						/** (2) drop from m.max (offset) */
+	int32_t mdrop;						/** (4) drop from m.max (offset) */
 	uint32_t pridx;						/** (4) remaining p-length */
-	uint32_t aid, bid;					/** (8) ids */
-	uint8_t const *atptr, *btptr;		/** (16) tail of the current section */
-	uint64_t abrk, bbrk;				/** (16) breakpoint masks */
 	uint32_t aridx, bridx;				/** (8) reverse indices for the tails */
 	uint32_t aadv, badv;				/** (8) advanced lengths */
 	struct gaba_joint_tail_s const *tail;/** (8) the previous tail */
+	uint64_t abrk, bbrk;				/** (16) breakpoint masks */
+	uint8_t const *atptr, *btptr;		/** (16) tail of the current section */
 	struct gaba_fill_s f;				/** (24) */
 };
 _static_assert((sizeof(struct gaba_joint_tail_s) % 32) == 0);
@@ -1224,18 +1223,18 @@ struct gaba_joint_tail_s *fill_create_tail(
 		v2i32_t ridx = _add_v2i32(_load_v2i32(&self->w.r.arem), rlim);
 		v2i32_t sridx = _load_v2i32(&self->w.r.asridx);
 		v2i32_t adv = _sub_v2i32(sridx, ridx);
+		_store_v2i32(&tail->aridx, ridx);
+		_store_v2i32(&tail->aadv, adv);
 
 		/* adjust breakpoint masks */
 		struct gaba_joint_tail_s const *prev_tail = self->w.r.tail;
 		v2i64_t brk = _shrv_v2i64(_loadu_v2i64(&prev_tail->abrk), _cvt_v2i32_v2i64(adv));
+		tail->tail = prev_tail;
+		_store_v2i64(&tail->abrk, brk);
 
 		/* save section info */
-		_store_v2i32(&tail->aid, id);
 		_store_v2i64(&tail->atptr, tptr);
-		_store_v2i64(&tail->abrk, brk);
-		_store_v2i32(&tail->aridx, ridx);
-		_store_v2i32(&tail->aadv, adv);
-		tail->tail = prev_tail;
+		_store_v2i32(&tail->f.aid, id);
 		_print_v2i32(ridx); _print_v2i32(sridx); _print_v2i32(adv);
 
 		/* calc end-of-section flag, section counts, and base counts */
@@ -1251,13 +1250,11 @@ struct gaba_joint_tail_s *fill_create_tail(
 		_print_v2i32(_load_v2i32(&tail->f.ascnt));
 		_print_v2i64(_load_v2i64(&tail->f.apos));
 
-		/* store max */
+		/* store max, status flag */
 		tail->f.max = _offset(prev_tail) + self->w.r.ofsd + mdrop;
+		tail->f.stat = ((uint32_t)(blk->xstat & (TERM | CONT))<<8) | _mask_v2i32(update);
 		debug("prev_offset(%ld), offset(%ld), max(%d, %ld)",
 			_offset(prev_tail), _offset(prev_tail) + self->w.r.ofsd, mdrop, tail->f.max);
-
-		/* status flag and p-coordinate */
-		tail->f.stat = ((uint32_t)(blk->xstat & (TERM | CONT))<<8) | _mask_v2i32(update);
 	}
 	return(tail);
 }
@@ -2163,8 +2160,8 @@ struct gaba_joint_tail_s const *merge_restore_section(
 	}
 
 	/* copy section info */
-	_r(mt->aid, i) = _r(tail->aid, i);
 	_r(mt->atptr, i) = _r(tail->atptr, i);
+	_r(mt->f.aid, i) = _r(tail->f.aid, i);
 	_r(mt->abrk, i) = brk;
 
 	/* save ridx */
@@ -2476,7 +2473,7 @@ void trace_reload_section(
 
 	/* reload finished, store section info */
 	_r(self->w.l.atail, i) = tail;		/* FIXME: is this correct?? */
-	_r(self->w.l.aid, i) = _r(prev_tail->aid, i);
+	_r(self->w.l.aid, i) = _r(prev_tail->f.aid, i);
 
 	_r(self->w.l.agidx, i) = gidx;
 	_r(self->w.l.asgidx, i) = gidx;
@@ -3412,14 +3409,14 @@ void gaba_init_phantom(
 			.max = 0,
 			.stat = CONT | GABA_UPDATE_A | GABA_UPDATE_B,
 			.ascnt = 0,    .bscnt = 0,
-			.apos = -BW/2, .bpos = -BW/2
+			.apos = -BW/2, .bpos = -BW/2,
+			.aid = 0,      .bid = 0,
 		},
 
 		/* section info */
 		.tail = NULL,
 		.aridx = 0,    .bridx = 0,
 		.aadv = 0,     .badv = 0,
-		.aid = 0,      .bid = 0,
 		.atptr = NULL, .btptr = NULL,
 		.abrk = 0,     .bbrk = 0,		/* no breakpoint set */
 
