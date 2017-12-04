@@ -2154,7 +2154,7 @@ struct gaba_joint_tail_s const *merge_restore_section(
 	/* calc ridx */
 	int32_t rem = q;
 	uint32_t scnt = _r(tail->f.ascnt, i);
-	while(rem > _r(tail->aadv, i)) {
+	while(rem > (int32_t)_r(tail->aadv, i)) {
 		rem -= _r(tail->aadv, i);
 		scnt -= _r(tail->aridx, i) == 0;
 		tail = tail->tail;
@@ -4149,15 +4149,15 @@ struct unittest_naive_result_s unittest_naive(
 	struct unittest_pos_score_s max = { 0, 0, 0 };
 
 	mat[s(0, 0)] = 0;
-	for(int64_t i = 1; i < alen+1; i++) {
-		mat[s(i, 0)] = MAX2(min, i * g);
+	for(uint64_t i = 1; i < alen+1; i++) {
+		mat[s(i, 0)] = MAX2(min, (int64_t)i * g);
 	}
-	for(int64_t j = 1; j < blen+1; j++) {
-		mat[s(0, j)] = MAX2(min, j * g);
+	for(uint64_t j = 1; j < blen+1; j++) {
+		mat[s(0, j)] = MAX2(min, (int64_t)j * g);
 	}
 
-	for(int64_t j = 1; j < blen+1; j++) {
-		for(int64_t i = 1; i < alen+1; i++) {
+	for(uint64_t j = 1; j < blen+1; j++) {
+		for(uint64_t i = 1; i < alen+1; i++) {
 			int64_t score = mat[s(i, j)] = MAX4(min,
 				mat[s(i - 1, j - 1)] + m(i, j),
 				mat[s(i - 1, j)] + g,
@@ -4277,8 +4277,8 @@ struct unittest_naive_result_s unittest_naive(
 	int8_t ge = -sc->ge;
 
 	/* calc lengths */
-	int64_t alen = strlen(a);
-	int64_t blen = strlen(b);
+	uint64_t alen = strlen(a);
+	uint64_t blen = strlen(b);
 
 	/* calc min */
 	int64_t min = INT16_MIN - x - 2*gi;
@@ -4291,17 +4291,17 @@ struct unittest_naive_result_s unittest_naive(
 	struct unittest_pos_score_s max = { 0, 0, 0 };
 
 	mat[s(0, 0)] = mat[e(0, 0)] = mat[f(0, 0)] = 0;
-	for(int64_t i = 1; i < alen+1; i++) {
-		mat[s(i, 0)] = mat[e(i, 0)] = MAX2(min, gi + i * ge);
-		mat[f(i, 0)] = MAX2(min, gi + i * ge + gi - 1);
+	for(uint64_t i = 1; i < alen+1; i++) {
+		mat[s(i, 0)] = mat[e(i, 0)] = MAX2(min, gi + (int64_t)i * ge);
+		mat[f(i, 0)] = MAX2(min, gi + (int64_t)i * ge + gi - 1);
 	}
-	for(int64_t j = 1; j < blen+1; j++) {
-		mat[s(0, j)] = mat[f(0, j)] = MAX2(min, gi + j * ge);
-		mat[e(0, j)] = MAX2(min, gi + j * ge + gi - 1);
+	for(uint64_t j = 1; j < blen+1; j++) {
+		mat[s(0, j)] = mat[f(0, j)] = MAX2(min, gi + (int64_t)j * ge);
+		mat[e(0, j)] = MAX2(min, gi + (int64_t)j * ge + gi - 1);
 	}
 
-	for(int64_t j = 1; j < blen+1; j++) {
-		for(int64_t i = 1; i < alen+1; i++) {
+	for(uint64_t j = 1; j < blen+1; j++) {
+		for(uint64_t i = 1; i < alen+1; i++) {
 			int64_t score_e = mat[e(i, j)] = MAX2(
 				mat[s(i - 1, j)] + gi + ge,
 				mat[e(i - 1, j)] + ge);
