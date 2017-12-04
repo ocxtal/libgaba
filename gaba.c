@@ -1183,7 +1183,7 @@ struct gaba_joint_tail_s *fill_create_tail(
 	struct gaba_block_s *blk)
 {
 	/* inspect fetched base counts */
-	uint16_t cnt = *((uint16_t const *)&blk->acnt);
+	uint16_t cnt = _load_v2i8(&blk->acnt);				/* *((uint16_t const *)&blk->acnt); */
 
 	/* create joint_tail: squash the last block if no vector was filled */
 	struct gaba_joint_tail_s *tail = (struct gaba_joint_tail_s *)(blk + (cnt != 0));
