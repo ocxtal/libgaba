@@ -60,7 +60,7 @@
 #endif
 
 #ifdef BIT
-#  if BIT == 2 || BIT == 4
+#  if !(BIT == 2 || BIT == 4)
 #    error "BIT must be 2 or 4."
 #  endif
 #else
