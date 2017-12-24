@@ -1407,7 +1407,7 @@ struct gaba_joint_tail_s *fill_create_tail(
 	delta = _op_add(delta, _t); \
 	drop = _op_subs(drop, _t); \
 	_dir_update(dir, _vector, _sign); \
-	_print_n(drop); \
+	_print_n(delta); _print_n(drop); \
 	_print_w(_add_w(_load_w(&self->w.r.md), _add_w(_cvt_n_w(delta), _set_w(_offset(self->w.r.tail) + self->w.r.ofsd - 128)))); \
 	_print_w(_add_w(_add_w(_load_w(&self->w.r.md), _cvt_n_w(delta)), _add_w(_cvt_n_w(drop), _set_w(_offset(self->w.r.tail) + self->w.r.ofsd)))); \
 }
@@ -4577,11 +4577,11 @@ struct gaba_fill_s const *unittest_dp_extend(
 	while((f->stat & GABA_TERM) == 0) {
 		if(f->stat & GABA_UPDATE_A) {
 			a++;
-			debug("update a(%u, %u, %s)", a->id, a->len, a->base);
+			debug("update a(%u, %u, %p, %s)", a->id, a->len, a->base, a->base);
 		}
 		if(f->stat & GABA_UPDATE_B) {
 			b++;
-			debug("update b(%u, %u, %s)", b->id, b->len, b->base);
+			debug("update b(%u, %u, %p, %s)", b->id, b->len, b->base, b->base);
 		}
 		if(a->base == NULL || b->base == NULL) { break; }
 		f = _export(gaba_dp_fill)(dp, f, a, b, 0);
