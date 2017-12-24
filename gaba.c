@@ -193,27 +193,6 @@ _static_assert(sizeof(struct gaba_alignment_s) == 64);
 _static_assert(sizeof(nvec_masku_t) == BW / 8);
 
 /**
- * @macro _max_match, _gap_h, _gap_v
- * @brief calculate scores
- */
-#define _max_match(_p)				( _hmax_v16i8(_loadu_v16i8((_p)->score_matrix)) )
-#define _max_match_base(_p)			( 0x01 )
-#if MODEL == LINEAR
-#define _gap_h(_p, _l)				( -1 * ((_p)->gi + (_p)->ge) * (_l) )
-#define _gap_v(_p, _l)				( -1 * ((_p)->gi + (_p)->ge) * (_l) )
-#elif MODEL == AFFINE
-#define _gap_h(_p, _l)				( -1 * ((_l) > 0) * (_p)->gi - (_p)->ge * (_l) )
-#define _gap_v(_p, _l)				( -1 * ((_l) > 0) * (_p)->gi - (_p)->ge * (_l) )
-#else /* MODEL == COMBINED */
-#define _gap_h(_p, _l)				( MAX2(-1 * ((_l) > 0) * (_p)->gi - (_p)->ge * (_l), -1 * (_p)->gfa * (_l)) )
-#define _gap_v(_p, _l)				( MAX2(-1 * ((_l) > 0) * (_p)->gi - (_p)->ge * (_l), -1 * (_p)->gfb * (_l)) )
-#endif
-#define _ofs_h(_p)					( (_p)->gi + (_p)->ge )
-#define _ofs_v(_p)					( (_p)->gi + (_p)->ge )
-#define _ofs_e(_p)					( (_p)->gi )
-#define _ofs_f(_p)					( (_p)->gi )
-
-/**
  * @macro _plen
  * @brief extract plen from path_section_s
  */
@@ -754,15 +733,39 @@ struct gaba_dir_s {
 #define _lo32(v)				_ext_v2i32(v, 0)
 #define _hi32(v)				_ext_v2i32(v, 1)
 
-/* sequence encoding */
+/* scoring function and sequence encoding */
+
+/**
+ * @macro _max_match, _gap_h, _gap_v
+ * @brief calculate scores
+ */
+#define _max_match(_p)				( _hmax_v16i8(_loadu_v16i8((_p)->score_matrix)) )
+#if MODEL == LINEAR
+#define _gap_h(_p, _l)				( -1 * ((_p)->gi + (_p)->ge) * (_l) )
+#define _gap_v(_p, _l)				( -1 * ((_p)->gi + (_p)->ge) * (_l) )
+#elif MODEL == AFFINE
+#define _gap_h(_p, _l)				( -1 * ((_l) > 0) * (_p)->gi - (_p)->ge * (_l) )
+#define _gap_v(_p, _l)				( -1 * ((_l) > 0) * (_p)->gi - (_p)->ge * (_l) )
+#else /* MODEL == COMBINED */
+#define _gap_h(_p, _l)				( MAX2(-1 * ((_l) > 0) * (_p)->gi - (_p)->ge * (_l), -1 * (_p)->gfa * (_l)) )
+#define _gap_v(_p, _l)				( MAX2(-1 * ((_l) > 0) * (_p)->gi - (_p)->ge * (_l), -1 * (_p)->gfb * (_l)) )
+#endif
+#define _ofs_h(_p)					( (_p)->gi + (_p)->ge )
+#define _ofs_v(_p)					( (_p)->gi + (_p)->ge )
+#define _ofs_e(_p)					( (_p)->gi )
+#define _ofs_f(_p)					( (_p)->gi )
 
 /**
  * @enum BASES
  */
 #if BIT == 2
-enum BASES { A = 0x00, C = 0x01, G = 0x02, T = 0x03, N = 0x80 };
+enum BASES { A = 0x00, C = 0x01, G = 0x02, T = 0x03, N = 0x09 };
+#  define _max_match_base_a(_p)		( 0x0c )
+#  define _max_match_base_b(_p)		( 0x03 )
 #else
 enum BASES { A = 0x01, C = 0x02, G = 0x04, T = 0x08, N = 0x00 };
+#  define _max_match_base_a(_p)		( 0x01 )
+#  define _max_match_base_b(_p)		( 0x01 )
 #endif
 
 /**
@@ -3424,7 +3427,7 @@ void gaba_init_phantom(
 
 		/* score and vectors */
 		.mdrop = 0,
-		.ch.w = { [0] = _max_match_base(p), [BW-1] = _max_match_base(p)<<4 },
+		.ch.w = { [0] = _max_match_base_a(p), [BW-1] = _max_match_base_b(p)<<4 },
 		.xd.drop = { [BW / 2] = _max_match(p) - _gap_v(p, 1) },
 		.md = gaba_init_middle_delta(p)
 	};
@@ -4438,24 +4441,30 @@ uint8_t unittest_encode_base(char c)
 	#define _b(x)	( (x) & 0x1f )
 
 	/* conversion tables */
-	enum bases { A = 0x01, C = 0x02, G = 0x04, T = 0x08 };
+	#if BIT == 2
+		enum bases { A = 0x00, C = 0x01, G = 0x02, T = 0x03 };
+	#else
+		enum bases { A = 0x01, C = 0x02, G = 0x04, T = 0x08 };
+	#endif
 	static uint8_t const table[] = {
 		[_b('A')] = A,
 		[_b('C')] = C,
 		[_b('G')] = G,
 		[_b('T')] = T,
 		[_b('U')] = T,
-		[_b('R')] = A | G,
-		[_b('Y')] = C | T,
-		[_b('S')] = G | C,
-		[_b('W')] = A | T,
-		[_b('K')] = G | T,
-		[_b('M')] = A | C,
-		[_b('B')] = C | G | T,
-		[_b('D')] = A | G | T,
-		[_b('H')] = A | C | T,
-		[_b('V')] = A | C | G,
-		[_b('N')] = 0,		/* treat 'N' as a gap */
+		#if BIT == 4
+			[_b('R')] = A | G,
+			[_b('Y')] = C | T,
+			[_b('S')] = G | C,
+			[_b('W')] = A | T,
+			[_b('K')] = G | T,
+			[_b('M')] = A | C,
+			[_b('B')] = C | G | T,
+			[_b('D')] = A | G | T,
+			[_b('H')] = A | C | T,
+			[_b('V')] = A | C | G,
+			[_b('N')] = 0,		/* treat 'N' as a gap */
+		#endif
 		[_b('_')] = 0		/* sentinel */
 	};
 	return(table[_b((uint8_t)c)]);
