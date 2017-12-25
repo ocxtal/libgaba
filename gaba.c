@@ -2469,32 +2469,33 @@ struct gaba_pos_pair_s *_export(gaba_dp_search_max)(
 
 	v2i32_t const v11 = _seta_v2i32(1, 1);
 	v2i32_t gidx = _load_v2i32(&self->w.l.agidx), acc = _zero_v2i32();
+	v2i32_t id = _load_v2i32(&tail->f.aid);
+
 	debug("gidx(%d, %d), acc(%d, %d)", _hi32(gidx), _lo32(gidx), _hi32(acc), _lo32(acc));
-	_print_v2i32(_gt_v2i32(v11, gidx));
-	debug("_test(%u)", _test_v2i32(_gt_v2i32(v11, gidx), v11) == 0);
-	while(_test_v2i32(_gt_v2i32(v11, gidx), v11) == 0) {
+	while(1) {
+		v2i32_t update = _gt_v2i32(v11, gidx);
+		if(_test_v2i32(update, v11)) { break; }
+
 		/* accumulate advanced lengths */
-		acc = _add_v2i32(acc, _load_v2i32(&tail->aadv));
-		_print_v2i32(acc); _print_v2i32(_load_v2i32(&tail->aadv));
+		v2i32_t adv = _load_v2i32(&tail->aadv), nid = _load_v2i32(&tail->f.aid);
+		acc = _add_v2i32(acc, adv);
+		_print_v2i32(acc); _print_v2i32(adv); _print_v2i32(nid);
 
-		/* fetch prev */
+		/* fetch previous tail and calculate the last update mask */
 		tail = tail->tail;
-
-		/* recalculate update mask */
-		v2i32_t update = _eq_v2i32(_load_v2i32(&tail->aridx), _zero_v2i32());
+		v2i32_t ridx = _load_v2i32(&tail->aridx);
+		v2i32_t mask = _and_v2i32(update, _eq_v2i32(ridx, _zero_v2i32()));
 		_print_v2i32(update);
 
 		/* add advanced lengths */
-		gidx = _add_v2i32(gidx, _and_v2i32(update, acc));
-		acc = _andn_v2i32(update, acc);
-		_print_v2i32(gidx);
-
-		_print_v2i32(_gt_v2i32(v11, gidx));
-		debug("_test(%u)", _test_v2i32(_gt_v2i32(v11, gidx), v11) == 0);
-
+		gidx = _add_v2i32(gidx, _and_v2i32(mask, acc));
+		id = _sel_v2i32(mask, nid, id);			/* reload */
+		acc = _andn_v2i32(mask, acc);			/* flush if summed up to gidx */
+		_print_v2i32(gidx); _print_v2i32(id);
 	}
+
 	struct gaba_pos_pair_s *pos = gaba_dp_malloc(self, sizeof(struct gaba_pos_pair_s));
-	_store_v2i32(&pos->aid, _zero_v2i32());
+	_store_v2i32(&pos->aid, id);
 	_store_v2i32(&pos->apos, _sub_v2i32(gidx, v11));
 	_print_v2i32(_sub_v2i32(gidx, v11));
 	return(pos);
@@ -4652,13 +4653,13 @@ static
 int unittest_check_maxpos(
 	uint32_t id,
 	uint32_t pos,
-	uint64_t npos,
+	uint64_t ofs,
+	uint64_t len,
 	struct gaba_section_s const *sec)
 {
 	int64_t acc = 0;
-	while(acc + sec->len < npos) { acc += sec++->len; }
-	fprintf(stderr, "id(%u), pos(%u), npos(%lu), acc(%lu)\n", id, pos, npos, acc);
-	return((id == sec->id && npos == pos + acc) ? 1 : 0);
+	while(acc + sec->len < ofs + len) { acc += sec++->len; }
+	return((id == sec->id && ofs + len - 1 == pos + acc) ? 1 : 0);
 }
 
 static
@@ -4745,24 +4746,30 @@ void unittest_test_pair(
 	struct gaba_dp_context_s *dp,
 	struct unittest_seq_pair_s const *pair)
 {
-	/* test naive implementations */
+	/* prepare sequences */
 	char *a = unittest_cat_seq(pair->a);
 	char *b = unittest_cat_seq(pair->b);
+	debug("a(%s), b(%s)", a, b);
+
 	uint64_t *asec = unittest_build_section_array(pair->a);
 	uint64_t *bsec = unittest_build_section_array(pair->b);
-	struct unittest_naive_result_s nr = unittest_naive(unittest_default_params, a, b, asec, bsec);
+	struct unittest_sec_pair_s *s = unittest_build_section(
+		pair,
+		unittest_build_section_forward
+	);
 
+	/* test naive implementations */
+	struct unittest_naive_result_s nr = unittest_naive(unittest_default_params, a, b, asec, bsec);
 	assert(nr.score >= 0);
 	assert(nr.path_length <= strlen(a) + strlen(b));
 	assert(nr.path != NULL);
 	assert(nr.sec != NULL);
 
+	/* fix head segment */
+	nr.sec[0].apos += s->apos;
+	nr.sec[0].bpos += s->bpos;
+
 	/* fill-in sections */
-	debug("a(%s), b(%s)", a, b);
-	struct unittest_sec_pair_s *s = unittest_build_section(
-		pair,
-		unittest_build_section_forward
-	);
 	struct gaba_fill_s const *m = unittest_dp_extend(dp, s);
 
 	assert(m != NULL);
@@ -4771,7 +4778,8 @@ void unittest_test_pair(
 	/* test max pos */
 	struct gaba_pos_pair_s const *p = _export(gaba_dp_search_max)(dp, m);
 	assert(p != NULL);
-	assert(unittest_check_maxpos(p->aid, p->apos, s->apos + nr.alen, s->a));
+	assert(unittest_check_maxpos(p->aid, p->apos, s->apos, nr.alen, s->a), "a(%s), b(%s)", a, b);
+	assert(unittest_check_maxpos(p->bid, p->bpos, s->bpos, nr.blen, s->b), "a(%s), b(%s)", a, b);
 
 	/* test path */
 	struct gaba_alignment_s const *r = _export(gaba_dp_trace)(dp, m, NULL);
@@ -4781,8 +4789,8 @@ void unittest_test_pair(
 	assert(unittest_check_path(r, nr.path), "a(%s), b(%s), r->path(%s), nr.path(%s)", a, b, unittest_decode_path(r), nr.path);
 	assert(unittest_check_section(r, nr.sec, nr.scnt), "a(%s), b(%s)", a, b);
 
+	/* cleanup everything */
 	unittest_clean_section(s);
-
 	free(a);
 	free(b);
 	free(asec);
