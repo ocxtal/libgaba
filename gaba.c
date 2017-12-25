@@ -2478,21 +2478,59 @@ void trace_reload_section(
 
 	while(gidx <= 0) {
 		do {
-			gidx += _r(tail->aadv, i);
-			debug("add ridx(%d), adv(%d), gidx(%d), stat(%x)", _r(tail->aridx, i), _r(tail->aadv, i), gidx, tail->f.stat);
+			gidx += tail->istat ? 0 : _r(tail->aadv, i);
+			debug("add istat(%u), ridx(%d), adv(%d), gidx(%d), stat(%x)", tail->istat, _r(tail->aridx, i), _r(tail->aadv, i), gidx, tail->f.stat);
 			prev_tail = tail; tail = tail->tail;
 		} while(_r(tail->aridx, i) != 0);
 	}
 
 	/* reload finished, store section info */
-	_r(self->w.l.atail, i) = tail;		/* FIXME: is this correct?? */
+	_r(self->w.l.atail, i) = tail;				/* FIXME: is this correct?? */
 	_r(self->w.l.aid, i) = _r(prev_tail->f.aid, i);
 
+	/* save indices, offset for bridged region adjustment */
+	_r(self->w.l.aofs, i) = prev_tail->istat ? _r(prev_tail->aadv, i) : 0;
 	_r(self->w.l.agidx, i) = gidx;
 	_r(self->w.l.asgidx, i) = gidx;
+	debug("prev_tail->istat(%u), ofs(%u)", prev_tail->istat, _r(self->w.l.aofs, i));
 	return;
 
 	#undef _r
+}
+
+/**
+ * @fn trace_push_segment
+ */
+static _force_inline
+void trace_push_segment(
+	struct gaba_dp_context_s *self)
+{
+	/* windback pointer */
+	self->w.l.a.slen++;
+	self->w.l.a.seg--;
+
+	/* calc ppos */
+	uint64_t ppos = (self->w.l.path - self->w.l.aln->path) * 32 + self->w.l.ofs;
+	debug("ppos(%lu), path(%p, %p), ofs(%u)", ppos, self->w.l.path, self->w.l.aln->path, self->w.l.ofs);
+
+	/* load section info */
+	v2i32_t ofs = _load_v2i32(&self->w.l.aofs);
+	v2i32_t gidx = _load_v2i32(&self->w.l.agidx);
+	v2i32_t sgidx = _load_v2i32(&self->w.l.asgidx);
+	v2i32_t id = _load_v2i32(&self->w.l.aid);
+	_print_v2i32(gidx); _print_v2i32(sgidx); _print_v2i32(id);
+
+	/* store section info */
+	v2i32_t mask = _eq_v2i32(gidx, _zero_v2i32());/* add bridged length if the traceback pointer has reached the head */
+	v2i32_t pos = _add_v2i32(_and_v2i32(mask, ofs), gidx), len = _sub_v2i32(sgidx, gidx);
+	_store_v2i32(&self->w.l.a.seg->apos, pos);
+	_store_v2i32(&self->w.l.a.seg->alen, len);
+	_store_v2i32(&self->w.l.a.seg->aid, id);
+	self->w.l.a.seg->ppos = ppos;
+
+	/* update rsgidx */
+	_store_v2i32(&self->w.l.asgidx, gidx);
+	return;
 }
 
 /**
@@ -2779,38 +2817,6 @@ _trace_term:;
 #  define DEBUG
 #  include "log.h"
 #endif
-
-/**
- * @fn trace_push_segment
- */
-static _force_inline
-void trace_push_segment(
-	struct gaba_dp_context_s *self)
-{
-	/* windback pointer */
-	self->w.l.a.slen++;
-	self->w.l.a.seg--;
-
-	/* calc ppos */
-	uint64_t ppos = (self->w.l.path - self->w.l.aln->path) * 32 + self->w.l.ofs;
-	debug("ppos(%lu), path(%p, %p), ofs(%u)", ppos, self->w.l.path, self->w.l.aln->path, self->w.l.ofs);
-
-	/* load section info */
-	v2i32_t gidx = _load_v2i32(&self->w.l.agidx);
-	v2i32_t sgidx = _load_v2i32(&self->w.l.asgidx);
-	v2i32_t id = _load_v2i32(&self->w.l.aid);
-	_print_v2i32(gidx); _print_v2i32(sgidx); _print_v2i32(id);
-
-	/* store section info */
-	_store_v2i32(&self->w.l.a.seg->apos, gidx);
-	_store_v2i32(&self->w.l.a.seg->alen, _sub_v2i32(sgidx, gidx));
-	_store_v2i32(&self->w.l.a.seg->aid, id);
-	self->w.l.a.seg->ppos = ppos;
-
-	/* update rsgidx */
-	_store_v2i32(&self->w.l.asgidx, gidx);
-	return;
-}
 
 /**
  * @fn trace_init
