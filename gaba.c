@@ -1406,10 +1406,12 @@ struct gaba_joint_tail_s *fill_create_tail(
 #else /* MODEL == COMBINED */
 #define _fill_body() { \
 	register nvec_t t = _match_n(_loadu_n(aptr), _loadu_n(bptr)); \
+	register nvec_t dhf = _add_n(dh, _load_gfh(self->scv)); \
+	register nvec_t dvf = _add_n(dv, _load_gfv(self->scv)); \
 	_print_n(_loadu_n(aptr)); _print_n(_loadu_n(bptr)); \
 	t = _shuf_n(_load_sb(self->scv), t); \
-	t = _max_n(de, t); \
-	t = _max_n(df, t); \
+	t = _max_n(de, t); t = _max_n(df, t); \
+	t = _max_n(dhf, t); t = _max_n(dvf, t); \
 	ptr->h.mask = _mask_n(_eq_n(t, de)); \
 	ptr->v.mask = _mask_n(_eq_n(t, df)); \
 	debug("mask(%x, %x)", ptr->h.all, ptr->v.all); \
@@ -3375,7 +3377,7 @@ struct gaba_score_vec_s gaba_init_score_vector(
 	struct gaba_params_s const *p)
 {
 	v16i8_t scv = _loadu_v16i8(p->score_matrix);
-	int8_t ge = -p->ge, gi = -p->gi, gfa = -p->gfa, gfb = -p->gfb;
+	int8_t ge = -p->ge, gi = -p->gi, gfa = -p->gfa, gfb = -p->gfb;	/* negative values */
 	struct gaba_score_vec_s sc __attribute__(( aligned(MEM_ALIGN_SIZE) ));
 
 	/* score matrices */
@@ -3398,10 +3400,10 @@ struct gaba_score_vec_s gaba_init_score_vector(
 		_store_ofsh(sc, -gi, ge + gi, 0, 0);
 		_store_ofsv(sc, -gi, ge + gi, 0, 0);
 	#else	/* COMBINED */
-		_store_adjh(sc, -gi, ge + gi, ge + gfa, ge + gfb);
-		_store_adjv(sc, -gi, ge + gi, ge + gfa, ge + gfb);
-		_store_ofsh(sc, -gi, ge + gi, ge + gfa, ge + gfb);
-		_store_ofsv(sc, -gi, ge + gi, ge + gfa, ge + gfb);
+		_store_adjh(sc, -gi, ge + gi, -(ge + gi) + gfa, -(ge + gi) + gfb);
+		_store_adjv(sc, -gi, ge + gi, -(ge + gi) + gfa, -(ge + gi) + gfb);
+		_store_ofsh(sc, -gi, ge + gi, -(ge + gi) + gfa, -(ge + gi) + gfb);
+		_store_ofsv(sc, -gi, ge + gi, -(ge + gi) + gfa, -(ge + gi) + gfb);
 	#endif
 	return(sc);
 }
