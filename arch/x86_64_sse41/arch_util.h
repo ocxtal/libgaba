@@ -247,6 +247,8 @@
 #define _load_adjv(_scv)					( _from_v16i8_n(_load_gap((_scv).v2, 0x00)) )
 #define _load_ofsh(_scv)					( _from_v16i8_n(_load_gap((_scv).v2, 0x55)) )
 #define _load_ofsv(_scv)					( _from_v16i8_n(_load_gap((_scv).v2, 0x55)) )
+#define _load_gfh(_scv)						( _from_v16i8_n(_load_gap((_scv).v2, 0xaa)) )
+#define _load_gfv(_scv)						( _from_v16i8_n(_load_gap((_scv).v2, 0xff)) )
 /*
 #define _load_adjv(_scv)					( _from_v16i8_n(_load_gap((_scv).v2, 0x55)) )
 #define _load_ofsv(_scv)					( _from_v16i8_n(_load_gap((_scv).v2, 0xff)) )
