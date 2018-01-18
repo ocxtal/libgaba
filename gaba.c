@@ -2565,18 +2565,19 @@ void trace_push_segment(
 
 	/* calc ppos */
 	uint64_t ppos = (self->w.l.path - self->w.l.aln->path) * 32 + self->w.l.ofs;
-	debug("ppos(%lu), path(%p, %p), ofs(%u)", ppos, self->w.l.path, self->w.l.aln->path, self->w.l.ofs);
+	debug("ppos(%lu), path(%p, %p), ofs(%u), seg(%p)", ppos, self->w.l.path, self->w.l.aln->path, self->w.l.ofs, self->w.l.a.seg);
 
 	/* load section info */
 	v2i32_t ofs = _load_v2i32(&self->w.l.aofs);
 	v2i32_t gidx = _load_v2i32(&self->w.l.agidx);
 	v2i32_t sgidx = _load_v2i32(&self->w.l.asgidx);
 	v2i32_t id = _load_v2i32(&self->w.l.aid);
-	_print_v2i32(gidx); _print_v2i32(sgidx); _print_v2i32(id);
+	_print_v2i32(gidx); _print_v2i32(sgidx); _print_v2i32(id); _print_v2i32(ofs);
 
 	/* store section info */
-	v2i32_t mask = _eq_v2i32(gidx, _zero_v2i32());/* add bridged length if the traceback pointer has reached the head */
-	v2i32_t pos = _add_v2i32(_and_v2i32(mask, ofs), gidx), len = _sub_v2i32(sgidx, gidx);
+	// v2i32_t mask = _eq_v2i32(gidx, _zero_v2i32());/* add bridged length if the traceback pointer has reached the head */
+	// v2i32_t pos = _add_v2i32(_and_v2i32(mask, ofs), gidx), len = _sub_v2i32(sgidx, gidx);
+	v2i32_t pos = _add_v2i32(ofs, gidx), len = _sub_v2i32(sgidx, gidx);		/* add bridged length, is this correct? */
 	_store_v2i32(&self->w.l.a.seg->apos, pos);
 	_store_v2i32(&self->w.l.a.seg->alen, len);
 	_store_v2i32(&self->w.l.a.seg->aid, id);
@@ -2755,9 +2756,9 @@ enum { ts_d = 0, ts_v0, ts_v1, ts_h0, ts_h1 };
 	} \
 }
 
-// #undef DEBUG
-// #undef _LOG_H_INCLUDED
-// #include "log.h"
+#undef DEBUG
+#undef _LOG_H_INCLUDED
+#include "log.h"
 
 /**
  * @fn trace_core
@@ -2847,10 +2848,10 @@ void trace_core(
 _trace_term:;
 	/* reached a boundary of sections, compensate ofs */
 	uint64_t rem = mask - blk->mask + 1;
-	debug("rem(%lu), path(%p), ofs(%lu)", rem, path + (ofs + rem >= BLK), (ofs + rem) & (BLK - 1));
 	path += (ofs + rem) >= BLK;
 	ofs = (ofs + rem) & (BLK - 1);
 	_storeu_u64(path, path_array<<ofs);
+	debug("rem(%lu), path(%p), arr(%lx), ofs(%lu)", rem, path, path_array<<ofs, ofs);
 
 	/* save gap counts */
 	_store_v2i32(&self->w.l.a.gicnt, gc);
@@ -2911,7 +2912,7 @@ void trace_init(
 
 	/* section */
 	self->w.l.a.slen = 0;
-	self->w.l.a.seg = (sn - 1) + (struct gaba_segment_s *)(self->w.l.aln->path + _roundup(pn, 8)),
+	self->w.l.a.seg = sn + (struct gaba_segment_s *)(self->w.l.aln->path + _roundup(pn, 8)),
 
 	/* clear state */
 	self->w.l.state = ts_d;
@@ -2919,6 +2920,7 @@ void trace_init(
 	/* store block and coordinates */
 	self->w.l.ofs = plen & (32 - 1);
 	self->w.l.path = self->w.l.aln->path + plen / 32;
+	debug("sn(%lu), seg(%p), pn(%lu), path(%p)", sn, self->w.l.a.seg, pn, self->w.l.path);
 
 	/* clear array */
 	self->w.l.path[0] = 0x01<<self->w.l.ofs;
