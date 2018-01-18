@@ -1439,7 +1439,7 @@ struct gaba_joint_tail_s *fill_create_tail(
  * @brief update small delta vector and max vector
  */
 #define _fill_update_delta(_op_add, _op_subs, _vector, _ofs, _sign) { \
-	nvec_t _t = _add_n(_vector, _ofs); \
+	nvec_t _t = _op_add(_vector, _ofs); \
 	delta = _op_add(delta, _t); \
 	drop = _op_subs(drop, _t); \
 	_dir_update(dir, _vector, _sign); \
@@ -3375,7 +3375,7 @@ struct gaba_score_vec_s gaba_init_score_vector(
 	struct gaba_params_s const *p)
 {
 	v16i8_t scv = _loadu_v16i8(p->score_matrix);
-	int8_t ge = -p->ge, gi = -p->gi;
+	int8_t ge = -p->ge, gi = -p->gi, gfa = -p->gfa, gfb = -p->gfb;
 	struct gaba_score_vec_s sc __attribute__(( aligned(MEM_ALIGN_SIZE) ));
 
 	/* score matrices */
@@ -3388,20 +3388,20 @@ struct gaba_score_vec_s gaba_init_score_vector(
 
 	/* gap penalties */
 	#if MODEL == LINEAR
-		_store_adjh(sc, 0, 0, ge + gi, ge + gi);
-		_store_adjv(sc, 0, 0, ge + gi, ge + gi);
-		_store_ofsh(sc, 0, 0, ge + gi, ge + gi);
-		_store_ofsv(sc, 0, 0, ge + gi, ge + gi);
+		_store_adjh(sc, 0, ge + gi, 0, 0);
+		_store_adjv(sc, 0, ge + gi, 0, 0);
+		_store_ofsh(sc, 0, ge + gi, 0, 0);
+		_store_ofsv(sc, 0, ge + gi, 0, 0);
 	#elif MODEL == AFFINE
-		_store_adjh(sc, -gi, -gi, -(ge + gi), ge + gi);
-		_store_adjv(sc, -gi, -gi, -(ge + gi), ge + gi);
-		_store_ofsh(sc, -gi, -gi, -(ge + gi), ge + gi);
-		_store_ofsv(sc, -gi, -gi, -(ge + gi), ge + gi);
+		_store_adjh(sc, -gi, ge + gi, 0, 0);
+		_store_adjv(sc, -gi, ge + gi, 0, 0);
+		_store_ofsh(sc, -gi, ge + gi, 0, 0);
+		_store_ofsv(sc, -gi, ge + gi, 0, 0);
 	#else	/* COMBINED */
-		_store_adjh(sc, -gi, -gi, -(ge + gi), ge + gi);
-		_store_adjv(sc, -gi, -gi, -(ge + gi), ge + gi);
-		_store_ofsh(sc, -gi, -gi, -(ge + gi), ge + gi);
-		_store_ofsv(sc, -gi, -gi, -(ge + gi), ge + gi);
+		_store_adjh(sc, -gi, ge + gi, ge + gfa, ge + gfb);
+		_store_adjv(sc, -gi, ge + gi, ge + gfa, ge + gfb);
+		_store_ofsh(sc, -gi, ge + gi, ge + gfa, ge + gfb);
+		_store_ofsv(sc, -gi, ge + gi, ge + gfa, ge + gfb);
 	#endif
 	return(sc);
 }
