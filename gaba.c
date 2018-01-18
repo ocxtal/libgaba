@@ -4551,6 +4551,7 @@ char *unittest_cat_seq(char const *const *p)
 	}
 	char *b = malloc(sizeof(char) * (len + 1)), *s = b;
 	for(char const *const *q = p; *q != NULL; q++) {
+		debug("s(%p, %s)", *q, *q);
 		memcpy(s, *q, strlen(*q)); s += strlen(*q);
 	}
 	*s = '\0';
@@ -4697,9 +4698,9 @@ int unittest_check_path(
 				break;
 			}
 			array = (array>>1) | ((*str++ == 'D') ? 0x80000000 : 0);
-			debug("%c, %x", str[-1], array);
+			// debug("%c, %x", str[-1], array);
 		}
-		debug("path(%x), array(%x)", *p, array);
+		// debug("path(%x), array(%x)", *p, array);
 		if(*p++ != array) {
 			return(0);
 		}
@@ -4758,9 +4759,8 @@ void unittest_test_pair(
 	struct unittest_seq_pair_s const *pair)
 {
 	/* prepare sequences */
-	char *a = unittest_cat_seq(pair->a);
-	char *b = unittest_cat_seq(pair->b);
-	debug("a(%s), b(%s)", a, b);
+	char *a = unittest_cat_seq(pair->a); debug("a(%s)", a);
+	char *b = unittest_cat_seq(pair->b); debug("b(%s)", b);
 
 	uint64_t *asec = unittest_build_section_array(pair->a);
 	uint64_t *bsec = unittest_build_section_array(pair->b);
@@ -4777,8 +4777,8 @@ void unittest_test_pair(
 	assert(nr.sec != NULL);
 
 	/* fix head segment */
-	nr.sec[0].apos += s->apos;
-	nr.sec[0].bpos += s->bpos;
+	for(uint64_t i = 0; i < nr.scnt && nr.sec[i].aid == 0; i++) { nr.sec[i].apos += s->apos; }
+	for(uint64_t i = 0; i < nr.scnt && nr.sec[i].bid == 0; i++) { nr.sec[i].bpos += s->bpos; }
 
 	/* fill-in sections */
 	struct gaba_fill_s const *m = unittest_dp_extend(dp, s);
