@@ -4199,121 +4199,13 @@ struct unittest_naive_section_pair_s *unittest_naive_finalize_section(
  * left-aligned gap and left-aligned deletion
  */
 #define UNITTEST_SEQ_MARGIN			( 8 )			/* add margin to avoid warnings in the glibc strlen */
-// #if MODEL == LINEAR
-#if 0
 static
 struct unittest_naive_result_s unittest_naive(
 	struct gaba_params_s const *sc,
 	char const *a, char const *b,
 	uint64_t const *abnd, uint64_t const *bbnd)
 {
-	/* utils */
-	#define _a(p, q, plen)	( (q) * ((plen) + 1) + (p) )
-	#define s(p, q)			_a(p, (q), alen)
-	#define m(p, q)			( a[(p) - 1] == b[(q) - 1] ? m : x )
-
-	/* load gap penalties */
-	v16i8_t scv = _loadu_v16i8(sc->score_matrix);
-	int8_t m = _hmax_v16i8(scv);
-	int8_t x = -_hmax_v16i8(_sub_v16i8(_zero_v16i8(), scv));
-	int8_t g = -(sc->gi + sc->ge);
-
-	/* calc lengths */
-	uint64_t alen = strlen(a);
-	uint64_t blen = strlen(b);
-
-	/* calc min */
-	int64_t min = INT16_MIN - x - 2 * g;
-
-	/* malloc matrix */
-	int64_t *mat = (int64_t *)malloc((alen + 1) * (blen + 1) * sizeof(int64_t));
-
-	/* init */
-	struct unittest_pos_score_s max = { 0, 0, 0 };
-
-	mat[s(0, 0)] = 0;
-	for(uint64_t i = 1; i < alen+1; i++) {
-		mat[s(i, 0)] = MAX2(min, (int64_t)i * g);
-	}
-	for(uint64_t j = 1; j < blen+1; j++) {
-		mat[s(0, j)] = MAX2(min, (int64_t)j * g);
-	}
-
-	for(uint64_t j = 1; j < blen+1; j++) {
-		for(uint64_t i = 1; i < alen+1; i++) {
-			int64_t score = mat[s(i, j)] = MAX4(min,
-				mat[s(i - 1, j - 1)] + m(i, j),
-				mat[s(i - 1, j)] + g,
-				mat[s(i, j - 1)] + g);
-			if(score > max.score
-			|| (score == max.score && (i + j) < (max.apos + max.bpos))) {
-				max = (struct unittest_pos_score_s){
-					score, i, j
-				};
-			}
-		}
-	}
-	if(max.score == 0) {
-		max = (struct unittest_pos_score_s){ 0, 0, 0 };
-	}
-
-	debug("max(%ld), apos(%ld), bpos(%ld)", max.score, max.apos, max.bpos);
-
-	struct unittest_naive_result_s result = {
-		.score = max.score,
-		.alen = max.apos,
-		.blen = max.bpos,
-		.path_length = max.apos + max.bpos + 1,
-		.path = (char *)malloc(max.apos + max.bpos + UNITTEST_SEQ_MARGIN)
-	};
-	struct unittest_naive_section_work_s w;
-	unittest_naive_init_section(&w, max.apos, max.bpos, abnd, bbnd);
-
-	struct unittest_pos_score_s curr = max;
-	int64_t path_index = max.apos + max.bpos + 1;
-	while(curr.apos > 0 || curr.bpos > 0) {
-		debug("path_index(%lu), apos(%ld), bpos(%ld)", path_index, curr.apos, curr.bpos);
-
-		/* M > I > D > X */
-		if(curr.bpos > 0
-		&& mat[s(curr.apos, curr.bpos)] == mat[s(curr.apos, curr.bpos - 1)] + g) {
-			unittest_naive_test_section(&w, curr, 0, 1);
-			curr.bpos--;
-			result.path[--path_index] = 'D';
-		} else if(curr.apos > 0
-		&& mat[s(curr.apos, curr.bpos)] == mat[s(curr.apos - 1, curr.bpos)] + g) {
-			unittest_naive_test_section(&w, curr, 1, 0);
-			curr.apos--;
-			result.path[--path_index] = 'R';
-		} else {
-			unittest_naive_test_section(&w, curr, 1, 1);
-			result.path[--path_index] = 'R';
-			result.path[--path_index] = 'D';
-			curr.apos--;
-			curr.bpos--;
-		}
-	}
-	result.sec = unittest_naive_finalize_section(&w, &result.scnt);
-
-	result.path_length -= path_index;
-	for(uint64_t i = 0; i < result.path_length; i++) {
-		result.path[i] = result.path[path_index++];
-	}
-	result.path[result.path_length] = '\0';
-	free(mat);
-
-	#undef _a
-	#undef s
-	#undef m
-	return(result);
-}
-#else /* MODEL == AFFINE */
-static
-struct unittest_naive_result_s unittest_naive(
-	struct gaba_params_s const *sc,
-	char const *a, char const *b,
-	uint64_t const *abnd, uint64_t const *bbnd)
-{
+	debug("a(%s), b(%s)", a, b);
 	/* utils */
 	#define _a(p, q, plen)	( (q) * ((plen) + 1) + (p) )
 	#define s(p, q)			_a(p, 3*(q), alen)
@@ -4346,11 +4238,11 @@ struct unittest_naive_result_s unittest_naive(
 
 	mat[s(0, 0)] = mat[e(0, 0)] = mat[f(0, 0)] = 0;
 	for(uint64_t i = 1; i < alen+1; i++) {
-		mat[s(i, 0)] = mat[e(i, 0)] = MAX2(min, gi + (int64_t)i * ge);
+		mat[s(i, 0)] = mat[e(i, 0)] = MAX3(min, gi + (int64_t)i * ge, (int64_t)i * gfa);
 		mat[f(i, 0)] = min;
 	}
 	for(uint64_t j = 1; j < blen+1; j++) {
-		mat[s(0, j)] = mat[f(0, j)] = MAX2(min, gi + (int64_t)j * ge);
+		mat[s(0, j)] = mat[f(0, j)] = MAX3(min, gi + (int64_t)j * ge, (int64_t)j * gfb);
 		mat[e(0, j)] = min;
 	}
 
@@ -4395,7 +4287,11 @@ struct unittest_naive_result_s unittest_naive(
 	int64_t path_index = max.apos + max.bpos + 1;
 	while(curr.apos > 0 || curr.bpos > 0) {
 		/* M > I > D > X */
-		if(mat[s(curr.apos, curr.bpos)] == mat[f(curr.apos, curr.bpos)]) {
+		if(curr.bpos > 1 && mat[s(curr.apos, curr.bpos)] == mat[s(curr.apos, curr.bpos - 1)] + gfb) {
+			unittest_naive_test_section(&w, curr, 0, 1);
+			curr.bpos--;
+			result.path[--path_index] = 'D';
+		} else if(mat[s(curr.apos, curr.bpos)] == mat[f(curr.apos, curr.bpos)]) {
 			while(curr.bpos > 1 && mat[f(curr.apos, curr.bpos)] == mat[f(curr.apos, curr.bpos - 1)] + ge) {
 				unittest_naive_test_section(&w, curr, 0, 1);
 				curr.bpos--;
@@ -4404,6 +4300,10 @@ struct unittest_naive_result_s unittest_naive(
 			unittest_naive_test_section(&w, curr, 0, 1);
 			curr.bpos--;
 			result.path[--path_index] = 'D';
+		} else if(curr.apos > 1 && mat[s(curr.apos, curr.bpos)] == mat[s(curr.apos - 1, curr.bpos)] + gfa) {
+			unittest_naive_test_section(&w, curr, 1, 0);
+			curr.apos--;
+			result.path[--path_index] = 'R';
 		} else if(mat[s(curr.apos, curr.bpos)] == mat[e(curr.apos, curr.bpos)]) {
 			while(curr.apos > 1 && mat[e(curr.apos, curr.bpos)] == mat[e(curr.apos - 1, curr.bpos)] + ge) {
 				unittest_naive_test_section(&w, curr, 1, 0);
@@ -4437,7 +4337,6 @@ struct unittest_naive_result_s unittest_naive(
 	#undef m
 	return(result);
 }
-#endif
 
 #if MODEL == LINEAR
 unittest()
@@ -4517,26 +4416,26 @@ unittest()
 
 	/* mismatch */
 	n = unittest_naive(p, "AAAAAAAA", "TAAAAAAAA", (uint64_t const []){ 0, 8, 0 }, (uint64_t const []){ 0, 9, 0 });
-	assert(check_naive_result(n, 11, "DRDRDRDRDRDRDRDR"), print_naive_result(n));
+	assert(check_naive_result(n, 14, "DDRDRDRDRDRDRDRDR"), print_naive_result(n));
 	free(n.path); free(n.sec);
 
 	n = unittest_naive(p, "GTTTTTTTT", "TTTTTTTT", (uint64_t const []){ 0, 9, 0 }, (uint64_t const []){ 0, 8, 0 });
-	assert(check_naive_result(n, 11, "DRDRDRDRDRDRDRDR"), print_naive_result(n));
+	assert(check_naive_result(n, 14, "RDRDRDRDRDRDRDRDR"), print_naive_result(n));
 	free(n.path); free(n.sec);
 
 	/* with deletions */
 	n = unittest_naive(p, "TTTTACGTACGT", "TTACGTACGT", (uint64_t const []){ 0, 12, 0 }, (uint64_t const []){ 0, 10, 0 });
-	assert(check_naive_result(n, 13, "DRDRRRDRDRDRDRDRDRDRDR"), print_naive_result(n));
+	assert(check_naive_result(n, 16, "DRDRRRDRDRDRDRDRDRDRDR"), print_naive_result(n));
 	free(n.path); free(n.sec);
 
 	/* with insertions */
 	n = unittest_naive(p, "TTACGTACGT", "TTTTACGTACGT", (uint64_t const []){ 0, 10, 0 }, (uint64_t const []){ 0, 12, 0 });
-	assert(check_naive_result(n, 13, "DRDRDDDRDRDRDRDRDRDRDR"), print_naive_result(n));
+	assert(check_naive_result(n, 16, "DRDRDDDRDRDRDRDRDRDRDR"), print_naive_result(n));
 	free(n.path); free(n.sec);
 
 	/* ins-match-del */
 	n = unittest_naive(p, "ATGAAGCTGCGAGGC", "TGATGGCTTGCGAGGC", (uint64_t const []){ 0, 15, 0 }, (uint64_t const []){ 0, 16, 0 });
-	assert(check_naive_result(n, 6, "DDDRDRDRRRDRDRDRDDRDRDRDRDRDRDR"), print_naive_result(n));
+	assert(check_naive_result(n, 17, "RDRDRDRDRDRDDRDRDDRDRDRDRDRDRDR"), print_naive_result(n));
 	free(n.path); free(n.sec);
 }
 #endif /* MODEL */
@@ -4835,7 +4734,7 @@ void unittest_test_pair(
 	struct gaba_fill_s const *m = unittest_dp_extend(dp, s);
 
 	assert(m != NULL);
-	assert(m->max == nr.score, "m->max(%ld), nr.score(%d)", m->max, nr.score);
+	assert(m->max == nr.score, "a(%s), b(%s), m->max(%ld), nr.score(%d)", a, b, m->max, nr.score);
 
 	/* test max pos */
 	struct gaba_pos_pair_s const *p = _export(gaba_dp_search_max)(dp, m);
