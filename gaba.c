@@ -3790,11 +3790,19 @@ void _export(gaba_dp_clean)(
 #if MODEL == LINEAR
 static struct gaba_params_s const *unittest_default_params = GABA_PARAMS(
 	.xdrop = 100,
-	GABA_SCORE_SIMPLE(2, 3, 0, 6));
+	GABA_SCORE_SIMPLE(2, 3, 0, 6)
+);
+#elif MODEL == AFFINE
+static struct gaba_params_s const *unittest_default_params = GABA_PARAMS(
+	.xdrop = 100,
+	GABA_SCORE_SIMPLE(2, 3, 5, 1)
+);
 #else
 static struct gaba_params_s const *unittest_default_params = GABA_PARAMS(
 	.xdrop = 100,
-	GABA_SCORE_SIMPLE(2, 3, 5, 1));
+	GABA_SCORE_SIMPLE(2, 3, 5, 1),
+	.gfa = 2, .gfb = 2
+);
 #endif
 static
 void *unittest_build_context(void *params)
@@ -4202,7 +4210,8 @@ struct unittest_naive_section_pair_s *unittest_naive_finalize_section(
  * left-aligned gap and left-aligned deletion
  */
 #define UNITTEST_SEQ_MARGIN			( 8 )			/* add margin to avoid warnings in the glibc strlen */
-#if MODEL == LINEAR
+// #if MODEL == LINEAR
+#if 0
 static
 struct unittest_naive_result_s unittest_naive(
 	struct gaba_params_s const *sc,
@@ -4309,37 +4318,6 @@ struct unittest_naive_result_s unittest_naive(
 	#undef m
 	return(result);
 }
-
-unittest()
-{
-	struct gaba_params_s const *p = unittest_default_params;
-	struct unittest_naive_result_s n;
-
-	/* all matches */
-	n = unittest_naive(p, "AAAA", "AAAA", (uint64_t const []){ 0, 4, 0 }, (uint64_t const []){ 0, 4, 0 });
-	assert(check_naive_result(n, 8, "DRDRDRDR"), print_naive_result(n));
-	free(n.path); free(n.sec);
-
-	/* mismatch */
-	n = unittest_naive(p, "AAAAAAAA", "TAAAAAAAA", (uint64_t const []){ 0, 8, 0 }, (uint64_t const []){ 0, 9, 0 });
-	assert(check_naive_result(n, 11, "DRDRDRDRDRDRDRDR"), print_naive_result(n));
-	free(n.path); free(n.sec);
-
-	n = unittest_naive(p, "GTTTTTTTT", "TTTTTTTT", (uint64_t const []){ 0, 9, 0 }, (uint64_t const []){ 0, 8, 0 });
-	assert(check_naive_result(n, 11, "DRDRDRDRDRDRDRDR"), print_naive_result(n));
-	free(n.path); free(n.sec);
-
-	/* with deletions */
-	n = unittest_naive(p, "TTTTACGTACGT", "TTACGTACGT", (uint64_t const []){ 0, 12, 0 }, (uint64_t const []){ 0, 10, 0 });
-	assert(check_naive_result(n, 8, "DRDRRRDRDRDRDRDRDRDRDR"), print_naive_result(n));
-	free(n.path); free(n.sec);
-
-	/* with insertions */
-	n = unittest_naive(p, "TTACGTACGT", "TTTTACGTACGT", (uint64_t const []){ 0, 10, 0 }, (uint64_t const []){ 0, 12, 0 });
-	assert(check_naive_result(n, 8, "DRDRDDDRDRDRDRDRDRDRDR"), print_naive_result(n));
-	free(n.path); free(n.sec);
-}
-
 #else /* MODEL == AFFINE */
 static
 struct unittest_naive_result_s unittest_naive(
@@ -4360,6 +4338,8 @@ struct unittest_naive_result_s unittest_naive(
 	int8_t x = -_hmax_v16i8(_sub_v16i8(_zero_v16i8(), scv));
 	int8_t gi = -sc->gi;
 	int8_t ge = -sc->ge;
+	int8_t gfa = sc->gfa == 0 ? gi + ge : -sc->gfa;
+	int8_t gfb = sc->gfb == 0 ? gi + ge : -sc->gfb;
 
 	/* calc lengths */
 	uint64_t alen = strlen(a);
@@ -4378,24 +4358,28 @@ struct unittest_naive_result_s unittest_naive(
 	mat[s(0, 0)] = mat[e(0, 0)] = mat[f(0, 0)] = 0;
 	for(uint64_t i = 1; i < alen+1; i++) {
 		mat[s(i, 0)] = mat[e(i, 0)] = MAX2(min, gi + (int64_t)i * ge);
-		mat[f(i, 0)] = MAX2(min, gi + (int64_t)i * ge + gi - 1);
+		mat[f(i, 0)] = min;
 	}
 	for(uint64_t j = 1; j < blen+1; j++) {
 		mat[s(0, j)] = mat[f(0, j)] = MAX2(min, gi + (int64_t)j * ge);
-		mat[e(0, j)] = MAX2(min, gi + (int64_t)j * ge + gi - 1);
+		mat[e(0, j)] = min;
 	}
 
 	for(uint64_t j = 1; j < blen+1; j++) {
 		for(uint64_t i = 1; i < alen+1; i++) {
 			int64_t score_e = mat[e(i, j)] = MAX2(
 				mat[s(i - 1, j)] + gi + ge,
-				mat[e(i - 1, j)] + ge);
+				mat[e(i - 1, j)] + ge
+			);
 			int64_t score_f = mat[f(i, j)] = MAX2(
 				mat[s(i, j - 1)] + gi + ge,
-				mat[f(i, j - 1)] + ge);
+				mat[f(i, j - 1)] + ge
+			);
 			int64_t score = mat[s(i, j)] = MAX4(min,
 				mat[s(i - 1, j - 1)] + m(i, j),
-				score_e, score_f);
+				MAX2(score_e, mat[s(i - 1, j)] + gfa),
+				MAX2(score_f, mat[s(i, j - 1)] + gfb)
+			);
 			if(score > max.score
 			|| (score == max.score && (i + j) < (max.apos + max.bpos))) {
 				max = (struct unittest_pos_score_s){
@@ -4423,7 +4407,7 @@ struct unittest_naive_result_s unittest_naive(
 	while(curr.apos > 0 || curr.bpos > 0) {
 		/* M > I > D > X */
 		if(mat[s(curr.apos, curr.bpos)] == mat[f(curr.apos, curr.bpos)]) {
-			while(mat[f(curr.apos, curr.bpos)] == mat[f(curr.apos, curr.bpos - 1)] + ge) {
+			while(curr.bpos > 1 && mat[f(curr.apos, curr.bpos)] == mat[f(curr.apos, curr.bpos - 1)] + ge) {
 				unittest_naive_test_section(&w, curr, 0, 1);
 				curr.bpos--;
 				result.path[--path_index] = 'D';
@@ -4432,7 +4416,7 @@ struct unittest_naive_result_s unittest_naive(
 			curr.bpos--;
 			result.path[--path_index] = 'D';
 		} else if(mat[s(curr.apos, curr.bpos)] == mat[e(curr.apos, curr.bpos)]) {
-			while(mat[e(curr.apos, curr.bpos)] == mat[e(curr.apos - 1, curr.bpos)] + ge) {
+			while(curr.apos > 1 && mat[e(curr.apos, curr.bpos)] == mat[e(curr.apos - 1, curr.bpos)] + ge) {
 				unittest_naive_test_section(&w, curr, 1, 0);
 				curr.apos--;
 				result.path[--path_index] = 'R';
@@ -4464,7 +4448,74 @@ struct unittest_naive_result_s unittest_naive(
 	#undef m
 	return(result);
 }
+#endif
 
+#if MODEL == LINEAR
+unittest()
+{
+	struct gaba_params_s const *p = unittest_default_params;
+	struct unittest_naive_result_s n;
+
+	/* all matches */
+	n = unittest_naive(p, "AAAA", "AAAA", (uint64_t const []){ 0, 4, 0 }, (uint64_t const []){ 0, 4, 0 });
+	assert(check_naive_result(n, 8, "DRDRDRDR"), print_naive_result(n));
+	free(n.path); free(n.sec);
+
+	/* mismatch */
+	n = unittest_naive(p, "AAAAAAAA", "TAAAAAAAA", (uint64_t const []){ 0, 8, 0 }, (uint64_t const []){ 0, 9, 0 });
+	assert(check_naive_result(n, 11, "DRDRDRDRDRDRDRDR"), print_naive_result(n));
+	free(n.path); free(n.sec);
+
+	n = unittest_naive(p, "GTTTTTTTT", "TTTTTTTT", (uint64_t const []){ 0, 9, 0 }, (uint64_t const []){ 0, 8, 0 });
+	assert(check_naive_result(n, 11, "DRDRDRDRDRDRDRDR"), print_naive_result(n));
+	free(n.path); free(n.sec);
+
+	/* with deletions */
+	n = unittest_naive(p, "TTTTACGTACGT", "TTACGTACGT", (uint64_t const []){ 0, 12, 0 }, (uint64_t const []){ 0, 10, 0 });
+	assert(check_naive_result(n, 8, "DRDRRRDRDRDRDRDRDRDRDR"), print_naive_result(n));
+	free(n.path); free(n.sec);
+
+	/* with insertions */
+	n = unittest_naive(p, "TTACGTACGT", "TTTTACGTACGT", (uint64_t const []){ 0, 10, 0 }, (uint64_t const []){ 0, 12, 0 });
+	assert(check_naive_result(n, 8, "DRDRDDDRDRDRDRDRDRDRDR"), print_naive_result(n));
+	free(n.path); free(n.sec);
+}
+#elif MODEL == AFFINE
+unittest()
+{
+	struct gaba_params_s const *p = unittest_default_params;
+	struct unittest_naive_result_s n;
+
+	/* all matches */
+	n = unittest_naive(p, "AAAA", "AAAA", (uint64_t const []){ 0, 4, 0 }, (uint64_t const []){ 0, 4, 0 });
+	assert(check_naive_result(n, 8, "DRDRDRDR"), print_naive_result(n));
+	free(n.path); free(n.sec);
+
+	/* mismatch */
+	n = unittest_naive(p, "AAAAAAAA", "TAAAAAAAA", (uint64_t const []){ 0, 8, 0 }, (uint64_t const []){ 0, 9, 0 });
+	assert(check_naive_result(n, 11, "DRDRDRDRDRDRDRDR"), print_naive_result(n));
+	free(n.path); free(n.sec);
+
+	n = unittest_naive(p, "GTTTTTTTT", "TTTTTTTT", (uint64_t const []){ 0, 9, 0 }, (uint64_t const []){ 0, 8, 0 });
+	assert(check_naive_result(n, 11, "DRDRDRDRDRDRDRDR"), print_naive_result(n));
+	free(n.path); free(n.sec);
+
+	/* with deletions */
+	n = unittest_naive(p, "TTTTACGTACGT", "TTACGTACGT", (uint64_t const []){ 0, 12, 0 }, (uint64_t const []){ 0, 10, 0 });
+	assert(check_naive_result(n, 13, "DRDRRRDRDRDRDRDRDRDRDR"), print_naive_result(n));
+	free(n.path); free(n.sec);
+
+	/* with insertions */
+	n = unittest_naive(p, "TTACGTACGT", "TTTTACGTACGT", (uint64_t const []){ 0, 10, 0 }, (uint64_t const []){ 0, 12, 0 });
+	assert(check_naive_result(n, 13, "DRDRDDDRDRDRDRDRDRDRDR"), print_naive_result(n));
+	free(n.path); free(n.sec);
+
+	/* ins-match-del */
+	n = unittest_naive(p, "ATGAAGCTGCGAGGC", "TGATGGCTTGCGAGGC", (uint64_t const []){ 0, 15, 0 }, (uint64_t const []){ 0, 16, 0 });
+	assert(check_naive_result(n, 6, "DDDRDRDRRRDRDRDRDDRDRDRDRDRDRDR"), print_naive_result(n));
+	free(n.path); free(n.sec);
+}
+#else /* COMBINED */
 unittest()
 {
 	struct gaba_params_s const *p = unittest_default_params;
