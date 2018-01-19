@@ -751,9 +751,13 @@ struct gaba_dir_s {
 #elif MODEL == AFFINE
 #define _gap_h(_p, _l)				( -1 * ((_l) > 0) * (_p)->gi - (_p)->ge * (_l) )
 #define _gap_v(_p, _l)				( -1 * ((_l) > 0) * (_p)->gi - (_p)->ge * (_l) )
+#define _gap_e(_p, _l)				( -1 * ((_l) > 0) * (_p)->gi - (_p)->ge * (_l) )
+#define _gap_f(_p, _l)				( -1 * ((_l) > 0) * (_p)->gi - (_p)->ge * (_l) )
 #else /* MODEL == COMBINED */
 #define _gap_h(_p, _l)				( MAX2(-1 * ((_l) > 0) * (_p)->gi - (_p)->ge * (_l), -1 * (_p)->gfa * (_l)) )
 #define _gap_v(_p, _l)				( MAX2(-1 * ((_l) > 0) * (_p)->gi - (_p)->ge * (_l), -1 * (_p)->gfb * (_l)) )
+#define _gap_e(_p, _l)				( -1 * ((_l) > 0) * (_p)->gi - (_p)->ge * (_l) )
+#define _gap_f(_p, _l)				( -1 * ((_l) > 0) * (_p)->gi - (_p)->ge * (_l) )
 #endif
 #define _ofs_h(_p)					( (_p)->gi + (_p)->ge )
 #define _ofs_v(_p)					( (_p)->gi + (_p)->ge )
@@ -1405,15 +1409,16 @@ struct gaba_joint_tail_s *fill_create_tail(
 #else /* MODEL == COMBINED */
 #define _fill_body() { \
 	register nvec_t t = _match_n(_loadu_n(aptr), _loadu_n(bptr)); \
-	register nvec_t dhf = _add_n(dh, _load_gfh(self->scv)); \
-	register nvec_t dvf = _add_n(dv, _load_gfv(self->scv)); \
-	_print_n(_loadu_n(aptr)); _print_n(_loadu_n(bptr)); \
-	_print_n(dhf); _print_n(dvf); \
+	register nvec_t di = _add_n(dv, _load_gfv(self->scv)); \
+	register nvec_t dd = _sub_n(_load_gfh(self->scv), dh); \
+	_print_n(dd); _print_n(di); \
+	di = _max_n(di, de); dd = _max_n(dd, df); \
 	t = _shuf_n(_load_sb(self->scv), t); \
-	t = _max_n(de, t); t = _max_n(df, t); \
-	t = _max_n(dhf, t); t = _max_n(dvf, t); \
-	ptr->h.mask = _mask_n(_eq_n(t, de)); \
-	ptr->v.mask = _mask_n(_eq_n(t, df)); \
+	_print_n(t); _print_n(dd); _print_n(di); \
+	t = _max_n(dd, t); t = _max_n(di, t); \
+	_print_n(t); \
+	ptr->h.mask = _mask_n(_eq_n(t, di)); \
+	ptr->v.mask = _mask_n(_eq_n(t, dd)); \
 	debug("mask(%x, %x)", ptr->h.all, ptr->v.all); \
 	/* update de and dh */ \
 	de = _add_n(de, _load_adjh(self->scv)); \
@@ -2033,7 +2038,7 @@ void merge_paste_score_vectors(
 			_loadu_w(_pb(self, q)),
 			pv
 		));
-	#elif MODEL == AFFINE
+	#else	/* AFFINE and COMBINED */
 		/* negated for affine: cv + -dh */
 		nvec_t dh = _loadu_n(blk->diff.dh);
 		wvec_t pv = _add_w(cv, _cvt_n_w(dh));
@@ -3375,7 +3380,7 @@ struct gaba_score_vec_s gaba_init_score_vector(
 	struct gaba_params_s const *p)
 {
 	v16i8_t scv = _loadu_v16i8(p->score_matrix);
-	int8_t ge = -p->ge, gi = -p->gi, gfa = -p->gfa, gfb = -p->gfb;	/* negative values */
+	int8_t ge = -p->ge, gi = -p->gi;			/* convert to negative values */
 	struct gaba_score_vec_s sc __attribute__(( aligned(MEM_ALIGN_SIZE) ));
 
 	/* score matrices */
@@ -3398,6 +3403,7 @@ struct gaba_score_vec_s gaba_init_score_vector(
 		_store_ofsh(sc, -gi, ge + gi, 0, 0);
 		_store_ofsv(sc, -gi, ge + gi, 0, 0);
 	#else	/* COMBINED */
+		int8_t gfa = -p->gfa, gfb = -p->gfb;	/* convert to negative values */
 		_store_adjh(sc, -gi, ge + gi, -(ge + gi) + gfa, -(ge + gi) + gfb);
 		_store_adjv(sc, -gi, ge + gi, -(ge + gi) + gfa, -(ge + gi) + gfb);
 		_store_ofsh(sc, -gi, ge + gi, -(ge + gi) + gfa, -(ge + gi) + gfb);
@@ -3447,10 +3453,10 @@ struct gaba_diff_vec_s gaba_init_diff_vectors(
 		diff.dv[_W/2 - 1 - i] = _ofs_v(p) + _max_match(p) + _gap_h(p, i*2 + 1) - _gap_v(p, (i + 1) * 2);
 		diff.dv[_W/2     + i] = _ofs_v(p) + _gap_v(p, i*2 + 1) - _gap_v(p, i*2);
 	#if MODEL == AFFINE || MODEL == COMBINED
-		diff.de[_W/2 - 1 - i] = _ofs_e(p) + diff.dv[_W/2 - 1 - i];
+		diff.de[_W/2 - 1 - i] = _ofs_e(p) + diff.dv[_W/2 - 1 - i] + _gap_e(p, i*2 + 1) - _gap_h(p, i*2 + 1);
 		diff.de[_W/2     + i] = _ofs_e(p) + diff.dv[_W/2     + i] - p->gi;
 		diff.df[_W/2 - 1 - i] = _ofs_f(p) + diff.dh[_W/2 - 1 - i] - p->gi;
-		diff.df[_W/2     + i] = _ofs_f(p) + diff.dh[_W/2     + i];
+		diff.df[_W/2     + i] = _ofs_f(p) + diff.dh[_W/2     + i] + _gap_f(p, i*2 + 1) - _gap_v(p, i*2 + 1);
 	#endif
 	}
 	#if MODEL == AFFINE || MODEL == COMBINED
