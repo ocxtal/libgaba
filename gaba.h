@@ -101,7 +101,7 @@ typedef struct gaba_params_s gaba_params_t;
  * @macro GABA_SCORE_SIMPLE
  * @brief utility macro for constructing score parameters.
  */
-#define GABA_SCORE_SIMPLE(_m, _x, _gi, _ge)	.score_matrix = { (_m),-(_x),-(_x),-(_x),-(_x),(_m),-(_x),-(_x),-(_x),-(_x),(_m),-(_x),-(_x),-(_x),-(_x),(_m) }, .gi = (_gi), .ge = (_ge), .gfa = 1, .gfb = 1
+#define GABA_SCORE_SIMPLE(_m, _x, _gi, _ge)	.score_matrix = { (_m),-(_x),-(_x),-(_x),-(_x),(_m),-(_x),-(_x),-(_x),-(_x),(_m),-(_x),-(_x),-(_x),-(_x),(_m) }, .gi = (_gi), .ge = (_ge)
 
 /**
  * @type gaba_t
