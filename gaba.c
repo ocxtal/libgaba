@@ -3327,7 +3327,7 @@ void gaba_init_restore_default(
 	uint32_t zm = ((v32i8_masku_t){
 		.mask = _mask_v32i8(_eq_v32i8(_loadu_v32i8(p->score_matrix), _zero_v32i8()))
 	}).all;
-	if((zm & 0xfffff) == 0) {
+	if((zm & 0xfffff) == 0xfffff) {
 		/* score matrix for erroneous long reads */
 		v16i8_t sc = _seta_v16i8(
 			1, -1, -1, -1,
