@@ -1338,7 +1338,7 @@ struct gaba_joint_tail_s *fill_create_tail(
 	register nvec_t dv = _loadu_n(((_blk) - 1)->diff.dv); \
 	register nvec_t de = _loadu_n(((_blk) - 1)->diff.de); \
 	register nvec_t df = _loadu_n(((_blk) - 1)->diff.df); \
-	_print_n(_add_n(dh, _load_ofsh(self->scv))); \
+	_print_n(_sub_n(dh, _load_ofsh(self->scv))); \
 	_print_n(_add_n(dv, _load_ofsv(self->scv))); \
 	_print_n(_sub_n(_sub_n(de, dv), _load_adjh(self->scv))); \
 	_print_n(_sub_n(_add_n(df, dh), _load_adjv(self->scv))); \
@@ -1396,9 +1396,8 @@ struct gaba_joint_tail_s *fill_create_tail(
 	ptr->f.mask = _mask_n(_eq_n(tf, df)); \
 	df = _sub_n(tf, dv); \
 	t = _sub_n(dv, t); \
-	ptr++; \
-	dv = dh; dh = t; \
-	_print_n(_add_n(dh, _load_ofsh(self->scv))); \
+	ptr++; dv = dh; dh = t; \
+	_print_n(_sub_n(dh, _load_ofsh(self->scv))); \
 	_print_n(_add_n(dv, _load_ofsv(self->scv))); \
 	_print_n(_sub_n(_sub_n(de, dv), _load_adjh(self->scv))); \
 	_print_n(_sub_n(_add_n(df, dh), _load_adjv(self->scv))); \
@@ -1409,6 +1408,7 @@ struct gaba_joint_tail_s *fill_create_tail(
 	register nvec_t dhf = _add_n(dh, _load_gfh(self->scv)); \
 	register nvec_t dvf = _add_n(dv, _load_gfv(self->scv)); \
 	_print_n(_loadu_n(aptr)); _print_n(_loadu_n(bptr)); \
+	_print_n(dhf); _print_n(dvf); \
 	t = _shuf_n(_load_sb(self->scv), t); \
 	t = _max_n(de, t); t = _max_n(df, t); \
 	t = _max_n(dhf, t); t = _max_n(dvf, t); \
@@ -1427,9 +1427,8 @@ struct gaba_joint_tail_s *fill_create_tail(
 	ptr->f.mask = _mask_n(_eq_n(tf, df)); \
 	df = _sub_n(tf, dv); \
 	t = _sub_n(dv, t); \
-	ptr++; \
-	dv = dh; dh = t; \
-	_print_n(_add_n(dh, _load_ofsh(self->scv))); \
+	ptr++; dv = dh; dh = t; \
+	_print_n(_sub_n(dh, _load_ofsh(self->scv))); \
 	_print_n(_add_n(dv, _load_ofsv(self->scv))); \
 	_print_n(_sub_n(_sub_n(de, dv), _load_adjh(self->scv))); \
 	_print_n(_sub_n(_add_n(df, dh), _load_adjv(self->scv))); \
