@@ -1440,6 +1440,16 @@ struct gaba_joint_tail_s *fill_create_tail(
  * @brief update small delta vector and max vector
  */
 #define _fill_update_delta(_op_add, _op_subs, _vector, _ofs, _sign) { \
+	nvec_t _t = _op_add(_ofs, _vector); \
+	delta = _add_n(delta, _t); \
+	drop = _subs_n(drop, _t); \
+	_dir_update(dir, _t, 1); \
+	_print_n(delta); _print_n(drop); \
+	_print_w(_add_w(_load_w(&self->w.r.md), _add_w(_cvt_n_w(delta), _set_w(_offset(self->w.r.tail) + self->w.r.ofsd - 128)))); \
+	_print_w(_add_w(_add_w(_load_w(&self->w.r.md), _cvt_n_w(delta)), _add_w(_cvt_n_w(drop), _set_w(_offset(self->w.r.tail) + self->w.r.ofsd)))); \
+}
+#if 0
+#define _fill_update_delta(_op_add, _op_subs, _vector, _ofs, _sign) { \
 	nvec_t _t = _op_add(_vector, _ofs); \
 	delta = _op_add(delta, _t); \
 	drop = _op_subs(drop, _t); \
@@ -1448,7 +1458,7 @@ struct gaba_joint_tail_s *fill_create_tail(
 	_print_w(_add_w(_load_w(&self->w.r.md), _add_w(_cvt_n_w(delta), _set_w(_offset(self->w.r.tail) + self->w.r.ofsd - 128)))); \
 	_print_w(_add_w(_add_w(_load_w(&self->w.r.md), _cvt_n_w(delta)), _add_w(_cvt_n_w(drop), _set_w(_offset(self->w.r.tail) + self->w.r.ofsd)))); \
 }
-
+#endif
 /**
  * @macro _fill_right, _fill_down
  * @brief wrapper of _fill_body and _fill_update_delta
