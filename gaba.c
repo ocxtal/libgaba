@@ -3850,7 +3850,7 @@ unittest()
 static
 int ut_printer(
 	void *pbuf,
-	int64_t len,
+	uint64_t len,
 	char c)
 {
 	char *buf = *((char **)pbuf);
