@@ -684,8 +684,8 @@ struct gaba_dir_s {
  * @macro _dir_update
  * @brief update direction determiner for the next band
  */
-#define _dir_update(_d, _vector, _sign) { \
-	(_d).acc += (_sign) * (_ext_n(_vector, 0) - _ext_n(_vector, _W-1)); \
+#define _dir_update(_d, _vector) { \
+	(_d).acc += _ext_n(_vector, 0) - _ext_n(_vector, _W-1); \
 	/*debug("acc(%d), (%d, %d)", _dir_acc, _ext_n(_vector, 0), _ext_n(_vector, _W-1));*/ \
 }
 /**
@@ -1439,26 +1439,15 @@ struct gaba_joint_tail_s *fill_create_tail(
  * @macro _fill_update_delta
  * @brief update small delta vector and max vector
  */
-#define _fill_update_delta(_op_add, _op_subs, _vector, _ofs, _sign) { \
+#define _fill_update_delta(_op_add, _vector, _ofs) { \
 	nvec_t _t = _op_add(_ofs, _vector); \
 	delta = _add_n(delta, _t); \
 	drop = _subs_n(drop, _t); \
-	_dir_update(dir, _t, 1); \
+	_dir_update(dir, _t); \
 	_print_n(delta); _print_n(drop); \
 	_print_w(_add_w(_load_w(&self->w.r.md), _add_w(_cvt_n_w(delta), _set_w(_offset(self->w.r.tail) + self->w.r.ofsd - 128)))); \
 	_print_w(_add_w(_add_w(_load_w(&self->w.r.md), _cvt_n_w(delta)), _add_w(_cvt_n_w(drop), _set_w(_offset(self->w.r.tail) + self->w.r.ofsd)))); \
 }
-#if 0
-#define _fill_update_delta(_op_add, _op_subs, _vector, _ofs, _sign) { \
-	nvec_t _t = _op_add(_vector, _ofs); \
-	delta = _op_add(delta, _t); \
-	drop = _op_subs(drop, _t); \
-	_dir_update(dir, _vector, _sign); \
-	_print_n(delta); _print_n(drop); \
-	_print_w(_add_w(_load_w(&self->w.r.md), _add_w(_cvt_n_w(delta), _set_w(_offset(self->w.r.tail) + self->w.r.ofsd - 128)))); \
-	_print_w(_add_w(_add_w(_load_w(&self->w.r.md), _cvt_n_w(delta)), _add_w(_cvt_n_w(drop), _set_w(_offset(self->w.r.tail) + self->w.r.ofsd)))); \
-}
-#endif
 /**
  * @macro _fill_right, _fill_down
  * @brief wrapper of _fill_body and _fill_update_delta
@@ -1473,14 +1462,14 @@ struct gaba_joint_tail_s *fill_create_tail(
 #define _fill_right() { \
 	dh = _bsl_n(dh, 1);	/* shift left dh */ \
 	_fill_body();		/* update vectors */ \
-	_fill_update_delta(_add_n, _subs_n, dh, _load_ofsh(self->scv), 1); \
+	_fill_update_delta(_add_n, dh, _load_ofsh(self->scv)); \
 }
 #else	/* AFFINE and COMBINED */
 #define _fill_right() { \
 	dh = _bsl_n(dh, 1);	/* shift left dh */ \
 	df = _bsl_n(df, 1);	/* shift left df */ \
 	_fill_body();		/* update vectors */ \
-	_fill_update_delta(_sub_n, _adds_n, dh, _load_ofsh(self->scv), -1); \
+	_fill_update_delta(_sub_n, dh, _load_ofsh(self->scv)); \
 }
 #endif /* MODEL */
 #define _fill_down_update_ptr() { \
@@ -1493,14 +1482,14 @@ struct gaba_joint_tail_s *fill_create_tail(
 #define _fill_down() { \
 	dv = _bsr_n(dv, 1);	/* shift right dv */ \
 	_fill_body();		/* update vectors */ \
-	_fill_update_delta(_add_n, _subs_n, dv, _load_ofsv(self->scv), 1); \
+	_fill_update_delta(_add_n, dv, _load_ofsv(self->scv)); \
 }
 #else	/* AFFINE and COMBINED */
 #define _fill_down() { \
 	dv = _bsr_n(dv, 1);	/* shift right dv */ \
 	de = _bsr_n(de, 1);	/* shift right de */ \
 	_fill_body();		/* update vectors */ \
-	_fill_update_delta(_add_n, _subs_n, dv, _load_ofsv(self->scv), 1); \
+	_fill_update_delta(_add_n, dv, _load_ofsv(self->scv)); \
 }
 #endif /* MODEL */
 
