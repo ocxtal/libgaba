@@ -10,7 +10,7 @@
 #include <stdio.h>
 #include <string.h>
 
-int printer(void *fp, int64_t len, char c)
+int printer(void *fp, uint64_t len, char c)
 {
 	return(fprintf((FILE *)fp, "%ld%c", len, c));
 }
