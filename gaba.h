@@ -320,59 +320,6 @@ GABA_EXPORT_LEVEL
 void gaba_dp_res_free(
 	gaba_alignment_t *aln);
 
-/**
- * @fn gaba_dp_print_cigar_forward
- *
- * @brief convert path string to cigar.
- * @detail
- * printer(void *fp, uint64_t len, char c); will be called with a pair;
- * cigar operation (c) and its length (len).
- * void *fp is an opaque pointer to the context of the printer.
- */
-typedef int (*gaba_dp_printer_t)(void *, uint64_t, char);
-GABA_EXPORT_LEVEL
-uint64_t gaba_dp_print_cigar_forward(
-	gaba_dp_printer_t printer,
-	void *fp,
-	uint32_t const *path,
-	uint32_t offset,
-	uint32_t len);
-
-/**
- * @fn gaba_dp_print_cigar_reverse
- *
- * @brief convert path string to cigar in reverse direction
- */
-GABA_EXPORT_LEVEL
-uint64_t gaba_dp_print_cigar_reverse(
-	gaba_dp_printer_t printer,
-	void *fp,
-	uint32_t const *path,
-	uint32_t offset,
-	uint32_t len);
-
-/**
- * @fn gaba_dp_dump_cigar_forward
- */
-GABA_EXPORT_LEVEL
-uint64_t gaba_dp_dump_cigar_forward(
-	char *buf,
-	uint64_t buf_size,
-	uint32_t const *path,
-	uint32_t offset,
-	uint32_t len);
-
-/**
- * @fn gaba_dp_dump_cigar_reverse
- */
-GABA_EXPORT_LEVEL
-uint64_t gaba_dp_dump_cigar_reverse(
-	char *buf,
-	uint64_t buf_size,
-	uint32_t const *path,
-	uint32_t offset,
-	uint32_t len);
-
 #endif  /* #ifndef _GABA_H_INCLUDED */
 
 /*
