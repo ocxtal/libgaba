@@ -187,17 +187,16 @@ typedef struct gaba_segment_s gaba_path_section_t;
 struct gaba_alignment_s {
 	/* reserved for internal use */
 	void *reserved1[2];
-	uint32_t reserved;
+	uint32_t reserved2;
 
-	uint32_t slen;				/* section length */
+	uint32_t slen;				/* segment length */
 	struct gaba_segment_s const *seg;
 
 	uint64_t plen;				/* path length */
-
 	int64_t score;				/** score */
-	uint32_t mcnt, xcnt;		/** #matches, #mismatches */
-	uint32_t gicnt, gecnt;		/** #gap opens, #gap bases */
-
+	// uint32_t mcnt, xcnt;		/** #matches, #mismatches */
+	// uint32_t gicnt, gecnt;		/** #gap opens, #gap bases */
+	uint32_t reserved3[4];
 	uint32_t path[];
 };
 typedef struct gaba_alignment_s gaba_alignment_t;
