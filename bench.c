@@ -11,6 +11,7 @@
 #include <getopt.h>
 #include "bench.h"
 #include "gaba.h"
+#include "gaba_parse.h"
 
 /**
  * @fn print_usage

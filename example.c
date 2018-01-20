@@ -5,6 +5,7 @@
 
 // #include "gaba.h"			/* single target configuration: gcc example.c gaba.c -DMODEL=AFFINE -DBW=64 */
 #include "gaba_wrap.h"			/* multiple target configuration: gcc example.c libgaba.a */
+#include "gaba_parse.h"			/* parser: contains gaba_dp_print_cigar_forward and so on */
 
 #include <stdint.h>
 #include <stdio.h>
