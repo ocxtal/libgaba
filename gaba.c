@@ -1393,13 +1393,13 @@ struct gaba_joint_tail_s *fill_create_tail(
 	/* update de and dh */ \
 	de = _add_n(de, _load_adjh(self->scv)); \
 	nvec_t te = _max_n(de, t); \
-	ptr->e.mask = _mask_n(_eq_n(te, de)); \
+	ptr->e.mask = _mask_n(_eq_n(te, t)); \
 	de = _add_n(te, dh); \
 	dh = _add_n(dh, t); \
 	/* update df and dv */ \
 	df = _add_n(df, _load_adjv(self->scv)); \
 	nvec_t tf = _max_n(df, t); \
-	ptr->f.mask = _mask_n(_eq_n(tf, df)); \
+	ptr->f.mask = _mask_n(_eq_n(tf, t)); \
 	df = _sub_n(tf, dv); \
 	t = _sub_n(dv, t); \
 	ptr++; dv = dh; dh = t; \
@@ -2637,15 +2637,15 @@ enum { ts_d = 0, ts_v0, ts_v1, ts_h0, ts_h1 };
  * @brief test mask
  */
 #if MODEL == LINEAR
-#define _trace_test_diag_h()			( (mask->h.all>>q) & 0x01 )
-#define _trace_test_diag_v()			( (mask->v.all>>q) & 0x01 )
-#define _trace_test_gap_h()				( (mask->h.all>>q) & 0x01 )
-#define _trace_test_gap_v()				( (mask->v.all>>q) & 0x01 )
+#define _trace_test_diag_h()			( ((mask->h.all>>q) & 0x01) == 0 )
+#define _trace_test_diag_v()			( ((mask->v.all>>q) & 0x01) == 0 )
+#define _trace_test_gap_h()				( ((mask->h.all>>q) & 0x01) != 0 )
+#define _trace_test_gap_v()				( ((mask->v.all>>q) & 0x01) != 0 )
 #else /* MODEL == AFFINE */
-#define _trace_test_diag_h()			( (mask->h.all>>q) & 0x01 )
-#define _trace_test_diag_v()			( (mask->v.all>>q) & 0x01 )
-#define _trace_test_gap_h()				( (mask->e.all>>q) & 0x01 )
-#define _trace_test_gap_v()				( (mask->f.all>>q) & 0x01 )
+#define _trace_test_diag_h()			( ((mask->h.all>>q) & 0x01) == 0 )
+#define _trace_test_diag_v()			( ((mask->v.all>>q) & 0x01) == 0 )
+#define _trace_test_gap_h()				( ((mask->e.all>>q) & 0x01) == 0 )
+#define _trace_test_gap_v()				( ((mask->f.all>>q) & 0x01) == 0 )
 #endif
 
 /**
@@ -2779,33 +2779,38 @@ void trace_core(
 	struct gaba_dp_context_s *self)
 {
 	#define _pop_vector(_c, _l, _state, _jump_to) { \
-		debug("go %s (%s, %s), dir(%x), mask_h(%lx), mask_v(%lx), p(%ld), q(%d), ptr(%p), path_array(%lx)", \
-			#_l, #_c, #_jump_to, dir_mask, (uint64_t)mask->h.all, (uint64_t)mask->v.all, (int64_t)(mask - blk->mask), (int32_t)q, mask, path_array); \
+		debug("go %s (%s, %s), dir(%x), mask_h(%lx), mask_v(%lx), mask_e(%lx), mask_f(%lx), p(%ld), q(%d), ptr(%p), path_array(%lx)", \
+			#_l, #_c, #_jump_to, dir_mask, (uint64_t)mask->h.all, (uint64_t)mask->v.all, (uint64_t)mask->e.all, (uint64_t)mask->f.all, (int64_t)(mask - blk->mask), (int32_t)q, mask, path_array); \
 		_trace_##_c##_##_l##_update_index(); \
 		_trace_##_l##_update_path_q(); \
 		_trace_##_c##_load_n(t, _state, _jump_to); \
 	}
 	#define _trace_gap_loop(t, _c, _n, _l) { \
 		_trace_##_c##_##_l##_head: \
-			if(_unlikely(_trace_##_c##_##_l##_test_index())) { \
-				self->w.l.state = ts_##_l##0; goto _trace_term; \
+			if(!_trace_test_gap_##_l()) { \
+				fprintf(stderr, "trap\n"); \
+				/**((volatile uint8_t *)NULL);*/ \
+				if(_unlikely(_trace_##_c##_##_l##_test_index())) { \
+					self->w.l.state = ts_##_l##0; goto _trace_term; \
+				} \
+				_trace_inc_ge(); \
+				_pop_vector(_c, _l, 1, _trace_##_n##_##_l##_tail); \
+				goto _trace_##_c##_d_head; \
 			} \
-			_trace_inc_gi();		/* increment #gap regions at the head */ \
-			_pop_vector(_c, _l, 1, _trace_##_n##_##_l##_head); \
-			while(1) { \
-		_trace_##_c##_##_l##_mid: \
-				if(_trace_test_gap_##_l() == 0) { goto _trace_##_c##_d_head; } \
+			do { \
 				if(_unlikely(_trace_##_c##_##_l##_test_index())) { \
 					self->w.l.state = ts_##_l##1; goto _trace_term; \
 				} \
 				_trace_inc_ge();	/* increment #gap bases on every iter */ \
-				_pop_vector(_c, _l, 1, _trace_##_n##_##_l##_head); \
-			} \
+				_pop_vector(_c, _l, 1, _trace_##_n##_##_l##_tail); \
+			_trace_##_c##_##_l##_tail:; \
+			} while(_trace_test_gap_##_l()); \
+			goto _trace_##_c##_d_head; \
 	}
 	#define _trace_diag_loop(t, _c, _n) { \
 		while(1) { \
 		_trace_##_c##_d_head: \
-			if(_trace_test_diag_h() != 0) { goto _trace_##_c##_h_head; } \
+			if(!_trace_test_diag_h()) { goto _trace_##_c##_h_head; } \
 			if(_unlikely(_trace_##_c##_d_test_index())) { \
 				self->w.l.state = ts_d; goto _trace_term; \
 			} \
@@ -2813,7 +2818,7 @@ void trace_core(
 		_trace_##_c##_d_mid: \
 			_pop_vector(_c, v, 0, _trace_##_n##_d_tail); \
 		_trace_##_c##_d_tail: \
-			if(_trace_test_diag_v() != 0) { goto _trace_##_c##_v_head; } \
+			if(!_trace_test_diag_v()) { goto _trace_##_c##_v_head; } \
 		} \
 	}
 
@@ -2846,9 +2851,9 @@ void trace_core(
 	switch(self->w.l.state) {
 		case ts_d:  goto _trace_tail_d_head;
 		case ts_v0: goto _trace_tail_v_head;
-		case ts_v1: goto _trace_tail_v_mid;
+		case ts_v1: goto _trace_tail_v_tail;
 		case ts_h0: goto _trace_tail_h_head;
-		case ts_h1: goto _trace_tail_h_mid;
+		case ts_h1: goto _trace_tail_h_tail;
 	}
 
 	/* tail loops */ {
@@ -3964,8 +3969,8 @@ struct unittest_naive_result_s unittest_naive(
 	int8_t x = -_hmax_v16i8(_sub_v16i8(_zero_v16i8(), scv));
 	int8_t gi = -sc->gi;
 	int8_t ge = -sc->ge;
-	int8_t gfa = sc->gfa == 0 ? gi + ge : -sc->gfa;
-	int8_t gfb = sc->gfb == 0 ? gi + ge : -sc->gfb;
+	int8_t gfa = sc->gfa == 0 ? gi + 2 * ge : -sc->gfa;
+	int8_t gfb = sc->gfb == 0 ? gi + 2 * ge : -sc->gfb;
 
 	/* calc lengths */
 	uint64_t alen = strlen(a);
@@ -4037,7 +4042,8 @@ struct unittest_naive_result_s unittest_naive(
 			curr.bpos--;
 			result.path[--path_index] = 'D';
 		} else if(mat[s(curr.apos, curr.bpos)] == mat[f(curr.apos, curr.bpos)]) {
-			while(curr.bpos > 1 && mat[f(curr.apos, curr.bpos)] == mat[f(curr.apos, curr.bpos - 1)] + ge) {
+			while(curr.bpos > 1 && mat[f(curr.apos, curr.bpos)] != mat[s(curr.apos, curr.bpos - 1)] + gi + ge) {
+			// while(curr.bpos > 1 && mat[f(curr.apos, curr.bpos)] == mat[f(curr.apos, curr.bpos - 1)] + ge) {
 				unittest_naive_test_section(&w, curr, 0, 1);
 				curr.bpos--;
 				result.path[--path_index] = 'D';
@@ -4050,7 +4056,8 @@ struct unittest_naive_result_s unittest_naive(
 			curr.apos--;
 			result.path[--path_index] = 'R';
 		} else if(mat[s(curr.apos, curr.bpos)] == mat[e(curr.apos, curr.bpos)]) {
-			while(curr.apos > 1 && mat[e(curr.apos, curr.bpos)] == mat[e(curr.apos - 1, curr.bpos)] + ge) {
+			while(curr.apos > 1 && mat[e(curr.apos, curr.bpos)] != mat[s(curr.apos - 1, curr.bpos)] + gi + ge) {
+			// while(curr.apos > 1 && mat[e(curr.apos, curr.bpos)] == mat[e(curr.apos - 1, curr.bpos)] + ge) {
 				unittest_naive_test_section(&w, curr, 1, 0);
 				curr.apos--;
 				result.path[--path_index] = 'R';
@@ -4084,7 +4091,7 @@ struct unittest_naive_result_s unittest_naive(
 }
 
 #if MODEL == LINEAR
-unittest()
+unittest( .name = "naive" )
 {
 	struct gaba_params_s const *p = unittest_default_params;
 	struct unittest_naive_result_s n;
@@ -4114,7 +4121,7 @@ unittest()
 	free(n.path); free(n.sec);
 }
 #elif MODEL == AFFINE
-unittest()
+unittest( .name = "naive" )
 {
 	struct gaba_params_s const *p = unittest_default_params;
 	struct unittest_naive_result_s n;
@@ -4149,7 +4156,7 @@ unittest()
 	free(n.path); free(n.sec);
 }
 #else /* COMBINED */
-unittest()
+unittest( .name = "naive" )
 {
 	struct gaba_params_s const *p = unittest_default_params;
 	struct unittest_naive_result_s n;
@@ -4561,7 +4568,7 @@ void unittest_test_pair(
 	return;
 }
 
-unittest()
+unittest( .name = "base" )
 {
 	struct unittest_seq_pair_s pairs[] = {
 		/**
@@ -4576,7 +4583,7 @@ unittest()
 			.a = { "" },
 			.b = { "" }
 		},*/
-		{
+/*		{
 			.a = { "A" },
 			.b = { "A" }
 		},
@@ -4643,7 +4650,17 @@ unittest()
 		{
 			.a = { "AAGGGTCGCCAATTG" },
 			.b = { "AAGGGTCGCCAATTG" }
+		},*/
+		/* non-matching sequences */
+/*		{
+			.a = "TCTGCGGTAACATCCGCTAC",
+			.b = "CACGAGGTTCATCGGGTACT"
+		},*/
+		{
+			.a = "CCTACTGAGTTT",
+			.b = "ACATGGCAGTTT"
 		}
+
 	};
 
 	uint8_t const *lim = (uint8_t const *)0x800000000000;
@@ -4722,9 +4739,9 @@ char *unittest_generate_mutated_sequence(
 	return mutated_seq;
 }
 
-unittest()
+unittest( .name = "cross" )
 {
-	uint64_t const cnt = 500;
+	uint64_t const cnt = 50000;
 
 	uint8_t const *lim = (uint8_t const *)0x800000000000;
 	struct gaba_context_s const *c = (struct gaba_context_s const *)gctx;
@@ -4733,18 +4750,21 @@ unittest()
 	for(uint64_t i = 0; i < cnt; i++) {
 		struct unittest_seq_pair_s pair = {
 			.a = {
+				/*
 				unittest_generate_random_sequence((rand() % 128) + 1),
 				unittest_generate_random_sequence((rand() % 128) + 1),
 				unittest_generate_random_sequence((rand() % 128) + 1),
 				unittest_generate_random_sequence((rand() % 128) + 1),
 				unittest_generate_random_sequence((rand() % 128) + 1),
 				unittest_generate_random_sequence((rand() % 128) + 200)
+				*/
+				unittest_generate_random_sequence((rand() % 5) + 10)
 			}
 		};
 
 		for(uint64_t j = 0; pair.a[j] != NULL; j++) {
 			// pair.b[j] = pair.a[j];
-			pair.b[j] = unittest_generate_mutated_sequence(pair.a[j], 0, 0, _W);
+			pair.b[j] = unittest_generate_mutated_sequence(pair.a[j], 0.1, 0.1, _W);
 		}
 
 		unittest_test_pair(UNITTEST_ARG_LIST, dp, &pair);
