@@ -2481,14 +2481,14 @@ struct gaba_pos_pair_s *_export(gaba_dp_search_max)(
 {
 	self = _restore_dp_context(self);
 	struct gaba_joint_tail_s const *tail = _tail(fill);
-	leaf_search(self, tail);
 
+	leaf_search(self, tail);					/* may return zero */
 	v2i32_t const v11 = _seta_v2i32(1, 1);
 	v2i32_t gidx = _load_v2i32(&self->w.l.agidx), acc = _zero_v2i32();
 	v2i32_t id = _load_v2i32(&tail->f.aid);
 
 	debug("gidx(%d, %d), acc(%d, %d)", _hi32(gidx), _lo32(gidx), _hi32(acc), _lo32(acc));
-	while(1) {
+	while(tail->tail != NULL) {
 		v2i32_t update = _gt_v2i32(v11, gidx);
 		if(_test_v2i32(update, v11)) { break; }
 
@@ -2501,7 +2501,6 @@ struct gaba_pos_pair_s *_export(gaba_dp_search_max)(
 		tail = tail->tail;
 		v2i32_t ridx = _load_v2i32(&tail->aridx);
 		v2i32_t mask = _and_v2i32(update, _eq_v2i32(ridx, _zero_v2i32()));
-		_print_v2i32(update);
 
 		/* add advanced lengths */
 		gidx = _add_v2i32(gidx, _and_v2i32(mask, acc));
@@ -2512,8 +2511,8 @@ struct gaba_pos_pair_s *_export(gaba_dp_search_max)(
 
 	struct gaba_pos_pair_s *pos = gaba_dp_malloc(self, sizeof(struct gaba_pos_pair_s));
 	_store_v2i32(&pos->aid, id);
-	_store_v2i32(&pos->apos, _sub_v2i32(gidx, v11));
-	_print_v2i32(_sub_v2i32(gidx, v11));
+	_store_v2i32(&pos->apos, gidx);
+	_print_v2i32(gidx);
 	return(pos);
 }
 
@@ -3214,11 +3213,20 @@ void gaba_init_phantom(
 		.diff = gaba_init_diff_vectors(p)
 	};
 
-	/* fill root tail object */
+	/*
+	 * fill root tail object
+	 * note on max, mdrop and xd.drop: The max-tracking variables are initialized to keep
+	 * values that correspond to the initial vector at p = -1. This configuration result in
+	 * the first maximum value update occurring at (i, j) = (0, 0) or the origin.
+	 * The max_mask and maximum value are correctly set here and they serve as sentinels
+	 * in the dp_search_max and trace_reload_section loop, especially for non-matching input
+	 * sequences.
+	 */
+	int64_t init_max = -(_max_match(p) + _gap_h(p, 1));
 	ph->tail = (struct gaba_joint_tail_s){
 		/* fill object: coordinate and status */
 		.f = {
-			.max = 0,
+			.max = init_max,
 			.stat = CONT | GABA_UPDATE_A | GABA_UPDATE_B,
 			.ascnt = 0,    .bscnt = 0,
 			.apos = -_W/2, .bpos = -_W/2,
@@ -3233,9 +3241,9 @@ void gaba_init_phantom(
 		.abrk = 0,     .bbrk = 0,		/* no breakpoint set */
 
 		/* score and vectors */
-		.mdrop = 0,
+		.mdrop = init_max,
 		.ch.w = { [0] = _max_match_base_a(p), [_W-1] = _max_match_base_b(p)<<4 },
-		.xd.drop = { [_W / 2] = _max_match(p) - _gap_v(p, 1) },
+		.xd.drop = { 0 /*[_W / 2] = _max_match(p) - _gap_v(p, 1)*/ },
 		.md = gaba_init_middle_delta(p)
 	};
 
@@ -4350,15 +4358,16 @@ struct gaba_fill_s const *unittest_dp_extend(
 
 static
 int unittest_check_maxpos(
-	uint32_t id,
-	uint32_t pos,
-	uint64_t ofs,
-	uint64_t len,
+	uint32_t id,				/* pos->id */
+	uint32_t pos,				/* pos->pos */
+	uint64_t ofs,				/* length before head */
+	uint64_t len,				/* nr.len */
 	struct gaba_section_s const *sec)
 {
 	int64_t acc = 0;
+	debug("id(%u), pos(%u), ofs(%lu), len(%lu)", id, pos, ofs, len);
 	while(acc + sec->len < ofs + len) { acc += sec++->len; }
-	return((id == sec->id && ofs + len - 1 == pos + acc) ? 1 : 0);
+	return((id == sec->id && ofs + len/* - 1*/ == pos + acc) ? 1 : 0);
 }
 
 static
@@ -4440,6 +4449,60 @@ int unittest_check_section(
 }
 
 static
+char *string_pair_diff(
+	char const *a,
+	char const *b)
+{
+	uint64_t len = 2 * (strlen(a) + strlen(b));
+	char *base = malloc(len);
+	char *ptr = base, *tail = base + len - 1;
+	uint64_t state = 0;
+
+	#define push(ch) { \
+		*ptr++ = (ch); \
+		if(ptr == tail) { \
+			base = realloc(base, 2 * len); \
+			ptr = base + len; \
+			tail = base + 2 * len; \
+			len *= 2; \
+		} \
+	}
+	#define push_str(str) { \
+		for(uint64_t i = 0; i < strlen(str); i++) { \
+			push(str[i]); \
+		} \
+	}
+
+	uint64_t i;
+	for(i = 0; i < MIN2(strlen(a), strlen(b)); i++) {
+		if(state == 0 && a[i] != b[i]) {
+			push_str("\x1b[31m"); state = 1;
+		} else if(state == 1 && a[i] == b[i]) {
+			push_str("\x1b[39m"); state = 0;
+		}
+		push(a[i]);
+	}
+	if(state == 1) { push_str("\x1b[39m"); state = 0; }
+	for(; i < strlen(a); i++) { push(a[i]); }
+
+	push('\n');
+	for(uint64_t i = 0; i < strlen(b); i++) {
+		push(b[i]);
+	}
+
+	push('\0');
+	return(base);
+}
+#define format_string_pair_diff(_a, _b) ({ \
+	char *str = string_pair_diff(_a, _b); \
+	char *copy = alloca(strlen(str) + 1); \
+	strcpy(copy, str); \
+	free(str); \
+	copy; \
+})
+#define print_string_pair_diff(_a, _b)		"\n%s", format_string_pair_diff(_a, _b)
+
+static
 void unittest_test_pair(
 	UNITTEST_ARG_DECL,
 	struct gaba_dp_context_s *dp,
@@ -4484,7 +4547,7 @@ void unittest_test_pair(
 
 	assert(r != NULL);
 	assert(r->plen == nr.path_length, "a(%s), b(%s), m->plen(%lu), nr.path_length(%u)", a, b, r->plen, nr.path_length);
-	assert(unittest_check_path(r, nr.path), "a(%s), b(%s), r->path(%s), nr.path(%s)", a, b, unittest_decode_path(r), nr.path);
+	assert(unittest_check_path(r, nr.path), "a(%s), b(%s)\n%s", a, b, format_string_pair_diff(unittest_decode_path(r), nr.path));
 	assert(unittest_check_section(r, nr.sec, nr.scnt), "a(%s), b(%s)", a, b);
 
 	/* cleanup everything */
@@ -4694,6 +4757,7 @@ unittest()
 	_export(gaba_dp_clean)(dp);
 }
 
+#if 0
 /**
  * @fn unittest_add_tail
  */
@@ -4712,62 +4776,6 @@ char *unittest_add_tail(
 	seq[len + tail_len] = '\0';
 	return(seq);
 }
-
-static
-char *string_pair_diff(
-	char const *a,
-	char const *b)
-{
-	uint64_t len = 2 * (strlen(a) + strlen(b));
-	char *base = malloc(len);
-	char *ptr = base, *tail = base + len - 1;
-	uint64_t state = 0;
-
-	#define push(ch) { \
-		*ptr++ = (ch); \
-		if(ptr == tail) { \
-			base = realloc(base, 2 * len); \
-			ptr = base + len; \
-			tail = base + 2 * len; \
-			len *= 2; \
-		} \
-	}
-	#define push_str(str) { \
-		for(uint64_t i = 0; i < strlen(str); i++) { \
-			push(str[i]); \
-		} \
-	}
-
-	uint64_t i;
-	for(i = 0; i < MIN2(strlen(a), strlen(b)); i++) {
-		if(state == 0 && a[i] != b[i]) {
-			push_str("\x1b[31m"); state = 1;
-		} else if(state == 1 && a[i] == b[i]) {
-			push_str("\x1b[39m"); state = 0;
-		}
-		push(a[i]);
-	}
-	if(state == 1) { push_str("\x1b[39m"); state = 0; }
-	for(; i < strlen(a); i++) { push(a[i]); }
-
-	push('\n');
-	for(uint64_t i = 0; i < strlen(b); i++) {
-		push(b[i]);
-	}
-
-	push('\0');
-	return(base);
-}
-#define format_string_pair_diff(_a, _b) ({ \
-	char *str = string_pair_diff(_a, _b); \
-	char *copy = alloca(strlen(str) + 1); \
-	strcpy(copy, str); \
-	free(str); \
-	copy; \
-})
-#define print_string_pair_diff(_a, _b)		"\n%s", format_string_pair_diff(_a, _b)
-
-#if 0
 #if 1
 /* cross test */
 unittest()
