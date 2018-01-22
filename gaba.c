@@ -156,11 +156,18 @@
 #define BLK_BASE					( 5 )
 #define BLK 						( 0x01<<BLK_BASE )
 
-#define MIN_BULK_BLOCKS				( 32 )
-#define MEM_ALIGN_SIZE				( 32 )		/* 32byte aligned for AVX2 environments */
-#define MEM_INIT_SIZE				( (uint64_t)256 * 1024 * 1024 )
-#define MEM_MARGIN_SIZE				( 2048 )	/* tail margin of internal memory blocks */
-// #define GP_INIT						( 1 )		/* global p coordinate where total fetched sequence length becomes BW */
+#ifdef DEBUG_MEM
+#  define MIN_BULK_BLOCKS			( 0 )
+#  define MEM_ALIGN_SIZE			( 32 )		/* 32byte aligned for AVX2 environments */
+#  define MEM_INIT_SIZE				( (uint64_t)4 * 1024 )
+#  define MEM_MARGIN_SIZE			( 2048 )	/* tail margin of internal memory blocks */
+#else
+#  define MIN_BULK_BLOCKS			( 32 )
+#  define MEM_ALIGN_SIZE			( 32 )		/* 32byte aligned for AVX2 environments */
+#  define MEM_INIT_SIZE				( (uint64_t)256 * 1024 * 1024  )
+#  define MEM_MARGIN_SIZE			( 2048 )	/* tail margin of internal memory blocks */
+#endif
+
 #define INIT_FETCH_APOS				( -1 )
 #define INIT_FETCH_BPOS				( -1 )
 
@@ -294,6 +301,11 @@ _static_assert(sizeof(struct gaba_block_s) % 16 == 0);
 _static_assert(sizeof(struct gaba_phantom_s) % 16 == 0);
 #define _last_block(x)				( (struct gaba_block_s *)(x) - 1 )
 #define _last_phantom(x)			( (struct gaba_phantom_s *)(x) - 1 )
+#define _phantom(x)					( _last_phantom((struct gaba_block_s *)(x) + 1) )
+
+#define MEM_INIT_VECANCY			( sizeof(struct gaba_phantom_s) + MIN_BULK_BLOCKS * sizeof(struct gaba_block_s) )
+_static_assert(2 * sizeof(struct gaba_block_s) < MEM_MARGIN_SIZE);
+_static_assert(MEM_INIT_VECANCY < MEM_INIT_SIZE);
 
 /**
  * @struct gaba_merge_s
@@ -506,6 +518,7 @@ struct gaba_stack_s {
 	uint8_t *end;
 };
 _static_assert(sizeof(struct gaba_stack_s) == 24);
+#define _stack_size(_s)					( (uint64_t)((_s)->end - (_s)->top) )
 
 /**
  * @struct gaba_dp_context_s
@@ -650,7 +663,7 @@ void *gaba_malloc(
 		debug("posix_memalign failed");
 		return(NULL);
 	}
-	debug("posix_memalign(%p)", ptr);
+	debug("posix_memalign(%p), size(%lu)", ptr, size);
 	return(ptr + MEM_MARGIN_SIZE);
 }
 static _force_inline
@@ -1746,7 +1759,7 @@ static _force_inline
 uint64_t max_blocks_mem(
 	struct gaba_dp_context_s const *self)
 {
-	uint64_t mem_size = self->stack.end - self->stack.top;
+	uint64_t mem_size = _stack_size(&self->stack);
 	uint64_t blk_cnt = mem_size / sizeof(struct gaba_block_s);
 	debug("calc_max_block_mem, stack_top(%p), stack_end(%p), mem_size(%lu), cnt(%lu)",
 		self->stack.top, self->stack.end, mem_size, (blk_cnt > 3) ? (blk_cnt - 3) : 0);
@@ -1833,9 +1846,9 @@ struct gaba_block_s *fill_section_seq_bounded(
 		}
 
 		/* memory ran out: malloc a next stack and create a new phantom head */
-		debug("add stack");
-		if(gaba_dp_add_stack(self, 0) != 0) { return(NULL); }
-		blk = fill_create_phantom(self, blk);
+		debug("add stack, blk(%p)", blk);
+		if(gaba_dp_add_stack(self, MEM_INIT_VECANCY) != 0) { return(NULL); }
+		blk = fill_create_phantom(self, blk, _load_v2i8(&blk->acnt));
 	}
 
 	/* bulk fill with seq bound check */
@@ -1875,6 +1888,7 @@ struct gaba_fill_s *_export(gaba_dp_fill_root)(
 	);
 
 	/* load sequences and extract the last block pointer */
+	if(_stack_size(&self->stack) < MEM_INIT_VECANCY) { gaba_dp_add_stack(self, MEM_INIT_VECANCY); }
 	struct gaba_block_s *blk = fill_load_vectors(self, _root(self));
 
 	/* init fetch */
@@ -1918,6 +1932,7 @@ struct gaba_fill_s *_export(gaba_dp_fill)(
 	/* load sequences and extract the last block pointer */
 	_print_v2i32(_load_v2i32(&_tail(fill)->aridx));
 	_print_v2i32(_load_v2i32(&_tail(fill)->aadv));
+	if(_stack_size(&self->stack) < MEM_INIT_VECANCY) { gaba_dp_add_stack(self, MEM_INIT_VECANCY); }
 	struct gaba_block_s *blk = fill_load_vectors(self, _tail(fill));
 
 	/* check if still in the init (head) state */
@@ -3407,6 +3422,7 @@ int64_t gaba_dp_add_stack(
 	struct gaba_dp_context_s *self,
 	uint64_t size)
 {
+	debug("add_stack, ptr(%p)", self->stack.mem->next);
 	if(self->stack.mem->next == NULL) {
 		/* current stack is the tail of the memory block chain, add new block */
 		size = MAX2(
@@ -3414,6 +3430,7 @@ int64_t gaba_dp_add_stack(
 			2 * self->stack.mem->size
 		);
 		struct gaba_mem_block_s *mem = gaba_malloc(size);
+		debug("malloc called, mem(%p)", mem);
 		if(mem == NULL) { return(-1); }
 
 		/* link new node to the tail of the current chain */
@@ -3490,7 +3507,7 @@ void *gaba_dp_malloc(
 
 	/* malloc */
 	debug("self(%p), stack_top(%p), size(%lu)", self, self->stack.top, size);
-	if((uint64_t)(self->stack.end - self->stack.top) < size) {
+	if(_stack_size(&self->stack) < size) {
 		if(gaba_dp_add_stack(self, size) != 0) {
 			return(NULL);
 		}
