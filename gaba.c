@@ -2834,8 +2834,8 @@ void trace_core(
 					self->w.l.state = ts_##_l##0; goto _trace_term; \
 				} \
 				_trace_inc_ge(); \
-				_pop_vector(_c, _l, 1, _trace_##_n##_##_l##_tail); \
-				goto _trace_##_c##_d_tail; \
+				_pop_vector(_c, _l, 1, _trace_##_n##_##_l##_retd); \
+				goto _trace_##_c##_##_l##_retd; \
 			} \
 			do { \
 				if(_unlikely(_trace_##_c##_##_l##_test_index())) { \
@@ -2846,11 +2846,11 @@ void trace_core(
 				debug("test next gap, (%x)", _trace_test_gap_##_l()); \
 			_trace_##_c##_##_l##_tail:; \
 			} while(_trace_test_gap_##_l()); \
-			goto _trace_##_c##_d_head; \
+			goto _trace_##_c##_##_l##_retd; \
 	}
 	#define _trace_diag_loop(t, _c, _n) { \
 		while(1) { \
-		_trace_##_c##_d_head: \
+		_trace_##_c##_h_retd: _trace_##_c##_d_head: \
 			if(!_trace_test_diag_h()) { goto _trace_##_c##_h_head; } \
 			if(_unlikely(_trace_##_c##_d_test_index())) { \
 				self->w.l.state = ts_d; goto _trace_term; \
@@ -2858,7 +2858,7 @@ void trace_core(
 			_pop_vector(_c, h, 0, _trace_##_n##_d_mid); \
 		_trace_##_c##_d_mid: \
 			_pop_vector(_c, v, 0, _trace_##_n##_d_tail); \
-		_trace_##_c##_d_tail: \
+		_trace_##_c##_v_retd: _trace_##_c##_d_tail: \
 			if(!_trace_test_diag_v()) { goto _trace_##_c##_v_head; } \
 		} \
 	}
