@@ -4830,7 +4830,7 @@ char *unittest_generate_mutated_sequence(
 
 unittest( .name = "cross" )
 {
-	uint64_t const cnt = 50000;
+	uint64_t const cnt = 5000;
 
 	uint8_t const *lim = (uint8_t const *)0x800000000000;
 	struct gaba_context_s const *c = (struct gaba_context_s const *)gctx;
@@ -4845,13 +4845,13 @@ unittest( .name = "cross" )
 				unittest_generate_random_sequence((rand() % 128) + 1),
 				unittest_generate_random_sequence((rand() % 128) + 1),
 				unittest_generate_random_sequence((rand() % 128) + 200)
-				// unittest_generate_random_sequence((rand() % 10) + 30)
+				// unittest_generate_random_sequence((rand() % 10) + TEST_LEN)
 			}
 		};
 
 		for(uint64_t j = 0; pair.a[j] != NULL; j++) {
 			// pair.b[j] = pair.a[j];
-			pair.b[j] = unittest_generate_mutated_sequence(pair.a[j], 0.1, 0.1, _W);
+			pair.b[j] = unittest_generate_mutated_sequence(pair.a[j], 0.15, 0.15, _W);
 		}
 
 		unittest_test_pair(UNITTEST_ARG_LIST, dp, &pair);
