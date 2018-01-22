@@ -3549,9 +3549,11 @@ void _export(gaba_dp_clean)(
 	self = _restore_dp_context(self);
 
 	struct gaba_mem_block_s *m = self->mem.next;
+	debug("cleanup memory chain, m(%p)", m);
 	while(m != NULL) {
 		struct gaba_mem_block_s *mnext = m->next;
-		free(m); m = mnext;
+		debug("free m(%p), mnext(%p)", m, mnext);
+		gaba_free(m); m = mnext;
 	}
 	gaba_free(_export_dp_context_global(self));
 	return;
