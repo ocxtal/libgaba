@@ -1146,7 +1146,8 @@ void fill_load_section(
 static _force_inline
 struct gaba_block_s *fill_create_phantom(
 	struct gaba_dp_context_s *self,
-	struct gaba_block_s const *prev_blk)
+	struct gaba_block_s const *prev_blk,
+	uint32_t cnt)								/* (0, 0) for the first phantom, (prev_blk->bcnt, prev_blk->acnt) for middle phantom */
 {
 	struct gaba_phantom_s *ph = (struct gaba_phantom_s *)self->stack.top;
 	debug("start stack_top(%p), stack_end(%p)", self->stack.top, self->stack.end);
@@ -1155,10 +1156,10 @@ struct gaba_block_s *fill_create_phantom(
 	_memcpy_blk_uu(&ph->diff, &prev_blk->diff, sizeof(struct gaba_diff_vec_s));
 	ph->acc = prev_blk->acc;					/* just copy */
 	ph->xstat = (prev_blk->xstat & ROOT) | HEAD;/* propagate root-update flag and mark head */
-	ph->acnt = ph->bcnt = 0;					/* clear counter (a and b sequences are aligned at the head of the buffer) FIXME: intermediate seq fetch breaks consistency */
+	_store_v2i8(&ph->acnt, cnt);				/* FIXED! */
 	ph->reserved = 0;							/* overlaps with mask */
 	ph->blk = prev_blk;
-	debug("ph(%p), xstat(%x)", ph, ph->xstat);
+	debug("ph(%p), xstat(%x), prev_blk(%p), blk(%p)", ph, ph->xstat, prev_blk, (struct gaba_block_s *)(ph + 1) - 1);
 	return((struct gaba_block_s *)(ph + 1) - 1);
 }
 
@@ -1225,7 +1226,7 @@ struct gaba_block_s *fill_load_vectors(
 	_print_w(md);
 
 	/* extract the last block pointer, pass to fill-in loop */
-	return(fill_create_phantom(self, _last_block(tail)));
+	return(fill_create_phantom(self, _last_block(tail), 0));
 }
 
 /**
