@@ -431,8 +431,8 @@ struct gaba_aln_intl_s {
 	uint64_t plen;						/** (8) path length (psum) */
 	int64_t score;						/** (8) score */
 	// uint32_t mcnt, xcnt;				/** (8) #matchs, #mismatchs */
-	// uint32_t gicnt, gecnt;				/** (8) #gap opens, #gap bases */
-	uint32_t _pad[4];
+	uint32_t gicnt, gecnt;				/** (8) #gap opens, #gap bases */
+	uint32_t gacnt, gbcnt;				/** (8) short-linear gap base counts */
 };
 _static_assert(sizeof(struct gaba_alignment_s) == sizeof(struct gaba_aln_intl_s));
 _static_assert(offsetof(struct gaba_alignment_s, slen) == offsetof(struct gaba_aln_intl_s, slen));
@@ -440,8 +440,10 @@ _static_assert(offsetof(struct gaba_alignment_s, seg) == offsetof(struct gaba_al
 _static_assert(offsetof(struct gaba_alignment_s, plen) == offsetof(struct gaba_aln_intl_s, plen));
 // _static_assert(offsetof(struct gaba_alignment_s, mcnt) == offsetof(struct gaba_aln_intl_s, mcnt));
 // _static_assert(offsetof(struct gaba_alignment_s, xcnt) == offsetof(struct gaba_aln_intl_s, xcnt));
-// _static_assert(offsetof(struct gaba_alignment_s, gicnt) == offsetof(struct gaba_aln_intl_s, gicnt));
-// _static_assert(offsetof(struct gaba_alignment_s, gecnt) == offsetof(struct gaba_aln_intl_s, gecnt));
+_static_assert(offsetof(struct gaba_alignment_s, gicnt) == offsetof(struct gaba_aln_intl_s, gicnt));
+_static_assert(offsetof(struct gaba_alignment_s, gecnt) == offsetof(struct gaba_aln_intl_s, gecnt));
+_static_assert(offsetof(struct gaba_alignment_s, gacnt) == offsetof(struct gaba_aln_intl_s, gacnt));
+_static_assert(offsetof(struct gaba_alignment_s, gbcnt) == offsetof(struct gaba_aln_intl_s, gbcnt));
 
 /**
  * @struct gaba_leaf_s
@@ -2628,14 +2630,16 @@ enum { ts_d = 0, ts_v0, ts_v1, ts_h0, ts_h1 };
  * @macro _trace_inc_*
  * @brief increment gap counters
  */
-/*
+
 #define _trace_inc_gi()					{ gc = _sub_v2i32(gc, v01); }
 #define _trace_inc_ge()					{ gc = _sub_v2i32(gc, v10); }
-#define _trace_inc_gf()					{ gc = _sub_v2i32(gc, v00); }
-*/
+#define _trace_inc_gh()					{ gf = _sub_v2i32(gf, v01); }
+#define _trace_inc_gv()					{ gf = _sub_v2i32(gf, v10); }
+/*
 #define _trace_inc_gi()					;
 #define _trace_inc_ge()					;
 #define _trace_inc_gf()					;
+*/
 
 /**
  * @macro _trace_*_*_test_index
@@ -2833,10 +2837,11 @@ void trace_core(
 				if(_unlikely(_trace_##_c##_##_l##_test_index())) { \
 					self->w.l.state = ts_##_l##0; goto _trace_term; \
 				} \
-				_trace_inc_ge(); \
+				_trace_inc_g##_l(); \
 				_pop_vector(_c, _l, 1, _trace_##_n##_##_l##_retd); \
 				goto _trace_##_c##_##_l##_retd; \
 			} \
+			_trace_inc_gi(); \
 			do { \
 				if(_unlikely(_trace_##_c##_##_l##_test_index())) { \
 					self->w.l.state = ts_##_l##1; goto _trace_term; \
@@ -2871,7 +2876,8 @@ void trace_core(
 	v2i32_t const bw = _set_v2i32(_W);
 
 	/* gap counts; #gap regions in lower and #gap bases in higher */
-	// register v2i32_t gc = _load_v2i32(&self->w.l.a.gicnt);
+	register v2i32_t gc = _load_v2i32(&self->w.l.a.gicnt);
+	register v2i32_t gf = _load_v2i32(&self->w.l.a.gacnt);
 
 	/* load path array, adjust path offset to align the head of the current block */
 	uint64_t ofs = self->w.l.ofs;	/* global p-coordinate */
@@ -2917,7 +2923,8 @@ _trace_term:;
 	debug("rem(%lu), path(%p), arr(%lx), ofs(%lu)", rem, path, path_array<<ofs, ofs);
 
 	/* save gap counts */
-	// _store_v2i32(&self->w.l.a.gicnt, gc);
+	_store_v2i32(&self->w.l.a.gicnt, gc);
+	_store_v2i32(&self->w.l.a.gacnt, gf);
 
 	/* store pointers and coordinates */
 	self->w.l.ofs = ofs;			/* global p-coordinate */
@@ -2970,8 +2977,10 @@ void trace_init(
 	self->w.l.a.score = tail->f.max;					/* just copy */
 	// self->w.l.a.mcnt = 0;
 	// self->w.l.a.xcnt = 0;
-	// self->w.l.a.gicnt = 0;
-	// self->w.l.a.gecnt = 0;
+	self->w.l.a.gicnt = 0;
+	self->w.l.a.gecnt = 0;
+	self->w.l.a.gacnt = 0;
+	self->w.l.a.gbcnt = 0;
 
 	/* section */
 	self->w.l.a.slen = 0;
@@ -3030,10 +3039,6 @@ struct gaba_alignment_s *trace_body(
 
 	/* calc mismatch and match counts */
 	// self->w.l.a.xcnt = 0;
-	self->w.l.a._pad[0] = 0;
-	self->w.l.a._pad[1] = 0;
-	self->w.l.a._pad[2] = 0;
-	self->w.l.a._pad[3] = 0;
 	/*
 	self->w.l.a.xcnt = ((int64_t)self->m * ((self->w.l.a.plen - self->w.l.a.gecnt)>>1)
 		- (self->w.l.a.score - (int64_t)self->gi * self->w.l.a.gicnt - (int64_t)self->ge * self->w.l.a.gecnt)

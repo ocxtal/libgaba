@@ -195,8 +195,8 @@ struct gaba_alignment_s {
 	uint64_t plen;				/* path length */
 	int64_t score;				/** score */
 	// uint32_t mcnt, xcnt;		/** #matches, #mismatches */
-	// uint32_t gicnt, gecnt;		/** #gap opens, #gap bases */
-	uint32_t reserved3[4];
+	uint32_t gicnt, gecnt;		/** #gap opens, #gap bases */
+	uint32_t gacnt, gbcnt;		/** short-linear gap base counts */
 	uint32_t path[];
 };
 typedef struct gaba_alignment_s gaba_alignment_t;
