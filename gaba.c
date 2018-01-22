@@ -160,12 +160,12 @@
 #  define MIN_BULK_BLOCKS			( 0 )
 #  define MEM_ALIGN_SIZE			( 32 )		/* 32byte aligned for AVX2 environments */
 #  define MEM_INIT_SIZE				( (uint64_t)4 * 1024 )
-#  define MEM_MARGIN_SIZE			( 2048 )	/* tail margin of internal memory blocks */
+#  define MEM_MARGIN_SIZE			( 4096 )	/* tail margin of internal memory blocks */
 #else
 #  define MIN_BULK_BLOCKS			( 32 )
 #  define MEM_ALIGN_SIZE			( 32 )		/* 32byte aligned for AVX2 environments */
 #  define MEM_INIT_SIZE				( (uint64_t)256 * 1024 * 1024  )
-#  define MEM_MARGIN_SIZE			( 2048 )	/* tail margin of internal memory blocks */
+#  define MEM_MARGIN_SIZE			( 4096 )	/* tail margin of internal memory blocks */
 #endif
 
 #define INIT_FETCH_APOS				( -1 )
