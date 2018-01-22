@@ -491,10 +491,10 @@ _static_assert(sizeof(struct gaba_score_vec_s) == 80);
  */
 struct gaba_mem_block_s {
 	struct gaba_mem_block_s *next;
-	struct gaba_mem_block_s *prev;
+	// struct gaba_mem_block_s *prev;
 	uint64_t size;
 };
-_static_assert(sizeof(struct gaba_mem_block_s) == 24);
+_static_assert(sizeof(struct gaba_mem_block_s) == 16);
 
 /**
  * @struct gaba_stack_s
@@ -518,6 +518,7 @@ struct gaba_dp_context_s {
 
 	/* memory management */
 	struct gaba_mem_block_s mem;		/** (24) root memory block */
+	uint64_t _pad2;
 	struct gaba_stack_s stack;			/** (24) current stack */
 
 	/* scores */
@@ -3386,7 +3387,6 @@ struct gaba_dp_context_s *_export(gaba_dp_init)(
 	/* init mem object */
 	self->mem = (struct gaba_mem_block_s){
 		.next = NULL,
-		.prev = NULL,
 		.size = MEM_INIT_SIZE
 	};
 
