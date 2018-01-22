@@ -2722,7 +2722,10 @@ enum { ts_d = 0, ts_v0, ts_v1, ts_h0, ts_h1 };
 	/* store path (offset will be adjusted afterwards) */ \
 	_storeu_u64(path, path_array<<ofs); \
 	/* reload block pointer */ \
-	blk = _last_phantom(blk)->blk; \
+	blk--; do { \
+		debug("reload head block, blk(%p), prev_blk(%p), head(%x)", blk, _phantom(blk)->blk, _phantom(blk)->blk->xstat & HEAD); \
+		blk = _phantom(blk)->blk; \
+	} while((blk->xstat & HEAD) != 0); \
 	while(blk->xstat & MERGE) { \
 		struct gaba_merge_s const *_mg = _merge(blk); \
 		blk = _mg->blk[_mg->tidx[_vec_idx][q]]; \
@@ -2742,10 +2745,12 @@ enum { ts_d = 0, ts_v0, ts_v1, ts_h0, ts_h1 };
 #define _trace_reload_block() { \
 	/* store path (bulk, offset does not change here) */ \
 	_storeu_u64(path, path_array<<ofs); path--; \
-	/* reload mask and mask pointer */ \
-	mask = &(--blk)->mask[BLK - 1]; \
+	/* reload mask and mask pointer; always test the boundary */ \
+	blk--; \
+	while(_unlikely((_phantom(blk)->xstat & HEAD) != 0)) { blk = _phantom(blk)->blk; } \
+	mask = &blk->mask[BLK - 1]; \
 	dir_mask = _dir_mask_load(blk, BLK); \
-	debug("reload block, path_array(%lx), blk(%p), mask(%x)", path_array, blk, dir_mask); \
+	debug("reload block, path_array(%lx), blk(%p), head(%x), mask(%x)", path_array, blk, blk->xstat & HEAD, dir_mask); \
 }
 
 /**
