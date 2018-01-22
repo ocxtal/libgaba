@@ -241,6 +241,7 @@ struct gaba_mask_pair_s {
 };
 _static_assert(sizeof(struct gaba_mask_pair_s) == _W / 2);
 #endif
+#define _mask_u64(_m)				( ((nvec_masku_t){ .mask = (_m) }).all )
 
 /**
  * @struct gaba_diff_vec_s
@@ -1159,9 +1160,15 @@ struct gaba_joint_tail_s *fill_create_bridge(
 	v2i32_t adv)
 {
 	struct gaba_joint_tail_s *tail = _bridge(gaba_dp_malloc(self, BRIDGE_TAIL_SIZE));
+	debug("create bridge, p(%p)", tail);
+
+	/* copy ch, xd, and md */
+	_storeu_n(tail->ch.w, _loadu_n(prev_tail->ch.w));
+	_storeu_n(tail->xd.drop, _loadu_n(prev_tail->xd.drop));
+	_storeu_w(tail->md.delta, _loadu_w(prev_tail->md.delta));
 
 	/* vector position and scores are unchanged */
-	_storeu_u64(&tail->mdrop, 0x00010000 | _loadu_u64(&prev_tail->mdrop));	/* mark istat */
+	_storeu_u64(&tail->mdrop, 0x00010000 | _loadu_u64(&prev_tail->mdrop));	/* mark istat, copy mdrop and pridx */
 
 	/* relative section pointer is moved, set advanced length */
 	_store_v2i32(&tail->aridx, _sub_v2i32(len, adv));			/* FIXME: len -> correct ridx */
@@ -1173,6 +1180,7 @@ struct gaba_joint_tail_s *fill_create_bridge(
 	_store_v2i64(&tail->atptr, _add_v2i64(bptr, _cvt_v2i32_v2i64(len)));/* correct tptr for safety (actually not required) */
 	_store_v2i32(&tail->f.aid, id);								/* correct id pair is required */
 	_memcpy_blk_uu(&tail->f.ascnt, &prev_tail->f.ascnt, 32);	/* just copy (unchanged) */
+	tail->f.stat = prev_tail->f.stat;
 	return(tail);
 }
 
@@ -1389,7 +1397,6 @@ struct gaba_joint_tail_s *fill_create_tail(
 	t = _max_n(df, t); \
 	ptr->h.mask = _mask_n(_eq_n(t, de)); \
 	ptr->v.mask = _mask_n(_eq_n(t, df)); \
-	debug("mask(%lx, %lx)", (uint64_t)ptr->h.all, (uint64_t)ptr->v.all); \
 	/* update de and dh */ \
 	de = _add_n(de, _load_adjh(self->scv)); \
 	nvec_t te = _max_n(de, t); \
@@ -1400,6 +1407,7 @@ struct gaba_joint_tail_s *fill_create_tail(
 	df = _add_n(df, _load_adjv(self->scv)); \
 	nvec_t tf = _max_n(df, t); \
 	ptr->f.mask = _mask_n(_eq_n(tf, t)); \
+	debug("mask(%lx, %lx, %lx, %lx)", (uint64_t)ptr->h.all, (uint64_t)ptr->v.all, (uint64_t)ptr->e.all, (uint64_t)ptr->f.all); \
 	df = _sub_n(tf, dv); \
 	t = _sub_n(dv, t); \
 	ptr++; dv = dh; dh = t; \
@@ -1414,24 +1422,28 @@ struct gaba_joint_tail_s *fill_create_tail(
 	register nvec_t di = _add_n(dv, _load_gfv(self->scv)); \
 	register nvec_t dd = _sub_n(_load_gfh(self->scv), dh); \
 	_print_n(dd); _print_n(di); \
-	di = _max_n(di, de); dd = _max_n(dd, df); \
+	register nvec_t s = _max_n(de, df); \
 	t = _shuf_n(_load_sb(self->scv), t); \
+	s = _max_n(s, di); \
+	t = _max_n(t, dd); \
+	t = _max_n(t, s); \
 	_print_n(t); _print_n(dd); _print_n(di); \
-	t = _max_n(dd, t); t = _max_n(di, t); \
-	_print_n(t); \
-	ptr->h.mask = _mask_n(_eq_n(t, di)); \
-	ptr->v.mask = _mask_n(_eq_n(t, dd)); \
-	debug("mask(%x, %x)", ptr->h.all, ptr->v.all); \
+	uint64_t mask_gfa = _mask_u64(_mask_n(_eq_n(t, di))), mask_gh = _mask_u64(_mask_n(_eq_n(t, de))); \
+	uint64_t mask_gfb = _mask_u64(_mask_n(_eq_n(t, dd))), mask_gv = _mask_u64(_mask_n(_eq_n(t, df))); \
+	debug("mask_gfa(%lx), mask_gh(%lx), mask_gfb(%lx), mask_gv(%lx)", mask_gfa, mask_gh, mask_gfb, mask_gv); \
+	ptr->h.all = mask_gfa | mask_gh; mask_gh &= ~mask_gfa; \
+	ptr->v.all = mask_gfb | mask_gv; mask_gv &= ~mask_gfb; \
 	/* update de and dh */ \
 	de = _add_n(de, _load_adjh(self->scv)); \
 	nvec_t te = _max_n(de, t); \
-	ptr->e.mask = _mask_n(_eq_n(te, de)); \
+	ptr->e.all = mask_gh | _mask_u64(_mask_n(_eq_n(te, t))); \
 	de = _add_n(te, dh); \
 	dh = _add_n(dh, t); \
 	/* update df and dv */ \
 	df = _add_n(df, _load_adjv(self->scv)); \
 	nvec_t tf = _max_n(df, t); \
-	ptr->f.mask = _mask_n(_eq_n(tf, df)); \
+	ptr->f.all = mask_gv | _mask_u64(_mask_n(_eq_n(tf, t))); \
+	debug("mask_ge(%lx), mask_gf(%lx), mask(%lx, %lx, %lx, %lx)", (uint64_t)_mask_u64(_mask_n(_eq_n(te, t))), (uint64_t)_mask_u64(_mask_n(_eq_n(tf, t))), (uint64_t)ptr->h.all, (uint64_t)ptr->v.all, (uint64_t)ptr->e.all, (uint64_t)ptr->f.all); \
 	df = _sub_n(tf, dv); \
 	t = _sub_n(dv, t); \
 	ptr++; dv = dh; dh = t; \
@@ -1520,9 +1532,7 @@ struct gaba_joint_tail_s *fill_create_tail(
 	nvec_t prev_drop = _load_n(&self->w.r.xd); \
 	_store_n(&self->w.r.xd, drop);		/* save max delta vector */ \
 	_print_n(prev_drop); _print_n(_add_n(drop, delta)); \
-	(_blk)->max_mask = ((nvec_masku_t){ \
-		.mask = _mask_n(_gt_n(_add_n(drop, delta), prev_drop)) \
-	}).all; \
+	(_blk)->max_mask = _mask_u64(_mask_n(_gt_n(_add_n(drop, delta), prev_drop))); \
 	debug("update_mask(%lx)", (uint64_t)(_blk)->max_mask); \
 	/* update middle delta vector */ \
 	wvec_t md = _load_w(&self->w.r.md); \
@@ -2338,12 +2348,10 @@ uint64_t leaf_load_max_mask(
 	/* load max vector, create mask */
 	nvec_t drop = _loadu_n(tail->xd.drop);
 	wvec_t md = _loadu_w(tail->md.delta);
-	uint64_t max_mask = ((nvec_masku_t){
-		.mask = _mask_w(_eq_w(
-			_set_w(tail->mdrop),
-			_add_w(md, _cvt_n_w(drop))
-		))
-	}).all;
+	uint64_t max_mask = _mask_u64(_mask_w(_eq_w(
+		_set_w(tail->mdrop),
+		_add_w(md, _cvt_n_w(drop))
+	)));
 	debug("max_mask(%lx)", max_mask);
 	_print_w(_set_w(tail->mdrop));
 	_print_w(_add_w(md, _cvt_n_w(drop)));
@@ -2375,7 +2383,7 @@ void leaf_detect_pos(
 		} \
 		_m++->mask = _mask_n(_gt_n(delta, max)); \
 		max = _max_n(delta, max); \
-		debug("mask(%x)", ((nvec_masku_t){ .mask = (_m - 1)->mask }).all); \
+		debug("mask(%x)", _mask_u64((_m - 1)->mask)); \
 	}
 
 	/* load contexts and overwrite max vector */
@@ -2641,11 +2649,22 @@ enum { ts_d = 0, ts_v0, ts_v1, ts_h0, ts_h1 };
 #define _trace_test_diag_v()			( ((mask->v.all>>q) & 0x01) == 0 )
 #define _trace_test_gap_h()				( ((mask->h.all>>q) & 0x01) != 0 )
 #define _trace_test_gap_v()				( ((mask->v.all>>q) & 0x01) != 0 )
-#else /* MODEL == AFFINE */
+#define _trace_test_fgap_h()			( 0 )
+#define _trace_test_fgap_v()			( 0 )
+#elif MODEL == AFFINE
 #define _trace_test_diag_h()			( ((mask->h.all>>q) & 0x01) == 0 )
 #define _trace_test_diag_v()			( ((mask->v.all>>q) & 0x01) == 0 )
 #define _trace_test_gap_h()				( ((mask->e.all>>q) & 0x01) == 0 )
 #define _trace_test_gap_v()				( ((mask->f.all>>q) & 0x01) == 0 )
+#define _trace_test_fgap_h()			( 0 )
+#define _trace_test_fgap_v()			( 0 )
+#else /* MODEL == COMBINED */
+#define _trace_test_diag_h()			( ((mask->h.all>>q) & 0x01) == 0 )
+#define _trace_test_diag_v()			( ((mask->v.all>>q) & 0x01) == 0 )
+#define _trace_test_gap_h()				( (((~mask->h.all & mask->e.all)>>q) & 0x01) == 0 )
+#define _trace_test_gap_v()				( (((~mask->v.all & mask->f.all)>>q) & 0x01) == 0 )
+#define _trace_test_fgap_h()			( ((mask->e.all>>q) & 0x01) == 0 )
+#define _trace_test_fgap_v()			( ((mask->f.all>>q) & 0x01) == 0 )
 #endif
 
 /**
@@ -2787,15 +2806,14 @@ void trace_core(
 	}
 	#define _trace_gap_loop(t, _c, _n, _l) { \
 		_trace_##_c##_##_l##_head: \
-			if(!_trace_test_gap_##_l()) { \
-				fprintf(stderr, "trap\n"); \
-				/**((volatile uint8_t *)NULL);*/ \
+			if(_trace_test_fgap_##_l()) { \
+				debug("fgap detected"); \
 				if(_unlikely(_trace_##_c##_##_l##_test_index())) { \
 					self->w.l.state = ts_##_l##0; goto _trace_term; \
 				} \
 				_trace_inc_ge(); \
 				_pop_vector(_c, _l, 1, _trace_##_n##_##_l##_tail); \
-				goto _trace_##_c##_d_head; \
+				goto _trace_##_c##_d_tail; \
 			} \
 			do { \
 				if(_unlikely(_trace_##_c##_##_l##_test_index())) { \
@@ -2803,6 +2821,7 @@ void trace_core(
 				} \
 				_trace_inc_ge();	/* increment #gap bases on every iter */ \
 				_pop_vector(_c, _l, 1, _trace_##_n##_##_l##_tail); \
+				debug("test next gap, (%x)", _trace_test_gap_##_l()); \
 			_trace_##_c##_##_l##_tail:; \
 			} while(_trace_test_gap_##_l()); \
 			goto _trace_##_c##_d_head; \
@@ -4583,7 +4602,7 @@ unittest( .name = "base" )
 			.a = { "" },
 			.b = { "" }
 		},*/
-/*		{
+		{
 			.a = { "A" },
 			.b = { "A" }
 		},
@@ -4650,17 +4669,32 @@ unittest( .name = "base" )
 		{
 			.a = { "AAGGGTCGCCAATTG" },
 			.b = { "AAGGGTCGCCAATTG" }
-		},*/
+		},
 		/* non-matching sequences */
-/*		{
+		{
 			.a = "TCTGCGGTAACATCCGCTAC",
 			.b = "CACGAGGTTCATCGGGTACT"
-		},*/
+		},
 		{
 			.a = "CCTACTGAGTTT",
 			.b = "ACATGGCAGTTT"
+		},
+		{
+			.a = "CCTACTGAGTTT",
+			.b = "ACATGGCAGTTT"
+		},
+		{
+			.a = "TAGGTGTACCGAG",
+			.b = "CCTGTATACCGGC"
+		},
+		{
+			.a = "TGTATGCACGGATGATCCAGCTCTAATGGATGG",
+			.b = "TATACGGGATGGGTGTGATCCACTCTAATGGAT"
+		},
+		{
+			.a = "GCAGATGGTCCCTCCTAATGAAGCTCGCTGACT",
+			.b = "GGTAGAGGTCCCTCCTAATGAAGCTCGCTGACT"
 		}
-
 	};
 
 	uint8_t const *lim = (uint8_t const *)0x800000000000;
@@ -4750,15 +4784,13 @@ unittest( .name = "cross" )
 	for(uint64_t i = 0; i < cnt; i++) {
 		struct unittest_seq_pair_s pair = {
 			.a = {
-				/*
 				unittest_generate_random_sequence((rand() % 128) + 1),
 				unittest_generate_random_sequence((rand() % 128) + 1),
 				unittest_generate_random_sequence((rand() % 128) + 1),
 				unittest_generate_random_sequence((rand() % 128) + 1),
 				unittest_generate_random_sequence((rand() % 128) + 1),
 				unittest_generate_random_sequence((rand() % 128) + 200)
-				*/
-				unittest_generate_random_sequence((rand() % 5) + 10)
+				// unittest_generate_random_sequence((rand() % 10) + 30)
 			}
 		};
 
