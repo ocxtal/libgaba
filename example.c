@@ -69,7 +69,7 @@ int main(int argc, char *argv[]) {
 	printf("\n");
 
 	/* clean up */
-	gaba_dp_res_free(r);
+	gaba_dp_res_free(dp, r);
 	gaba_dp_clean(dp);
 	gaba_clean(ctx);
 	return 0;

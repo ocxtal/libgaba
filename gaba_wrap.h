@@ -133,7 +133,7 @@ _decl(gaba_fill_t *, gaba_dp_fill, gaba_dp_t *self, gaba_fill_t const *prev_sec,
 _decl(gaba_fill_t *, gaba_dp_merge, gaba_dp_t *self, gaba_fill_t const *const *sec, uint8_t const *qofs, uint32_t cnt);
 _decl(gaba_pos_pair_t *, gaba_dp_search_max, gaba_dp_t *self, gaba_fill_t const *sec);
 _decl(gaba_alignment_t *, gaba_dp_trace, gaba_dp_t *self, gaba_fill_t const *tail, gaba_alloc_t const *alloc);
-_decl(void, gaba_dp_res_free, gaba_alignment_t *res);
+_decl(void, gaba_dp_res_free, gaba_dp_t *dp, gaba_alignment_t *res);
 // _decl(int64_t, gaba_dp_print_cigar_forward, gaba_dp_printer_t printer, void *fp, uint32_t const *path, uint32_t offset, uint32_t len);
 // _decl(int64_t, gaba_dp_print_cigar_reverse, gaba_dp_printer_t printer, void *fp, uint32_t const *path, uint32_t offset, uint32_t len);
 // _decl(int64_t, gaba_dp_dump_cigar_forward, char *buf, uint64_t buf_size, uint32_t const *path, uint32_t offset, uint32_t len);
@@ -395,9 +395,10 @@ gaba_alignment_t *gaba_dp_trace(
  */
 static inline
 void gaba_dp_res_free(
+	gaba_dp_t *dp,
 	gaba_alignment_t *res)
 {
-	_import(gaba_dp_res_free_linear_64)(res);
+	_import(gaba_dp_res_free_linear_64)(dp, res);
 	return;
 }
 

@@ -425,19 +425,21 @@ struct gaba_aln_intl_s {
 	void *opaque;						/** (8) opaque (context pointer) */
 	gaba_lfree_t lfree;					/** (8) local free */
 
-	uint32_t head_margin;				/** (8) margin size at the head of an alignment object, must be multiple of 8 */
-	uint32_t slen;						/** (8) section length */
-	struct gaba_segment_s *seg;			/** (8) */
-	uint64_t plen;						/** (8) path length (psum) */
 	int64_t score;						/** (8) score */
+	uint64_t plen;						/** (8) path length (psum) */
+	float identity;						/** (4) esitmated percent identity */
+	uint32_t slen;						/** (4) section length */
+	struct gaba_segment_s *seg;			/** (8) */
 	// uint32_t mcnt, xcnt;				/** (8) #matchs, #mismatchs */
 	uint32_t gicnt, gecnt;				/** (8) #gap opens, #gap bases */
 	uint32_t gacnt, gbcnt;				/** (8) short-linear gap base counts */
 };
 _static_assert(sizeof(struct gaba_alignment_s) == sizeof(struct gaba_aln_intl_s));
+_static_assert(offsetof(struct gaba_alignment_s, score) == offsetof(struct gaba_aln_intl_s, score));
+_static_assert(offsetof(struct gaba_alignment_s, plen) == offsetof(struct gaba_aln_intl_s, plen));
+_static_assert(offsetof(struct gaba_alignment_s, identity) == offsetof(struct gaba_aln_intl_s, identity));
 _static_assert(offsetof(struct gaba_alignment_s, slen) == offsetof(struct gaba_aln_intl_s, slen));
 _static_assert(offsetof(struct gaba_alignment_s, seg) == offsetof(struct gaba_aln_intl_s, seg));
-_static_assert(offsetof(struct gaba_alignment_s, plen) == offsetof(struct gaba_aln_intl_s, plen));
 // _static_assert(offsetof(struct gaba_alignment_s, mcnt) == offsetof(struct gaba_aln_intl_s, mcnt));
 // _static_assert(offsetof(struct gaba_alignment_s, xcnt) == offsetof(struct gaba_aln_intl_s, xcnt));
 _static_assert(offsetof(struct gaba_alignment_s, gicnt) == offsetof(struct gaba_aln_intl_s, gicnt));
@@ -532,14 +534,14 @@ struct gaba_dp_context_s {
 	struct gaba_joint_tail_s const *root[4];	/** (32) root tail (phantom vectors) */
 
 	/* memory management */
-	struct gaba_mem_block_s mem;		/** (24) root memory block */
-	uint64_t _pad2;
+	struct gaba_mem_block_s mem;		/** (16) root memory block */
 	struct gaba_stack_s stack;			/** (24) current stack */
 
 	/* scores */
+	float mx, x;
 	int8_t tx;							/** (1) xdrop threshold */
 	int8_t tf;							/** (1) filter threshold */
-	uint8_t _pad1[6];
+	uint8_t gi, ge, gfa, gfb;
 
 	/** output options */
 	uint32_t head_margin;				/** (4) margin at the head of gaba_res_t */
@@ -2970,21 +2972,23 @@ void trace_init(
 	self->w.l.aln = alloc->lmalloc(alloc->opaque, size) + self->head_margin;
 	self->w.l.a.opaque = alloc->opaque;					/* save opaque pointer */
 	self->w.l.a.lfree = alloc->lfree;
-	self->w.l.a.head_margin = self->head_margin;		/* required when free the object */
+	// self->w.l.a.head_margin = self->head_margin;		/* required when free the object */
 
 	/* use gaba_alignment_s buffer instead in the traceback loop */
-	self->w.l.a.plen = plen;
 	self->w.l.a.score = tail->f.max;					/* just copy */
+	self->w.l.a.plen = plen;
+	self->w.l.a.identity = 0.0;
+
+	/* section */
+	self->w.l.a.slen = 0;
+	self->w.l.a.seg = sn + (struct gaba_segment_s *)(self->w.l.aln->path + _roundup(pn, 8)),
+
 	// self->w.l.a.mcnt = 0;
 	// self->w.l.a.xcnt = 0;
 	self->w.l.a.gicnt = 0;
 	self->w.l.a.gecnt = 0;
 	self->w.l.a.gacnt = 0;
 	self->w.l.a.gbcnt = 0;
-
-	/* section */
-	self->w.l.a.slen = 0;
-	self->w.l.a.seg = sn + (struct gaba_segment_s *)(self->w.l.aln->path + _roundup(pn, 8)),
 
 	/* clear state */
 	self->w.l.state = ts_d;
@@ -3028,7 +3032,7 @@ struct gaba_alignment_s *trace_body(
 		if(_unlikely(self->w.l.q >= _W)) {
 			/* out of band: abort */
 			self->w.l.a.lfree(self->w.l.a.opaque,
-				(void *)((uint8_t *)self->w.l.aln - self->w.l.a.head_margin)
+				(void *)((uint8_t *)self->w.l.aln - self->head_margin)
 			);
 			return(NULL);
 		}
@@ -3038,8 +3042,7 @@ struct gaba_alignment_s *trace_body(
 	}
 
 	/* calc mismatch and match counts */
-	// self->w.l.a.xcnt = 0;
-	/*
+	#if 0
 	self->w.l.a.xcnt = ((int64_t)self->m * ((self->w.l.a.plen - self->w.l.a.gecnt)>>1)
 		- (self->w.l.a.score - (int64_t)self->gi * self->w.l.a.gicnt - (int64_t)self->ge * self->w.l.a.gecnt)
 	) / (self->m - self->x);
@@ -3050,7 +3053,17 @@ struct gaba_alignment_s *trace_body(
 		(uint32_t)(self->w.l.a.plen - self->w.l.a.gecnt)>>1,
 		self->w.l.a.score - (int64_t)self->gi * self->w.l.a.gicnt - (int64_t)self->ge * self->w.l.a.gecnt,
 		self->m - self->x, self->w.l.a.xcnt);
-	*/
+	#endif
+
+	/* estimate alignment identity */
+	double mx = self->mx, x = self->x;
+	int64_t gi = self->gi, ge = self->ge, ga = self->gfa, gb = self->gfb;
+	int64_t sc = self->w.l.a.score;
+	int64_t gic = self->w.l.a.gicnt, gec = self->w.l.a.gecnt, gac = self->w.l.a.gacnt, gbc = self->w.l.a.gbcnt;
+
+	double dlen = (double)((plen - gec - gac - gbc)>>1);
+	double id = (double)(sc - gi*gic - ge*gec - ga*gac - gb*gbc) / (mx * dlen) + x;
+	self->w.l.a.identity = (float)id;
 
 	/* copy */
 	_memcpy_blk_ua(self->w.l.aln, &self->w.l.a, sizeof(struct gaba_alignment_s));
@@ -3087,11 +3100,12 @@ struct gaba_alignment_s *_export(gaba_dp_trace)(
  * @fn gaba_dp_res_free
  */
 void _export(gaba_dp_res_free)(
+	struct gaba_dp_context_s *self,
 	struct gaba_alignment_s *aln)
 {
 	struct gaba_aln_intl_s *a = (struct gaba_aln_intl_s *)aln;
-	debug("free mem, ptr(%p), lmm(%p)", (void *)a - a->head_margin, a->opaque);
-	a->lfree(a->opaque, (void *)((uint8_t *)a - a->head_margin));
+	debug("free mem, ptr(%p), lmm(%p)", (void *)a - self->head_margin, a->opaque);
+	a->lfree(a->opaque, (void *)((uint8_t *)a - self->head_margin));
 	return;
 }
 

@@ -82,8 +82,8 @@ struct gaba_params_s {
 	uint8_t filter_thresh;		/** popcnt filter threshold, set zero if you want to disable it */
 
 	/** output options */
-	uint32_t head_margin;		/** margin at the head of gaba_res_t */
-	uint32_t tail_margin;		/** margin at the tail of gaba_res_t */
+	uint32_t head_margin;		/** margin at the head of gaba_alignment_t */
+	uint32_t tail_margin;		/** margin at the tail of gaba_alignment_t */
 
 	/* internal */
 	void *reserved;
@@ -187,13 +187,14 @@ typedef struct gaba_segment_s gaba_path_section_t;
 struct gaba_alignment_s {
 	/* reserved for internal use */
 	void *reserved1[2];
-	uint32_t reserved2;
+
+	int64_t score;				/** score */
+	uint64_t plen;				/* path length */
+	float identity;				/* estimated percent identity over the entire alignment, match_count / (match_count + mismatch_count) */
 
 	uint32_t slen;				/* segment length */
 	struct gaba_segment_s const *seg;
 
-	uint64_t plen;				/* path length */
-	int64_t score;				/** score */
 	// uint32_t mcnt, xcnt;		/** #matches, #mismatches */
 	uint32_t gicnt, gecnt;		/** #gap opens, #gap bases */
 	uint32_t gacnt, gbcnt;		/** short-linear gap base counts */
@@ -317,6 +318,7 @@ gaba_alignment_t *gaba_dp_trace(
  */
 GABA_EXPORT_LEVEL
 void gaba_dp_res_free(
+	gaba_dp_t *dp,
 	gaba_alignment_t *aln);
 
 #endif  /* #ifndef _GABA_H_INCLUDED */
