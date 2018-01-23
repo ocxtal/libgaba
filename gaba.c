@@ -3261,7 +3261,7 @@ struct gaba_diff_vec_s gaba_init_diff_vectors(
 static _force_inline
 void gaba_init_phantom(
 	struct gaba_root_block_s *ph,
-	struct gaba_params_s *p)
+	struct gaba_params_s const *p)
 {
 	/* 192 bytes are reserved for phantom block */
 	*_last_phantom(&ph->tail) = (struct gaba_phantom_s){
@@ -3378,20 +3378,22 @@ gaba_t *_export(gaba_init)(
 		? *p
 		: (struct gaba_params_s){ { 0 }, 0 }
 	);
-	gaba_init_restore_default(&pi);				/* restore defaults */
-	if(gaba_init_check_score(&pi) != 0) {		/* check the scores are applicable */
-		return(NULL);
-	}
 
 	/* malloc gaba_context_s */
 	struct gaba_context_s *ctx = NULL;
 	if(pi.reserved == NULL) {
+		/* create new context */
+		gaba_init_restore_default(&pi);			/* restore defaults */
+		if(gaba_init_check_score(&pi) != 0) {	/* check the scores are applicable */
+			return(NULL);						/* cannot be instanciated with the score param */
+		}
+
 		if((ctx = gaba_malloc(sizeof(struct gaba_context_s))) == NULL) {
 			return(NULL);
 		}
 		gaba_init_dp_context(ctx, &pi);
 	} else {
-		/* fill phantom objects of existing dp context */
+		/* reuse the previous dp context: fill phantom objects of the context */
 		ctx = (struct gaba_context_s *)pi.reserved;
 	}
 
