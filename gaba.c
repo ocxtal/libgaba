@@ -54,10 +54,13 @@
 
 #if MODEL == LINEAR
 #  define MODEL_LABEL				linear
+#  define MODEL_STR					"linear"
 #elif MODEL == AFFINE
 #  define MODEL_LABEL				affine
+#  define MODEL_STR					"affine"
 #else
 #  define MODEL_LABEL				combined
+#  define MODEL_STR					"combined"
 #endif
 
 #ifdef BIT
@@ -4618,21 +4621,21 @@ void unittest_test_pair(
 	struct gaba_fill_s const *m = unittest_dp_extend(dp, s);
 
 	assert(m != NULL);
-	assert(m->max == nr.score, "a(%s), b(%s), m->max(%ld), nr.score(%d)", a, b, m->max, nr.score);
+	assert(m->max == nr.score, "[%s:%d] a(%s), b(%s), m->max(%ld), nr.score(%d)", MODEL_STR, _W, a, b, m->max, nr.score);
 
 	/* test max pos */
 	struct gaba_pos_pair_s const *p = _export(gaba_dp_search_max)(dp, m);
 	assert(p != NULL);
-	assert(unittest_check_maxpos(p->aid, p->apos, s->apos, nr.alen, s->a), "a(%s), b(%s)", a, b);
-	assert(unittest_check_maxpos(p->bid, p->bpos, s->bpos, nr.blen, s->b), "a(%s), b(%s)", a, b);
+	assert(unittest_check_maxpos(p->aid, p->apos, s->apos, nr.alen, s->a), "[%s:%d] a(%s), b(%s)", MODEL_STR, _W, a, b);
+	assert(unittest_check_maxpos(p->bid, p->bpos, s->bpos, nr.blen, s->b), "[%s:%d] a(%s), b(%s)", MODEL_STR, _W, a, b);
 
 	/* test path */
 	struct gaba_alignment_s const *r = _export(gaba_dp_trace)(dp, m, NULL);
 
 	assert(r != NULL);
-	assert(r->plen == nr.path_length, "a(%s), b(%s), m->plen(%lu), nr.path_length(%u)", a, b, r->plen, nr.path_length);
-	assert(unittest_check_path(r, nr.path), "a(%s), b(%s)\n%s", a, b, format_string_pair_diff(unittest_decode_path(r), nr.path));
-	assert(unittest_check_section(r, nr.sec, nr.scnt), "a(%s), b(%s)", a, b);
+	assert(r->plen == nr.path_length, "[%s:%d] a(%s), b(%s), m->plen(%lu), nr.path_length(%u)", MODEL_STR, _W, a, b, r->plen, nr.path_length);
+	assert(unittest_check_path(r, nr.path), "[%s:%d] a(%s), b(%s)\n%s", MODEL_STR, _W, a, b, format_string_pair_diff(unittest_decode_path(r), nr.path));
+	assert(unittest_check_section(r, nr.sec, nr.scnt), "[%s:%d] a(%s), b(%s)", MODEL_STR, _W, a, b);
 
 	/* cleanup everything */
 	unittest_clean_section(s);
