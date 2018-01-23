@@ -538,10 +538,11 @@ struct gaba_dp_context_s {
 	struct gaba_stack_s stack;			/** (24) current stack */
 
 	/* scores */
-	float mx, x;
+	float imx, xmx;						/** (8) 1 / (M - X), X / (M - X) (precalculated constants) */
 	int8_t tx;							/** (1) xdrop threshold */
 	int8_t tf;							/** (1) filter threshold */
-	uint8_t gi, ge, gfa, gfb;
+	int8_t gi, ge, gfa, gfb;			/** (4) negative integers */
+	int8_t _pad[2];
 
 	/** output options */
 	uint32_t head_margin;				/** (4) margin at the head of gaba_res_t */
@@ -3041,29 +3042,18 @@ struct gaba_alignment_s *trace_body(
 		trace_push_segment(self);
 	}
 
-	/* calc mismatch and match counts */
-	#if 0
-	self->w.l.a.xcnt = ((int64_t)self->m * ((self->w.l.a.plen - self->w.l.a.gecnt)>>1)
-		- (self->w.l.a.score - (int64_t)self->gi * self->w.l.a.gicnt - (int64_t)self->ge * self->w.l.a.gecnt)
-	) / (self->m - self->x);
-	self->w.l.a.mcnt = ((self->w.l.a.plen - self->w.l.a.gecnt)>>1) - self->w.l.a.xcnt;
-	debug("sc(%d, %d, %d, %d), score(%ld), plen(%ld), gic(%u), gec(%u), dcnt(%u), esc(%ld), div(%d), xcnt(%u)",
-		self->m, self->x, self->gi, self->ge, self->w.l.a.score,
-		self->w.l.a.plen, self->w.l.a.gicnt, self->w.l.a.gecnt,
-		(uint32_t)(self->w.l.a.plen - self->w.l.a.gecnt)>>1,
-		self->w.l.a.score - (int64_t)self->gi * self->w.l.a.gicnt - (int64_t)self->ge * self->w.l.a.gecnt,
-		self->m - self->x, self->w.l.a.xcnt);
-	#endif
-
 	/* estimate alignment identity */
-	double mx = self->mx, x = self->x;
+	double imx = self->imx, xmx = self->xmx;
 	int64_t gi = self->gi, ge = self->ge, ga = self->gfa, gb = self->gfb;
 	int64_t sc = self->w.l.a.score;
 	int64_t gic = self->w.l.a.gicnt, gec = self->w.l.a.gecnt, gac = self->w.l.a.gacnt, gbc = self->w.l.a.gbcnt;
 
-	double dlen = (double)((plen - gec - gac - gbc)>>1);
-	double id = (double)(sc - gi*gic - ge*gec - ga*gac - gb*gbc) / (mx * dlen) + x;
+	int64_t dlen = (plen - gec - gac - gbc)>>1;
+	int64_t dsc = sc - gi*gic - ge*gec - ga*gac - gb*gbc;
+	double id = dlen == 0 ? 0.0 : (((double)dsc / (double)dlen) * imx - xmx);
 	self->w.l.a.identity = (float)id;
+	debug("plen(%lu), g(%ld, %ld, %ld, %ld), gcnt(%ld, %ld, %ld, %ld), dlen(%ld), sc(%ld, %ld), mc(%f), id(%f)",
+		plen, gi, ge, ga, gb, gic, gec, gac, gbc, dlen, sc, dsc, dsc * imx - xmx * dlen, id);
 
 	/* copy */
 	_memcpy_blk_ua(self->w.l.aln, &self->w.l.a, sizeof(struct gaba_alignment_s));
@@ -3321,19 +3311,40 @@ void gaba_init_phantom(
 }
 
 /**
+ * @fn gaba_init_accumulate_score
+ */
+static _force_inline
+v2i64_t gaba_init_accumulate_score(
+	struct gaba_params_s const *p)
+{
+	int64_t acc[2] = { 0, 0 };
+	for(uint64_t i = 0; i < 16; i++) {
+		acc[(i & 0x03) == (i>>2)] += (int64_t)p->score_matrix[i];
+	}
+	return(_loadu_v2i64(acc));
+}
+
+/**
  * @fn gaba_init_dp_context
  */
 static _force_inline
 void gaba_init_dp_context(
 	struct gaba_context_s *ctx,
-	struct gaba_params_s *p)
+	struct gaba_params_s const *p)
 {
+	v2i64_t acc = gaba_init_accumulate_score(p);
+	double m = (double)_hi64(acc) / 4.0, x = (double)_lo64(acc) / 12.0;
+	debug("m(%f), x(%f), xmx(%f)", m, x, x / (m - x));
+
 	/* initialize template, see also: "loaded on init" mark and GABA_DP_CONTEXT_LOAD_OFFSET */
 	ctx->dp = (struct gaba_dp_context_s){
 		/* score vectors */
 		.scv = gaba_init_score_vector(p),
 		.tx = p->xdrop - 128,
 		.tf = p->filter_thresh,
+
+		.gi = -p->gi, .ge = -p->ge, .gfa = -p->gfa, .gfb = -p->gfb,
+		.imx = 1 / (m - x), .xmx = x / (m - x),
 
 		/* input and output options */
 		.head_margin = _roundup(p->head_margin, MEM_ALIGN_SIZE),
@@ -3346,6 +3357,9 @@ void gaba_init_dp_context(
 			[_dp_ctx_index(64)] = &_proot(ctx, 64)->tail
 		}
 	};
+	debug("g(%d, %d, %d, %d), g(%d, %d, %d, %d)",
+		p->gi, p->ge, p->gfa, p->gfb,
+		ctx->dp.gi, ctx->dp.ge, ctx->dp.gfa, ctx->dp.gfb);
 	return;
 }
 
