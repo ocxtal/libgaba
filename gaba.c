@@ -34,7 +34,6 @@
 #include "gaba.h"
 #include "gaba_parse.h"
 #include "log.h"
-#include "sassert.h"
 #include "arch/arch.h"			/* architecture dependents */
 
 
@@ -44,9 +43,9 @@
  *   affine:   g(k) =     gi + ge * k          where gi > 0,      ge > 0
  *   combined: g(k) = min(gi + ge * k, gf * k) where gi > 0, gf > ge > 0
  */
-#define LINEAR 						1
-#define AFFINE						2
-#define COMBINED					3
+#define LINEAR 						0
+#define AFFINE						1
+#define COMBINED					2
 
 #ifdef MODEL
 #  if !(MODEL == LINEAR || MODEL == AFFINE || MODEL == COMBINED)
@@ -157,6 +156,12 @@
 #  endif
 #endif
 #include  "unittest.h"
+
+
+/* static assertion macros */
+#define _sa_cat_intl(x, y) 		x##y
+#define _sa_cat(x, y)			_sa_cat_intl(x, y)
+#define _static_assert(expr)	typedef char _sa_cat(_st, __LINE__)[(expr) ? 1 : -1]
 
 
 /* internal constants */
