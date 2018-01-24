@@ -154,7 +154,7 @@ struct gaba_fill_s {
 	uint32_t ascnt, bscnt;		/** (8) aligned section counts */
 	uint64_t apos, bpos;		/** (16) #fetched bases from the head (ppos = apos + bpos) */
 	int64_t max;				/** (8) max score in the entire band */
-	uint32_t stat;				/** (4) status (section update flags) */
+	uint32_t status;			/** (4) status (section update flags) */
 	// int32_t ppos;				/** (8) #vectors from the head (FIXME: should be 64bit int) */
 	uint32_t reserved[5];
 };

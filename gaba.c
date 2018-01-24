@@ -1219,7 +1219,7 @@ struct gaba_joint_tail_s *fill_create_bridge(
 	_store_v2i64(&tail->atptr, _add_v2i64(bptr, _cvt_v2i32_v2i64(len)));/* correct tptr for safety (actually not required) */
 	_store_v2i32(&tail->f.aid, id);								/* correct id pair is required */
 	_memcpy_blk_uu(&tail->f.ascnt, &prev_tail->f.ascnt, 32);	/* just copy (unchanged) */
-	tail->f.stat = prev_tail->f.stat;
+	tail->f.status = prev_tail->f.status;
 	return(tail);
 }
 
@@ -1330,7 +1330,7 @@ struct gaba_joint_tail_s *fill_save_section(
 
 	/* store max, status flag */
 	tail->f.max = _offset(prev_tail) + self->w.r.ofsd + mdrop;
-	tail->f.stat = ((xstat & (TERM | CONT))<<8) | _mask_v2i32(update);
+	tail->f.status = ((xstat & (TERM | CONT))<<8) | _mask_v2i32(update);
 	debug("prev_offset(%ld), offset(%ld), max(%d, %ld)",
 		_offset(prev_tail), _offset(prev_tail) + self->w.r.ofsd, mdrop, tail->f.max);
 	return(tail);
@@ -2594,7 +2594,7 @@ void trace_reload_section(
 	while(gidx <= 0) {
 		do {
 			gidx += tail->istat ? 0 : _r(tail->aadv, i);
-			debug("add istat(%u), ridx(%d), adv(%d), gidx(%d), stat(%x)", tail->istat, _r(tail->aridx, i), _r(tail->aadv, i), gidx, tail->f.stat);
+			debug("add istat(%u), ridx(%d), adv(%d), gidx(%d), stat(%x)", tail->istat, _r(tail->aridx, i), _r(tail->aadv, i), gidx, tail->f.status);
 			prev_tail = tail; tail = tail->tail;
 		} while(_r(tail->aridx, i) != 0);
 	}
@@ -3325,7 +3325,7 @@ void gaba_init_phantom(
 		/* fill object: coordinate and status */
 		.f = {
 			.max = init_max,
-			.stat = CONT | GABA_UPDATE_A | GABA_UPDATE_B,
+			.status = CONT | GABA_UPDATE_A | GABA_UPDATE_B,
 			.ascnt = 0,    .bscnt = 0,
 			.apos = -_W/2, .bpos = -_W/2,
 			.aid = 0,      .bid = 0,
@@ -4474,12 +4474,12 @@ struct gaba_fill_s const *unittest_dp_extend(
 	struct gaba_fill_s const *f = _export(gaba_dp_fill_root)(dp, a, p->apos, b, p->bpos, 0);
 
 	gaba_fill_t const *m = f;
-	while((f->stat & GABA_TERM) == 0) {
-		if(f->stat & GABA_UPDATE_A) {
+	while((f->status & GABA_TERM) == 0) {
+		if(f->status & GABA_UPDATE_A) {
 			a++;
 			debug("update a(%u, %u, %p, %s)", a->id, a->len, a->base, a->base);
 		}
-		if(f->stat & GABA_UPDATE_B) {
+		if(f->status & GABA_UPDATE_B) {
 			b++;
 			debug("update b(%u, %u, %p, %s)", b->id, b->len, b->base, b->base);
 		}
