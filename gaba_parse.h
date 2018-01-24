@@ -4,6 +4,13 @@
  *
  * @brief libgaba utility function implementations
  *
+ * NOTE: Including this header is not recommended since this header internally include
+ *   arch/arch.h, which floods a lot of SIMD-related defines. The same function will
+ *   be found in the libgaba.a. The functions can be overridden by this header by
+ *   compiling the file with a proper SIMD-enabling flag, such as `-mavx2 -mbmi -mpopcnt'
+ *   (see Makefile for the details), which result in a slightly better performace
+ *   with the functions inlined.
+ *
  * @author Hajime Suzuki
  * @date 2018/1/20
  * @license Apache v2
@@ -16,6 +23,9 @@
 #include "gaba.h"
 #include "arch/arch.h"
 
+#ifndef _GABA_PARSE_EXPORT_LEVEL
+#  define _GABA_PARSE_EXPORT_LEVEL		static inline	/* hidden */
+#endif
 
 #define _gaba_parse_min2(_x, _y)		( (_x) < (_y) ? (_x) : (_y) )
 
@@ -25,7 +35,7 @@
  * called with a pair of cigar operation (c) and its length (len).
  * void *fp is an opaque pointer to the context of the printer.
  */
-typedef int (*gaba_printer_t)(void *, uint64_t, char);
+typedef int (*gaba_printer_t)(void *, uint64_t, char);	/* moved to gaba.h */
 
 /**
  * @fn gaba_parse_load_uint64
@@ -98,7 +108,7 @@ int64_t gaba_parse_dump_gap_string(
 		return(p - buf);
 	} else {
 		int64_t adv;
-		uint8_t b[16] = { ch, '0' }, *p = &b[1];
+		uint8_t b[16] = { (uint8_t)ch, '0' }, *p = &b[1];
 		while(len != 0) { *p++ = (len % 10) + '0'; len /= 10; }
 		for(p -= (p != &b[1]), adv = (int64_t)((ptrdiff_t)(p - b)) + 1; p >= b; p--) { *buf++ = *p; }
 		return(adv);
@@ -122,7 +132,7 @@ int64_t gaba_parse_dump_gap_string(
  * @fn gaba_print_cigar_forward
  * @brief parse path string and print cigar to file
  */
-static inline
+_GABA_PARSE_EXPORT_LEVEL
 uint64_t gaba_print_cigar_forward(
 	gaba_printer_t printer,
 	void *fp,
@@ -168,7 +178,7 @@ uint64_t gaba_print_cigar_forward(
  * @fn gaba_dump_cigar_forward
  * @brief parse path string and store cigar to buffer
  */
-static inline
+_GABA_PARSE_EXPORT_LEVEL
 uint64_t gaba_dump_cigar_forward(
 	char *buf,
 	uint64_t buf_size,
@@ -229,7 +239,7 @@ uint64_t gaba_dump_cigar_forward(
  * @fn gaba_print_cigar_reverse
  * @brief parse path string and print cigar to file
  */
-static inline
+_GABA_PARSE_EXPORT_LEVEL
 uint64_t gaba_print_cigar_reverse(
 	gaba_printer_t printer,
 	void *fp,
@@ -274,7 +284,7 @@ uint64_t gaba_print_cigar_reverse(
  * @fn gaba_dump_cigar_reverse
  * @brief parse path string and store cigar to buffer
  */
-static inline
+_GABA_PARSE_EXPORT_LEVEL
 uint64_t gaba_dump_cigar_reverse(
 	char *buf,
 	uint64_t buf_size,
