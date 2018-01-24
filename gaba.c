@@ -687,6 +687,7 @@ static _force_inline
 void gaba_free(
 	void *ptr)
 {
+	debug("free(%p)", ptr - MEM_MARGIN_SIZE);
 	free(ptr - MEM_MARGIN_SIZE);
 	return;
 }
@@ -1203,7 +1204,8 @@ struct gaba_joint_tail_s *fill_create_bridge(
 	v2i32_t id, v2i32_t len, v2i64_t bptr,
 	v2i32_t adv)
 {
-	struct gaba_joint_tail_s *tail = _bridge(gaba_dp_malloc(self, BRIDGE_TAIL_SIZE));
+	// struct gaba_joint_tail_s *tail = _bridge(gaba_dp_malloc(self, BRIDGE_TAIL_SIZE));
+	struct gaba_joint_tail_s *tail = gaba_dp_malloc(self, sizeof(struct gaba_joint_tail_s));
 	debug("create bridge, p(%p)", tail);
 
 	/* copy ch, xd, and md */
