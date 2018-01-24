@@ -873,8 +873,10 @@ void fill_fetch_seq_a(
 	if(pos < self->alim) {
 		debug("reverse fetch a: pos(%p), len(%lu)", pos, len);
 		/* reverse fetch: 2 * alen - (2 * alen - pos) + (len - 32) */
-		v32i8_t ach = _loadu_v32i8(pos + (len - BLK));
-		_storeu_v32i8(_rd_bufa(self, _W, len), _rva_v32i8(ach));		/* reverse */
+		// v32i8_t ach = _loadu_v32i8(pos + (len - BLK));				/* this may touch the space before the array */
+		// _storeu_v32i8(_rd_bufa(self, _W, len), _rva_v32i8(ach));		/* reverse */
+		v32i8_t ach = _loadu_v32i8(pos);								/* this will not touch the space before the array, but will touch at most 31bytes after the array */
+		_storeu_v32i8(_rd_bufa(self, _W, BLK), _rva_v32i8(ach));		/* reverse */
 	} else {
 		debug("forward fetch a: pos(%p), len(%lu)", pos, len);
 		/* forward fetch: 2 * alen - pos */
@@ -901,19 +903,18 @@ void fill_fetch_seq_a_n(
 		pos += len; ofs += len;		/* fetch in reverse direction */
 		while(len > 0) {
 			uint64_t l = MIN2(len, 16);
-			v16i8_t ach = _loadu_v16i8(pos - 16);
-			_storeu_v16i8(_rd_bufa(self, ofs - l, l), _rva_v16i8(ach));	/* reverse */
+			v16i8_t ach = _loadu_v16i8(pos - l);
+			_storeu_v16i8(_rd_bufa(self, ofs - l, l), _rva_v16i8(ach, l));	/* reverse */
 			len -= l; pos -= l; ofs -= l;
 		}
 	} else {
 		debug("forward fetch a: pos(%p), len(%lu)", pos, len);
 		/* forward fetch: 2 * alen - pos */
-		// v16i8_t const cv = _load_v16i8(comp_mask);		/* complement mask */
 		pos += len - 1; ofs += len;
 		while(len > 0) {
 			uint64_t l = MIN2(len, 16);
 			v16i8_t ach = _loadu_v16i8(_rev(pos, self->alim));
-			_storeu_v16i8(_rd_bufa(self, ofs - l, l), _fwa_v16i8(ach));	/* complement */
+			_storeu_v16i8(_rd_bufa(self, ofs - l, l), _fwa_v16i8(ach, l));	/* complement */
 			len -= l; pos -= l; ofs -= l;
 		}
 	}
@@ -937,8 +938,8 @@ void fill_fetch_seq_b(
 	} else {
 		debug("reverse fetch b: pos(%p), len(%lu)", pos, len);
 		/* reverse fetch: 2 * blen - pos + (len - 32) */
-		v32i8_t bch = _loadu_v32i8(_rev(pos, self->blim) - (BLK - 1));
-		_storeu_v32i8(_rd_bufb(self, _W, len), _rvb_v32i8(bch));		/* reverse complement */
+		v32i8_t bch = _loadu_v32i8(_rev(pos + (len - 1), self->blim));
+		_storeu_v32i8(_rd_bufb(self, _W, BLK), _rvb_v32i8(bch));		/* reverse complement */
 	}
 	return;
 }
@@ -960,7 +961,7 @@ void fill_fetch_seq_b_n(
 		while(len > 0) {
 			uint64_t l = MIN2(len, 16);					/* advance length */
 			v16i8_t bch = _loadu_v16i8(pos);
-			_storeu_v16i8(_rd_bufb(self, ofs, l), _fwb_v16i8(bch));
+			_storeu_v16i8(_rd_bufb(self, ofs, l), _fwb_v16i8(bch, l));
 			len -= l; pos += l; ofs += l;
 		}
 	} else {
@@ -968,8 +969,8 @@ void fill_fetch_seq_b_n(
 		/* reverse fetch: 2 * blen - pos + (len - 16) */
 		while(len > 0) {
 			uint64_t l = MIN2(len, 16);					/* advance length */
-			v16i8_t bch = _loadu_v16i8(_rev(pos + (16 - 1), self->blim));
-			_storeu_v16i8(_rd_bufb(self, ofs, l), _rvb_v16i8(bch));
+			v16i8_t bch = _loadu_v16i8(_rev(pos + (l - 1), self->blim));
+			_storeu_v16i8(_rd_bufb(self, ofs, l), _rvb_v16i8(bch, l));
 			len -= l; pos += l; ofs += l;
 		}
 	}
