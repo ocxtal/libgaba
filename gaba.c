@@ -2640,7 +2640,16 @@ void trace_push_segment(
 /**
  * @enum ts_*
  */
-enum { ts_d = 0, ts_v0, ts_v1, ts_h0, ts_h1 };
+#define TS_H							( 0x01 )
+#define TS_V							( 0x02 )
+#define TS_S							( 0x04 )
+enum {
+	ts_d  = TS_H | TS_V,
+	ts_v0 = TS_V,
+	ts_v1 = TS_V | TS_S,
+	ts_h0 = TS_H,
+	ts_h1 = TS_H | TS_S
+};
 
 /**
  * @macro _trace_inc_*
@@ -2921,6 +2930,7 @@ void trace_core(
 		case ts_v1: goto _trace_tail_v_tail;
 		case ts_h0: goto _trace_tail_h_head;
 		case ts_h1: goto _trace_tail_h_tail;
+		default: /* trap(); */ return;			/* broken state */
 	}
 
 	/* tail loops */ {
@@ -3039,10 +3049,14 @@ struct gaba_alignment_s *trace_body(
 
 	/* blockwise traceback loop, until ppos reaches the root */
 	while(self->w.l.path + self->w.l.ofs > self->w.l.aln->path) {	/* !(self->w.l.path == self->w.l.aln->path && self->w.l.ofs == 0) */
-		/* update section info */
+		/* update section info; check the next direction */
 		debug("gidx(%d, %d)", self->w.l.bgidx, self->w.l.agidx);
-		if((int32_t)self->w.l.agidx <= 0) { trace_reload_section(self, 0); }
-		if((int32_t)self->w.l.bgidx <= 0) { trace_reload_section(self, 1); }
+		if((int32_t)self->w.l.agidx < (int32_t)((self->w.l.state & TS_H) != 0)) {
+			trace_reload_section(self, 0);
+		}
+		if((int32_t)self->w.l.bgidx < (int32_t)((self->w.l.state & TS_V) != 0)) {
+			trace_reload_section(self, 1);
+		}
 
 		/* fragment trace: q must be inside [0, BW) */
 		trace_core(self);
@@ -4004,8 +4018,8 @@ void unittest_naive_test_section(
 
 		w->appos = pos.apos;
 		w->bppos = pos.bpos;
-		if(pos.apos <= w->abnd[-1]) { w->abnd--; w->aid--; }
-		if(pos.bpos <= w->bbnd[-1]) { w->bbnd--; w->bid--; }
+		if(pos.apos - aadv < w->abnd[-1]) { w->abnd--; w->aid--; }
+		if(pos.bpos - badv < w->bbnd[-1]) { w->bbnd--; w->bid--; }
 	}
 	return;
 }
@@ -4801,7 +4815,33 @@ unittest( .name = "base" )
 		{
 			.a = { "GCTCTGACCGTGTTGAGAATATCGGGTTTCGGGCTCATGCCCTACGATGCGTA" },
 			.b = { "GGTTGACCGTGTTGAGAATATCGGGTTTCGGGCTCATGCCCTACATGCTTTAA" }
+		},
+		/* debugging section boundaries; non-matching sequence (eaten as a gap) at the head */
+		{
+			.a = {
+				"G",
+				"TAGGACACTCAGAAGAGCTTGGATATTATGGGGAAGCCTAGTTGTCGCGCAAACAAATAACGGTGTCAAAAGTTATAGAGACTAGTAGGCGATCTGACGACGGCGGA",
+				"AACACAATTCG",
+				"GACCCCTCGCCTATAGCAAGCCGGCTGAAAGGATTGATTGACGAAGGGTTAAAGGGCAGCAATCATTAGGTGTCTATCGGAGGCACTGCCTGGT",
+				"GGGGAACG",
+				"GCAGTGATATAAATGCCGTTCGCTATTCCCCTTCCGTGCTCGTCCGGGAGCCAGACGTGTATGTAACTGTGTCCAGTGCTAGACCAGTTAGATATTACGGAACCCCTCAAAATCCACTTCTCCGCACGCTACTGGCTGGTGGACTCCCCAGACTTTTACCACGTTCATTGGCCGTAAACCCTCGGACGCGTCACATGCGCTCTATGCTGGATGGGAGTGTGCAGTCCCGATCCGGAATAGCAGTGAACTGACACTTGCAACTCGCTGCGGAATGTCGTGC"
+			},
+			.b = {
+				"T",
+				"GTCGGGAACTCAGAAGATCTCTGATATATTTATGGGGAAGCTAGTTGTCCGCAGACAAATAAAGGTGTCAAAAGTTATAGAGACTAGTAGGGATCTGACGACTGGCG",
+				"AAACAATTCGA",
+				"AACCCCTCGCCTTAAAAGCCGGCTGAAATGATTGATTGACGAAGGGTTCATGGGCAGCAATCCATTTCAGGTGTTATCGGAGCAAATGTCTGGT",
+				"GTGGAAAC",
+				"GCAGTGATAGAAATCATGTTCTCTATTCCCCTTCCGTGCTCGTCCGGTGCTAGACGAGTTTGTTACTGTGTCCAATGCTAGACCAGTTTGAGATTACTAAACCCCCAAACTCCACTTCTCCGACGCTAAGTGCTGGCGGACTCCCCAGACGTTTACCCCGTTCATTGGCGTAAACCCTCGTGATGCGTGCACACGCGCTCTATACTGCATGGAGTGCGCAGTCCCGAATCGGAATAGCAATGTACCTGTAACATGCAGCTCACTGCGGAATATACGTGCC"
+			}
+		},
+		/* fails for affine-16 due to the bandwidth shotage */
+#if 0
+		{
+			.a = { "CCTTTACATATACGGACCAGAGATAGGTTAAATTTAAATCTTGCCGGT" },
+			.b = { "CCCTAAGATACGGATTAGCTAACTAGCAACGGAGATACGTAAATGTTAAATCTTGCCGGT" }
 		}
+#endif
 	};
 
 	uint8_t const *lim = (uint8_t const *)0x800000000000;
