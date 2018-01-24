@@ -3640,6 +3640,10 @@ void _export(gaba_dp_clean)(
 /* unittests */
 #if UNITTEST == 1
 
+#define UNITTEST_SEQ_MARGIN			( 8 )			/* add margin to avoid warnings in the glibc strlen */
+#define UNITTEST_GABA_HEAD_MARGIN	( 0 )
+#define UNITTEST_GABA_TAIL_MARGIN	( 64 )
+
 #include <string.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -4070,7 +4074,6 @@ struct unittest_naive_section_pair_s *unittest_naive_finalize_section(
  * @brief naive implementation of the forward semi-global alignment algorithm
  * left-aligned gap and left-aligned deletion
  */
-#define UNITTEST_SEQ_MARGIN			( 8 )			/* add margin to avoid warnings in the glibc strlen */
 static
 struct unittest_naive_result_s unittest_naive(
 	struct gaba_params_s const *sc,
@@ -4397,16 +4400,20 @@ uint64_t *unittest_build_section_array(char const *const *p)
 }
 
 static
-struct gaba_section_s *unittest_build_section_forward(char const *const *p)
+struct gaba_section_s *unittest_build_section_forward(char const *const *p, uint64_t pos)
 {
 	struct gaba_section_s *s = calloc(UNITTEST_MAX_SEQ_CNT + 1, sizeof(struct gaba_section_s));
 
-	uint64_t len = 256;
+	uint64_t len = pos + UNITTEST_GABA_HEAD_MARGIN + UNITTEST_GABA_TAIL_MARGIN;
 	for(char const *const *q = p; *q != NULL; q++) { len += strlen(*q) + 1; }
-	char *b = calloc(1, len), *a = b; a += 128;
+	char *a = calloc(1, len); a += pos + UNITTEST_GABA_HEAD_MARGIN;
 	uint64_t i = 0;
 	while(p[i] != NULL) {
-		s[i] = gaba_build_section(i * 2, a, strlen(p[i]));
+		if(i == 0) {
+			s[i] = gaba_build_section(i * 2, a - pos, strlen(p[i]) + pos);
+		} else {
+			s[i] = gaba_build_section(i * 2, a, strlen(p[i]));
+		}
 		for(char const *r = p[i]; *r != '\0'; r++) {
 			*a++ = unittest_encode_base(*r);
 		}
@@ -4418,16 +4425,20 @@ struct gaba_section_s *unittest_build_section_forward(char const *const *p)
 }
 
 static
-struct gaba_section_s *unittest_build_section_reverse(char const *const *p)
+struct gaba_section_s *unittest_build_section_reverse(char const *const *p, uint64_t pos)
 {
 	struct gaba_section_s *s = calloc(UNITTEST_MAX_SEQ_CNT + 1, sizeof(struct gaba_section_s));
 
-	uint64_t len = 256;
+	uint64_t len = pos + UNITTEST_GABA_HEAD_MARGIN + UNITTEST_GABA_TAIL_MARGIN;
 	for(char const *const *q = p; *q != NULL; q++) { len += strlen(*q) + 1; }
-	char *b = calloc(1, len), *a = b; a += 128;
+	char *a = calloc(1, len); a += pos + UNITTEST_GABA_HEAD_MARGIN;
 	uint64_t i = 0;
 	while(p[i] != NULL) {
-		s[i] = gaba_build_section(i * 2 + 1, a, strlen(p[i]));
+		if(i == 0) {
+			s[i] = gaba_build_section(i * 2 + 1, a - pos, strlen(p[i]) + pos);
+		} else {
+			s[i] = gaba_build_section(i * 2 + 1, a, strlen(p[i]));
+		}
 		for(char const *r = p[i] + strlen(p[i]); r > p[i]; r--) {
 			*a++ = unittest_encode_base(r[-1]);
 		}
@@ -4441,8 +4452,8 @@ struct gaba_section_s *unittest_build_section_reverse(char const *const *p)
 static
 void unittest_clean_section(struct unittest_sec_pair_s *s)
 {
-	free((char *)s->a[0].base + s->apos - 128);
-	free((char *)s->b[0].base + s->bpos - 128);
+	free((char *)s->a[0].base - UNITTEST_GABA_HEAD_MARGIN);
+	free((char *)s->b[0].base - UNITTEST_GABA_HEAD_MARGIN);
 	free(s->a); free(s->b);
 	free(s);
 	return;
@@ -4451,11 +4462,11 @@ void unittest_clean_section(struct unittest_sec_pair_s *s)
 static
 struct unittest_sec_pair_s *unittest_build_section(
 	struct unittest_seq_pair_s const *p,
-	struct gaba_section_s *(*build_section)(char const *const *))
+	struct gaba_section_s *(*build_section)(char const *const *, uint64_t))
 {
 	struct unittest_sec_pair_s *s = malloc(sizeof(struct unittest_sec_pair_s));
-	s->a = build_section(p->a); s->apos = rand() % 64; s->a[0].base -= s->apos; s->a[0].len += s->apos;
-	s->b = build_section(p->b); s->bpos = rand() % 64; s->b[0].base -= s->bpos; s->b[0].len += s->bpos;
+	s->apos = rand() % 64; s->a = build_section(p->a, s->apos);
+	s->bpos = rand() % 64; s->b = build_section(p->b, s->bpos);
 	return(s);
 }
 
