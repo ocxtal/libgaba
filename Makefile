@@ -8,8 +8,8 @@ TARGET = libgaba.a
 all: native example unittest bench
 
 native:
-	$(MAKE) -f Makefile.core CC=$(CC) CFLAGS='$(CFLAGS) $(ARCHFLAGS)'
-	$(AR) rcs $(TARGET) gaba.*.o
+	$(MAKE) -f Makefile.core CC=$(CC) CFLAGS='$(CFLAGS) $(ARCHFLAGS)' all
+	$(AR) rcs $(TARGET) gaba.*.o gaba_common.o
 
 example: example.c native
 	$(CC) -o $@ $(CFLAGS) $(ARCHFLAGS) $< $(TARGET)
