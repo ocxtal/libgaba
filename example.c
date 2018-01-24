@@ -46,9 +46,9 @@ int main(int argc, char *argv[]) {
 
 	/* until X-drop condition is detected */
 	struct gaba_fill_s const *m = f;					/* track max */
-	while((f->stat & GABA_TERM) == 0) {
-		if(f->stat & GABA_UPDATE_A) { ap = &tail; }		/* substitute the pointer by the tail section's if it reached the end */
-		if(f->stat & GABA_UPDATE_B) { bp = &tail; }
+	while((f->status & GABA_TERM) == 0) {
+		if(f->status & GABA_UPDATE_A) { ap = &tail; }	/* substitute the pointer by the tail section's if it reached the end */
+		if(f->status & GABA_UPDATE_B) { bp = &tail; }
 
 		f = gaba_dp_fill(dp, f, ap, bp, UINT32_MAX);	/* extend the banded matrix */
 		m = f->max > m->max ? f : m;					/* swap if maximum score was updated */
