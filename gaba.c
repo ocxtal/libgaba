@@ -9,6 +9,10 @@
  * @license Apache v2
  */
 
+/* debug print configuration: -DDEBUG to enable debug print, -DDEBUG_ALL to print all the vectors, arrays, and bitmasks */
+#if defined(DEBUG_ALL) && !defined(DEBUG)
+#  define DEBUG
+#endif
 #ifdef DEBUG
 #  define REDEFINE_DEBUG
 #endif
@@ -1608,9 +1612,11 @@ int64_t fill_bulk_test_idx(
 	((int64_t)aptr - (int64_t)alim) | ((int64_t)blim - (int64_t)bptr) | ((int64_t)plim - (int64_t)bptr + (int64_t)aptr); \
 })
 
-#undef DEBUG
-#undef _LOG_H_INCLUDED
-#include "log.h"
+#ifndef DEBUG_ALL
+#  undef DEBUG
+#  undef _LOG_H_INCLUDED
+#  include "log.h"
+#endif
 
 /**
  * @fn fill_bulk_block
@@ -1702,9 +1708,11 @@ struct gaba_block_s *fill_bulk_seq_bounded(
 	return(blk);
 }
 
-#undef DEBUG
-#undef _LOG_H_INCLUDED
-#include "log.h"
+#ifndef DEBUG_ALL
+#  undef DEBUG
+#  undef _LOG_H_INCLUDED
+#  include "log.h"
+#endif
 
 /**
  * @fn fill_cap_seq_bounded
@@ -2383,9 +2391,11 @@ uint64_t leaf_load_max_mask(
 	return(max_mask);
 }
 
-#undef DEBUG
-#undef _LOG_H_INCLUDED
-#include "log.h"
+#ifndef DEBUG_ALL
+#  undef DEBUG
+#  undef _LOG_H_INCLUDED
+#  include "log.h"
+#endif
 
 /**
  * @fn leaf_detect_pos
@@ -2818,9 +2828,11 @@ enum { ts_d = 0, ts_v0, ts_v1, ts_h0, ts_h1 };
 	} \
 }
 
-#undef DEBUG
-#undef _LOG_H_INCLUDED
-#include "log.h"
+#ifndef DEBUG_ALL
+#  undef DEBUG
+#  undef _LOG_H_INCLUDED
+#  include "log.h"
+#endif
 
 /**
  * @fn trace_core
@@ -2830,8 +2842,10 @@ void trace_core(
 	struct gaba_dp_context_s *self)
 {
 	#define _pop_vector(_c, _l, _state, _jump_to) { \
-		debug("go %s (%s, %s), dir(%x), mask_h(%lx), mask_v(%lx), mask_e(%lx), mask_f(%lx), p(%ld), q(%d), ptr(%p), path_array(%lx)", \
-			#_l, #_c, #_jump_to, dir_mask, (uint64_t)mask->h.all, (uint64_t)mask->v.all, (uint64_t)mask->e.all, (uint64_t)mask->f.all, (int64_t)(mask - blk->mask), (int32_t)q, mask, path_array); \
+		debug("go %s (%s, %s), dir(%x), mask(%lx, %lx), h(%lx, %lx, %lx), v(%lx, %lx, %lx), p(%ld), q(%d), ptr(%p), path_array(%lx)", \
+			#_l, #_c, #_jump_to, dir_mask, (uint64_t)mask->h.all, (uint64_t)mask->v.all, \
+			(uint64_t)_trace_test_diag_h(), (uint64_t)_trace_test_gap_h(), (uint64_t)_trace_test_fgap_h(), (uint64_t)_trace_test_diag_v(), (uint64_t)_trace_test_gap_v(), (uint64_t)_trace_test_fgap_v(), \
+			(int64_t)(mask - blk->mask), (int32_t)q, mask, path_array); \
 		_trace_##_c##_##_l##_update_index(); \
 		_trace_##_l##_update_path_q(); \
 		_trace_##_c##_load_n(t, _state, _jump_to); \
