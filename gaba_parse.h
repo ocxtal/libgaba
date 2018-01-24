@@ -20,12 +20,12 @@
 #define _gaba_parse_min2(_x, _y)		( (_x) < (_y) ? (_x) : (_y) )
 
 /**
- * @type gaba_dp_printer_t
+ * @type gaba_printer_t
  * @brief callback to CIGAR element printer
  * called with a pair of cigar operation (c) and its length (len).
  * void *fp is an opaque pointer to the context of the printer.
  */
-typedef int (*gaba_dp_printer_t)(void *, uint64_t, char);
+typedef int (*gaba_printer_t)(void *, uint64_t, char);
 
 /**
  * @fn gaba_parse_load_uint64
@@ -119,12 +119,12 @@ int64_t gaba_parse_dump_gap_string(
 })
 
 /**
- * @fn gaba_dp_print_cigar_forward
+ * @fn gaba_print_cigar_forward
  * @brief parse path string and print cigar to file
  */
 static inline
-uint64_t gaba_dp_print_cigar_forward(
-	gaba_dp_printer_t printer,
+uint64_t gaba_print_cigar_forward(
+	gaba_printer_t printer,
 	void *fp,
 	uint32_t const *path,
 	uint32_t offset,
@@ -165,11 +165,11 @@ uint64_t gaba_dp_print_cigar_forward(
 }
 
 /**
- * @fn gaba_dp_dump_cigar_forward
+ * @fn gaba_dump_cigar_forward
  * @brief parse path string and store cigar to buffer
  */
 static inline
-uint64_t gaba_dp_dump_cigar_forward(
+uint64_t gaba_dump_cigar_forward(
 	char *buf,
 	uint64_t buf_size,
 	uint32_t const *path,
@@ -226,12 +226,12 @@ uint64_t gaba_dp_dump_cigar_forward(
 })
 
 /**
- * @fn gaba_dp_print_cigar_reverse
+ * @fn gaba_print_cigar_reverse
  * @brief parse path string and print cigar to file
  */
 static inline
-uint64_t gaba_dp_print_cigar_reverse(
-	gaba_dp_printer_t printer,
+uint64_t gaba_print_cigar_reverse(
+	gaba_printer_t printer,
 	void *fp,
 	uint32_t const *path,
 	uint32_t offset,
@@ -271,11 +271,11 @@ uint64_t gaba_dp_print_cigar_reverse(
 }
 
 /**
- * @fn gaba_dp_dump_cigar_reverse
+ * @fn gaba_dump_cigar_reverse
  * @brief parse path string and store cigar to buffer
  */
 static inline
-uint64_t gaba_dp_dump_cigar_reverse(
+uint64_t gaba_dump_cigar_reverse(
 	char *buf,
 	uint64_t buf_size,
 	uint32_t const *path,

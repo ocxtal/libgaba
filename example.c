@@ -60,7 +60,7 @@ int main(int argc, char *argv[]) {
 	);
 
 	printf("score(%ld), path length(%lu)\n", r->score, r->plen);
-	gaba_dp_print_cigar_forward(
+	gaba_print_cigar_forward(
 		printer, (void *)stdout,						/* printer */
 		r->path,										/* bit-encoded path array */
 		0,												/* offset is always zero */

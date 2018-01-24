@@ -210,7 +210,7 @@ int main(int argc, char *argv[])
 		bench_end(trace);
 
 		bench_start(parse);
-		gaba_dp_dump_cigar_forward(c, p.len, r->path, 0, r->plen);
+		gaba_dump_cigar_forward(c, p.len, r->path, 0, r->plen);
 		bench_end(parse);
 
 		gaba_dp_clean(dp);
