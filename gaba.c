@@ -3729,12 +3729,12 @@ int ut_printer(
 	return(len);
 }
 
+#define _arr(...)		( (uint32_t const []){ 0, 0, __VA_ARGS__, 0, 0, 0, 0 } + 2 )
 unittest()
 {
 	char *buf = (char *)malloc(16384);
 	char *p = buf;
 
-	#define _arr(...)		( (uint32_t const []){ 0, 0, __VA_ARGS__, 0, 0 } + 2 )
 	gaba_dp_print_cigar_forward(ut_printer, (void *)&p, _arr(0x55555555), 0, 32);
 	assert(strcmp(buf, "16M") == 0, "%s", buf);
 
@@ -3790,7 +3790,6 @@ unittest()
 	gaba_dp_print_cigar_forward(ut_printer, (void *)&p, _arr(0xaaabf554, 0xaaaa0556, 0xaaaaaaaa), 0, 65);
 	assert(strcmp(buf, "2D5M5I8M1I5M5D8M") == 0, "%s", buf);
 
-	#undef _arr
 	free(buf);
 }
 
@@ -3799,7 +3798,6 @@ unittest()
 	char *buf = (char *)malloc(16384);
 	char *p = buf;
 
-	#define _arr(...)		( (uint32_t const []){ 0, 0, __VA_ARGS__, 0, 0 } + 2 )
 	gaba_dp_print_cigar_reverse(ut_printer, (void *)&p, _arr(0x55555555), 0, 32);
 	assert(strcmp(buf, "16M") == 0, "%s", buf);
 
@@ -3855,7 +3853,6 @@ unittest()
 	gaba_dp_print_cigar_reverse(ut_printer, (void *)&p, _arr(0xaaabf554, 0xaaaa0556, 0xaaaaaaaa), 0, 65);
 	assert(strcmp(buf, "8M5D5M1I8M5I5M2D") == 0, "%s", buf);
 
-	#undef _arr
 	free(buf);
 }
 
@@ -3865,7 +3862,6 @@ unittest()
 	uint64_t const len = 16384;
 	char *buf = (char *)malloc(len);
 
-	#define _arr(...)		( (uint32_t const []){ 0, 0, __VA_ARGS__, 0, 0 } + 2 )
 	gaba_dp_dump_cigar_forward(buf, len, _arr(0x55555555), 0, 32);
 	assert(strcmp(buf, "16M") == 0, "%s", buf);
 
@@ -3908,7 +3904,6 @@ unittest()
 	gaba_dp_dump_cigar_forward(buf, len, _arr(0xaaabf554, 0xaaaa0556, 0xaaaaaaaa), 0, 65);
 	assert(strcmp(buf, "2D5M5I8M1I5M5D8M") == 0, "%s", buf);
 
-	#undef _arr
 	free(buf);
 }
 
@@ -3917,7 +3912,6 @@ unittest()
 	uint64_t const len = 16384;
 	char *buf = (char *)malloc(len);
 
-	#define _arr(...)		( (uint32_t const []){ 0, 0, __VA_ARGS__, 0, 0 } + 2 )
 	gaba_dp_dump_cigar_reverse(buf, len, _arr(0x55555555), 0, 32);
 	assert(strcmp(buf, "16M") == 0, "%s", buf);
 
@@ -3960,9 +3954,9 @@ unittest()
 	gaba_dp_dump_cigar_reverse(buf, len, _arr(0xaaabf554, 0xaaaa0556, 0xaaaaaaaa), 0, 65);
 	assert(strcmp(buf, "8M5D5M1I8M5I5M2D") == 0, "%s", buf);
 
-	#undef _arr
 	free(buf);
 }
+#undef _arr
 
 /* cross tests */
 /**
