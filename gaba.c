@@ -807,7 +807,18 @@ enum BASES { A = 0x01, C = 0x02, G = 0x04, T = 0x08, N = 0x00 };
 #endif
 
 /**
+ * @macro _swapn_v16i8
+ * @brief bswap functionality on arbitrary-length (1..16) array on SIMD vector
+ */
+static uint8_t const swapn_mask[16] __attribute__(( aligned(16) )) = {
+	0xff, 0xfe, 0xfd, 0xfc, 0xfb, 0xfa, 0xf9, 0xf8,
+	0xf7, 0xf6, 0xf5, 0xf4, 0xf3, 0xf2, 0xf1, 0xf0
+};
+#define _swapn_v16i8(_v, _n)	( _shuf_v16i8((_v), _add_v16i8(_load_v16i8(swapn_mask), _set_v16i8((_n)))) )
+
+/**
  * @macro _adjust_BLK, _comp_BLK, _match_BW
+ * NOTE: _load_v16i8 and _load_v32i8 will be moved out of the loop when loading static uint8_t const[16].
  */
 #if BIT == 2
 /* 2bit encoding */
@@ -823,13 +834,13 @@ static uint8_t const compshift_mask_b[16] __attribute__(( aligned(16) )) = {
 	0x0c, 0x08, 0x04, 0x00, 0x02, 0x02, 0x02, 0x02,
 	0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02
 };
-#  define _fwa_v16i8(_v)		( _xor_v16i8((_load_v16i8(comp_mask_a)), (_v)) )
+#  define _fwa_v16i8(_v, _l)	( _xor_v16i8((_load_v16i8(comp_mask_a)), (_v)) )	/* _l is ignored */
 #  define _fwa_v32i8(_v)		( _xor_v32i8((_from_v16i8_v32i8(_load_v16i8(comp_mask_a))), (_v)) )
-#  define _rva_v16i8(_v)		( _swap_v16i8((_v)) )
+#  define _rva_v16i8(_v, _l)	( _swapn_v16i8((_v), (_l)) )
 #  define _rva_v32i8(_v)		( _swap_v32i8((_v)) )
-#  define _fwb_v16i8(_v)		( _shuf_v16i8((_load_v16i8(shift_mask_b)), (_v)) )
+#  define _fwb_v16i8(_v, _l)	( _shuf_v16i8((_load_v16i8(shift_mask_b)), (_v)) )	/* _l is ignored */
 #  define _fwb_v32i8(_v)		( _shuf_v32i8((_from_v16i8_v32i8(_load_v16i8(shift_mask_b))), (_v)) )
-#  define _rvb_v16i8(_v)		( _shuf_v16i8((_load_v16i8(compshift_mask_b)), _swap_v16i8(_v)) )
+#  define _rvb_v16i8(_v, _l)	( _shuf_v16i8((_load_v16i8(compshift_mask_b)), _swap_v16i8(_v)) )	/* _l is ignored */
 #  define _rvb_v32i8(_v)		( _shuf_v32i8((_from_v16i8_v32i8(_load_v16i8(compshift_mask_b))), _swap_v32i8(_v)) )
 #  define _match_n(_a, _b)		_or_n(_a, _b)
 
@@ -839,13 +850,13 @@ static uint8_t const comp_mask[16] __attribute__(( aligned(16) )) = {
 	0x00, 0x08, 0x04, 0x0c, 0x02, 0x0a, 0x06, 0x0e,
 	0x01, 0x09, 0x05, 0x0d, 0x03, 0x0b, 0x07, 0x0f
 };
-#  define _fwa_v16i8(_v)		( _shuf_v16i8((_load_v16i8(comp_mask)), (_v)) )
+#  define _fwa_v16i8(_v, _l)	( _shuf_v16i8((_load_v16i8(comp_mask)), (_v)) )		/* _l is ignored */
 #  define _fwa_v32i8(_v)		( _shuf_v32i8((_from_v16i8_v32i8(_load_v16i8(comp_mask))), (_v)) )
-#  define _rva_v16i8(_v)		( _swap_v16i8((_v)) )
+#  define _rva_v16i8(_v, _l)	( _swapn_v16i8((_v), (_l)) )
 #  define _rva_v32i8(_v)		( _swap_v32i8((_v)) )
-#  define _fwb_v16i8(_v)		( (_v) )
+#  define _fwb_v16i8(_v, _l)	( (_v) )											/* id(x); _l is ignored */
 #  define _fwb_v32i8(_v)		( (_v) )
-#  define _rvb_v16i8(_v)		( _shuf_v16i8((_load_v16i8(comp_mask)), _swap_v16i8(_v)) )
+#  define _rvb_v16i8(_v, _l)	( _shuf_v16i8((_load_v16i8(comp_mask)), _swap_v16i8(_v)) )	/* _l is ignored */
 #  define _rvb_v32i8(_v)		( _shuf_v32i8((_from_v16i8_v32i8(_load_v16i8(comp_mask))), _swap_v32i8(_v)) )
 #  define _match_n(_a, _b)		_and_n(_a, _b)
 #endif
