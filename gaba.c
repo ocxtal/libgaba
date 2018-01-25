@@ -4107,7 +4107,9 @@ struct unittest_naive_result_s unittest_naive(
 
 	/* malloc matrix */
 	int64_t *mat = (int64_t *)malloc(
-		3 * (alen + 1) * (blen + 1) * sizeof(int64_t));
+		3 * (alen + 1) * (blen + 1) * sizeof(int64_t)
+	);
+	if(mat == NULL) { trap(); }
 
 	/* init */
 	struct unittest_pos_score_s max = { 0, 0, 0 };
@@ -4955,12 +4957,12 @@ unittest( .name = "cross" )
 	for(uint64_t i = 0; i < cnt; i++) {
 		struct unittest_seq_pair_s pair = {
 			.a = {
-				unittest_generate_random_sequence((rand() % 128) + 1),
-				unittest_generate_random_sequence((rand() % 128) + 1),
-				unittest_generate_random_sequence((rand() % 128) + 1),
-				unittest_generate_random_sequence((rand() % 128) + 1),
-				unittest_generate_random_sequence((rand() % 128) + 1),
-				unittest_generate_random_sequence((rand() % 128) + 200)
+				unittest_generate_random_sequence((rand() % 2048) + 1),
+				unittest_generate_random_sequence((rand() % 2048) + 1),
+				unittest_generate_random_sequence((rand() % 2048) + 1),
+				unittest_generate_random_sequence((rand() % 2048) + 1),
+				unittest_generate_random_sequence((rand() % 2048) + 1),
+				unittest_generate_random_sequence((rand() % 2048) + 200)
 				// unittest_generate_random_sequence((rand() % 10) + TEST_LEN)
 			}
 		};
