@@ -4923,27 +4923,27 @@ char *unittest_generate_mutated_sequence(
 
 	int64_t wave = 0;			/** wave is q-coordinate of the alignment path */
 	int64_t len = strlen(seq);
-	char *mutated_seq = (char *)malloc(sizeof(char) * (len + UNITTEST_SEQ_MARGIN));
+	char *mutated_seq = (char *)malloc(sizeof(char) * (2 * len + UNITTEST_SEQ_MARGIN));
 	if(mutated_seq == NULL) { return NULL; }
-	for(int64_t i = 0, j = 0; i < len; i++) {
+	for(uint64_t i = 0, j = 0; j < len; i++, j++) {
 		if(((double)rand() / (double)RAND_MAX) < x) {
-			mutated_seq[i] = unittest_random_base();	j++;	/** mismatch */
+			mutated_seq[i] = unittest_random_base();/** mismatch */
 		} else if(((double)rand() / (double)RAND_MAX) < d) {
 			if(rand() & 0x01 && wave > -bw+1) {
-				mutated_seq[i] = (j < len) ? seq[j++] : unittest_random_base();
-				j++; wave--;						/** deletion */
+				mutated_seq[i] = seq[j++];			/** deletion */
+				wave--;
 			} else if(wave < bw-2) {
 				mutated_seq[i] = unittest_random_base();
-				wave++;								/** insertion */
+				j--; wave++;						/** insertion */
 			} else {
-				mutated_seq[i] = (j < len) ? seq[j++] : unittest_random_base();
+				mutated_seq[i] = seq[j];
 			}
 		} else {
-			mutated_seq[i] = (j < len) ? seq[j++] : unittest_random_base();
+			mutated_seq[i] = seq[j];
 		}
+		mutated_seq[i + 1] = '\0';
 	}
-	mutated_seq[len] = '\0';
-	return mutated_seq;
+	return(mutated_seq);
 }
 
 unittest( .name = "cross" )
