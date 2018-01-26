@@ -548,13 +548,7 @@ struct gaba_dp_context_s {
 	/* memory management */
 	struct gaba_mem_block_s mem;		/** (16) root memory block */
 	struct gaba_stack_s stack;			/** (24) current stack */
-
-	/* scores */
-	float imx, xmx;						/** (8) 1 / (M - X), X / (M - X) (precalculated constants) */
-	int8_t tx;							/** (1) xdrop threshold */
-	int8_t tf;							/** (1) filter threshold */
-	int8_t gi, ge, gfa, gfb;			/** (4) negative integers */
-	int8_t _pad[2];
+	uint64_t _pad1[2];
 
 	/** output options */
 	uint32_t head_margin;				/** (4) margin at the head of gaba_res_t */
@@ -563,8 +557,12 @@ struct gaba_dp_context_s {
 	/* score constants */
 	struct gaba_score_vec_s scv;		/** (80) substitution matrix and gaps */
 
-	/* tail-of-userland pointers */
-	uint8_t const *alim, *blim;			/** (16) max index of seq array */
+	/* scores */
+	float imx, xmx;						/** (8) 1 / (M - X), X / (M - X) (precalculated constants) */
+	int8_t tx;							/** (1) xdrop threshold */
+	int8_t tf;							/** (1) filter threshold */
+	int8_t gi, ge, gfa, gfb;			/** (4) negative integers */
+	int8_t _pad2[2];
 	/** 192; 64byte aligned */
 
 	/* working buffers */
@@ -648,7 +646,8 @@ _static_assert((int32_t)TERM<<8 == (int32_t)GABA_TERM);
 /**
  * coordinate conversion macros
  */
-#define _rev(pos, len)				( (len) + (uint64_t)(len) - (uint64_t)(pos) - 1 )
+// #define _rev(pos, len)				( (len) + (uint64_t)(len) - (uint64_t)(pos) - 1 )
+#define _rev(pos)					( GABA_EOU + (uint64_t)GABA_EOU - (uint64_t)(pos) - 1 )
 #define _roundup(x, base)			( ((x) + (base) - 1) & ~((base) - 1) )
 
 /**
@@ -876,7 +875,7 @@ void fill_fetch_seq_a(
 	uint8_t const *pos,
 	uint64_t len)
 {
-	if(pos < self->alim) {
+	if(pos < GABA_EOU) {
 		debug("reverse fetch a: pos(%p), len(%lu)", pos, len);
 		/* reverse fetch: 2 * alen - (2 * alen - pos) + (len - 32) */
 		// v32i8_t ach = _loadu_v32i8(pos + (len - BLK));				/* this may touch the space before the array */
@@ -886,7 +885,7 @@ void fill_fetch_seq_a(
 	} else {
 		debug("forward fetch a: pos(%p), len(%lu)", pos, len);
 		/* forward fetch: 2 * alen - pos */
-		v32i8_t ach = _loadu_v32i8(_rev(pos + (len - 1), self->alim));
+		v32i8_t ach = _loadu_v32i8(_rev(pos + (len - 1)));
 		_storeu_v32i8(_rd_bufa(self, _W, len), _fwa_v32i8(ach));		/* complement */
 	}
 	return;
@@ -903,7 +902,7 @@ void fill_fetch_seq_a_n(
 	uint8_t const *pos,
 	uint64_t len)
 {
-	if(pos < self->alim) {
+	if(pos < GABA_EOU) {
 		debug("reverse fetch a: pos(%p), len(%lu)", pos, len);
 		/* reverse fetch: 2 * alen - (2 * alen - pos) + (len - 32) */
 		pos += len; ofs += len;		/* fetch in reverse direction */
@@ -919,7 +918,7 @@ void fill_fetch_seq_a_n(
 		pos += len - 1; ofs += len;
 		while(len > 0) {
 			uint64_t l = MIN2(len, 16);
-			v16i8_t ach = _loadu_v16i8(_rev(pos, self->alim));
+			v16i8_t ach = _loadu_v16i8(_rev(pos));
 			_storeu_v16i8(_rd_bufa(self, ofs - l, l), _fwa_v16i8(ach, l));	/* complement */
 			len -= l; pos -= l; ofs -= l;
 		}
@@ -936,7 +935,7 @@ void fill_fetch_seq_b(
 	uint8_t const *pos,
 	uint64_t len)
 {
-	if(pos < self->blim) {
+	if(pos < GABA_EOU) {
 		debug("forward fetch b: pos(%p), len(%lu)", pos, len);
 		/* forward fetch: pos */
 		v32i8_t bch = _loadu_v32i8(pos);
@@ -944,7 +943,7 @@ void fill_fetch_seq_b(
 	} else {
 		debug("reverse fetch b: pos(%p), len(%lu)", pos, len);
 		/* reverse fetch: 2 * blen - pos + (len - 32) */
-		v32i8_t bch = _loadu_v32i8(_rev(pos + (len - 1), self->blim));
+		v32i8_t bch = _loadu_v32i8(_rev(pos + (len - 1)));
 		_storeu_v32i8(_rd_bufb(self, _W, BLK), _rvb_v32i8(bch));		/* reverse complement */
 	}
 	return;
@@ -961,7 +960,7 @@ void fill_fetch_seq_b_n(
 	uint8_t const *pos,
 	uint64_t len)
 {
-	if(pos < self->blim) {
+	if(pos < GABA_EOU) {
 		debug("forward fetch b: pos(%p), len(%lu)", pos, len);
 		/* forward fetch: pos */
 		while(len > 0) {
@@ -975,7 +974,7 @@ void fill_fetch_seq_b_n(
 		/* reverse fetch: 2 * blen - pos + (len - 16) */
 		while(len > 0) {
 			uint64_t l = MIN2(len, 16);					/* advance length */
-			v16i8_t bch = _loadu_v16i8(_rev(pos + (l - 1), self->blim));
+			v16i8_t bch = _loadu_v16i8(_rev(pos + (l - 1)));
 			_storeu_v16i8(_rd_bufb(self, ofs, l), _rvb_v16i8(bch, l));
 			len -= l; pos += l; ofs += l;
 		}
@@ -3464,9 +3463,7 @@ void _export(gaba_clean)(
  * @fn gaba_dp_init
  */
 struct gaba_dp_context_s *_export(gaba_dp_init)(
-	struct gaba_context_s const *ctx,
-	uint8_t const *alim,
-	uint8_t const *blim)
+	struct gaba_context_s const *ctx)
 {
 	/* malloc stack memory */
 	struct gaba_dp_context_s *self = gaba_malloc(sizeof(struct gaba_dp_context_s) + MEM_INIT_SIZE);
@@ -3495,10 +3492,6 @@ struct gaba_dp_context_s *_export(gaba_dp_init)(
 		.next = NULL,
 		.size = MEM_INIT_SIZE
 	};
-
-	/* init seq lims */
-	self->alim = alim;
-	self->blim = blim;
 
 	/* return offsetted pointer */
 	return(_export_dp_context(self));
@@ -3715,9 +3708,8 @@ unittest()
  */
 unittest()
 {
-	uint8_t const *lim = (uint8_t const *)0x800000000000;
 	struct gaba_context_s const *c = (struct gaba_context_s const *)gctx;
-	struct gaba_dp_context_s *d = _export(gaba_dp_init)(c, lim, lim);
+	struct gaba_dp_context_s *d = _export(gaba_dp_init)(c);
 
 	assert(d != NULL, "%p", d);
 	_export(gaba_dp_clean)(d);
@@ -4870,9 +4862,8 @@ unittest( .name = "base" )
 #endif
 	};
 
-	uint8_t const *lim = (uint8_t const *)0x800000000000;
 	struct gaba_context_s const *c = (struct gaba_context_s const *)gctx;
-	struct gaba_dp_context_s *dp = _export(gaba_dp_init)(c, lim, lim);
+	struct gaba_dp_context_s *dp = _export(gaba_dp_init)(c);
 
 	for(uint64_t i = 0; i < sizeof(pairs) / sizeof(struct unittest_seq_pair_s); i++) {
 		_export(gaba_dp_flush)(dp);
@@ -4950,9 +4941,8 @@ unittest( .name = "cross" )
 {
 	uint64_t const cnt = 5000;
 
-	uint8_t const *lim = (uint8_t const *)0x800000000000;
 	struct gaba_context_s const *c = (struct gaba_context_s const *)gctx;
-	struct gaba_dp_context_s *dp = _export(gaba_dp_init)(c, lim, lim);
+	struct gaba_dp_context_s *dp = _export(gaba_dp_init)(c);
 
 	for(uint64_t i = 0; i < cnt; i++) {
 		struct unittest_seq_pair_s pair = {

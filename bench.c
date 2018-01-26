@@ -194,11 +194,10 @@ int main(int argc, char *argv[])
 	/**
 	 * run benchmark.
 	 */
-	void const *lim = (void const *)0x800000000000;
 	int64_t score = 0;
 	for(i = 0; i < p.cnt; i++) {
 
-		gaba_dp_t *dp = gaba_dp_init(ctx, lim, lim);
+		gaba_dp_t *dp = gaba_dp_init(ctx);
 
 		bench_start(fill);
 		struct gaba_fill_s *f = gaba_dp_fill_root(dp, &asec, 0, &bsec, 0, 0);

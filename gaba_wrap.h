@@ -129,7 +129,7 @@ _static_assert(sizeof(struct gaba_api_s) == 8 * sizeof(void *));		/* must be con
 
 _decl(gaba_t *, gaba_init, gaba_params_t const *params);
 _decl(void, gaba_clean, gaba_t *ctx);
-_decl(gaba_dp_t *, gaba_dp_init, gaba_t const *ctx, uint8_t const *alim, uint8_t const *blim);
+_decl(gaba_dp_t *, gaba_dp_init, gaba_t const *ctx);
 _decl(void, gaba_dp_flush, gaba_dp_t *self);
 _decl(gaba_stack_t const *, gaba_dp_save_stack, gaba_dp_t *self);
 _decl(void, gaba_dp_flush_stack, gaba_dp_t *self, gaba_stack_t const *stack);
@@ -302,11 +302,9 @@ void gaba_clean(
  */
 static inline
 gaba_dp_t *gaba_dp_init(
-	gaba_t const *ctx,
-	uint8_t const *alim,
-	uint8_t const *blim)
+	gaba_t const *ctx)
 {
-	return((gaba_dp_t *)gaba_set_api((void *)_import(gaba_dp_init_linear_64)(ctx, alim, blim), _api_array(ctx)));
+	return((gaba_dp_t *)gaba_set_api((void *)_import(gaba_dp_init_linear_64)(ctx), _api_array(ctx)));
 }
 
 /**
@@ -670,8 +668,7 @@ unittest()
 	gaba_t *c = gaba_init(GABA_PARAMS(GABA_SCORE_SIMPLE(1, 1, 0, 1)));
 	assert(c != NULL);
 
-	void const *lim = (void const *)0x800000000000;
-	gaba_dp_t *d = gaba_dp_init(c, lim, lim);
+	gaba_dp_t *d = gaba_dp_init(c);
 	assert(d != NULL);
 
 	gaba_dp_clean(d);
@@ -682,9 +679,8 @@ unittest(with_seq_pair("GGAAAAAAAA", "AAAAAAAA"))
 {
 	omajinai();
 
-	void const *lim = (void const *)0x800000000000;
 	gaba_t *c = gaba_init(GABA_PARAMS(GABA_SCORE_SIMPLE(1, 1, 0, 1)));
-	gaba_dp_t *d = gaba_dp_init(c, lim, lim);
+	gaba_dp_t *d = gaba_dp_init(c);
 
 
 	/* check fill functions and resulting scores */
@@ -707,8 +703,7 @@ unittest()
 	gaba_t *c = gaba_init(GABA_PARAMS(GABA_SCORE_SIMPLE(1, 1, 1, 1)));
 	assert(c != NULL);
 
-	void const *lim = (void const *)0x800000000000;
-	gaba_dp_t *d = gaba_dp_init(c, lim, lim);
+	gaba_dp_t *d = gaba_dp_init(c);
 	assert(d != NULL);
 
 	gaba_dp_clean(d);
@@ -719,9 +714,8 @@ unittest(with_seq_pair("GGAAAAAAAA", "AAAAAAAA"))
 {
 	omajinai();
 
-	void const *lim = (void const *)0x800000000000;
 	gaba_t *c = gaba_init(GABA_PARAMS(GABA_SCORE_SIMPLE(1, 1, 1, 1)));
-	gaba_dp_t *d = gaba_dp_init(c, lim, lim);
+	gaba_dp_t *d = gaba_dp_init(c);
 
 
 	/* check fill functions and resulting scores */

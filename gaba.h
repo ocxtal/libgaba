@@ -135,7 +135,18 @@ typedef struct gaba_section_s gaba_section_t;
 		.len = (_len) \
 	} \
 )
-#define gaba_rev(pos, len)		( (len) + (uint64_t)(len) - (uint64_t)(pos) - 1 )
+/**
+ * @macro GABA_EOU
+ * @brief end-of-userland pointer. Any input sequence pointer p that points to an address
+ * after the end-of-userland is regarded as "phantom array". The actual sequence is fetched
+ * from an array located at 2 * GABA_EQU - p (that is, the pointer p is mirrored at the
+ * GABA_EOU)
+ */
+#define GABA_EOU						( (uint8_t const *)0x800000000000 )
+#define gaba_phantom_rev(base, len)		( GABA_EOU + (uint64_t)GABA_EOU - (uint64_t)(base) - (uint64_t)(len) )
+
+/* gaba_rev is deprecated */
+#define gaba_rev(pos, len)				( (len) + (uint64_t)(len) - (uint64_t)(pos) - 1 )
 
 /**
  * @type gaba_dp_t
@@ -223,10 +234,7 @@ void gaba_clean(gaba_t *ctx);
  * the tails of sequence arrays.
  */
 GABA_EXPORT_LEVEL
-gaba_dp_t *gaba_dp_init(
-	gaba_t const *ctx,
-	uint8_t const *alim,
-	uint8_t const *blim);
+gaba_dp_t *gaba_dp_init(gaba_t const *ctx);
 
 /**
  * @fn gaba_dp_flush
