@@ -812,16 +812,6 @@ enum BASES { A = 0x01, C = 0x02, G = 0x04, T = 0x08, N = 0x00 };
 #endif
 
 /**
- * @macro _swapn_v16i8
- * @brief bswap functionality on arbitrary-length (1..16) array on SIMD vector
- */
-static uint8_t const swapn_mask[16] __attribute__(( aligned(16) )) = {
-	0xff, 0xfe, 0xfd, 0xfc, 0xfb, 0xfa, 0xf9, 0xf8,
-	0xf7, 0xf6, 0xf5, 0xf4, 0xf3, 0xf2, 0xf1, 0xf0
-};
-#define _swapn_v16i8(_v, _n)	( _shuf_v16i8((_v), _add_v16i8(_load_v16i8(swapn_mask), _set_v16i8((_n)))) )
-
-/**
  * @macro _adjust_BLK, _comp_BLK, _match_BW
  * NOTE: _load_v16i8 and _load_v32i8 will be moved out of the loop when loading static uint8_t const[16].
  */
