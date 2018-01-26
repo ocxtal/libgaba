@@ -2015,10 +2015,10 @@ int64_t merge_calc_qspan(
 	self->w.m.qw = qub - qlb;
 
 	/* calc max and min indices */
-	self->w.m.uidx = lzcnt(((v16i8_masku_t){
+	self->w.m.uidx = tzcnt(((v16i8_masku_t){
 		.mask = _mask_v16i8(_eq_v16i8(qv, _set_v16i8(qub)))
 	}).all);
-	self->w.m.lidx = lzcnt(((v16i8_masku_t){
+	self->w.m.lidx = tzcnt(((v16i8_masku_t){
 		.mask = _mask_v16i8(_eq_v16i8(qv, _set_v16i8(qlb)))
 	}).all);
 
@@ -2185,7 +2185,7 @@ uint64_t merge_detect_maxpos(
 	/* calc index */
 	uint64_t qmax = MERGE_BUFFER_LENGTH;
 	for(uint64_t i = 0; i < MERGE_BUFFER_LENGTH; i += 32) {
-		uint64_t q = lzcnt(((v32i8_masku_t){
+		uint64_t q = tzcnt(((v32i8_masku_t){
 			.mask = _mask_v32i16(_eq_v32i16(cmaxv, _load_v32i16(_cb(self, i))))
 		}).all);
 		qmax = MIN2(qmax, i + (q >= 64 ? MERGE_BUFFER_LENGTH : q));
