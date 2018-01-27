@@ -143,7 +143,7 @@ typedef struct gaba_section_s gaba_section_t;
  * GABA_EOU)
  */
 #define GABA_EOU						( (uint8_t const *)0x800000000000 )
-#define gaba_phantom_rev(base, len)		( GABA_EOU + (uint64_t)GABA_EOU - (uint64_t)(base) - (uint64_t)(len) )
+#define gaba_mirror(base, len)			( GABA_EOU + (uint64_t)GABA_EOU - (uint64_t)(base) - (uint64_t)(len) )
 
 /* gaba_rev is deprecated */
 #define gaba_rev(pos, len)				( (len) + (uint64_t)(len) - (uint64_t)(pos) - 1 )
@@ -200,18 +200,28 @@ struct gaba_alignment_s {
 	void *reserved1[2];
 
 	int64_t score;				/** score */
-	uint64_t plen;				/* path length */
-	float identity;				/* estimated percent identity over the entire alignment, match_count / (match_count + mismatch_count) */
+	double identity;			/** estimated percent identity over the entire alignment, match_count / (match_count + mismatch_count) */
+	uint32_t gacnt, gbcnt;		/** #gap bases on seq a and seq b */
+	uint32_t dcnt;				/** #diagonals (match and mismatch) */
 
 	uint32_t slen;				/* segment length */
 	struct gaba_segment_s const *seg;
 
-	// uint32_t mcnt, xcnt;		/** #matches, #mismatches */
-	uint32_t gicnt, gecnt;		/** #gap opens, #gap bases */
-	uint32_t gacnt, gbcnt;		/** short-linear gap base counts */
+	uint64_t plen;				/* path length */
 	uint32_t path[];
 };
 typedef struct gaba_alignment_s gaba_alignment_t;
+
+/**
+ * @struct gaba_score_s
+ */
+struct gaba_score_s {
+	double identity;
+	uint32_t mcnt, xcnt;
+	uint32_t agicnt, bgicnt;
+	uint32_t agecnt, bgecnt;
+};
+typedef struct gaba_score_s gaba_score_t;
 
 /**
  * @fn gaba_init
@@ -328,6 +338,18 @@ GABA_EXPORT_LEVEL
 void gaba_dp_res_free(
 	gaba_dp_t *dp,
 	gaba_alignment_t *aln);
+
+/**
+ * @fn gaba_dp_calc_score
+ * @brief calculate score, match count, mismatch count, and gap counts for the section
+ */
+GABA_EXPORT_LEVEL
+gaba_score_t gaba_dp_calc_score(
+	gaba_dp_t *dp,
+	uint32_t const *path,
+	gaba_path_section_t const *s,
+	gaba_section_t const *a,
+	gaba_section_t const *b);
 
 #endif  /* #ifndef _GABA_H_INCLUDED */
 
