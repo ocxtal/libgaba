@@ -4675,13 +4675,6 @@ void unittest_test_pair(
 
 	assert(m != NULL);
 	assert(m->max == nr.score, FMT ", m->max(%ld), nr.score(%d)", ARG, m->max, nr.score);
-	if(m->max != nr.score) {
-		struct gaba_alignment_s const *r = _export(gaba_dp_trace)(dp, m, NULL);
-		char buf[1024];
-		gaba_dump_cigar_forward(buf, 1024, r->path, 0, gaba_plen(r->seg));
-		debug("cigar(%s)", buf);
-		*((volatile uint8_t *)NULL);
-	}
 
 	/* test max pos */
 	struct gaba_pos_pair_s const *p = _export(gaba_dp_search_max)(dp, m);
