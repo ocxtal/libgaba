@@ -4636,9 +4636,12 @@ void unittest_test_pair(
 	struct gaba_dp_context_s *dp,
 	struct unittest_seq_pair_s const *pair)
 {
+	#define FMT			"[%s:%d] { .a = { \"%s\", \"%s\", \"%s\", \"%s\", \"%s\", \"%s\" }, .b = \"%s\", \"%s\", \"%s\", \"%s\", \"%s\", \"%s\" } }"
+	#define ARG			MODEL_STR, _W, pair->a[0], pair->a[1], pair->a[2], pair->a[3], pair->a[4], pair->a[5], pair->b[0], pair->b[1], pair->b[2], pair->b[3], pair->b[4], pair->b[5]
+
 	/* prepare sequences */
-	char *a = unittest_cat_seq(pair->a); debug("a(%s)", a);
-	char *b = unittest_cat_seq(pair->b); debug("b(%s)", b);
+	char *a = unittest_cat_seq(pair->a);
+	char *b = unittest_cat_seq(pair->b);
 
 	uint64_t *asec = unittest_build_section_array(pair->a);
 	uint64_t *bsec = unittest_build_section_array(pair->b);
@@ -4662,21 +4665,28 @@ void unittest_test_pair(
 	struct gaba_fill_s const *m = unittest_dp_extend(dp, s);
 
 	assert(m != NULL);
-	assert(m->max == nr.score, "[%s:%d] a(%s), b(%s), m->max(%ld), nr.score(%d)", MODEL_STR, _W, a, b, m->max, nr.score);
+	assert(m->max == nr.score, FMT ", m->max(%ld), nr.score(%d)", ARG, m->max, nr.score);
+	if(m->max != nr.score) {
+		struct gaba_alignment_s const *r = _export(gaba_dp_trace)(dp, m, NULL);
+		char buf[1024];
+		gaba_dump_cigar_forward(buf, 1024, r->path, 0, gaba_plen(r->seg));
+		debug("cigar(%s)", buf);
+		*((volatile uint8_t *)NULL);
+	}
 
 	/* test max pos */
 	struct gaba_pos_pair_s const *p = _export(gaba_dp_search_max)(dp, m);
 	assert(p != NULL);
-	assert(unittest_check_maxpos(p->aid, p->apos, s->apos, nr.alen, s->a), "[%s:%d] a(%s), b(%s)", MODEL_STR, _W, a, b);
-	assert(unittest_check_maxpos(p->bid, p->bpos, s->bpos, nr.blen, s->b), "[%s:%d] a(%s), b(%s)", MODEL_STR, _W, a, b);
+	assert(unittest_check_maxpos(p->aid, p->apos, s->apos, nr.alen, s->a), FMT, ARG);
+	assert(unittest_check_maxpos(p->bid, p->bpos, s->bpos, nr.blen, s->b), FMT, ARG);
 
 	/* test path */
 	struct gaba_alignment_s const *r = _export(gaba_dp_trace)(dp, m, NULL);
 
 	assert(r != NULL);
-	assert(r->plen == nr.path_length, "[%s:%d] a(%s), b(%s), m->plen(%lu), nr.path_length(%u)", MODEL_STR, _W, a, b, r->plen, nr.path_length);
-	assert(unittest_check_path(r, nr.path), "[%s:%d] a(%s), b(%s)\n%s", MODEL_STR, _W, a, b, format_string_pair_diff(unittest_decode_path(r), nr.path));
-	assert(unittest_check_section(r, nr.sec, nr.scnt), "[%s:%d] a(%s), b(%s)", MODEL_STR, _W, a, b);
+	assert(r->plen == nr.path_length, FMT ", m->plen(%lu), nr.path_length(%u)", ARG, r->plen, nr.path_length);
+	assert(unittest_check_path(r, nr.path), "\n%s", ARG, format_string_pair_diff(unittest_decode_path(r), nr.path));
+	assert(unittest_check_section(r, nr.sec, nr.scnt), FMT, ARG);
 
 	/* cleanup everything */
 	unittest_clean_section(s);
@@ -4687,6 +4697,9 @@ void unittest_test_pair(
 	free(nr.path);
 	free(nr.sec);
 	return;
+
+	#undef FMT
+	#undef ARG
 }
 
 unittest( .name = "base" )
