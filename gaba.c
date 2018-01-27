@@ -439,28 +439,23 @@ struct gaba_aln_intl_s {
 	/* memory management */
 	void *opaque;						/** (8) opaque (context pointer) */
 	gaba_lfree_t lfree;					/** (8) local free */
-
-	int64_t score;						/** (8) score */
-	uint64_t plen;						/** (8) path length (psum) */
-	float identity;						/** (4) esitmated percent identity */
-	uint32_t slen;						/** (4) section length */
-	struct gaba_segment_s *seg;			/** (8) */
-	// uint32_t mcnt, xcnt;				/** (8) #matchs, #mismatchs */
-	uint32_t gicnt, gecnt;				/** (8) #gap opens, #gap bases */
-	uint32_t gacnt, gbcnt;				/** (8) short-linear gap base counts */
+	int64_t score;						/** (8) score (save) */
+	uint32_t giacnt, gibcnt;			/** (8) gap region counters */
+	uint32_t geacnt, gebcnt;			/** (8) gap base counters */
+	uint32_t dcnt;						/** (4) unused in the loop */
+	uint32_t slen;						/** (4) section length (counter) */
+	struct gaba_segment_s *seg;			/** (8) section ptr */
+	uint64_t plen;						/** (8) path length (psum; save) */
 };
+
 _static_assert(sizeof(struct gaba_alignment_s) == sizeof(struct gaba_aln_intl_s));
 _static_assert(offsetof(struct gaba_alignment_s, score) == offsetof(struct gaba_aln_intl_s, score));
-_static_assert(offsetof(struct gaba_alignment_s, plen) == offsetof(struct gaba_aln_intl_s, plen));
-_static_assert(offsetof(struct gaba_alignment_s, identity) == offsetof(struct gaba_aln_intl_s, identity));
+_static_assert(offsetof(struct gaba_alignment_s, dcnt) == offsetof(struct gaba_aln_intl_s, dcnt));
 _static_assert(offsetof(struct gaba_alignment_s, slen) == offsetof(struct gaba_aln_intl_s, slen));
 _static_assert(offsetof(struct gaba_alignment_s, seg) == offsetof(struct gaba_aln_intl_s, seg));
-// _static_assert(offsetof(struct gaba_alignment_s, mcnt) == offsetof(struct gaba_aln_intl_s, mcnt));
-// _static_assert(offsetof(struct gaba_alignment_s, xcnt) == offsetof(struct gaba_aln_intl_s, xcnt));
-_static_assert(offsetof(struct gaba_alignment_s, gicnt) == offsetof(struct gaba_aln_intl_s, gicnt));
-_static_assert(offsetof(struct gaba_alignment_s, gecnt) == offsetof(struct gaba_aln_intl_s, gecnt));
-_static_assert(offsetof(struct gaba_alignment_s, gacnt) == offsetof(struct gaba_aln_intl_s, gacnt));
-_static_assert(offsetof(struct gaba_alignment_s, gbcnt) == offsetof(struct gaba_aln_intl_s, gbcnt));
+_static_assert(offsetof(struct gaba_alignment_s, plen) == offsetof(struct gaba_aln_intl_s, plen));
+_static_assert(offsetof(struct gaba_alignment_s, gacnt) == offsetof(struct gaba_aln_intl_s, geacnt));
+_static_assert(offsetof(struct gaba_alignment_s, gbcnt) == offsetof(struct gaba_aln_intl_s, gebcnt));
 
 /**
  * @struct gaba_leaf_s
@@ -480,14 +475,13 @@ struct gaba_leaf_s {
  */
 struct gaba_writer_work_s {
 	/** local context */
-	struct gaba_aln_intl_s a;			/** (48) working buffer, copied to the result object */
+	struct gaba_aln_intl_s a;			/** (64) working buffer, copied to the result object */
 
 	/** work */
-	uint32_t state;						/** (4) d/v0/v1/h0/h1 */
-	uint32_t ofs;						/** (4) path array offset */
+	uint32_t gfacnt, gfbcnt;			/** (8) */
 	uint32_t *path;						/** (8) path array pointer */
 	struct gaba_block_s const *blk;		/** (8) current block */
-	uint32_t p, q;						/** (8) local p, q-coordinate, [0, BW) */
+	uint8_t p, q, ofs, state, _pad[4];	/** (8) local p, q-coordinate, [0, BW), path offset, state */
 
 	/** save */
 	uint32_t aofs, bofs;				/** (8) ofs for bridge */
@@ -551,7 +545,7 @@ struct gaba_dp_context_s {
 	/* memory management */
 	struct gaba_mem_block_s mem;		/** (16) root memory block */
 	struct gaba_stack_s stack;			/** (24) current stack */
-	uint64_t _pad1[2];
+	double imx, xmx;					/** (8) 1 / (M - X), X / (M - X) (precalculated constants) */
 
 	/** output options */
 	uint32_t head_margin;				/** (4) margin at the head of gaba_res_t */
@@ -561,11 +555,11 @@ struct gaba_dp_context_s {
 	struct gaba_score_vec_s scv;		/** (80) substitution matrix and gaps */
 
 	/* scores */
-	float imx, xmx;						/** (8) 1 / (M - X), X / (M - X) (precalculated constants) */
 	int8_t tx;							/** (1) xdrop threshold */
 	int8_t tf;							/** (1) filter threshold */
 	int8_t gi, ge, gfa, gfb;			/** (4) negative integers */
-	int8_t _pad2[2];
+	uint8_t aflen, bflen;				/** (2) short-gap length thresholds */
+	uint32_t _pad1[2];					/** (16) */
 	/** 192; 64byte aligned */
 
 	/* working buffers */
@@ -2667,10 +2661,12 @@ enum {
  * @brief increment gap counters
  */
 
-#define _trace_inc_gi()					{ gc = _sub_v2i32(gc, v01); }
-#define _trace_inc_ge()					{ gc = _sub_v2i32(gc, v10); }
-#define _trace_inc_gh()					{ gf = _sub_v2i32(gf, v01); }
-#define _trace_inc_gv()					{ gf = _sub_v2i32(gf, v10); }
+#define _trace_inc_gi_h()				{ gi = _sub_v2i32(gi, v01); }
+#define _trace_inc_gi_v()				{ gi = _sub_v2i32(gi, v10); }
+#define _trace_inc_ge_h()				{ ge = _sub_v2i32(ge, v01); }
+#define _trace_inc_ge_v()				{ ge = _sub_v2i32(ge, v10); }
+#define _trace_inc_gf_h()				{ gf = _sub_v2i32(gf, v01); }
+#define _trace_inc_gf_v()				{ gf = _sub_v2i32(gf, v10); }
 /*
 #define _trace_inc_gi()					;
 #define _trace_inc_ge()					;
@@ -2877,16 +2873,16 @@ void trace_core(
 				if(_unlikely(_trace_##_c##_##_l##_test_index())) { \
 					self->w.l.state = ts_##_l##0; goto _trace_term; \
 				} \
-				_trace_inc_g##_l(); \
+				_trace_inc_gf_##_l(); \
 				_pop_vector(_c, _l, 1, _trace_##_n##_##_l##_retd); \
 				goto _trace_##_c##_##_l##_retd; \
 			} \
-			_trace_inc_gi(); \
+			_trace_inc_gi_##_l(); \
 			do { \
 				if(_unlikely(_trace_##_c##_##_l##_test_index())) { \
 					self->w.l.state = ts_##_l##1; goto _trace_term; \
 				} \
-				_trace_inc_ge();	/* increment #gap bases on every iter */ \
+				_trace_inc_ge_##_l();	/* increment #gap bases on every iter */ \
 				_pop_vector(_c, _l, 1, _trace_##_n##_##_l##_tail); \
 				debug("test next gap, (%x)", _trace_test_gap_##_l()); \
 			_trace_##_c##_##_l##_tail:; \
@@ -2916,11 +2912,12 @@ void trace_core(
 	v2i32_t const bw = _set_v2i32(_W);
 
 	/* gap counts; #gap regions in lower and #gap bases in higher */
-	register v2i32_t gc = _load_v2i32(&self->w.l.a.gicnt);
-	register v2i32_t gf = _load_v2i32(&self->w.l.a.gacnt);
+	register v2i32_t gi = _load_v2i32(&self->w.l.a.giacnt);
+	register v2i32_t ge = _load_v2i32(&self->w.l.a.geacnt);
+	register v2i32_t gf = _load_v2i32(&self->w.l.gfacnt);
 
 	/* load path array, adjust path offset to align the head of the current block */
-	uint64_t ofs = self->w.l.ofs;	/* global p-coordinate */
+	uint32_t ofs = self->w.l.ofs;	/* global p-coordinate */
 	uint32_t *path = self->w.l.path;
 	uint64_t path_array = _loadu_u64(path)>>ofs;
 
@@ -2964,15 +2961,16 @@ _trace_term:;
 	debug("rem(%lu), path(%p), arr(%lx), ofs(%lu)", rem, path, path_array<<ofs, ofs);
 
 	/* save gap counts */
-	_store_v2i32(&self->w.l.a.gicnt, gc);
-	_store_v2i32(&self->w.l.a.gacnt, gf);
+	_store_v2i32(&self->w.l.a.giacnt, gi);
+	_store_v2i32(&self->w.l.a.geacnt, ge);
+	_store_v2i32(&self->w.l.gfacnt, gf);
 
 	/* store pointers and coordinates */
-	self->w.l.ofs = ofs;			/* global p-coordinate */
 	self->w.l.path = path;
 	self->w.l.blk = blk;
 	self->w.l.p = mask - blk->mask;	/* local p-coordinate */
 	self->w.l.q = q;				/* q coordinate */
+	self->w.l.ofs = ofs;			/* global p-coordinate */
 	_store_v2i32(&self->w.l.agidx, gidx);
 	_print_v2i32(gidx);
 	return;
@@ -3011,29 +3009,21 @@ void trace_init(
 	self->w.l.aln = alloc->lmalloc(alloc->opaque, size) + self->head_margin;
 	self->w.l.a.opaque = alloc->opaque;					/* save opaque pointer */
 	self->w.l.a.lfree = alloc->lfree;
-	// self->w.l.a.head_margin = self->head_margin;		/* required when free the object */
 
 	/* use gaba_alignment_s buffer instead in the traceback loop */
 	self->w.l.a.score = tail->f.max;					/* just copy */
-	self->w.l.a.plen = plen;
-	self->w.l.a.identity = 0.0;
+	_store_v2i32(&self->w.l.a.giacnt, _zero_v2i32());	/* clear counters */
+	_store_v2i32(&self->w.l.a.geacnt, _zero_v2i32());
+	self->w.l.a.dcnt = 0;
 
-	/* section */
+	/* section and path */
 	self->w.l.a.slen = 0;
 	self->w.l.a.seg = sn + (struct gaba_segment_s *)(self->w.l.aln->path + _roundup(pn, 8)),
-
-	// self->w.l.a.mcnt = 0;
-	// self->w.l.a.xcnt = 0;
-	self->w.l.a.gicnt = 0;
-	self->w.l.a.gecnt = 0;
-	self->w.l.a.gacnt = 0;
-	self->w.l.a.gbcnt = 0;
-
-	/* clear state */
-	self->w.l.state = ts_d;
+	self->w.l.a.plen = plen;							/* save path length */
 
 	/* store block and coordinates */
 	self->w.l.ofs = plen & (32 - 1);
+	self->w.l.state = ts_d;								/* clear state, the traceback always starts with a match */
 	self->w.l.path = self->w.l.aln->path + plen / 32;
 	debug("sn(%lu), seg(%p), pn(%lu), path(%p)", sn, self->w.l.a.seg, pn, self->w.l.path);
 
@@ -3085,20 +3075,29 @@ struct gaba_alignment_s *trace_body(
 	}
 
 	/* estimate alignment identity */
-	double imx = self->imx, xmx = self->xmx;
-	int64_t gi = self->gi, ge = self->ge, ga = self->gfa, gb = self->gfb;
-	int64_t sc = self->w.l.a.score;
-	int64_t gic = self->w.l.a.gicnt, gec = self->w.l.a.gecnt, gac = self->w.l.a.gacnt, gbc = self->w.l.a.gbcnt;
+	v2i32_t gicnt = _load_v2i32(&self->w.l.a.giacnt);
+	v2i32_t gecnt = _load_v2i32(&self->w.l.a.geacnt);
+	v2i32_t gfcnt = _load_v2i32(&self->w.l.gfacnt);
+	v2i32_t gcnt = _add_v2i32(gecnt, gfcnt);
 
-	int64_t dlen = (plen - gec - gac - gbc)>>1;
-	int64_t dsc = sc - gi*gic - ge*gec - ga*gac - gb*gbc;
-	double id = dlen == 0 ? 0.0 : (((double)dsc / (double)dlen) * imx - xmx);
-	self->w.l.a.identity = (float)id;
-	debug("plen(%lu), g(%ld, %ld, %ld, %ld), gcnt(%ld, %ld, %ld, %ld), dlen(%ld), sc(%ld, %ld), mc(%f), id(%f)",
-		plen, gi, ge, ga, gb, gic, gec, gac, gbc, dlen, sc, dsc, dsc * imx - xmx * dlen, id);
+	v2i32_t gi = _set_v2i32((int32_t)self->gi), ge = _set_v2i32((int32_t)self->ge);
+	v2i32_t gf = _cvt_v2i8_v2i32(_load_v2i8(&self->gfa));
+	v2i32_t g = _add_v2i32(_add_v2i32(
+		_mul_v2i32(gi, gicnt),
+		_mul_v2i32(ge, gecnt)),
+		_mul_v2i32(gf, gfcnt)
+	);
+
+	uint64_t dlen = (self->w.l.a.plen - _hi32(gcnt) - _lo32(gcnt))>>1;
+	int64_t dsc = self->w.l.a.score - _hi32(g) - _lo32(g);
+	// debug("plen(%lu), g(%ld, %ld, %ld, %ld), gcnt(%ld, %ld, %ld, %ld), dlen(%ld), sc(%ld, %ld), mc(%f), id(%f)",
+		// plen, gi, ge, ga, gb, gic, gec, gac, gbc, dlen, sc, dsc, dsc * self->imx - self->xmx * dlen, id);
 
 	/* copy */
 	_memcpy_blk_ua(self->w.l.aln, &self->w.l.a, sizeof(struct gaba_alignment_s));
+	self->w.l.aln->identity = dlen == 0 ? 0.0 : (((double)dsc / (double)dlen) * self->imx - self->xmx);
+	_store_v2i32(&self->w.l.aln->gacnt, gcnt);
+	self->w.l.aln->dcnt = dlen;
 	return(self->w.l.aln);
 }
 
