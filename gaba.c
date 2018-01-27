@@ -3159,40 +3159,12 @@ void _export(gaba_dp_res_free)(
 	return;
 }
 
-#if 0
-#  define _fwaq_v16i8(_v, _l)	( _xor_v16i8((_load_v16i8(comp_mask_a)), (_v)) )	/* _l is ignored */
-#  define _fwa_v32i8(_v)		( _xor_v32i8((_from_v16i8_v32i8(_load_v16i8(comp_mask_a))), (_v)) )
-#  define _rvaq_v16i8(_v, _l)	( _swapn_v16i8((_v), (_l)) )
-#  define _rva_v32i8(_v)		( _swap_v32i8((_v)) )
-#  define _fwbq_v16i8(_v, _l)	( _shuf_v16i8((_load_v16i8(shift_mask_b)), (_v)) )	/* _l is ignored */
-#  define _fwb_v32i8(_v)		( _shuf_v32i8((_from_v16i8_v32i8(_load_v16i8(shift_mask_b))), (_v)) )
-#  define _rvbq_v16i8(_v, _l)	( _shuf_v16i8((_load_v16i8(compshift_mask_b)), _swap_v16i8(_v)) )	/* _l is ignored */
-#  define _rvb_v32i8(_v)		( _shuf_v32i8((_from_v16i8_v32i8(_load_v16i8(compshift_mask_b))), _swap_v32i8(_v)) )
-#  define _match_n(_a, _b)		_or_n(_a, _b)
-#  define _match_v16i8(_a, _b)	_or_v16i8(_a, _b)
-
-/* 4bit encoding */
-static uint8_t const comp_mask[16] __attribute__(( aligned(16) )) = {
-	0x00, 0x08, 0x04, 0x0c, 0x02, 0x0a, 0x06, 0x0e,
-	0x01, 0x09, 0x05, 0x0d, 0x03, 0x0b, 0x07, 0x0f
-};
-#  define _fwa_v16i8(_v, _l)	( _shuf_v16i8((_load_v16i8(comp_mask)), (_v)) )		/* _l is ignored */
-#  define _fwa_v32i8(_v)		( _shuf_v32i8((_from_v16i8_v32i8(_load_v16i8(comp_mask))), (_v)) )
-#  define _rva_v16i8(_v, _l)	( _swapn_v16i8((_v), (_l)) )
-#  define _rva_v32i8(_v)		( _swap_v32i8((_v)) )
-#  define _fwb_v16i8(_v, _l)	( (_v) )											/* id(x); _l is ignored */
-#  define _fwb_v32i8(_v)		( (_v) )
-#  define _rvb_v16i8(_v, _l)	( _shuf_v16i8((_load_v16i8(comp_mask)), _swap_v16i8(_v)) )	/* _l is ignored */
-#  define _rvb_v32i8(_v)		( _shuf_v32i8((_from_v16i8_v32i8(_load_v16i8(comp_mask))), _swap_v32i8(_v)) )
-#  define _match_n(_a, _b)		_and_n(_a, _b)
-#  define _match_v16i8(_a, _b)	_and_v16i8(_a, _b)
-
 /**
  * @fn gaba_dp_calc_score
  * @brief calculate score, match count, mismatch count, and gap counts for the section
  * NOTE: this function depends on the _parser_init_* and _parser_loop_* macros defined in gaba_parse.h
  */
-void _export(gaba_dp_calc_score)(
+gaba_score_t *_export(gaba_dp_calc_score)(
 	struct gaba_dp_context_s *self,
 	uint32_t const *path,
 	gaba_path_section_t const *s,
@@ -3203,110 +3175,63 @@ void _export(gaba_dp_calc_score)(
 
 	#define _del(_c) { \
 		v2i32_t cnt = _seta_v2i32(1, _c); \
-		gbc = _add_v2i32(gbc, cnt); \
-		if((_c) < self->bflen) { fbc = _add_v2i32(fbc, cnt); } \
+		gbc = _add_v2i32(gbc, cnt); fbc = (_c) > self->bflen ? fbc : _add_v2i32(fbc, cnt); \
 	}
 	#define _ins(_c) { \
 		v2i32_t cnt = _seta_v2i32(1, _c); \
-		gac = _add_v2i32(gac, cnt); \
-		if((_c) < self->aflen) { fac = _add_v2i32(fac, cnt); } \
+		gac = _add_v2i32(gac, cnt); fac = (_c) > self->aflen ? fac : _add_v2i32(fac, cnt); \
 	}
 	#define _match_ff(_c) { \
-		v16i8_t rv = _loadu_v16i8(ap), qv = _loadu_v16i8(bp); \
-		xc += popcnt(((v16i8_masku_t){ .mask = _mask_v16i8(_shuf_v16i8(_match_v16i8(rv, qv))) }).all); \
+		v16i8_t rv = _fwap_v16i8(_loadu_v16i8(ap), (_c)), qv = _fwbp_v16i8(_loadu_v16i8(bp), (_c)); \
+		xc += popcnt(((v16i8_masku_t){ .mask = _mask_v16i8(_match_v16i8(rv, qv)) }).all); \
 		dc += (_c); ap += (_c); bp += (_c); \
 	}
-	#define _nop(_c) {}
+	#define _match_fr(_c) { \
+		v16i8_t rv = _fwap_v16i8(_loadu_v16i8(ap), (_c)), qv = _rvbp_v16i8(_loadu_v16i8(bp - (_c)), (_c)); \
+		xc += popcnt(((v16i8_masku_t){ .mask = _mask_v16i8(_match_v16i8(rv, qv)) }).all); \
+		dc += (_c); ap += (_c); bp -= (_c); \
+	}
+	#define _match_rf(_c) { \
+		v16i8_t rv = _rvap_v16i8(_loadu_v16i8(ap - (_c)), (_c)), qv = _fwbp_v16i8(_loadu_v16i8(bp), (_c)); \
+		xc += popcnt(((v16i8_masku_t){ .mask = _mask_v16i8(_match_v16i8(rv, qv)) }).all); \
+		dc += (_c); ap -= (_c); bp += (_c); \
+	}
+	#define _match_rr(_c) { \
+		v16i8_t rv = _rvap_v16i8(_loadu_v16i8(ap - (_c)), (_c)), qv = _rvbp_v16i8(_loadu_v16i8(bp - (_c)), (_c)); \
+		xc += popcnt(((v16i8_masku_t){ .mask = _mask_v16i8(_match_v16i8(rv, qv)) }).all); \
+		dc += (_c); ap -= (_c); bp -= (_c); \
+	}
+	#define _nop(_c) { (void)(_c); }
 
-	v2i32_t gac = _zero_v4i32(), fac = _zero_v4i32();
-	v2i32_t gbc = _zero_v4i32(), fbc = _zero_v4i32();
+	v2i32_t gac = _zero_v2i32(), fac = _zero_v2i32();
+	v2i32_t gbc = _zero_v2i32(), fbc = _zero_v2i32();
 	uint64_t xc = 0, dc = 0;
 
 	uint8_t const *ap = a->base < GABA_EOU ? a->base : gaba_mirror(a->base, 0);
 	uint8_t const *bp = b->base < GABA_EOU ? b->base : gaba_mirror(b->base, 0);
-	v16i8_t cv = _load_v16i8((a->base < GABA_EOU) ^ (b->base < GABA_EOU) ? comp_mask : id_mask);
-
-	_parser_init_fw(path, offset, len);
-	switch(x) {
-		case 0: _parser_loop_fw(_del, _ins, _match, _nop); break;
-		case 0: _parser_loop_fw(_del, _ins, _match, _nop); break;
-		case 0: _parser_loop_fw(_del, _ins, _match, _nop); break;
-		case 0: _parser_loop_fw(_del, _ins, _match, _nop); break;
+	_parser_init_fw(path, s->ppos, gaba_plen(s));
+	switch(((a->base < GABA_EOU)<<1) | (b->base < GABA_EOU)) {
+		case 0x00: _parser_loop_fw(_del, _ins, _match_ff, _nop); break;
+		case 0x01: _parser_loop_fw(_del, _ins, _match_fr, _nop); break;
+		case 0x02: _parser_loop_fw(_del, _ins, _match_rf, _nop); break;
+		case 0x03: _parser_loop_fw(_del, _ins, _match_rr, _nop); break;
 		default: break;
 	}
 
-	struct gaba_score_s *sc = gaba_dp_malloc(dp, sizeof(struct gaba_score_s));
+	struct gaba_score_s *sc = gaba_dp_malloc(self, sizeof(struct gaba_score_s));
 	sc->identity = (double)xc / (double)dc;
-	_store_v2i32(&sc->aicnt, _hi_v2i32(gbc, gac));
+	_store_v2i32(&sc->agcnt, _lo_v2i32(gbc, gac));
 	sc->mcnt = dc - xc; sc->xcnt = xc;
-	_store_v2i32(&sc->aecnt, _lo_v2i32(gbc, gac));
-	_store_v2i32(&sc->aecnt, _hi_v2i32(fbc, fac));
-	_store_v2i32(&sc->aecnt, _lo_v2i32(fbc, fac));
-	return(0);
+	_store_v2i32(&sc->aicnt, _hi_v2i32(gbc, gac));
+	_store_v2i32(&sc->afgcnt, _lo_v2i32(fbc, fac));
+	_store_v2i32(&sc->aficnt, _hi_v2i32(fbc, fac));
+	return(sc);
 
 	#undef _del
 	#undef _ins
 	#undef _match
 	#undef _nop
-
-
-
-
-	uint64_t const *p = _gaba_parse_ptr(path);
-	uint64_t lim = s->ppos + _gaba_parse_ofs(path) + gaba_plen(s);
-	uint64_t ridx = gaba_plen(s);
-
-	uint32_t as = s->apos, bs = s->bpos;
-	uint8_t const *rp = &a->base[as], *rb = rp;
-	uint8_t const *qp = &b->base[dir ? (uint64_t)b->len - bs - 32 : bs];
-	while(ridx > 0) {
-		/* suppose each indel block is shorter than 32 bases */
-		uint64_t arr = gaba_parse_u64(p, lim - ridx);
-		uint64_t cnt = tzcnt(~arr) - (arr & 0x01);		/* count #ins */
-		ridx -= cnt; ins += cnt;
-		qp += dir ? -cnt : cnt;
-
-		if((arr & 0x01) == 0) {							/* is_del */
-			ridx -= cnt = tzcnt(arr);					/* count #del */
-		}
-
-		/* match or mismatch */
-		uint64_t acnt = 32;
-		while(acnt == 32) {
-			/* count diagonal */
-			arr = gaba_parse_u64(p, lim - ridx);
-			acnt = _gaba_parse_min2(tzcnt(_gaba_diag(arr)), ridx)>>1;
-
-			/* load sequence to detect mismatch */
-			v32i8_t rv = _shuf_v32i8(cv, _loadu_v32i8(rp)), qv = _loadu_v32i8(qp);
-			if(dir) { qv = _swap_v32i8(qv); }
-
-			/* compare and count matches */
-			uint64_t mmask = (uint64_t)((v32_masku_t){ .mask = _mask_v32i8(_eq_v32i8(rv, qv)) }).all;
-			uint64_t mcnt = _gaba_parse_min2(acnt, tzcnt(~mmask));
-
-			/* adjust pos */
-			ridx -= 2*mcnt;
-			rp += mcnt;
-			qp += dir ? -mcnt : mcnt;
-
-			if(mcnt >= acnt) { continue; }				/* continues longer than 32bp */
-			_putn(b, (int32_t)(rp - rb));				/* print match length */
-			ridx -= 2*(cnt = _gaba_parse_min2(tzcnt(mmask>>mcnt), acnt - mcnt));
-			qp += dir ? -cnt : cnt;
-			for(uint64_t i = 0; i < cnt - 1; i++) {
-				_put(b, decaf[*rp]);		/* print mismatch base */
-				_put(b, '0');							/* padding */
-				rp++;
-			}
-			_put(b, decaf[*rp]);			/* print mismatch base */
-			rp++;
-			rb = rp;
-		}
-	}
-	return(0);
 }
-#endif
 
 /**
  * @fn gaba_init_restore_default

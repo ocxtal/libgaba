@@ -221,7 +221,7 @@ struct gaba_score_s {
 	uint32_t agcnt, bgcnt;
 	uint32_t mcnt, xcnt;
 	uint32_t aicnt, bicnt;
-	uint32_t afecnt, bfecnt;
+	uint32_t afgcnt, bfgcnt;
 	uint32_t aficnt, bficnt;
 	uint64_t _reserved;
 };
@@ -348,7 +348,7 @@ void gaba_dp_res_free(
  * @brief calculate score, match count, mismatch count, and gap counts for the section
  */
 GABA_EXPORT_LEVEL
-gaba_score_t gaba_dp_calc_score(
+gaba_score_t *gaba_dp_calc_score(
 	gaba_dp_t *dp,
 	uint32_t const *path,
 	gaba_path_section_t const *s,
