@@ -201,7 +201,7 @@ struct gaba_alignment_s {
 
 	int64_t score;				/** score */
 	double identity;			/** estimated percent identity over the entire alignment, match_count / (match_count + mismatch_count) */
-	uint32_t gacnt, gbcnt;		/** #gap bases on seq a and seq b */
+	uint32_t agcnt, bgcnt;		/** #gap bases on seq a and seq b */
 	uint32_t dcnt;				/** #diagonals (match and mismatch) */
 
 	uint32_t slen;				/* segment length */
@@ -216,10 +216,14 @@ typedef struct gaba_alignment_s gaba_alignment_t;
  * @struct gaba_score_s
  */
 struct gaba_score_s {
+	int64_t score;
 	double identity;
+	uint32_t agcnt, bgcnt;
 	uint32_t mcnt, xcnt;
-	uint32_t agicnt, bgicnt;
-	uint32_t agecnt, bgecnt;
+	uint32_t aicnt, bicnt;
+	uint32_t afecnt, bfecnt;
+	uint32_t aficnt, bficnt;
+	uint64_t _reserved;
 };
 typedef struct gaba_score_s gaba_score_t;
 
