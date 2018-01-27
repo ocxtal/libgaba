@@ -474,7 +474,7 @@ uint64_t gaba_dump_seq_reverse(
 	#undef _gap
 	#undef _fw
 	#undef _rv
-	#undef _loop
+	#undef _nop
 }
 
 /**
