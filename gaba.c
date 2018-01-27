@@ -9,7 +9,10 @@
  * @license Apache v2
  */
 
-/* debug print configuration: -DDEBUG to enable debug print, -DDEBUG_ALL to print all the vectors, arrays, and bitmasks */
+/*
+ * debug print configuration: -DDEBUG to enable debug print, -DDEBUG_ALL to print all the vectors, arrays, and bitmasks
+ * NOTE: dumping all the vectors sometimes raises SEGV due to a stack shortage. use `ulimit -s 65536' to avoid it.
+ */
 #if defined(DEBUG_ALL) && !defined(DEBUG)
 #  define DEBUG
 #endif
@@ -4843,6 +4846,11 @@ unittest( .name = "base" )
 				"GCAGTGATAGAAATCATGTTCTCTATTCCCCTTCCGTGCTCGTCCGGTGCTAGACGAGTTTGTTACTGTGTCCAATGCTAGACCAGTTTGAGATTACTAAACCCCCAAACTCCACTTCTCCGACGCTAAGTGCTGGCGGACTCCCCAGACGTTTACCCCGTTCATTGGCGTAAACCCTCGTGATGCGTGCACACGCGCTCTATACTGCATGGAGTGCGCAGTCCCGAATCGGAATAGCAATGTACCTGTAACATGCAGCTCACTGCGGAATATACGTGCC"
 			}
 		},
+		/* debugging init_fetch (BW = 64) */
+		{
+			.a = { "GGGGCTAGCAGCATCATTCTGTCCCGGAAA" },
+			.b = { "GGGCGCGAGCAGCGAAATTCGGCCAAAAA" }
+		}
 		/* fails for affine-16 due to the bandwidth shotage */
 #if 0
 		{
