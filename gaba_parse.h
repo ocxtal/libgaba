@@ -75,6 +75,25 @@ static uint8_t const gaba_parse_ascii_rv[16] __attribute__(( aligned(16) )) = {
 #endif
 
 
+/* dp context (opaque) */
+#ifndef _GABA_H_INCLUDED
+typedef struct gaba_dp_context_s gaba_dp_t;
+#endif
+struct gaba_parse_dp_context_s {
+	uint64_t _pad[12];					/** (96) margin */
+
+	/* score constants */
+	// struct gaba_score_vec_s scv;		/** (80) substitution matrix and gaps */
+
+	/* scores */
+	float imx, xmx;						/** (8) 1 / (M - X), X / (M - X) (precalculated constants) */
+	int8_t tx;							/** (1) xdrop threshold */
+	int8_t tf;							/** (1) filter threshold */
+	int8_t gi, ge, gfa, gfb;			/** (4) negative integers */
+	uint8_t aflen, bflen;				/** (2) short-gap length thresholds */
+	/** 192; 64byte aligned */
+};
+
 /**
  * @fn gaba_parse_u64
  */
@@ -86,6 +105,70 @@ uint64_t gaba_parse_u64(
 	int64_t rem = pos & 63;
 	uint64_t a = (ptr[pos>>6]>>rem) | ((ptr[(pos>>6) + 1]<<(63 - rem))<<1);
 	return(a);
+}
+
+/**
+ * @macro _gaba_diag
+ * @brief convert contiguous diagonal transitions to zeros
+ */
+#define _gaba_diag(_x)			( (_x) ^ 0x5555555555555555 )
+
+/**
+ * @macro _parser_init_fw, _parser_init_rv
+ * @brief initialize variables for the parser template
+ */
+#define _parser_init_fw(_path, _offset, _len) \
+	uint64_t const *p = _gaba_parse_ptr(_path); \
+	uint64_t lim = (_offset) + _gaba_parse_ofs(_path) + (_len), ridx = (_len);
+#define _parser_init_rv(_path, _offset, _len) \
+	uint64_t const *p = _gaba_parse_ptr(_path); \
+	uint64_t ofs = (int64_t)(_offset) + _gaba_parse_ofs(_path) - 64, idx = (_len);
+
+/**
+ * @macro _parser_loop_fw, _parser_loop_rv
+ * @brief parser templates
+ */
+#define _parser_loop_fw(_del_dump, _ins_dump, _diag_step, _diag_end) { \
+	while((int64_t)ridx > 0) { \
+		ZCNT_RESULT uint64_t m; uint64_t c; \
+		/* deletions */ \
+		m = tzcnt(gaba_parse_u64(p, lim - ridx)); \
+		c = _gaba_parse_min2(ridx, m); \
+		ridx -= c; _del_dump(c);		/* at most 64bp */ \
+		/* insertions */ \
+		m = tzcnt(~gaba_parse_u64(p, lim - ridx)); \
+		c = _gaba_parse_min2(ridx, m - 1); \
+		ridx -= c; _ins_dump(c);		/* at most 64bp */ \
+		/* diagonals */ \
+		uint64_t sridx = ridx; \
+		do { \
+			m = tzcnt(_gaba_diag(gaba_parse_u64(p, lim - ridx))); \
+			c = _gaba_parse_min2(ridx, m) & ~0x01; \
+			ridx -= c; _diag_step(c>>1); \
+		} while(c == 64); \
+		_diag_end((sridx - ridx)>>1); \
+	} \
+}
+#define _parser_loop_rv(_del_dump, _ins_dump, _diag_dump, _diag_end) { \
+	while((int64_t)idx > 0) { \
+		ZCNT_RESULT uint64_t m; uint64_t c; \
+		/* insertions */ \
+		m = lzcnt(~gaba_parse_u64(p, ofs + idx)); \
+		c = _gaba_parse_min2(idx, m); \
+		idx -= c; _ins_dump(c);		/* at most 64bp */ \
+		/* deletions */ \
+		m = lzcnt(gaba_parse_u64(p, ofs + idx)); \
+		c = _gaba_parse_min2(idx, m - 1); \
+		idx -= c; _del_dump(c);		/* at most 64bp */ \
+		/* diagonals */ \
+		uint64_t sidx = idx; \
+		do { \
+			m = lzcnt(_gaba_diag(gaba_parse_u64(p, ofs + idx))); \
+			c = _gaba_parse_min2(idx, m) & ~0x01; \
+			idx -= c; _diag_dump(c>>1); \
+		} while(c == 64); \
+		_diag_end((sidx - idx)>>1); \
+	} \
 }
 
 /**
@@ -121,10 +204,10 @@ uint64_t gaba_parse_dump_match_string(
 }
 
 /**
- * @fn gaba_parse_dump_gap_string
+ * @fn gaba_parse_dump_cigar_elem
  */
 static inline
-uint64_t gaba_parse_dump_gap_string(
+uint64_t gaba_parse_dump_cigar_elem(
 	char *buf,
 	uint64_t len,
 	char ch)
@@ -154,30 +237,6 @@ uint64_t gaba_parse_dump_gap_string(
 }
 
 /**
- * @macro _gaba_parse_count_match, _gaba_parse_count_gap
- * @brief match and gap counters
- */
-#define _gaba_diag(_x)			( (_x) ^ 0x5555555555555555 )
-#define _gaba_parse_count_match_forward(_arr) ({ \
-	tzcnt(_gaba_diag(_arr)); \
-})
-#define _gaba_parse_count_gap_forward(_arr) ({ \
-	uint64_t _a = (_arr); \
-	uint64_t mask = 0ULL - (_a & 0x01); \
-	uint64_t gc = tzcnt(_a ^ mask) + (uint64_t)mask; \
-	gc; \
-})
-#define _gaba_parse_count_match_reverse(_arr) ({ \
-	lzcnt(_gaba_diag(_arr)); \
-})
-#define _gaba_parse_count_gap_reverse(_arr) ({ \
-	uint64_t _a = (_arr); \
-	uint64_t mask = (uint64_t)(((int64_t)_a)>>63); \
-	uint64_t gc = lzcnt(_a ^ mask) - ((int64_t)mask + 1); \
-	gc; \
-})
-
-/**
  * @fn gaba_print_cigar_forward
  * @brief parse path string and print cigar to file
  */
@@ -189,40 +248,20 @@ uint64_t gaba_print_cigar_forward(
 	uint64_t offset,
 	uint64_t len)
 {
+	#define _del(_c)	{ if(_c) { clen += printer(fp, _c, 'D'); } }
+	#define _ins(_c)	{ if(_c) { clen += printer(fp, _c, 'I'); } }
+	#define _match(_c)	{ if(_c) { clen += printer(fp, _c, 'M'); } }
+	#define _nop(_c)	{}
+
 	uint64_t clen = 0;
-
-	/* convert path to uint64_t pointer */
-	uint64_t const *p = _gaba_parse_ptr(path);
-	uint64_t lim = offset + _gaba_parse_ofs(path) + len;
-	uint64_t ridx = len;
-
-	while(1) {
-		uint64_t rsidx = ridx;
-		while(1) {
-			ZCNT_RESULT uint64_t m = _gaba_parse_count_match_forward(
-				gaba_parse_u64(p, lim - ridx)
-			);
-			uint64_t a = _gaba_parse_min2(m, ridx) & ~0x01;
-			ridx -= a;
-			if(a < 64) { break; }
-		}
-		uint64_t m = (rsidx - ridx)>>1;
-		if(m > 0) {
-			clen += printer(fp, m, 'M');
-		}
-		if(ridx == 0) { break; }
-
-		uint64_t arr;
-		uint64_t g = _gaba_parse_min2(
-			_gaba_parse_count_gap_forward(arr = gaba_parse_u64(p, lim - ridx)),
-			ridx
-		);
-		if(g > 0) {
-			clen += printer(fp, g, 'D' + ((char)(0ULL - (arr & 0x01)) & ('I' - 'D')));
-		}
-		if((ridx -= g) <= 1) { break; }
-	}
+	_parser_init_fw(path, offset, len);
+	_parser_loop_fw(_del, _ins, _nop, _match);
 	return(clen);
+
+	#undef _del
+	#undef _ins
+	#undef _match
+	#undef _nop
 }
 
 /**
@@ -237,42 +276,21 @@ uint64_t gaba_dump_cigar_forward(
 	uint64_t offset,
 	uint64_t len)
 {
-	uint64_t const filled_len_margin = 5;
-	char *b = buf, *blim = buf + buf_size - filled_len_margin;
+	#define _del(_c)	{ if(_c) { b += gaba_parse_dump_cigar_elem(b, _c, 'D'); } }
+	#define _ins(_c)	{ if(_c) { b += gaba_parse_dump_cigar_elem(b, _c, 'I'); } }
+	#define _match(_c)	{ if(_c) { b += gaba_parse_dump_cigar_elem(b, _c, 'M'); } }
+	#define _nop(_c)	{}
 
-	/* convert path to uint64_t pointer */
-	uint64_t const *p = _gaba_parse_ptr(path);
-	uint64_t lim = offset + _gaba_parse_ofs(path) + len;
-	uint64_t ridx = len;
-
-	while(1) {
-		uint64_t rsidx = ridx;
-		while(1) {
-			ZCNT_RESULT uint64_t m = _gaba_parse_count_match_forward(
-				gaba_parse_u64(p, lim - ridx)
-			);
-			uint64_t a = _gaba_parse_min2(m, ridx) & ~0x01;
-			ridx -= a;
-			if(a < 64) { break; }
-		}
-		uint64_t m = (rsidx - ridx)>>1;
-		if(m > 0) {
-			b += gaba_parse_dump_match_string(b, m);
-		}
-		if(ridx == 0 || b > blim) { break; }
-
-		uint64_t arr;
-		uint64_t g = _gaba_parse_min2(
-			_gaba_parse_count_gap_forward(arr = gaba_parse_u64(p, lim - ridx)),
-			ridx
-		);
-		if(g > 0) {
-			b += gaba_parse_dump_gap_string(b, g, 'D' + ((char)(0ULL - (arr & 0x01)) & ('I' - 'D')));
-		}
-		if((ridx -= g) <= 1 || b > blim) { break; }
-	}
-	*b = '\0';
+	char *b = buf;
+	_parser_init_fw(path, offset, len);
+	_parser_loop_fw(_del, _ins, _nop, _match);
+	*b++ = '\0';
 	return(b - buf);
+
+	#undef _del
+	#undef _ins
+	#undef _match
+	#undef _nop
 }
 
 /**
@@ -287,40 +305,20 @@ uint64_t gaba_print_cigar_reverse(
 	uint64_t offset,
 	uint64_t len)
 {
-	int64_t clen = 0;
+	#define _del(_c)	{ if(_c) { clen += printer(fp, _c, 'D'); } }
+	#define _ins(_c)	{ if(_c) { clen += printer(fp, _c, 'I'); } }
+	#define _match(_c)	{ if(_c) { clen += printer(fp, _c, 'M'); } }
+	#define _nop(_c)	{ (void)(_c); }
 
-	/* convert path to uint64_t pointer */
-	uint64_t const *p = _gaba_parse_ptr(path);
-	uint64_t ofs = (int64_t)offset + _gaba_parse_ofs(path) - 64;
-	uint64_t idx = len;
-
-	while(1) {
-		uint64_t sidx = idx;
-		while(1) {
-			ZCNT_RESULT uint64_t m = _gaba_parse_count_match_reverse(
-				gaba_parse_u64(p, idx + ofs)
-			);
-			uint64_t a = _gaba_parse_min2(m, idx) & ~0x01;
-			idx -= a;
-			if(a < 64) { break; }
-		}
-		uint64_t m = (sidx - idx)>>1;
-		if(m > 0) {
-			clen += printer(fp, m, 'M');
-		}
-		if(idx == 0) { break; }
-
-		uint64_t arr;
-		uint64_t g = _gaba_parse_min2(
-			_gaba_parse_count_gap_reverse(arr = gaba_parse_u64(p, idx + ofs)),
-			idx
-		);
-		if(g > 0) {
-			clen += printer(fp, g, 'D' + ((char)(((int64_t)arr)>>63) & ('I' - 'D')));
-		}
-		if((idx -= g) <= 1) { break; }
-	}
+	uint64_t clen = 0;
+	_parser_init_rv(path, offset, len);
+	_parser_loop_rv(_del, _ins, _nop, _match);
 	return(clen);
+
+	#undef _del
+	#undef _ins
+	#undef _match
+	#undef _nop
 }
 
 /**
@@ -335,50 +333,36 @@ uint64_t gaba_dump_cigar_reverse(
 	uint64_t offset,
 	uint64_t len)
 {
-	uint64_t const filled_len_margin = 5;
-	char *b = buf, *blim = buf + buf_size - filled_len_margin;
+	#define _del(_c)	{ if(_c) { b += gaba_parse_dump_cigar_elem(b, _c, 'D'); } }
+	#define _ins(_c)	{ if(_c) { b += gaba_parse_dump_cigar_elem(b, _c, 'I'); } }
+	#define _match(_c)	{ if(_c) { b += gaba_parse_dump_cigar_elem(b, _c, 'M'); } }
+	#define _nop(_c)	{ (void)(_c); }
 
-	/* convert path to int64_t pointer */
-	uint64_t const *p = _gaba_parse_ptr(path);
-	uint64_t ofs = (int64_t)offset + _gaba_parse_ofs(path) - 64;
-	uint64_t idx = len;
-
-	while(1) {
-		uint64_t sidx = idx;
-		while(1) {
-			ZCNT_RESULT uint64_t m = _gaba_parse_count_match_reverse(
-				gaba_parse_u64(p, idx + ofs)
-			);
-			uint64_t a = _gaba_parse_min2(m, idx) & ~0x01;
-			idx -= a;
-			if(a < 64) { break; }
-		}
-		uint64_t m = (sidx - idx)>>1;
-		if(m > 0) {
-			b += gaba_parse_dump_match_string(b, m);
-		}
-		if(idx == 0 || b > blim) { break; }
-
-		uint64_t arr;
-		uint64_t g = _gaba_parse_min2(
-			_gaba_parse_count_gap_reverse(arr = gaba_parse_u64(p, idx + ofs)),
-			idx
-		);
-		if(g > 0) {
-			b += gaba_parse_dump_gap_string(b, g, 'D' + ((char)(((int64_t)arr)>>63) & ('I' - 'D')));
-		}
-		if((idx -= g) <= 1 || b > blim) { break; }
-	}
-	*b = '\0';
+	char *b = buf;
+	_parser_init_rv(path, offset, len);
+	_parser_loop_rv(_del, _ins, _nop, _match);
+	*b++ = '\0';
 	return(b - buf);
+
+	#undef _del
+	#undef _ins
+	#undef _match
+	#undef _nop
 }
 
-#if TEMP
+/**
+ * @macro GABA_SEQ_FW, GABA_SEQ_RV, GABA_SEQ_A, GABA_SEQ_B
+ */
+#define GABA_SEQ_FW				( 0x00 )
+#define GABA_SEQ_RV				( 0x01 )
+#define GABA_SEQ_A				( 0x00 )
+#define GABA_SEQ_B				( 0x02 )
+
 /**
  * @fn gaba_dump_seq_forward
  * @brief traverse the path in the forward direction and dump the sequence with appropriate gaps
  */
-static inline
+_GABA_PARSE_EXPORT_LEVEL
 uint64_t gaba_dump_seq_forward(
 	uint8_t *buf,
 	uint64_t buf_size,
@@ -389,67 +373,55 @@ uint64_t gaba_dump_seq_forward(
 	uint8_t const *seq,			/* a->seq[s->alen] when SEQ_RV */
 	char gap)					/* gap char, '-' */
 {
-	#define _dump_gap(_r, _q, _c) { \
-		for((_r) += (_c); (_c) > 0; (_c) -= MIN2(_c, 16)) { \
-			_storeu_v16i8((_r) - (_c), gv); \
+	#define _gap(c) { \
+		r += c; \
+		for(uint64_t i = c; i > 0; i -= _gaba_parse_min2(i, 16)) { \
+			_storeu_v16i8(r - i, gv); \
 		} \
 	}
-	#define _dump_fw(_r, _q, _c) { \
-		for((_q) += (_c), (_r) += (_c); (_c) > 0; (_c) -= MIN2(_c, 16)) { \
-			_storeu_v16i8((_r) - (_c), _shuf_v16i8(cv, _loadu_v16i8((_q) - (_c)))); \
+	#define _fw(c) { \
+		q += c, r += c; \
+		for(uint64_t i = c; i > 0; i -= _gaba_parse_min2(i, 16)) { \
+			_storeu_v16i8(r - i, _shuf_v16i8(cv, _loadu_v16i8(q - i))); \
 		} \
 	}
-	#define _dump_rv(_r, _q, _c) { \
-		for((_r) += (_c); (_c) > 0; (_c) -= MIN2(_c, 16)) { \
-			uint64_t _l = MIN2(_c, 16); \
-			_storeu_v16i8((_r) - (_c), _shuf_v16i8(cv, \
-				_swapn_v16i8(_loadu_v16i8((_q) + (_c) - (_l)), (_l)) \
+	#define _rv(c) { \
+		q -= c; r += c; \
+		for(uint64_t i = c; i > 0; i -= _gaba_parse_min2(i, 16)) { \
+			uint64_t l = _gaba_parse_min2(i, 16); \
+			_storeu_v16i8(r - i, _shuf_v16i8(cv, \
+				_swapn_v16i8(_loadu_v16i8(q + i - l), l) \
 			)); \
 		} \
 	}
-	#define _loop(_ins_dump, _del_dump, _diag_dump) { \
-		while((int64_t)ridx > 0) { \
-			uint64_t c; \
-			/* insertions */ \
-			ridx -= (c = lzcnt(~gaba_parse_u64(p, lim - ridx))); \
-			_ins_dump(r, q, c); \
-			/* deletions */ \
-			ridx -= (c = lzcnt(gaba_parse_u64(p, lim - ridx)) - 1); \
-			_del_dump(r, q, c);		/* at most 64bp */ \
-			/* diagonals */ \
-			do { \
-				ridx -= 2 * (c = (lzcnt(_gaba_diag(gaba_parse_u64(p, lim - ridx)))>>1)); \
-				_diag_dump(r, q, c); \
-			} while(c == 32); \
-		} \
-	}
+	#define _nop(c) { (void)(c); }
 
 	v16i8_t const cv = _load_v16i8((conf & GABA_SEQ_RV) ? gaba_parse_ascii_rv : gaba_parse_ascii_fw);
-	v16i8_t const gv = _seta_v16i8(gap);
-	uint64_t const *p = _gaba_parse_ptr(path);
-	uint64_t lim = offset + _gaba_parse_ofs(path) + len, ridx = len;
+	v16i8_t const gv = _set_v16i8(gap);
 	uint8_t const *q = seq;
 	uint8_t *r = buf;
+
+	_parser_init_fw(path, offset, len);
 	switch(conf) {
-		case GABA_SEQ_A | GABA_SEQ_FW: _loop(_dump_gap, _dump_fw, _dump_fw); break;
-		case GABA_SEQ_A | GABA_SEQ_RV: _loop(_dump_gap, _dump_rv, _dump_rv); break;
-		case GABA_SEQ_B | GABA_SEQ_FW: _loop(_dump_fw, _dump_gap, _dump_fw); break;
-		case GABA_SEQ_B | GABA_SEQ_RV: _loop(_dump_rv, _dump_gap, _dump_rv); break;
+		case GABA_SEQ_A | GABA_SEQ_FW: _parser_loop_fw(_fw, _gap, _fw, _nop); break;
+		case GABA_SEQ_A | GABA_SEQ_RV: _parser_loop_fw(_rv, _gap, _rv, _nop); break;
+		case GABA_SEQ_B | GABA_SEQ_FW: _parser_loop_fw(_gap, _fw, _fw, _nop); break;
+		case GABA_SEQ_B | GABA_SEQ_RV: _parser_loop_fw(_gap, _rv, _rv, _nop); break;
 	}
 	*r++ = '\0';
 	return(r - buf);
 
-	#undef _dump_gap
-	#undef _dump_fw
-	#undef _dump_rv
-	#undef _loop
+	#undef _gap
+	#undef _fw
+	#undef _rv
+	#undef _nop
 }
 
 /**
  * @fn gaba_dump_seq_reverse
  * @brief traverse the path in the reverse direction and dump the sequence with appropriate gaps
  */
-static inline
+_GABA_PARSE_EXPORT_LEVEL
 uint64_t gaba_dump_seq_reverse(
 	uint8_t *buf,
 	uint64_t buf_size,
@@ -460,107 +432,88 @@ uint64_t gaba_dump_seq_reverse(
 	uint8_t const *seq,			/* a->seq[s->alen] when SEQ_RV */
 	char gap)					/* gap char, '-' */
 {
-	#define _dump_gap(_r, _q, _c) { \
-		for((_r) += (_c); (_c) > 0; (_c) -= MIN2(_c, 16)) { \
-			_storeu_v16i8((_r) - (_c), gv); \
+	#define _gap(c) { \
+		r += c; \
+		for(uint64_t i = c; i > 0; i -= _gaba_parse_min2(i, 16)) { \
+			_storeu_v16i8(r - i, gv); \
 		} \
 	}
-	#define _dump_fw(_r, _q, _c) { \
-		for((_q) += (_c), (_r) += (_c); (_c) > 0; (_c) -= MIN2(_c, 16)) { \
-			_storeu_v16i8((_r) - (_c), _shuf_v16i8(cv, _loadu_v16i8((_q) - (_c)))); \
+	#define _fw(c) { \
+		q += c, r += c; \
+		for(uint64_t i = c; i > 0; i -= _gaba_parse_min2(i, 16)) { \
+			_storeu_v16i8(r - i, _shuf_v16i8(cv, _loadu_v16i8(q - i))); \
 		} \
 	}
-	#define _dump_rv(_r, _q, _c) { \
-		for((_q) += (_c), (_r) += (_c); (_c) > 0; (_c) -= MIN2(_c, 16)) { \
-			_storeu_v16i8((_r) - (_c), _shuf_v16i8(cv, _loadu_v16i8((_q) - (_c)))); \
+	#define _rv(c) { \
+		q -= c; r += c; \
+		for(uint64_t i = c; i > 0; i -= _gaba_parse_min2(i, 16)) { \
+			uint64_t l = _gaba_parse_min2(i, 16); \
+			_storeu_v16i8(r - i, _shuf_v16i8(cv, \
+				_swapn_v16i8(_loadu_v16i8(q + i - l), l) \
+			)); \
 		} \
 	}
-	#define _loop(_ins_dump, _del_dump, _diag_dump) { \
-		while((int64_t)idx > 0) { \
-			uint64_t c; \
-			/* insertions */ \
-			idx -= (c = lzcnt(~gaba_parse_u64(p, ofs + idx))); \
-			_ins_dump(r, q, c); \
-			/* deletions */ \
-			idx -= (c = lzcnt(gaba_parse_u64(p, ofs + idx)) - 1); \
-			_del_dump(r, q, c);		/* at most 64bp */ \
-			/* diagonals */ \
-			do { \
-				idx -= 2 * (c = (lzcnt(_gaba_diag(gaba_parse_u64(p, ofs + idx)))>>1)); \
-				_diag_dump(r, q, c); \
-			} while(c == 32); \
-		} \
-	}
+	#define _nop(c) { (void)(c); }
 
 	v16i8_t const cv = _load_v16i8((conf & GABA_SEQ_RV) ? gaba_parse_ascii_rv : gaba_parse_ascii_fw);
-	v16i8_t const gv = _seta_v16i8(gap);
-	uint64_t const *p = _gaba_parse_ptr(path);
-	uint64_t ofs = (int64_t)offset + _gaba_parse_ofs(path) - 64, idx = len;
+	v16i8_t const gv = _set_v16i8(gap);
 	uint8_t const *q = seq;
 	uint8_t *r = buf;
+
+	_parser_init_rv(path, offset, len);
 	switch(conf) {
-		case GABA_SEQ_A | GABA_SEQ_FW: _loop(_dump_gap, _dump_fw, _dump_fw); break;
-		case GABA_SEQ_A | GABA_SEQ_RV: _loop(_dump_gap, _dump_rv, _dump_rv); break;
-		case GABA_SEQ_B | GABA_SEQ_FW: _loop(_dump_fw, _dump_gap, _dump_fw); break;
-		case GABA_SEQ_B | GABA_SEQ_RV: _loop(_dump_rv, _dump_gap, _dump_rv); break;
+		case GABA_SEQ_A | GABA_SEQ_FW: _parser_loop_rv(_fw, _gap, _fw, _nop); break;
+		case GABA_SEQ_A | GABA_SEQ_RV: _parser_loop_rv(_rv, _gap, _rv, _nop); break;
+		case GABA_SEQ_B | GABA_SEQ_FW: _parser_loop_rv(_gap, _fw, _fw, _nop); break;
+		case GABA_SEQ_B | GABA_SEQ_RV: _parser_loop_rv(_gap, _rv, _rv, _nop); break;
+		default: break;
 	}
 	*r++ = '\0';
 	return(r - buf);
 
-	#undef _dump_gap
-	#undef _dump_fw
-	#undef _dump_rv
+	#undef _gap
+	#undef _fw
+	#undef _rv
 	#undef _loop
 }
 
 /**
  * @fn gaba_dump_seq_ref, gaba_dump_seq_query
  */
-static inline
+_GABA_PARSE_EXPORT_LEVEL
 uint64_t gaba_dump_seq_ref(
 	uint8_t *buf,
 	uint64_t buf_size,
 	uint32_t const *path,
 	gaba_path_section_t const *s,
-	gaba_section_t const *a,
-	uint8_t const *alim)
+	gaba_section_t const *a)
 {
-	uint8_t const *base = (a->aid & 0x01)
-		? gaba_rev(a->base, alim)
-		? &a->base[a->apos];
-
 	return(gaba_dump_seq_forward(
 		buf, buf_size,
-		a->base >= alim ? 
-		path, s->ppos, gaba_len(a),
-		a->base >= alim ? &a->base[s->apos] : gaba_rev(&a->base[s->apos], alim), '-'
+		GABA_SEQ_A | (a->base < GABA_EOU ? GABA_SEQ_FW : GABA_SEQ_RV),
+		path, s->ppos, gaba_plen(s),
+		a->base < GABA_EOU ? &a->base[s->apos] : gaba_mirror(&a->base[s->apos], 0),
+		'-'
 	));
 }
-static inline
+_GABA_PARSE_EXPORT_LEVEL
 uint64_t gaba_dump_seq_query(
 	uint8_t *buf,
 	uint64_t buf_size,
 	uint32_t const *path,
 	gaba_path_section_t const *s,
-	gaba_section_t const *b,
-	uint8_t const *alim)
-{
-	return;
-}
-
-/**
- * @fn gaba_calc_score
- */
-static inline
-int64_t gaba_calc_score(
-	uint32_t const *path,
-	gaba_path_section_t const *s,
-	gaba_section_t const *a,
 	gaba_section_t const *b)
 {
-	return;
+	return(gaba_dump_seq_forward(
+		buf, buf_size,
+		GABA_SEQ_B | (b->base < GABA_EOU ? GABA_SEQ_FW : GABA_SEQ_RV),
+		path, s->ppos, gaba_plen(s),
+		b->base < GABA_EOU ? &b->base[s->apos] : gaba_mirror(&b->base[s->apos], 0),
+		'-'
+	));
 }
 
+#if TEMP 
 /**
  * @fn gaba_dump_sam_md
  * @brief print sam MD tag
