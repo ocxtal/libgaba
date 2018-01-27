@@ -1026,7 +1026,7 @@ int64_t fill_init_fetch(
 	v2i64_t pos)
 {
 	/* calc irem (length until the init_fetch breakpoint; restore remaining head margin lengths) */
-	v2i32_t const adj = _seta_v2i32(1, 0);
+	v2i32_t const adj = _seta_v2i32(0, 1);
 	v2i32_t irem = _sub_v2i32(
 		_seta_v2i32(INIT_FETCH_BPOS, INIT_FETCH_APOS),
 		_cvt_v2i64_v2i32(pos)
