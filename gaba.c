@@ -2423,7 +2423,7 @@ void leaf_detect_pos(
 		} \
 		_m++->mask = _mask_n(_gt_n(delta, max)); \
 		max = _max_n(delta, max); \
-		debug("mask(%lx)", _mask_u64((_m - 1)->mask)); \
+		debug("mask(%lx)", (uint64_t)_mask_u64((_m - 1)->mask)); \
 	}
 
 	/* load contexts and overwrite max vector */
