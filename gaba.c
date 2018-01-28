@@ -4814,7 +4814,11 @@ void unittest_test_pair(
 	assert(unittest_check_section(r, nr.sec, nr.scnt), FMT, ARG);
 
 	/* calc score */
-	struct gaba_score_s const *c = _export(gaba_dp_calc_score)(dp, r->path, &r->seg[0], &s->a[0], &s->a[0]);
+	for(uint64_t i = 0; i < r->scnt; i++) {
+		struct gaba_score_s const *c = _export(gaba_dp_calc_score)(dp,
+			r->path, &r->seg[i], &s->a[r->seg[i].aid>>1], &s->b[r->seg[i].bid>>1]
+		);
+	}
 
 	/* cleanup everything */
 	unittest_clean_section(s);
