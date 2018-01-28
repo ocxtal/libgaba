@@ -172,42 +172,10 @@ uint64_t gaba_parse_u64(
 }
 
 /**
- * @fn gaba_parse_dump_match_string
+ * @fn gaba_parse_dump_num
  */
 static inline
-uint64_t gaba_parse_dump_match_string(
-	char *buf,
-	uint64_t len)
-{
-	if(len < 64) {
-		static uint8_t const conv[64] = {
-			0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09,
-			0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19,
-			0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29,
-			0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39,
-			0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49,
-			0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59,
-			0x60, 0x61, 0x62, 0x63
-		};
-		char *p = buf;
-		*p = (conv[len]>>4) + '0'; p += (conv[len] & 0xf0) != 0;
-		*p++ = (conv[len] & 0x0f) + '0';
-		*p++ = 'M';
-		return(p - buf);
-	} else {
-		uint64_t adv;
-		uint8_t b[16] = { 'M', '0' }, *p = &b[1];
-		while(len != 0) { *p++ = (len % 10) + '0'; len /= 10; }
-		for(p -= (p != &b[1]), adv = (int64_t)((ptrdiff_t)(p - b)) + 1; p >= b; p--) { *buf++ = *p; }
-		return(adv);
-	}
-}
-
-/**
- * @fn gaba_parse_dump_cigar_elem
- */
-static inline
-uint64_t gaba_parse_dump_cigar_elem(
+uint64_t gaba_parse_dump_num(
 	char *buf,
 	uint64_t len,
 	char ch)
@@ -276,9 +244,9 @@ uint64_t gaba_dump_cigar_forward(
 	uint64_t offset,
 	uint64_t len)
 {
-	#define _del(_c)	{ if(_c) { b += gaba_parse_dump_cigar_elem(b, _c, 'D'); } }
-	#define _ins(_c)	{ if(_c) { b += gaba_parse_dump_cigar_elem(b, _c, 'I'); } }
-	#define _match(_c)	{ if(_c) { b += gaba_parse_dump_cigar_elem(b, _c, 'M'); } }
+	#define _del(_c)	{ if(_c) { b += gaba_parse_dump_num(b, _c, 'D'); } }
+	#define _ins(_c)	{ if(_c) { b += gaba_parse_dump_num(b, _c, 'I'); } }
+	#define _match(_c)	{ if(_c) { b += gaba_parse_dump_num(b, _c, 'M'); } }
 	#define _nop(_c)	{}
 
 	char *b = buf;
@@ -333,9 +301,9 @@ uint64_t gaba_dump_cigar_reverse(
 	uint64_t offset,
 	uint64_t len)
 {
-	#define _del(_c)	{ if(_c) { b += gaba_parse_dump_cigar_elem(b, _c, 'D'); } }
-	#define _ins(_c)	{ if(_c) { b += gaba_parse_dump_cigar_elem(b, _c, 'I'); } }
-	#define _match(_c)	{ if(_c) { b += gaba_parse_dump_cigar_elem(b, _c, 'M'); } }
+	#define _del(_c)	{ if(_c) { b += gaba_parse_dump_num(b, _c, 'D'); } }
+	#define _ins(_c)	{ if(_c) { b += gaba_parse_dump_num(b, _c, 'I'); } }
+	#define _match(_c)	{ if(_c) { b += gaba_parse_dump_num(b, _c, 'M'); } }
 	#define _nop(_c)	{ (void)(_c); }
 
 	char *b = buf;
@@ -512,93 +480,6 @@ uint64_t gaba_dump_seq_query(
 		'-'
 	));
 }
-
-#if TEMP 
-/**
- * @fn gaba_dump_sam_md
- * @brief print sam MD tag
- */
-_GABA_PARSE_EXPORT_LEVEL
-void gaba_dump_sam_md(
-	uint8_t *buf,
-	uint64_t buf_size,
-	uint32_t const *path,
-	gaba_path_section_t const *s,
-	gaba_section_t const *a,
-	gaba_section_t const *b)
-{
-	uint64_t dir = (s->bid & 0x01) ? 1 : 0;
-	static uint8_t const comp[16] __attribute__(( aligned(16) )) = {
-		0x00, 0x08, 0x04, 0x0c, 0x02, 0x0a, 0x06, 0x0e,
-		0x01, 0x09, 0x05, 0x0d, 0x03, 0x0b, 0x07, 0x0f
-	};
-	static uint8_t const id[16] __attribute__(( aligned(16) )) = {
-		0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
-		0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f
-	};
-	v32i8_t const cv = _from_v16i8_v32i8(_load_v16i8(dir ? comp : id));
-
-	uint64_t const *p = _gaba_parse_ptr(path);
-	uint64_t lim = s->ppos + _gaba_parse_ofs(path) + gaba_plen(s);
-	uint64_t ridx = gaba_plen(s);
-
-	uint32_t as = s->apos, bs = s->bpos;
-	uint8_t const *rp = &a->base[as], *rb = rp;
-	uint8_t const *qp = &b->base[dir ? (uint64_t)b->len - bs - 32 : bs];
-	while(ridx > 0) {
-		/* suppose each indel block is shorter than 32 bases */
-		uint64_t arr = gaba_parse_u64(p, lim - ridx);
-		uint64_t cnt = tzcnt(~arr) - (arr & 0x01);		/* count #ins */
-		ridx -= cnt;
-		qp += dir ? -cnt : cnt;
-
-		if((arr & 0x01) == 0) {							/* is_del */
-			ridx -= cnt = tzcnt(arr);					/* count #del */
-			_putn(b, (int32_t)(rp - rb));
-			_put(b, '^');
-			_putsnt32(b, rp, cnt, decaf);
-			rp += cnt;
-			rb = rp;
-		}
-
-		/* match or mismatch */
-		uint64_t acnt = 32;
-		while(acnt == 32) {
-			/* count diagonal */
-			arr = gaba_parse_u64(p, lim - ridx);
-			acnt = MIN2(tzcnt(arr ^ 0x5555555555555555), ridx)>>1;
-
-			/* load sequence to detect mismatch */
-			v32i8_t rv = _shuf_v32i8(cv, _loadu_v32i8(rp)), qv = _loadu_v32i8(qp);
-			if(dir) { qv = _swap_v32i8(qv); }
-
-			/* compare and count matches */
-			uint64_t mmask = (uint64_t)((v32_masku_t){ .mask = _mask_v32i8(_eq_v32i8(rv, qv)) }).all;
-			uint64_t mcnt = MIN2(acnt, tzcnt(~mmask));
-
-			/* adjust pos */
-			ridx -= 2*mcnt;
-			rp += mcnt;
-			qp += dir ? -mcnt : mcnt;
-
-			if(mcnt >= acnt) { continue; }				/* continues longer than 32bp */
-			_putn(b, (int32_t)(rp - rb));				/* print match length */
-			ridx -= 2*(cnt = MIN2(tzcnt(mmask>>mcnt), acnt - mcnt));
-			qp += dir ? -cnt : cnt;
-			for(uint64_t i = 0; i < cnt - 1; i++) {
-				_put(b, decaf[*rp]);		/* print mismatch base */
-				_put(b, '0');							/* padding */
-				rp++;
-			}
-			_put(b, decaf[*rp]);			/* print mismatch base */
-			rp++;
-			rb = rp;
-		}
-	}
-	_putn(b, (int32_t)(rp - rb));						/* always print tail even if # == 0 */
-	return;
-}
-#endif
 
 #endif /* _GABA_PARSE_H_INCLUDED */
 /**
