@@ -2799,8 +2799,8 @@ enum {
  * @brief reload mask pointer and direction mask, and adjust path offset
  */
 #define _trace_load_block_rem(_cnt) ({ \
-	debug("ofs(%lu), cnt(%lu), path(%p), ofs(%lu)", \
-		ofs, (uint64_t)_cnt, path - (ofs < (_cnt)), (ofs - (_cnt)) & (BLK - 1)); \
+	debug("ofs(%u), cnt(%lu), path(%p), ofs(%u)", \
+		ofs, (uint64_t)_cnt, path - (ofs < (_cnt)), (uint32_t)(ofs - (_cnt)) & (BLK - 1)); \
 	path -= ofs < (_cnt); \
 	ofs = (ofs - (_cnt)) & (BLK - 1); \
 	_dir_mask_load(blk, (_cnt)); \
@@ -2884,7 +2884,7 @@ enum {
 }
 #define _trace_tail_load_n(t, _state, _jump_to) { \
 	if(_unlikely(mask < blk->mask)) { \
-		debug("test ph(%p), xstat(%x), ppos(%lu), path(%p, %p), ofs(%lu)", \
+		debug("test ph(%p), xstat(%x), ppos(%lu), path(%p, %p), ofs(%u)", \
 			_last_phantom(blk), _last_phantom(blk)->xstat, (path - self->w.l.aln->path) * 32 + ofs, path, self->w.l.aln->path, ofs); \
 		if(_last_phantom(blk)->xstat & HEAD) {	/* head (phantom) block is marked 0x4000 */ \
 			_trace_reload_tail(t, _state);		/* fetch the previous tail */ \
@@ -3014,7 +3014,7 @@ _trace_term:;
 	path += (ofs + rem) >= BLK;
 	ofs = (ofs + rem) & (BLK - 1);
 	_storeu_u64(path, path_array<<ofs);
-	debug("rem(%lu), path(%p), arr(%lx), ofs(%lu)", rem, path, path_array<<ofs, ofs);
+	debug("rem(%lu), path(%p), arr(%lx), ofs(%u)", rem, path, path_array<<ofs, ofs);
 
 	/* save gap counts */
 	_store_v2i32(&self->w.l.a.aicnt, gi);
