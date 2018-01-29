@@ -4480,18 +4480,18 @@ struct unittest_sec_pair_s {
 	uint32_t apos, bpos;
 };
 
+/* convert to upper case and subtract offset by 0x40 */
+#define _b(x)	( (x) & 0x1f )
 static
-uint8_t unittest_encode_base(char c)
+uint8_t unittest_encode_base_forward(char c)
 {
-	/* convert to upper case and subtract offset by 0x40 */
-	#define _b(x)	( (x) & 0x1f )
-
-	/* conversion tables */
+	/* conversion table */
 	#if BIT == 2
-		enum bases { A = 0x00, C = 0x01, G = 0x02, T = 0x03 };
+		enum unittest_bases { A = 0x00, C = 0x01, G = 0x02, T = 0x03 };
 	#else
-		enum bases { A = 0x01, C = 0x02, G = 0x04, T = 0x08 };
+		enum unittest_bases { A = 0x01, C = 0x02, G = 0x04, T = 0x08 };
 	#endif
+
 	static uint8_t const table[] = {
 		[_b('A')] = A,
 		[_b('C')] = C,
@@ -4514,9 +4514,41 @@ uint8_t unittest_encode_base(char c)
 		[_b('_')] = 0		/* sentinel */
 	};
 	return(table[_b((uint8_t)c)]);
-
-	#undef _b
 }
+static
+uint8_t unittest_encode_base_reverse(char c)
+{
+	/* conversion table */
+	#if BIT == 2
+		enum unittest_bases { A = 0x00, C = 0x01, G = 0x02, T = 0x03 };
+	#else
+		enum unittest_bases { A = 0x01, C = 0x02, G = 0x04, T = 0x08 };
+	#endif
+
+	static uint8_t const table[] = {
+		[_b('A')] = T,
+		[_b('C')] = G,
+		[_b('G')] = C,
+		[_b('T')] = A,
+		[_b('U')] = A,
+		#if BIT == 4
+			[_b('R')] = T | C,
+			[_b('Y')] = G | A,
+			[_b('S')] = C | G,
+			[_b('W')] = T | A,
+			[_b('K')] = C | A,
+			[_b('M')] = T | G,
+			[_b('B')] = G | C | A,
+			[_b('D')] = T | C | A,
+			[_b('H')] = T | G | A,
+			[_b('V')] = T | G | C,
+			[_b('N')] = 0,		/* treat 'N' as a gap */
+		#endif
+		[_b('_')] = 0		/* sentinel */
+	};
+	return(table[_b((uint8_t)c)]);
+}
+#undef _b
 
 static
 char *unittest_cat_seq(char const *const *p)
@@ -4564,7 +4596,7 @@ struct gaba_section_s *unittest_build_section_forward(char const *const *p, uint
 			s[i] = gaba_build_section(i * 2, a, strlen(p[i]));
 		}
 		for(char const *r = p[i]; *r != '\0'; r++) {
-			*a++ = unittest_encode_base(*r);
+			*a++ = unittest_encode_base_forward(*r);
 		}
 		i++; *a++ = '\0';
 	}
@@ -4580,20 +4612,23 @@ struct gaba_section_s *unittest_build_section_reverse(char const *const *p, uint
 
 	uint64_t len = pos + UNITTEST_GABA_HEAD_MARGIN + UNITTEST_GABA_TAIL_MARGIN;
 	for(char const *const *q = p; *q != NULL; q++) { len += strlen(*q) + 1; }
-	char *a = calloc(1, len); a += pos + UNITTEST_GABA_HEAD_MARGIN;
+	char *a = calloc(1, len); a += UNITTEST_GABA_HEAD_MARGIN;
 	uint64_t i = 0;
 	while(p[i] != NULL) {
 		if(i == 0) {
-			s[i] = gaba_build_section(i * 2 + 1, a - pos, strlen(p[i]) + pos);
+			s[i] = gaba_build_section(i * 2 + 1, gaba_mirror(a, strlen(p[i]) + pos), strlen(p[i]) + pos);
 		} else {
-			s[i] = gaba_build_section(i * 2 + 1, a, strlen(p[i]));
+			s[i] = gaba_build_section(i * 2 + 1, gaba_mirror(a, strlen(p[i])), strlen(p[i]));
 		}
+		debug("a(%p, %p)", a, s[i].base);
 		for(char const *r = p[i] + strlen(p[i]); r > p[i]; r--) {
-			*a++ = unittest_encode_base(r[-1]);
+			*a++ = unittest_encode_base_reverse(r[-1]);
+			debug("r[-1](%c), *a(%x)", r[-1], a[-1]);
 		}
+		if(i == 0) { a += pos; }
 		i++; *a++ = '\0';
 	}
-	s[i] = gaba_build_section(i * 2 + 1, a, _W);
+	s[i] = gaba_build_section(i * 2 + 1, gaba_mirror(a, _W), _W);
 	memset(a, N, _W);
 	return(s);
 }
@@ -4601,8 +4636,16 @@ struct gaba_section_s *unittest_build_section_reverse(char const *const *p, uint
 static
 void unittest_clean_section(struct unittest_sec_pair_s *s)
 {
-	free((char *)s->a[0].base - UNITTEST_GABA_HEAD_MARGIN);
-	free((char *)s->b[0].base - UNITTEST_GABA_HEAD_MARGIN);
+	if(s->a[0].base < GABA_EOU) {
+		free((char *)s->a[0].base - UNITTEST_GABA_HEAD_MARGIN);
+	} else {
+		free((char *)gaba_mirror(s->a[0].base, s->a[0].len) - UNITTEST_GABA_HEAD_MARGIN);
+	}
+	if(s->b[0].base < GABA_EOU) {
+		free((char *)s->b[0].base - UNITTEST_GABA_HEAD_MARGIN);
+	} else {
+		free((char *)gaba_mirror(s->b[0].base, s->b[0].len) - UNITTEST_GABA_HEAD_MARGIN);
+	}
 	free(s->a); free(s->b);
 	free(s);
 	return;
@@ -4632,11 +4675,11 @@ struct gaba_fill_s const *unittest_dp_extend(
 	while((f->status & GABA_TERM) == 0) {
 		if(f->status & GABA_UPDATE_A) {
 			a++;
-			debug("update a(%u, %u, %p, %s)", a->id, a->len, a->base, a->base);
+			debug("update a(%u, %u, %p)", a->id, a->len, a->base);
 		}
 		if(f->status & GABA_UPDATE_B) {
 			b++;
-			debug("update b(%u, %u, %p, %s)", b->id, b->len, b->base, b->base);
+			debug("update b(%u, %u, %p)", b->id, b->len, b->base);
 		}
 		if(a->base == NULL || b->base == NULL) { break; }
 		f = _export(gaba_dp_fill)(dp, f, a, b, 0);
@@ -4803,10 +4846,11 @@ static
 void unittest_test_pair(
 	UNITTEST_ARG_DECL,
 	struct gaba_dp_context_s *dp,
-	struct unittest_seq_pair_s const *pair)
+	struct unittest_seq_pair_s const *pair,
+	uint64_t dir)
 {
-	#define FMT			"[%s:%d] { .a = { \"%s\", \"%s\", \"%s\", \"%s\", \"%s\", \"%s\" }, .b = { \"%s\", \"%s\", \"%s\", \"%s\", \"%s\", \"%s\" } }"
-	#define ARG			MODEL_STR, _W, pair->a[0], pair->a[1], pair->a[2], pair->a[3], pair->a[4], pair->a[5], pair->b[0], pair->b[1], pair->b[2], pair->b[3], pair->b[4], pair->b[5]
+	#define FMT			"[%s:%d:%s] { .a = { \"%s\", \"%s\", \"%s\", \"%s\", \"%s\", \"%s\" }, .b = { \"%s\", \"%s\", \"%s\", \"%s\", \"%s\", \"%s\" } }"
+	#define ARG			MODEL_STR, _W, dir == 0 ? "fw" : "rv", pair->a[0], pair->a[1], pair->a[2], pair->a[3], pair->a[4], pair->a[5], pair->b[0], pair->b[1], pair->b[2], pair->b[3], pair->b[4], pair->b[5]
 
 	/* prepare sequences */
 	char *a = unittest_cat_seq(pair->a);
@@ -4816,7 +4860,7 @@ void unittest_test_pair(
 	uint64_t *bsec = unittest_build_section_array(pair->b);
 	struct unittest_sec_pair_s *s = unittest_build_section(
 		pair,
-		unittest_build_section_forward
+		dir == 0 ? unittest_build_section_forward : unittest_build_section_reverse
 	);
 
 	/* test naive implementations */
@@ -4851,7 +4895,7 @@ void unittest_test_pair(
 	assert(unittest_check_section(r, nr.sec, nr.scnt), FMT, ARG);
 
 	/* calc score */
-	for(uint64_t i = 0; i < r->scnt; i++) {
+	for(uint64_t i = 0; i < r->slen; i++) {
 		struct gaba_score_s const *c = _export(gaba_dp_calc_score)(dp,
 			r->path, &r->seg[i], &s->a[r->seg[i].aid>>1], &s->b[r->seg[i].bid>>1]
 		);
@@ -5105,6 +5149,15 @@ unittest( .name = "base" )
 				"GGACTTTACATGCACACAGACTTGAGTAATCAGTTTGGCTTATGCTACAATGAGTTCCGCGGCCAAATTGCGGAATACTCGGTATCTGTACCGGCGGACAGTTGAAGAGCCTTTTCCAAACCCT",
 				"ACCTTACGAAGTCGTGTATTATAAAACCGAACCAACGGTTTGCGTAACGGGCCGGCGGGTTTTTCAACCTAGCCACGACTTTCGCTATGATCTATAGGTTCGCTACATCCCCGCCTGAGGTCTTGTATGCGTAGAACGCGCGGAGGGGCATAGTTGGCAAAGAGGATTAGCTCGCATAGCGACGAACACGAGTAATCCAGGGACCGAAGCCGTCCCAGTGGAAGCCTAGTTCAGTCCCACAGGGGAACGTTAACGCGCGAACATCTCTCTAAGTCTTCACCTCGATGGAATTACACCCTGATGCCAAAGACGAGTACCTCCCGGCGTGGCGCTCGCTCATTGTCCATGTACCGCGAGCGCTTCCCTTATTAGCTATTTCGTCTGGGGATTAAGTCCCTGCTCACCTCCCGAATTAAAGTACGTCGAAACCTATGGCAACCGGGGCGATTACAATTCGCGGTTCTTAACCACTGTTCATCCAGCGTTAGCTCGGGGGGATATCTACCAAGGTATCATGCCTAGCGGACAGATGTCGAGTAGAGCGGTATGAGATAAAAGAAACTAGGACTTGCAAAACGCCGACGACCACCAGCCCTCGGAAAATACGTTCGAAGCCTTTTAACCGCCCGCCCGCTCTTGGTGACTACTATGTGCATCTAGGCATCCTAAACTGCCGCGAACTTTGTATATTACCCGAAGATGTGTTCCTGGGCCCCACCAGGATTATTTAACTGAAGCCCTGAATCGTTGATAGGTGGCGCGGCGATTGCGAATTAGCGCTGTCAATTTGACATCCCACACTACGTTTCATAATAGGTGAATCTAGAGTAGACGCGCCTTCGTGCCTAATTAGATCGGCGTCGCGCTGCCCAATCTGGACACAGACGTTGGCTCTGTCTGTAATATAAACACGTAGGAGGAAACTTCATTATGGTCCGATCAGTGCCATCGCTACTCGGGGTGCGCCAACCTGGTAAAGCCTGGTTTACCGTAAGCGGCACATAAGCCATCTGAATCGGCTGAAGGGAGAGTAGTCTACGCCACATGTCTGTTTGGCTGAGGTGAGATGCCTGCCTAGGGCCCCCCATTCCCCTGACGGCAAATTTCCTCCCATTCAAGGAGACGTACATAGCACAAGCTTTCATAGACGATCTGCCTACCACCGGCGGCGACCTACAGGTGCACTCGTAAACCCATGTGAGCTCTAGCGCTTAAGGGCTCAGGAACCAGACAGCACATAGACCCCATCCGGTGCCTTGTCTACCTCGGCCAACCGCCCGTTAGCTAGGTTCAATCGCGTGGATGGATAGGCCACGAGAAGCGTACCGTAGCTTTTCACAGCTGAAAGGGGCGTGAGGAGTAGTCGGTGTCACTCTTCCGTATGGCGATTCTCTGACATTTAAATCTGAGTAAGGGACTTAGTCACATCCACAACTTCACCACGCTAGTCCTTGATCCACTACAAAACACACTGCGAGTTTGATCTCCGGTGTGGGCGGTTTTGTCTGTATGCCTAGGCTAGGGTAGAGTGGGCCGGTAGTTGTACATCGGCGCTATGATTTCCCGCTACTGACTTCTGGACACAACCCGCATGCCAACATAAGTCGCAACCATGAAGCTTCGCGTCGAGCGATAGCAGGAAATGCAAGTTTCCCAGTCACCCCATGTCAAACGAATAGTACACGTGCGTCTTAAACTTTGAATTGTGCTATACCTATAGGCGGGGACGAGTTGCGTGGGCGTGCTCCGTTACCCGCGAACGTACCGTCCTTGATAGGCTAAGACTTTTTAAGAGTGCTGCGGTAGAAACTCCGCTCAGTAGAGGGCCTCAGTTGCTCGAATGTACCATTACTTTTCATTCTGACTGAAAAATTTTAACGCGCAGTGAACCTTCCGTCGTGTGCGGCCGATAACCACTACCCAGGTGTCACGAATGGCCACTAGACGCTTG"
 			}
+		},
+		/* debugging reverse fetch */
+		{
+			.a = { "C", "TCAGCTTAC" },
+			.b = { "C", "TTGGTTAC" }
+		},
+		{
+			.a = { "GTCCTGTTACACCCCAGGCGACGGGAGT", "CGGCATAGGTTTTACACCGTTCAATGGTCCTGAGT", "CTGATCTGCATTG" },
+			.b = { "GTCCTGTTACACCCCCAGGCGACCGGGAGT", "CGTCATAGCGTTTTACACCGTTCAATGTCTCTTAGGT", "CTGTTTCATG" }
 		}
 		/* fails for affine-16 due to the bandwidth shotage */
 #if 0
@@ -5120,7 +5173,8 @@ unittest( .name = "base" )
 
 	for(uint64_t i = 0; i < sizeof(pairs) / sizeof(struct unittest_seq_pair_s); i++) {
 		_export(gaba_dp_flush)(dp);
-		unittest_test_pair(UNITTEST_ARG_LIST, dp, &pairs[i]);
+		unittest_test_pair(UNITTEST_ARG_LIST, dp, &pairs[i], 0);
+		unittest_test_pair(UNITTEST_ARG_LIST, dp, &pairs[i], 1);
 	}
 	_export(gaba_dp_clean)(dp);
 }
@@ -5215,7 +5269,8 @@ unittest( .name = "cross" )
 			pair.b[j] = unittest_generate_mutated_sequence(pair.a[j], 0.1, 0.1, _W);
 		}
 
-		unittest_test_pair(UNITTEST_ARG_LIST, dp, &pair);
+		unittest_test_pair(UNITTEST_ARG_LIST, dp, &pair, 0);
+		unittest_test_pair(UNITTEST_ARG_LIST, dp, &pair, 1);
 
 		for(uint64_t j = 0; pair.a[j] != NULL; j++) {
 			free((void *)pair.a[j]);
