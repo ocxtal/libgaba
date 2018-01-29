@@ -827,6 +827,16 @@ static uint8_t const compshift_mask_b[16] __attribute__(( aligned(16) )) = {
 	0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02
 };
 /* q-fetch (anti-diagonal matching for vector calculation) */
+
+#  define _fwaq_v16i8(_v)		( _xor_v16i8((_load_v16i8(comp_mask_a)), (_v)) )
+#  define _fwaq_v32i8(_v)		( _xor_v32i8((_from_v16i8_v32i8(_load_v16i8(comp_mask_a))), (_v)) )
+#  define _rvaq_v16i8(_v)		( _swap_v16i8((_v)) )
+#  define _rvaq_v32i8(_v)		( _swap_v32i8((_v)) )
+#  define _fwbq_v16i8(_v)		( _shuf_v16i8((_load_v16i8(shift_mask_b)), (_v)) )
+#  define _fwbq_v32i8(_v)		( _shuf_v32i8((_from_v16i8_v32i8(_load_v16i8(shift_mask_b))), (_v)) )
+#  define _rvbq_v16i8(_v)		( _shuf_v16i8((_load_v16i8(compshift_mask_b)), _swap_v16i8(_v)) )
+#  define _rvbq_v32i8(_v)		( _shuf_v32i8((_from_v16i8_v32i8(_load_v16i8(compshift_mask_b))), _swap_v32i8(_v)) 
+#if 0
 #  define _fwaq_v16i8(_v, _l)	( _xor_v16i8((_load_v16i8(comp_mask_a)), (_v)) )	/* _l is ignored */
 #  define _fwaq_v32i8(_v)		( _xor_v32i8((_from_v16i8_v32i8(_load_v16i8(comp_mask_a))), (_v)) )
 #  define _rvaq_v16i8(_v, _l)	( _swapn_v16i8((_v), (_l)) )
@@ -835,6 +845,7 @@ static uint8_t const compshift_mask_b[16] __attribute__(( aligned(16) )) = {
 #  define _fwbq_v32i8(_v)		( _shuf_v32i8((_from_v16i8_v32i8(_load_v16i8(shift_mask_b))), (_v)) )
 #  define _rvbq_v16i8(_v, _l)	( _shuf_v16i8((_load_v16i8(compshift_mask_b)), _swap_v16i8(_v)) )	/* _l is ignored */
 #  define _rvbq_v32i8(_v)		( _shuf_v32i8((_from_v16i8_v32i8(_load_v16i8(compshift_mask_b))), _swap_v32i8(_v)) )
+#endif
 
 /* p-fetch (diagonal matching for alignment refinement) */
 #  define _fwap_v16i8(_v, _l)	( (_v) )
@@ -853,6 +864,15 @@ static uint8_t const comp_mask[16] __attribute__(( aligned(16) )) = {
 };
 
 /* q-fetch (anti-diagonal matching for vector calculation) */
+#  define _fwaq_v16i8(_v)		( _shuf_v16i8((_load_v16i8(comp_mask)), (_v)) )
+#  define _fwaq_v32i8(_v)		( _shuf_v32i8((_from_v16i8_v32i8(_load_v16i8(comp_mask))), (_v)) )
+#  define _rvaq_v16i8(_v)		( _swap_v16i8((_v)) )
+#  define _rvaq_v32i8(_v)		( _swap_v32i8((_v)) )
+#  define _fwbq_v16i8(_v)		( (_v) )
+#  define _fwbq_v32i8(_v)		( (_v) )
+#  define _rvbq_v16i8(_v)		( _shuf_v16i8((_load_v16i8(comp_mask)), _swap_v16i8(_v)) )
+#  define _rvbq_v32i8(_v)		( _shuf_v32i8((_from_v16i8_v32i8(_load_v16i8(comp_mask))), _swap_v32i8(_v)) )
+#if 0
 #  define _fwaq_v16i8(_v, _l)	( _shuf_v16i8((_load_v16i8(comp_mask)), (_v)) )		/* _l is ignored */
 #  define _fwaq_v32i8(_v)		( _shuf_v32i8((_from_v16i8_v32i8(_load_v16i8(comp_mask))), (_v)) )
 #  define _rvaq_v16i8(_v, _l)	( _swapn_v16i8((_v), (_l)) )
@@ -861,6 +881,7 @@ static uint8_t const comp_mask[16] __attribute__(( aligned(16) )) = {
 #  define _fwbq_v32i8(_v)		( (_v) )
 #  define _rvbq_v16i8(_v, _l)	( _shuf_v16i8((_load_v16i8(comp_mask)), _swap_v16i8(_v)) )	/* _l is ignored */
 #  define _rvbq_v32i8(_v)		( _shuf_v32i8((_from_v16i8_v32i8(_load_v16i8(comp_mask))), _swap_v32i8(_v)) )
+#endif
 
 /* p-fetch (diagonal matching for alignment refinement) */
 #  define _fwap_v16i8(_v, _l)	( (_v) )
@@ -884,15 +905,18 @@ void fill_fetch_seq_a(
 	if(pos < GABA_EOU) {
 		debug("reverse fetch a: pos(%p), len(%lu)", pos, len);
 		/* reverse fetch: 2 * alen - (2 * alen - pos) + (len - 32) */
-		// v32i8_t ach = _loadu_v32i8(pos + (len - BLK));				/* this may touch the space before the array */
-		// _storeu_v32i8(_rd_bufa(self, _W, len), _rvaq_v32i8(ach));		/* reverse */
-		v32i8_t ach = _loadu_v32i8(pos);								/* this will not touch the space before the array, but will touch at most 31bytes after the array */
-		_storeu_v32i8(_rd_bufa(self, _W, BLK), _rvaq_v32i8(ach));		/* reverse */
+		v32i8_t ach = _loadu_v32i8(pos + (len - BLK));					/* this may touch the space before the array */
+		_storeu_v32i8(_rd_bufa(self, _W, len), _rvaq_v32i8(ach));		/* reverse */
+		// v32i8_t ach = _loadu_v32i8(pos);								/* this will not touch the space before the array, but will touch at most 31bytes after the array */
+		// _storeu_v32i8(_rd_bufa(self, _W, BLK), _rvaq_v32i8(ach));	/* reverse; will not invade any buf */
 	} else {
-		debug("forward fetch a: pos(%p), len(%lu)", pos, len);
+		debug("forward fetch a: pos(%p), len(%lu), p(%p)", pos, len, _rev(pos + (len - 1)));
 		/* forward fetch: 2 * alen - pos */
 		v32i8_t ach = _loadu_v32i8(_rev(pos + (len - 1)));
 		_storeu_v32i8(_rd_bufa(self, _W, len), _fwaq_v32i8(ach));		/* complement */
+		// v32i8_t ach = _loadu_v32i8(_rev(pos + (len - 1)));
+		// _print_v32i8(ach); _print_v32i8(_fwaq_v32i8(ach));
+		// _storeu_v32i8(_rd_bufa(self, _W, len), _fwaq_v32i8(ach));	/* complement; will invade bufa[BLK..BLK+_W] */
 	}
 	return;
 }
@@ -914,18 +938,23 @@ void fill_fetch_seq_a_n(
 		pos += len; ofs += len;		/* fetch in reverse direction */
 		while(len > 0) {
 			uint64_t l = MIN2(len, 16);
-			v16i8_t ach = _loadu_v16i8(pos - l);
-			_storeu_v16i8(_rd_bufa(self, ofs - l, l), _rvaq_v16i8(ach, l));	/* reverse */
+			v16i8_t ach = _loadu_v16i8(pos - 16);
+			_storeu_v16i8(_rd_bufa(self, ofs - l, l), _rvaq_v16i8(ach));/* reverse */
+			// v16i8_t ach = _loadu_v16i8(pos - l);						/* fetch in the reverse order */
+			// _storeu_v16i8(_rd_bufa(self, ofs - l, l), _rvaq_v16i8(ach, l));	/* reverse; this will invade bufa[BLK..BLK+_W] */
 			len -= l; pos -= l; ofs -= l;
 		}
 	} else {
-		debug("forward fetch a: pos(%p), len(%lu)", pos, len);
+		debug("forward fetch a: pos(%p), len(%lu), p(%p)", pos, len, _rev(pos + len - 1));
 		/* forward fetch: 2 * alen - pos */
 		pos += len - 1; ofs += len;
 		while(len > 0) {
 			uint64_t l = MIN2(len, 16);
 			v16i8_t ach = _loadu_v16i8(_rev(pos));
-			_storeu_v16i8(_rd_bufa(self, ofs - l, l), _fwaq_v16i8(ach, l));	/* complement */
+			_storeu_v16i8(_rd_bufa(self, ofs - l, l), _fwaq_v16i8(ach));/* complement */
+			// v16i8_t ach = _loadu_v16i8(_rev(pos));					/* fetch in the forward order */
+			// _print_v16i8(ach); _print_v16i8(_fwaq_v16i8(ach, l));
+			// _storeu_v16i8(_rd_bufa(self, ofs - l, l), _fwaq_v16i8(ach, l));	/* complement; will invade bufa[BLK..BLK+_W] */
 			len -= l; pos -= l; ofs -= l;
 		}
 	}
@@ -945,12 +974,15 @@ void fill_fetch_seq_b(
 		debug("forward fetch b: pos(%p), len(%lu)", pos, len);
 		/* forward fetch: pos */
 		v32i8_t bch = _loadu_v32i8(pos);
-		_storeu_v32i8(_rd_bufb(self, _W, len), _fwbq_v32i8(bch));		/* forward */
+		_storeu_v32i8(_rd_bufb(self, _W, len), _fwbq_v32i8(bch));		/* forward; will not invade any buf */
 	} else {
-		debug("reverse fetch b: pos(%p), len(%lu)", pos, len);
+		debug("reverse fetch b: pos(%p), len(%lu), p(%p)", pos, len, _rev(pos + len - 1));
 		/* reverse fetch: 2 * blen - pos + (len - 32) */
-		v32i8_t bch = _loadu_v32i8(_rev(pos + (len - 1)));
-		_storeu_v32i8(_rd_bufb(self, _W, BLK), _rvbq_v32i8(bch));		/* reverse complement */
+		v32i8_t bch = _loadu_v32i8(_rev(pos) - (BLK - 1));
+		_storeu_v32i8(_rd_bufb(self, _W, len), _rvbq_v32i8(bch));		/* reverse complement */
+		// v32i8_t bch = _loadu_v32i8(_rev(pos + (len - 1)));
+		// _print_v32i8(bch); _print_v32i8(_rvbq_v32i8(bch));
+		// _storeu_v32i8(_rd_bufb(self, _W + len - BLK, BLK), _rvbq_v32i8(bch));	/* reverse complement; not to use swapn for v32i8_t, will invade bufb[0.._W] and bufa */
 	}
 	return;
 }
@@ -970,18 +1002,21 @@ void fill_fetch_seq_b_n(
 		debug("forward fetch b: pos(%p), len(%lu)", pos, len);
 		/* forward fetch: pos */
 		while(len > 0) {
-			uint64_t l = MIN2(len, 16);					/* advance length */
+			uint64_t l = MIN2(len, 16);									/* advance length */
 			v16i8_t bch = _loadu_v16i8(pos);
-			_storeu_v16i8(_rd_bufb(self, ofs, l), _fwbq_v16i8(bch, l));
+			_storeu_v16i8(_rd_bufb(self, ofs, l), _fwbq_v16i8(bch));	/* FIXME: will invade a region after bufb, will break arlim..bid */
 			len -= l; pos += l; ofs += l;
 		}
 	} else {
-		debug("reverse fetch b: pos(%p), len(%lu)", pos, len);
+		debug("reverse fetch b: pos(%p), len(%lu), p(%p)", pos, len, _rev(pos + len - 1));
 		/* reverse fetch: 2 * blen - pos + (len - 16) */
 		while(len > 0) {
-			uint64_t l = MIN2(len, 16);					/* advance length */
-			v16i8_t bch = _loadu_v16i8(_rev(pos + (l - 1)));
-			_storeu_v16i8(_rd_bufb(self, ofs, l), _rvbq_v16i8(bch, l));
+			uint64_t l = MIN2(len, 16);									/* advance length */
+			v16i8_t bch = _loadu_v16i8(_rev(pos + (16 - 1)));
+			_storeu_v16i8(_rd_bufb(self, ofs, l), _rvbq_v16i8(bch));
+			// v16i8_t bch = _loadu_v16i8(_rev(pos + (l - 1)));			/* reverse fetch */
+			// _print_v16i8(bch); _print_v16i8(_rvbq_v16i8(bch, l));
+			// _storeu_v16i8(_rd_bufb(self, ofs, l), _rvbq_v16i8(bch, l));	/* FIXME: will invade a region after bufb */
 			len -= l; pos += l; ofs += l;
 		}
 	}
@@ -1002,13 +1037,13 @@ void fill_fetch_core(
 {
 	/* fetch seq a */
 	nvec_t a = _loadu_n(_rd_bufa(self, acnt, _W));		/* unaligned */
-	fill_fetch_seq_a(self, self->w.r.atptr - self->w.r.arem, alen);
+	fill_fetch_seq_a(self, self->w.r.atptr - self->w.r.arem, alen);		/* will not invade bufb */
 	_store_n(_rd_bufa(self, 0, _W), a);					/* always aligned */
 
 	/* fetch seq b */
 	nvec_t b = _loadu_n(_rd_bufb(self, bcnt, _W));		/* unaligned */
 	_store_n(_rd_bufb(self, 0, _W), b);					/* always aligned */
-	fill_fetch_seq_b(self, self->w.r.btptr - self->w.r.brem, blen);
+	fill_fetch_seq_b(self, self->w.r.btptr - self->w.r.brem, blen);		/* will invade bufa */
 
 	_print_n(a); _print_n(b);
 	return;
@@ -1116,6 +1151,7 @@ void fill_restore_fetch(
 		_print_n(ach);
 		_storeu_n(_rd_bufa(self, 0, _lo32(ofs)), ach);				/* invades backward */
 	}
+	_print_n(_loadu_n(_rd_bufa(self, 0, _W)));
 
 	/* fetch seq b */
 	if(_hi32(ofs) > 0) {
@@ -1127,6 +1163,7 @@ void fill_restore_fetch(
 		_storeu_n(_rd_bufb(self, 0, _hi32(ofs)), bch);				/* aligned store */
 	}
 	fill_fetch_seq_b_n(self, _hi32(ofs), tail->btptr - _hi32(cridx), _hi32(len));
+	_print_n(_loadu_n(_rd_bufb(self, 0, _W)));
 	return;
 }
 
