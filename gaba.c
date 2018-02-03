@@ -3828,10 +3828,10 @@ static struct gaba_params_s const *unittest_default_params[8] = {
 	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(1, 2, 0, 1)),
 	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(2, 4, 0, 3)),
 	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(2, 6, 0, 3)),
-	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(2, 2, 0, 2)),
+	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(4, 5, 0, 10)),
 	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(6, 8, 0, 8)),
 	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(5, 3, 0, 10)),
-	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(4, 10, 0, 6))
+	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(5, 7, 0, 5))
 };
 #elif MODEL == AFFINE
 static struct gaba_params_s const *unittest_default_params[8] = {
@@ -3840,9 +3840,9 @@ static struct gaba_params_s const *unittest_default_params[8] = {
 	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(1, 3, 2, 1)),
 	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(2, 6, 3, 1)),
 	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(4, 5, 8, 2)),
-	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(4, 6, 5, 3)),
+	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(6, 8, 5, 3)),
 	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(5, 3, 8, 2)),
-	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(6, 8, 10, 2))
+	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(5, 7, 10, 2))
 };
 #else
 static struct gaba_params_s const *unittest_default_params[8] = {
@@ -3850,10 +3850,10 @@ static struct gaba_params_s const *unittest_default_params[8] = {
 	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(2, 4, 5, 1), .gfa = 2, .gfb = 2),
 	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(2, 3, 5, 1), .gfa = 4, .gfb = 2),
 	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(2, 3, 5, 1), .gfa = 2, .gfb = 4),
-	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(4, 3, 3, 2), .gfa = 3, .gfb = 3),
-	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(4, 3, 5, 3), .gfa = 4, .gfb = 4),
+	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(4, 5, 8, 2), .gfa = 3, .gfb = 3),
+	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(6, 8, 5, 3), .gfa = 4, .gfb = 4),
 	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(5, 3, 5, 2), .gfa = 3, .gfb = 3),
-	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(6, 7, 10, 2), .gfa = 4, .gfb = 4)
+	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(5, 7, 10, 2), .gfa = 4, .gfb = 4)
 };
 #endif
 static
@@ -5216,7 +5216,10 @@ unittest( .name = "base" )
 				"GCATTATACAGGGATGGCCAAGTTGACACGGAGTGCTGGGCGCATTTTCGTAAACATTTACCTAGATTACCATGCTCGAATCAGATTAAGC",
 				"TAGTGGTTG"
 			}
-		}
+		},
+		{ .a = { "GGCATCAGGTTGCGACC", "AACGACAGATCACTGGTGTAACTTAAC", "G", "AGGCATTACTTGTAG" }, .b = { "GGCATCAGCTTGCGACC", "AAGCGCAGGATCACTGGTGTGGAAACTGTT", "G", "AGGCTGTTTACTCGTAG" } },
+		{ .a = { "GTAGT", "TCAATATTAGACGATGGCTGCTTTCCTCAG", "TTCATCTGC", "GTAGGGAAGGCCCCTTAATGCGCGGATCGATATT" }, .b = { "GTAGT", "TCCATATTAGACGAAGGCTGCGGTCTCG", "TTATCCTGC", "GCAGGAGAGGCCCCTTAATGCGTGGATCGAATATG" } },
+		{ .a = { "ACAAAAAGATCGGTC", "ATGGGACGTTGACAGCGGGGTGATCGGTCTTGGCAA", "GTACCATGTA", "CGGAATACCGCGCAATCCTTTGTAAATGTAGAGACTTCAATCTACTTTAGGTC" }, .b = { "ACTAAAAGTCGGAC", "ATAGACGTTCACAGCGGTGATCCGGACTTGGCAA", "GTACCATGTA", "CGGAGTACCACGCACTCCTTTATAAAGTAGAGACTTAAATCCTACTTGAATGGC" } },
 		/* fails for affine-16 due to the bandwidth shotage */
 #if 0
 		{
