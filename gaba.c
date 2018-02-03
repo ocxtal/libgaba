@@ -46,7 +46,7 @@
  *   affine:   g(k) =     gi + ge * k          where gi > 0,      ge > 0
  *   combined: g(k) = min(gi + ge * k, gf * k) where gi > 0, gf > ge > 0
  */
-#define LINEAR 						0
+#define LINEAR						0
 #define AFFINE						1
 #define COMBINED					2
 
@@ -55,7 +55,7 @@
 #    error "MODEL must be LINEAR (1), AFFINE (2), or COMBINED (3)."
 #  endif
 #else
-#  define MODEL 					AFFINE
+#  define MODEL					AFFINE
 #endif
 
 #if MODEL == LINEAR
@@ -162,14 +162,14 @@
 
 
 /* static assertion macros */
-#define _sa_cat_intl(x, y) 		x##y
+#define _sa_cat_intl(x, y)		x##y
 #define _sa_cat(x, y)			_sa_cat_intl(x, y)
 #define _static_assert(expr)	typedef char _sa_cat(_st, __LINE__)[(expr) ? 1 : -1]
 
 
 /* internal constants */
 #define BLK_BASE					( 5 )
-#define BLK 						( 0x01<<BLK_BASE )
+#define BLK						( 0x01<<BLK_BASE )
 
 #ifdef DEBUG_MEM
 #  define MIN_BULK_BLOCKS			( 0 )
@@ -299,14 +299,14 @@ _static_assert(sizeof(struct gaba_char_vec_s) == _W);
  */
 struct gaba_block_s {
 	struct gaba_mask_pair_s mask[BLK];	/** (256 / 512) traceback capability flag vectors (set if transition to the ajdacent cell is possible) */
-	struct gaba_diff_vec_s diff; 		/** (64, 128, 256) diff variables of the last vector */
+	struct gaba_diff_vec_s diff;		/** (64, 128, 256) diff variables of the last vector */
 	int8_t acc, xstat;					/** (2) accumulator, and xdrop status (term detected when xstat < 0) */
 	int8_t acnt, bcnt;					/** (2) forwarded lengths */
 	uint32_t dir_mask;					/** (4) extension direction bit array */
 	uint64_t max_mask;					/** (8) lanewise update mask (set if the lane contains the current max) */
 };
 struct gaba_phantom_s {
-	struct gaba_diff_vec_s diff; 		/** (64, 128, 256) diff variables of the last (just before the head) vector */
+	struct gaba_diff_vec_s diff;		/** (64, 128, 256) diff variables of the last (just before the head) vector */
 	int8_t acc, xstat;					/** (2) accumulator, and xdrop status (term detected when xstat < 0) */
 	int8_t acnt, bcnt;					/** (4) prefetched sequence lengths (only effective at the root, otherwise zero) */
 	uint32_t reserved;					/** (4) overlaps with dir_mask */
@@ -329,11 +329,11 @@ struct gaba_merge_s {
 	uint64_t reserved1;					/** (8) keep aligned to 16byte boundary */
 	struct gaba_block_s const *blk[1];	/** (8) addressed by [tail_idx[vec][q]] */
 	int8_t tidx[2][_W];					/** (32, 64, 128) lanewise index array */
-	struct gaba_diff_vec_s diff; 		/** (64, 128, 256) diff variables of the last (just before the head) vector */
+	struct gaba_diff_vec_s diff;		/** (64, 128, 256) diff variables of the last (just before the head) vector */
 	int8_t acc, xstat;					/** (2) acc and xstat are reserved for block_s */
 	uint8_t reserved2[13], qofs[1];		/** (14) displacement of vectors in the q-direction */
 };
-#define MERGE_TAIL_OFFSET 			( BLK * sizeof(struct gaba_mask_pair_s) - 2 * _W - 2 * sizeof(void *) )
+#define MERGE_TAIL_OFFSET			( BLK * sizeof(struct gaba_mask_pair_s) - 2 * _W - 2 * sizeof(void *) )
 #define _merge(x)					( (struct gaba_merge_s *)((uint8_t *)(x) + MERGE_TAIL_OFFSET) )
 _static_assert(sizeof(struct gaba_merge_s) % 16 == 0);
 _static_assert(sizeof(struct gaba_merge_s) + MERGE_TAIL_OFFSET == sizeof(struct gaba_block_s));
@@ -650,13 +650,13 @@ _static_assert((int32_t)TERM<<8 == (int32_t)GABA_TERM);
 /**
  * max and min
  */
-#define MAX2(x,y) 		( (x) > (y) ? (x) : (y) )
-#define MAX3(x,y,z) 	( MAX2(x, MAX2(y, z)) )
-#define MAX4(w,x,y,z) 	( MAX2(MAX2(w, x), MAX2(y, z)) )
+#define MAX2(x,y)		( (x) > (y) ? (x) : (y) )
+#define MAX3(x,y,z)		( MAX2(x, MAX2(y, z)) )
+#define MAX4(w,x,y,z)	( MAX2(MAX2(w, x), MAX2(y, z)) )
 
-#define MIN2(x,y) 		( (x) < (y) ? (x) : (y) )
-#define MIN3(x,y,z) 	( MIN2(x, MIN2(y, z)) )
-#define MIN4(w,x,y,z) 	( MIN2(MIN2(w, x), MIN2(y, z)) )
+#define MIN2(x,y)		( (x) < (y) ? (x) : (y) )
+#define MIN3(x,y,z)		( MIN2(x, MIN2(y, z)) )
+#define MIN4(w,x,y,z)	( MIN2(MIN2(w, x), MIN2(y, z)) )
 
 
 /**
@@ -3328,7 +3328,7 @@ void gaba_init_restore_default(
 		/* affine gap penalty */
 		p->gi = 1; p->ge = 1; p->gfa = 0; p->gfb = 0;
 	}
-	restore(xdrop, 			50);
+	restore(xdrop,			50);
 	restore(filter_thresh,	0);					/* disable filter */
 	restore(head_margin,	0);
 	restore(tail_margin,	0);
