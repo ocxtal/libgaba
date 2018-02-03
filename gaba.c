@@ -816,8 +816,8 @@ enum BASES { A = 0x01, C = 0x02, G = 0x04, T = 0x08, N = 0x00 };
 #if BIT == 2
 /* 2bit encoding */
 static uint8_t const comp_mask_a[16] __attribute__(( aligned(16) )) = {
-	0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03,
-	0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03
+	0x03, 0x02, 0x01, 0x00, 0x04, 0x04, 0x04, 0x04,
+	0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04
 };
 static uint8_t const shift_mask_b[16] __attribute__(( aligned(16) )) = {
 	0x00, 0x04, 0x08, 0x0c, 0x02, 0x02, 0x02, 0x02,
@@ -829,8 +829,8 @@ static uint8_t const compshift_mask_b[16] __attribute__(( aligned(16) )) = {
 };
 /* q-fetch (anti-diagonal matching for vector calculation) */
 
-#  define _fwaq_v16i8(_v)		( _xor_v16i8((_load_v16i8(comp_mask_a)), (_v)) )
-#  define _fwaq_v32i8(_v)		( _xor_v32i8((_from_v16i8_v32i8(_load_v16i8(comp_mask_a))), (_v)) )
+#  define _fwaq_v16i8(_v)		( _shuf_v16i8((_load_v16i8(comp_mask_a)), (_v)) )
+#  define _fwaq_v32i8(_v)		( _shuf_v32i8((_from_v16i8_v32i8(_load_v16i8(comp_mask_a))), (_v)) )
 #  define _rvaq_v16i8(_v)		( _swap_v16i8((_v)) )
 #  define _rvaq_v32i8(_v)		( _swap_v32i8((_v)) )
 #  define _fwbq_v16i8(_v)		( _shuf_v16i8((_load_v16i8(shift_mask_b)), (_v)) )
@@ -839,8 +839,8 @@ static uint8_t const compshift_mask_b[16] __attribute__(( aligned(16) )) = {
 #  define _rvbq_v32i8(_v)		( _shuf_v32i8((_from_v16i8_v32i8(_load_v16i8(compshift_mask_b))), _swap_v32i8(_v)) )
 
 #if 0
-#  define _fwaq_v16i8(_v, _l)	( _xor_v16i8((_load_v16i8(comp_mask_a)), (_v)) )	/* _l is ignored */
-#  define _fwaq_v32i8(_v)		( _xor_v32i8((_from_v16i8_v32i8(_load_v16i8(comp_mask_a))), (_v)) )
+#  define _fwaq_v16i8(_v, _l)	( _shuf_v16i8((_load_v16i8(comp_mask_a)), (_v)) )	/* _l is ignored */
+#  define _fwaq_v32i8(_v)		( _shuf_v32i8((_from_v16i8_v32i8(_load_v16i8(comp_mask_a))), (_v)) )
 #  define _rvaq_v16i8(_v, _l)	( _swapn_v16i8((_v), (_l)) )
 #  define _rvaq_v32i8(_v)		( _swap_v32i8((_v)) )
 #  define _fwbq_v16i8(_v, _l)	( _shuf_v16i8((_load_v16i8(shift_mask_b)), (_v)) )	/* _l is ignored */
@@ -851,7 +851,7 @@ static uint8_t const compshift_mask_b[16] __attribute__(( aligned(16) )) = {
 
 /* p-fetch (diagonal matching for alignment refinement) */
 #  define _fwap_v16i8(_v, _l)	( (_v) )
-#  define _rvap_v16i8(_v, _l)	( _xor_v16i8((_load_v16i8(comp_mask_a)), _swapn_v16i8((_v), (_l))) )
+#  define _rvap_v16i8(_v, _l)	( _shuf_v16i8((_load_v16i8(comp_mask_a)), _swapn_v16i8((_v), (_l))) )
 #  define _fwbp_v16i8(_v, _l)	( _shuf_v16i8((_load_v16i8(shift_mask_b)), (_v)) )
 #  define _rvbp_v16i8(_v, _l)	( _shuf_v16i8((_load_v16i8(compshift_mask_b)), _swapn_v16i8((_v), (_l))) )
 
