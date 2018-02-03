@@ -3343,7 +3343,10 @@ static _force_inline
 int64_t gaba_init_check_score(
 	struct gaba_params_s const *p)
 {
-	if(_max_match(p) > 7) { return(-1); }
+	if(_max_match(p) <= 0) { return(-1); }
+	if(_max_match(p) > 6) { return(-1); }
+	if(_min_match(p) >= 0) { return(-1); }
+	if(_min_match(p) < -7) { return(-1); }
 	if(_min_match(p) < -2 * (p->gi + p->ge)) { return(-1); }
 	if(p->gfa != 0 && p->gfb != 0 && _min_match(p) < -1 * (p->gfa + p->gfb)) { return(-1); }
 	if(p->ge <= 0) { return(-1); }
