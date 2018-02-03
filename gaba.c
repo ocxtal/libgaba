@@ -3828,9 +3828,9 @@ static struct gaba_params_s const *unittest_default_params[8] = {
 	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(1, 2, 0, 1)),
 	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(2, 4, 0, 3)),
 	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(2, 6, 0, 3)),
-	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(4, 5, 0, 10)),
-	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(6, 7, 0, 8)),
-	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(5, 3, 0, 10)),
+	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(4, 5, 0, 8)),
+	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(4, 7, 0, 8)),
+	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(5, 3, 0, 8)),
 	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(5, 7, 0, 5))
 };
 #elif MODEL == AFFINE
