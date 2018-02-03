@@ -674,7 +674,7 @@ void *gaba_malloc(
 	size = _roundup(size, MEM_ALIGN_SIZE);
 	if(posix_memalign(&ptr, MEM_ALIGN_SIZE, size + 2 * MEM_MARGIN_SIZE) != 0) {
 		debug("posix_memalign failed");
-		return(NULL);
+		trap(); return(NULL);
 	}
 	debug("posix_memalign(%p), size(%lu)", ptr, size);
 	return(ptr + MEM_MARGIN_SIZE);
@@ -776,6 +776,7 @@ struct gaba_dir_s {
  * @brief calculate scores
  */
 #define _max_match(_p)				( _hmax_v16i8(_loadu_v16i8((_p)->score_matrix)) )
+#define _min_match(_p)				( -_hmax_v16i8(_sub_v16i8(_zero_v16i8(), _loadu_v16i8((_p)->score_matrix))) )
 #if MODEL == LINEAR
 #define _gap_h(_p, _l)				( -1 * ((_p)->gi + (_p)->ge) * (_l) )
 #define _gap_v(_p, _l)				( -1 * ((_p)->gi + (_p)->ge) * (_l) )
@@ -2690,9 +2691,9 @@ void trace_push_segment(
 	// v2i32_t mask = _eq_v2i32(gidx, _zero_v2i32());/* add bridged length if the traceback pointer has reached the head */
 	// v2i32_t pos = _add_v2i32(_and_v2i32(mask, ofs), gidx), len = _sub_v2i32(sgidx, gidx);
 	v2i32_t pos = _add_v2i32(ofs, gidx), len = _sub_v2i32(sgidx, gidx);		/* add bridged length, is this correct? */
+	_store_v2i32(&self->w.l.a.seg->aid, id);
 	_store_v2i32(&self->w.l.a.seg->apos, pos);
 	_store_v2i32(&self->w.l.a.seg->alen, len);
-	_store_v2i32(&self->w.l.a.seg->aid, id);
 	self->w.l.a.seg->ppos = ppos;
 
 	/* update rsgidx */
@@ -3055,7 +3056,7 @@ void trace_init(
 	self->w.l.btail = tail;
 
 	/* malloc container */
-	uint64_t sn = tail->f.ascnt + tail->f.bscnt, pn = (plen + 31) / 32 + 2;
+	uint64_t sn = tail->f.ascnt + tail->f.bscnt + 2, pn = (plen + 31) / 32 + 2;
 	uint64_t size = (
 		  sizeof(struct gaba_alignment_s)				/* base */
 		+ sizeof(uint32_t) * _roundup(pn, 8)			/* path array and its margin */
@@ -3343,6 +3344,8 @@ int64_t gaba_init_check_score(
 	struct gaba_params_s const *p)
 {
 	if(_max_match(p) > 7) { return(-1); }
+	if(_min_match(p) < -2 * (p->gi + p->ge)) { return(-1); }
+	if(p->gfa != 0 && p->gfb != 0 && _min_match(p) < -1 * (p->gfa + p->gfb)) { return(-1); }
 	if(p->ge <= 0) { return(-1); }
 	if(p->gi < 0) { return(-1); }
 	if(p->gfa < 0 || (p->gfa != 0 && p->gfa <= p->ge)) { return(-1); }
@@ -3585,6 +3588,7 @@ gaba_t *_export(gaba_init)(
 		/* create new context */
 		gaba_init_restore_default(&pi);			/* restore defaults */
 		if(gaba_init_check_score(&pi) != 0) {	/* check the scores are applicable */
+			debug("unsupported score: (%d, %d, %d, %d, %d, %d)", p->score_matrix[0], p->score_matrix[1], p->gi, p->ge, p->gfa, p->gfb);
 			return(NULL);						/* cannot be instanciated with the score param */
 		}
 
@@ -3803,41 +3807,75 @@ void _export(gaba_dp_clean)(
 #include <unistd.h>
 
 /**
+ * @struct unittest_context_s
+ */
+struct unittest_context_s {
+	struct gaba_params_s const *params;
+	struct gaba_context_s *ctx;
+	struct gaba_dp_context_s *dp;
+};
+
+/**
  * @fn unittest_build_context
  * @brief build context for unittest
  */
 #if MODEL == LINEAR
-static struct gaba_params_s const *unittest_default_params = GABA_PARAMS(
-	.xdrop = 100,
-	GABA_SCORE_SIMPLE(2, 3, 0, 6)
-);
+static struct gaba_params_s const *unittest_default_params[8] = {
+	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(2, 3, 0, 6)),
+	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(1, 2, 0, 1)),
+	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(2, 4, 0, 3)),
+	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(2, 6, 0, 3)),
+	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(2, 2, 0, 2)),
+	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(6, 8, 0, 8)),
+	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(5, 3, 0, 10)),
+	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(4, 10, 0, 6))
+};
 #elif MODEL == AFFINE
-static struct gaba_params_s const *unittest_default_params = GABA_PARAMS(
-	.xdrop = 100,
-	GABA_SCORE_SIMPLE(2, 3, 5, 1)
-);
+static struct gaba_params_s const *unittest_default_params[8] = {
+	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(2, 3, 5, 1)),
+	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(1, 2, 2, 1)),
+	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(1, 3, 2, 1)),
+	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(2, 6, 3, 1)),
+	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(4, 5, 8, 2)),
+	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(4, 6, 5, 3)),
+	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(5, 3, 8, 2)),
+	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(6, 8, 10, 2))
+};
 #else
-static struct gaba_params_s const *unittest_default_params = GABA_PARAMS(
-	.xdrop = 100,
-	GABA_SCORE_SIMPLE(2, 3, 5, 1),
-	.gfa = 2, .gfb = 2
-);
+static struct gaba_params_s const *unittest_default_params[8] = {
+	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(2, 3, 5, 1), .gfa = 2, .gfb = 2),
+	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(2, 4, 5, 1), .gfa = 2, .gfb = 2),
+	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(2, 3, 5, 1), .gfa = 4, .gfb = 2),
+	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(2, 3, 5, 1), .gfa = 2, .gfb = 4),
+	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(4, 3, 3, 2), .gfa = 3, .gfb = 3),
+	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(4, 3, 5, 3), .gfa = 4, .gfb = 4),
+	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(5, 3, 5, 2), .gfa = 3, .gfb = 3),
+	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(6, 7, 10, 2), .gfa = 4, .gfb = 4)
+};
 #endif
 static
 void *unittest_build_context(void *params)
 {
 	/* build context */
-	gaba_t *ctx = _export(gaba_init)(unittest_default_params);
-	return((void *)ctx);
+	struct unittest_context_s *c = malloc(sizeof(struct unittest_context_s));
+	c->params = unittest_default_params[rand() % 8];
+	c->ctx = _export(gaba_init)(c->params);
+	c->dp = _export(gaba_dp_init)(c->ctx);
+
+	if(c->ctx == NULL) { trap(); }
+	if(c->dp == NULL) { trap(); }
+	return((void *)c);
 }
 
 /**
  * @fn unittest_clean_context
  */
 static
-void unittest_clean_context(void *ctx)
+void unittest_clean_context(void *gctx)
 {
-	_export(gaba_clean)((struct gaba_context_s *)ctx);
+	struct unittest_context_s *c = (struct unittest_context_s *)gctx;
+	_export(gaba_dp_clean)(c->dp);
+	_export(gaba_clean)(c->ctx);
 	return;
 }
 
@@ -3849,24 +3887,15 @@ unittest_config(
 );
 
 /**
- * check if gaba_init returns a valid pointer to a context
+ * check if gaba_init and gaba_dp_init returned valid pointers to context
  */
 unittest()
 {
-	struct gaba_context_s const *c = (struct gaba_context_s const *)gctx;
+	struct unittest_context_s *c = (struct unittest_context_s *)gctx;
 	assert(c != NULL, "%p", c);
-}
-
-/**
- * check if gaba_dp_init returns a vaild pointer to a dp context
- */
-unittest()
-{
-	struct gaba_context_s const *c = (struct gaba_context_s const *)gctx;
-	struct gaba_dp_context_s *d = _export(gaba_dp_init)(c);
-
-	assert(d != NULL, "%p", d);
-	_export(gaba_dp_clean)(d);
+	assert(c != NULL, "%p", c->params);
+	assert(c != NULL, "%p", c->ctx);
+	assert(c != NULL, "%p", c->dp);
 }
 
 /* print_cigar test */
@@ -4369,7 +4398,7 @@ struct unittest_naive_result_s unittest_naive(
 #if MODEL == LINEAR
 unittest( .name = "naive" )
 {
-	struct gaba_params_s const *p = unittest_default_params;
+	struct gaba_params_s const *p = unittest_default_params[0];
 	struct unittest_naive_result_s n;
 
 	/* all matches */
@@ -4399,7 +4428,7 @@ unittest( .name = "naive" )
 #elif MODEL == AFFINE
 unittest( .name = "naive" )
 {
-	struct gaba_params_s const *p = unittest_default_params;
+	struct gaba_params_s const *p = unittest_default_params[0];
 	struct unittest_naive_result_s n;
 
 	/* all matches */
@@ -4434,7 +4463,7 @@ unittest( .name = "naive" )
 #else /* COMBINED */
 unittest( .name = "naive" )
 {
-	struct gaba_params_s const *p = unittest_default_params;
+	struct gaba_params_s const *p = unittest_default_params[0];
 	struct unittest_naive_result_s n;
 
 	/* all matches */
@@ -4847,12 +4876,16 @@ char *string_pair_diff(
 static
 void unittest_test_pair(
 	UNITTEST_ARG_DECL,
+	struct gaba_params_s const *params,
 	struct gaba_dp_context_s *dp,
 	struct unittest_seq_pair_s const *pair,
 	uint64_t dir)
 {
-	#define FMT			"[%s:%d:%s] { .a = { \"%s\", \"%s\", \"%s\", \"%s\", \"%s\", \"%s\" }, .b = { \"%s\", \"%s\", \"%s\", \"%s\", \"%s\", \"%s\" } }"
-	#define ARG			MODEL_STR, _W, dir == 0 ? "fw" : "rv", pair->a[0], pair->a[1], pair->a[2], pair->a[3], pair->a[4], pair->a[5], pair->b[0], pair->b[1], pair->b[2], pair->b[3], pair->b[4], pair->b[5]
+	#define FMT			"[%s:%d:%s] (%d, %d, %d, %d, %d, %d) { .a = { \"%s\", \"%s\", \"%s\", \"%s\", \"%s\", \"%s\" }, .b = { \"%s\", \"%s\", \"%s\", \"%s\", \"%s\", \"%s\" } }"
+	#define ARG			MODEL_STR, _W, dir == 0 ? "fw" : "rv", \
+		params->score_matrix[0], params->score_matrix[1], params->gi, params->ge, params->gfa, params->gfb, \
+		pair->a[0], pair->a[1], pair->a[2], pair->a[3], pair->a[4], pair->a[5], \
+		pair->b[0], pair->b[1], pair->b[2], pair->b[3], pair->b[4], pair->b[5]
 
 	/* prepare sequences */
 	char *a = unittest_cat_seq(pair->a);
@@ -4866,7 +4899,7 @@ void unittest_test_pair(
 	);
 
 	/* test naive implementations */
-	struct unittest_naive_result_s nr = unittest_naive(unittest_default_params, a, b, asec, bsec);
+	struct unittest_naive_result_s nr = unittest_naive(params, a, b, asec, bsec);
 	assert(nr.score >= 0);
 	assert(nr.path_length <= strlen(a) + strlen(b));
 	assert(nr.path != NULL);
@@ -4893,7 +4926,7 @@ void unittest_test_pair(
 
 	assert(r != NULL);
 	assert(r->plen == nr.path_length, FMT ", m->plen(%lu), nr.path_length(%u)", ARG, r->plen, nr.path_length);
-	assert(unittest_check_path(r, nr.path), "\n%s", ARG, format_string_pair_diff(unittest_decode_path(r), nr.path));
+	assert(unittest_check_path(r, nr.path), FMT "\n%s", ARG, format_string_pair_diff(unittest_decode_path(r), nr.path));
 	assert(unittest_check_section(r, nr.sec, nr.scnt), FMT, ARG);
 
 	/* calc score */
@@ -4901,6 +4934,7 @@ void unittest_test_pair(
 		struct gaba_score_s const *c = _export(gaba_dp_calc_score)(dp,
 			r->path, &r->seg[i], &s->a[r->seg[i].aid>>1], &s->b[r->seg[i].bid>>1]
 		);
+		(void)c;
 	}
 
 	/* cleanup everything */
@@ -5160,6 +5194,25 @@ unittest( .name = "base" )
 		{
 			.a = { "GTCCTGTTACACCCCAGGCGACGGGAGT", "CGGCATAGGTTTTACACCGTTCAATGGTCCTGAGT", "CTGATCTGCATTG" },
 			.b = { "GTCCTGTTACACCCCCAGGCGACCGGGAGT", "CGTCATAGCGTTTTACACCGTTCAATGTCTCTTAGGT", "CTGTTTCATG" }
+		},
+		/* debugging combined */
+		{
+			.a = {
+				"CTCACTGCCACACACGGTTCG",
+				"ACCCACTTTAGCATATCC",
+				"GCCTTTCG",
+				"GCTTGAAGGTCCAAGATGTATTTCAGATTGGGTCCGGCAAAGCAGACCGAGGTCTTTTTGCCACGCTAGTATCGTTGACACTGAACATATCGAGTGTGTGCTCTCAGTCTAGGGGGAGCACTGCCCAATTGCGTAAAGTCGTTAGCTGAAGCTCTAGTCGGTTATTATCAATTTACATTATGGTTCTCAATGAGGTCTGTTGGGCGACCTGCCAAACTGCACTAACTCACATTTGACGCTCTATTATATCCTTATTGGAGTCGGAAGCGAATTAGTAGTATCTGCTCTCGGCTATTAGAGGCCCCAAGGAGCCCAGACGGTATGAGCAAGGGTTAATAGCAATCGTAGAGAAGTGGGAGGGACCTCCTCAAGATTGGTCTCCTTCCCTCTCTTGATTGGCGGTGGGCAGGTTTGTAAATCACCTTCGTTAACTTACCCCTTCTGTGTTGGCGTGGTTAGTCGAACACGCGGATCTTTGGCATAACGT",
+				"GCATTATACAGGTATGCGCAAAGATGACATGGAGGTGCTTGGGCGCTATCATCGTAAACATTTACCTAGTTACCCTGCTCGAATGATTAC",
+				"TAGTGTTG"
+			},
+			.b = {
+				"GTGTCGCTGCCCTCACACCGCTCG",
+				"ACCACTTTAGCATTCC",
+				"GCCTTTGG",
+				"GCTTGAAGGTCCAAGCTGTATTTCAGATTGGGTCGGCTAAGCAGACTGAGGTCTATTTGCACACGCTAGTATCGGTGACACTTCACATATTCGAGTGTGCGCTCTCAAGTCTAGGGGAGCACGCCGACATTGCGTAAAGTCAGTTAGATAGAAGCTCTAAGTCGGTAATTATTAAGTATCATTATGGGTCTCCAGAGGTCTGTTGGGGACCTGCCAAACTGCACTAACTCACATTTGCGCTTATTATATCACTTATTGGAATCGGAAGTGAATTAGTAGTATCTGCTCTCGGCTATTAGAGGCCCCCATGACTCAGCGCGATGAGACCAAGGTCAAGTACCAATCGTAGAGTAAGGCGAGAATCCTCCTTCAGATCGGCTCTTCCCTCTCTTGATTGGCGGTGGGCAGATTTATAATCACCTTCGTTAACCCAGCCCTTACTGTGTTGTCGATGGTAAGTCGAGACCCCGGATCTTTGGCATAAGT",
+				"GCATTATACAGGGATGGCCAAGTTGACACGGAGTGCTGGGCGCATTTTCGTAAACATTTACCTAGATTACCATGCTCGAATCAGATTAAGC",
+				"TAGTGGTTG"
+			}
 		}
 		/* fails for affine-16 due to the bandwidth shotage */
 #if 0
@@ -5170,15 +5223,13 @@ unittest( .name = "base" )
 #endif
 	};
 
-	struct gaba_context_s const *c = (struct gaba_context_s const *)gctx;
-	struct gaba_dp_context_s *dp = _export(gaba_dp_init)(c);
+	struct unittest_context_s *c = (struct unittest_context_s *)gctx;
 
 	for(uint64_t i = 0; i < sizeof(pairs) / sizeof(struct unittest_seq_pair_s); i++) {
-		_export(gaba_dp_flush)(dp);
-		unittest_test_pair(UNITTEST_ARG_LIST, dp, &pairs[i], 0);
-		unittest_test_pair(UNITTEST_ARG_LIST, dp, &pairs[i], 1);
+		_export(gaba_dp_flush)(c->dp);
+		unittest_test_pair(UNITTEST_ARG_LIST, c->params, c->dp, &pairs[i], 0);
+		unittest_test_pair(UNITTEST_ARG_LIST, c->params, c->dp, &pairs[i], 1);
 	}
-	_export(gaba_dp_clean)(dp);
 }
 
 /**
@@ -5250,8 +5301,7 @@ unittest( .name = "cross" )
 {
 	uint64_t const cnt = 5000;
 
-	struct gaba_context_s const *c = (struct gaba_context_s const *)gctx;
-	struct gaba_dp_context_s *dp = _export(gaba_dp_init)(c);
+	struct unittest_context_s *c = (struct unittest_context_s *)gctx;
 
 	for(uint64_t i = 0; i < cnt; i++) {
 		struct unittest_seq_pair_s pair = {
@@ -5271,15 +5321,14 @@ unittest( .name = "cross" )
 			pair.b[j] = unittest_generate_mutated_sequence(pair.a[j], 0.1, 0.1, _W);
 		}
 
-		unittest_test_pair(UNITTEST_ARG_LIST, dp, &pair, 0);
-		unittest_test_pair(UNITTEST_ARG_LIST, dp, &pair, 1);
+		unittest_test_pair(UNITTEST_ARG_LIST, c->params, c->dp, &pair, 0);
+		unittest_test_pair(UNITTEST_ARG_LIST, c->params, c->dp, &pair, 1);
 
 		for(uint64_t j = 0; pair.a[j] != NULL; j++) {
 			free((void *)pair.a[j]);
 			free((void *)pair.b[j]);
 		}
 	}
-	_export(gaba_dp_clean)(dp);
 }
 
 #endif /* UNITTEST */
