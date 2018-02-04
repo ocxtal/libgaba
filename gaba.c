@@ -2841,7 +2841,7 @@ enum {
 	_storeu_u64(path, path_array<<ofs); \
 	/* reload block pointer */ \
 	blk--; do { \
-		debug("reload head block, blk(%p), prev_blk(%p), head(%x)", blk, _phantom(blk)->blk, _phantom(blk)->blk->xstat & HEAD); \
+		debug("reload head block, blk(%p), prev_blk(%p), head(%x), cnt(%u, %u)", blk, _phantom(blk)->blk, _phantom(blk)->blk->xstat & HEAD, _phantom(blk)->blk->acnt, _phantom(blk)->blk->bcnt); \
 		blk = _phantom(blk)->blk; \
 	} while((blk->xstat & HEAD) != 0); \
 	while(blk->xstat & MERGE) { \
@@ -2851,8 +2851,7 @@ enum {
 	} \
 	/* reload dir and mask pointer, adjust path offset */ \
 	uint64_t _cnt = blk->acnt + blk->bcnt; \
-	mask = &blk->mask[_cnt - 1]; \
-	dir_mask = _trace_load_block_rem(_cnt); \
+	mask = &blk->mask[_cnt - 1]; dir_mask = _trace_load_block_rem(_cnt); \
 	debug("reload tail, path_array(%lx), blk(%p), idx(%lu), mask(%x)", path_array, blk, _cnt - 1, dir_mask); \
 }
 
@@ -2864,11 +2863,13 @@ enum {
 	/* store path (bulk, offset does not change here) */ \
 	_storeu_u64(path, path_array<<ofs); path--; \
 	/* reload mask and mask pointer; always test the boundary */ \
-	blk--; \
-	while(_unlikely((_phantom(blk)->xstat & HEAD) != 0)) { blk = _phantom(blk)->blk; } \
-	mask = &blk->mask[BLK - 1]; \
-	dir_mask = _dir_mask_load(blk, BLK); \
-	debug("reload block, path_array(%lx), blk(%p), head(%x), mask(%x)", path_array, blk, blk->xstat & HEAD, dir_mask); \
+	mask = &(--blk)->mask[BLK - 1]; dir_mask = _dir_mask_load(blk, BLK); \
+	if(_unlikely((_phantom(blk)->xstat & HEAD) != 0)) { \
+		do { blk = _phantom(blk)->blk; debug("reload block, cnt(%u, %u)", blk->acnt, blk->bcnt); } while((_phantom(blk)->xstat & HEAD) != 0); \
+		uint64_t _cnt = blk->acnt + blk->bcnt; \
+		mask = &blk->mask[_cnt - 1]; dir_mask = _trace_load_block_rem(_cnt); \
+	} \
+	debug("reload block, path_array(%lx), blk(%p), head(%x), mask(%x), ofs(%u), cnt(%u, %u)", path_array, blk, blk->xstat & HEAD, dir_mask, ofs, blk->acnt, blk->bcnt); \
 }
 
 /**
