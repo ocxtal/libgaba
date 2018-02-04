@@ -2597,7 +2597,7 @@ uint64_t leaf_search(
 	v2i32_t rem = _sub_v2i32(ridx, eridx);
 	uint64_t plen = tail->f.apos + tail->f.bpos - (INIT_FETCH_APOS + INIT_FETCH_BPOS) + _W - _hi32(rem) - _lo32(rem);
 	_print_v2i32(eridx); _print_v2i32(rem);
-	debug("path length: %ld", plen);
+	debug("path length: plen(%lu, %lu), p(%u)", plen, plen % 32, self->w.l.p);
 	return(plen);
 }
 
@@ -2611,7 +2611,9 @@ struct gaba_pos_pair_s *_export(gaba_dp_search_max)(
 	self = _restore_dp_context(self);
 	struct gaba_joint_tail_s const *tail = _tail(fill);
 
-	leaf_search(self, tail);					/* may return zero */
+	struct gaba_pos_pair_s *pos = gaba_dp_malloc(self, sizeof(struct gaba_pos_pair_s));
+	pos->plen = leaf_search(self, tail);		/* may return zero */
+
 	v2i32_t const v11 = _seta_v2i32(1, 1);
 	v2i32_t gidx = _load_v2i32(&self->w.l.agidx), acc = _zero_v2i32();
 	v2i32_t id = _load_v2i32(&tail->f.aid);
@@ -2638,7 +2640,6 @@ struct gaba_pos_pair_s *_export(gaba_dp_search_max)(
 		_print_v2i32(gidx); _print_v2i32(id);
 	}
 
-	struct gaba_pos_pair_s *pos = gaba_dp_malloc(self, sizeof(struct gaba_pos_pair_s));
 	_store_v2i32(&pos->aid, id);
 	_store_v2i32(&pos->apos, gidx);
 	_print_v2i32(gidx);
