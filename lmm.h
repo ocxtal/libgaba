@@ -155,7 +155,6 @@ void *lmm_realloc(
 	#ifndef LMM_DEBUG
 		/* check if prev mem (ptr) is inside mm */
 		if((void *)lmm < ptr && ptr < lmm->lim) {
-			
 			uint64_t prev_size = *((uint64_t *)((uintptr_t)ptr - LMM_ALIGN_SIZE));
 			if((uintptr_t)ptr + prev_size == (uintptr_t)lmm->ptr	/* the last block */
 			&& (uintptr_t)ptr + size < (uintptr_t)lmm->lim) {		/* and room for expansion */
