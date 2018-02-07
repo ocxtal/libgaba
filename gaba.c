@@ -124,7 +124,7 @@
 #ifdef NAMESPACE
 #  define _export_cat(x, y)			x##_##y
 #  define _export_cat2(x, y)		_export_cat(x, y)
-#  define _export(_base)			_export_cat2(NAMESPACE, _suffix(_base))
+#  define _export(_base)			_export_cat2(_suffix(_base), NAMESPACE)
 #else
 #  define _export(_base)			_suffix(_base)
 #endif
@@ -209,7 +209,7 @@ _static_assert(V2I32_MASK_10 == GABA_UPDATE_B);
 _static_assert(sizeof(void *) == 8);
 
 /** check size of structs declared in gaba.h */
-_static_assert(sizeof(struct gaba_params_s) == 48);
+_static_assert(sizeof(struct gaba_params_s) == 40);
 _static_assert(sizeof(struct gaba_section_s) == 16);
 _static_assert(sizeof(struct gaba_fill_s) == 64);
 _static_assert(sizeof(struct gaba_segment_s) == 32);
@@ -545,10 +545,7 @@ struct gaba_dp_context_s {
 	/* memory management */
 	struct gaba_mem_block_s mem;		/** (16) root memory block */
 	struct gaba_stack_s stack;			/** (24) current stack */
-
-	/** output options */
-	uint32_t head_margin;				/** (4) margin at the head of gaba_res_t */
-	uint32_t tail_margin;				/** (4) margin at the tail of gaba_res_t */
+	uint64_t _pad2;
 
 	/* score constants */
 	double imx, xmx;					/** (16) 1 / (M - X), X / (M - X) (precalculated constants) */
@@ -1629,7 +1626,10 @@ struct gaba_joint_tail_s *fill_create_tail(
 	debug("update_mask(%lx)", (uint64_t)(_blk)->max_mask); \
 	/* update middle delta vector */ \
 	wvec_t md = _load_w(&self->w.r.md); \
-	md = _add_w(md, _cvt_n_w(_sub_n(delta, _set_n(cofs)))); \
+	md = _add_w(md, _cvt_n_w(delta)); \
+	/* dirty-hack to handle overflow: underflow is not rescued here */ \
+	md = _add_w(md, _and_w(_set_w(0x0100), _cvt_n_w(_andn_n(_add_n(delta, drop), delta)))); \
+	md = _add_w(md, _set_w(-cofs));		/* fixup offset adjustment */ \
 	_store_w(&self->w.r.md, md); \
 }
 #if MODEL == LINEAR
@@ -1753,6 +1753,7 @@ struct gaba_block_s *fill_bulk_k_blocks(
 			self->w.r.asridx - self->w.r.arem - self->w.r.arlim,
 			self->w.r.bsridx - self->w.r.brem - self->w.r.brlim,
 			self->w.r.md.delta[_W/2] + self->w.r.xd.drop[_W/2] + _offset(self->w.r.tail) + self->w.r.ofsd);
+		_print_w(_load_w(self->w.r.md.delta));
 		fill_bulk_block(self, ++blk);
 	}
 	debug("return, blk(%p), xstat(%x), pridx(%u)", blk, blk->xstat, self->w.r.pridx);
@@ -2866,7 +2867,7 @@ enum {
 	mask = &(--blk)->mask[BLK - 1]; dir_mask = _dir_mask_load(blk, BLK); \
 	if(_unlikely((_phantom(blk)->xstat & HEAD) != 0)) { \
 		do { blk = _phantom(blk)->blk; debug("reload block, cnt(%u, %u)", blk->acnt, blk->bcnt); } while((_phantom(blk)->xstat & HEAD) != 0); \
-		uint64_t _cnt = blk->acnt + blk->bcnt; \
+		uint64_t _cnt = blk->acnt + blk->bcnt; path++; \
 		mask = &blk->mask[_cnt - 1]; dir_mask = _trace_load_block_rem(_cnt); \
 	} \
 	debug("reload block, path_array(%lx), blk(%p), head(%x), mask(%x), ofs(%u), cnt(%u, %u)", path_array, blk, blk->xstat & HEAD, dir_mask, ofs, blk->acnt, blk->bcnt); \
@@ -2953,7 +2954,6 @@ void trace_core(
 	#define _trace_gap_loop(t, _c, _n, _l) { \
 		_trace_##_c##_##_l##_head: \
 			if(_trace_test_fgap_##_l()) { \
-				debug("fgap detected"); \
 				if(_unlikely(_trace_##_c##_##_l##_test_index())) { \
 					self->w.l.state = ts_##_l##0; goto _trace_term; \
 				} \
@@ -2968,7 +2968,6 @@ void trace_core(
 				} \
 				_trace_inc_ge_##_l();	/* increment #gap bases on every iter */ \
 				_pop_vector(_c, _l, 1, _trace_##_n##_##_l##_tail); \
-				debug("test next gap, (%x)", _trace_test_gap_##_l()); \
 			_trace_##_c##_##_l##_tail:; \
 			} while(_trace_test_gap_##_l()); \
 			goto _trace_##_c##_##_l##_retd; \
@@ -3086,11 +3085,10 @@ void trace_init(
 		  sizeof(struct gaba_alignment_s)				/* base */
 		+ sizeof(uint32_t) * _roundup(pn, 8)			/* path array and its margin */
 		+ sizeof(struct gaba_segment_s) * sn			/* segment array */
-		+ self->head_margin + self->tail_margin			/* head and tail margins */
 	);
 
 	/* save aln pointer and memory management stuffs to working buffer */
-	self->w.l.aln = alloc->lmalloc(alloc->opaque, size) + self->head_margin;
+	self->w.l.aln = alloc->lmalloc(alloc->opaque, size);
 	self->w.l.a.opaque = alloc->opaque;					/* save opaque pointer */
 	self->w.l.a.lfree = alloc->lfree;
 
@@ -3098,6 +3096,7 @@ void trace_init(
 	self->w.l.a.score = tail->f.max;					/* just copy */
 	_store_v2i32(&self->w.l.a.aicnt, _zero_v2i32());	/* clear counters */
 	_store_v2i32(&self->w.l.a.aecnt, _zero_v2i32());
+	_store_v2i32(&self->w.l.afcnt, _zero_v2i32());
 	self->w.l.a.dcnt = 0;
 
 	/* section and path */
@@ -3148,9 +3147,7 @@ struct gaba_alignment_s *trace_body(
 		debug("p(%d), q(%d)", self->w.l.p, self->w.l.q);
 		if(_unlikely(self->w.l.q >= _W)) {
 			/* out of band: abort */
-			self->w.l.a.lfree(self->w.l.a.opaque,
-				(void *)((uint8_t *)self->w.l.aln - self->head_margin)
-			);
+			self->w.l.a.lfree(self->w.l.a.opaque, (void *)((uint8_t *)self->w.l.aln));
 			return(NULL);
 		}
 
@@ -3174,14 +3171,22 @@ struct gaba_alignment_s *trace_body(
 
 	uint64_t dlen = (self->w.l.a.plen - _hi32(gcnt) - _lo32(gcnt))>>1;
 	int64_t dsc = self->w.l.a.score - _hi32(g) - _lo32(g);
-	// debug("plen(%lu), g(%ld, %ld, %ld, %ld), gcnt(%ld, %ld, %ld, %ld), dlen(%ld), sc(%ld, %ld), mc(%f), id(%f)",
-		// plen, gi, ge, ga, gb, gic, gec, gac, gbc, dlen, sc, dsc, dsc * self->imx - self->xmx * dlen, id);
 
 	/* copy */
 	_memcpy_blk_ua(self->w.l.aln, &self->w.l.a, sizeof(struct gaba_alignment_s));
 	self->w.l.aln->identity = dlen == 0 ? 0.0 : (((double)dsc / (double)dlen) * self->imx - self->xmx);
 	_store_v2i32(&self->w.l.aln->agcnt, gcnt);
 	self->w.l.aln->dcnt = dlen;
+
+	/*
+	fprintf(stderr, "plen(%lu), g(%d, %d, %d, %d), gic(%u, %u), gec(%u, %u), gfc(%u, %u), gc(%u, %u), dlen(%ld), sc(%ld, %ld), mc(%f), identity(%f)\n",
+		plen, self->gi, self->ge, self->gfa, self->gfb,
+		self->w.l.a.bicnt, self->w.l.a.aicnt,
+		self->w.l.a.becnt, self->w.l.a.aecnt,
+		self->w.l.bfcnt, self->w.l.afcnt,
+		_hi32(gcnt), _lo32(gcnt),
+		dlen, self->w.l.aln->score, dsc, dsc * self->imx - self->xmx * dlen, self->w.l.aln->identity);
+	*/
 	return(self->w.l.aln);
 }
 
@@ -3219,8 +3224,8 @@ void _export(gaba_dp_res_free)(
 	struct gaba_alignment_s *aln)
 {
 	struct gaba_aln_intl_s *a = (struct gaba_aln_intl_s *)aln;
-	debug("free mem, ptr(%p), lmm(%p)", (void *)a - self->head_margin, a->opaque);
-	a->lfree(a->opaque, (void *)((uint8_t *)a - self->head_margin));
+	debug("free mem, ptr(%p), lmm(%p)", a, a->opaque);
+	a->lfree(a->opaque, (void *)a);
 	return;
 }
 
@@ -3355,8 +3360,6 @@ void gaba_init_restore_default(
 	}
 	restore(xdrop,			50);
 	restore(filter_thresh,	0);					/* disable filter */
-	restore(head_margin,	0);
-	restore(tail_margin,	0);
 	return;
 }
 
@@ -3580,10 +3583,6 @@ void gaba_init_dp_context(
 		.gi = -p->gi, .ge = -p->ge, .gfa = -p->gfa, .gfb = -p->gfb,
 		.imx = 1 / (m - x), .xmx = x / (m - x),
 
-		/* input and output options */
-		.head_margin = _roundup(p->head_margin, MEM_ALIGN_SIZE),
-		.tail_margin = _roundup(p->tail_margin, MEM_ALIGN_SIZE),
-
 		/* pointers to root vectors */
 		.root = {
 			[_dp_ctx_index(16)] = &_proot(ctx, 16)->tail,
@@ -3641,7 +3640,7 @@ gaba_t *_export(gaba_init)(
 void _export(gaba_clean)(
 	struct gaba_context_s *ctx)
 {
-	gaba_free(ctx);
+	if(ctx != NULL) { gaba_free(ctx); }
 	return;
 }
 
