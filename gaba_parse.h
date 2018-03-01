@@ -252,7 +252,7 @@ uint64_t gaba_dump_cigar_forward(
 	char *b = buf;
 	_parser_init_fw(path, offset, len);
 	_parser_loop_fw(_del, _ins, _nop, _match);
-	*b++ = '\0';
+	*b = '\0';
 	return(b - buf);
 
 	#undef _del
@@ -309,7 +309,7 @@ uint64_t gaba_dump_cigar_reverse(
 	char *b = buf;
 	_parser_init_rv(path, offset, len);
 	_parser_loop_rv(_del, _ins, _nop, _match);
-	*b++ = '\0';
+	*b = '\0';
 	return(b - buf);
 
 	#undef _del
@@ -332,7 +332,7 @@ uint64_t gaba_dump_cigar_reverse(
  */
 _GABA_PARSE_EXPORT_LEVEL
 uint64_t gaba_dump_seq_forward(
-	uint8_t *buf,
+	char *buf,
 	uint64_t buf_size,
 	uint32_t conf,				/* { SEQ_A, SEQ_B } x { SEQ_FW, SEQ_RV } */
 	uint32_t const *path,
@@ -367,7 +367,7 @@ uint64_t gaba_dump_seq_forward(
 	v16i8_t const cv = _load_v16i8((conf & GABA_SEQ_RV) ? gaba_parse_ascii_rv : gaba_parse_ascii_fw);
 	v16i8_t const gv = _set_v16i8(gap);
 	uint8_t const *q = seq;
-	uint8_t *r = buf;
+	char *r = buf;
 
 	_parser_init_fw(path, offset, len);
 	switch(conf) {
@@ -376,7 +376,7 @@ uint64_t gaba_dump_seq_forward(
 		case GABA_SEQ_B | GABA_SEQ_FW: _parser_loop_fw(_gap, _fw, _fw, _nop); break;
 		case GABA_SEQ_B | GABA_SEQ_RV: _parser_loop_fw(_gap, _rv, _rv, _nop); break;
 	}
-	*r++ = '\0';
+	*r = '\0';
 	return(r - buf);
 
 	#undef _gap
@@ -391,7 +391,7 @@ uint64_t gaba_dump_seq_forward(
  */
 _GABA_PARSE_EXPORT_LEVEL
 uint64_t gaba_dump_seq_reverse(
-	uint8_t *buf,
+	char *buf,
 	uint64_t buf_size,
 	uint32_t conf,				/* { SEQ_A, SEQ_B } x { SEQ_FW, SEQ_RV } */
 	uint32_t const *path,
@@ -426,7 +426,7 @@ uint64_t gaba_dump_seq_reverse(
 	v16i8_t const cv = _load_v16i8((conf & GABA_SEQ_RV) ? gaba_parse_ascii_rv : gaba_parse_ascii_fw);
 	v16i8_t const gv = _set_v16i8(gap);
 	uint8_t const *q = seq;
-	uint8_t *r = buf;
+	char *r = buf;
 
 	_parser_init_rv(path, offset, len);
 	switch(conf) {
@@ -436,7 +436,7 @@ uint64_t gaba_dump_seq_reverse(
 		case GABA_SEQ_B | GABA_SEQ_RV: _parser_loop_rv(_gap, _rv, _rv, _nop); break;
 		default: break;
 	}
-	*r++ = '\0';
+	*r = '\0';
 	return(r - buf);
 
 	#undef _gap
@@ -450,7 +450,7 @@ uint64_t gaba_dump_seq_reverse(
  */
 _GABA_PARSE_EXPORT_LEVEL
 uint64_t gaba_dump_seq_ref(
-	uint8_t *buf,
+	char *buf,
 	uint64_t buf_size,
 	uint32_t const *path,
 	gaba_path_section_t const *s,
@@ -466,7 +466,7 @@ uint64_t gaba_dump_seq_ref(
 }
 _GABA_PARSE_EXPORT_LEVEL
 uint64_t gaba_dump_seq_query(
-	uint8_t *buf,
+	char *buf,
 	uint64_t buf_size,
 	uint32_t const *path,
 	gaba_path_section_t const *s,
