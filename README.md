@@ -142,16 +142,16 @@ struct gaba_section_s {
 
 #### Reverse-complemented sequences
 
-If you need to align the reverse-complement of a sequence you have on memory, you do not need to explicitly construct the reverse-complemented sequence before calling the fill-in functions. Passing a pointer mirrored at GABA_EOU (end-of-userland) will fetch the sequence at the original location in the reverse-complemented manner. `gaba_mirror(sequence, strlen(sequence))` will create a pointer to the head of the reverse-complemented sequence (or the *tail of the original sequence*).
+If you need to align the reverse-complement of a sequence you have on memory, you do not need to explicitly construct the reverse-complemented sequence before calling the fill-in functions. Passing a pointer mirrored at GABA_EOU (end-of-userland) will fetch the sequence at the original location in the reverse-complemented manner. `gaba_mirror(sequence, strlen(sequence))` will create a pointer to the head of the reverse-complemented sequence (or the **tail of the original sequence**).
 
 
 ## References and Links
 
-* [Hajime Suzuki and Masahiro Kasahara (2018), Introducing difference recurrence relations for faster semi-global alignment of long sequences.](https://doi.org/10.1186/s12859-018-2014-8)
+* Hajime Suzuki and Masahiro Kasahara (2018), Introducing difference recurrence relations for faster semi-global alignment of long sequences. [https://doi.org/10.1186/s12859-018-2014-8](https://doi.org/10.1186/s12859-018-2014-8)
 
-* [Benchmark scripts and alternative implementations (https://github.com/ocxtal/diffbench)](https://github.com/ocxtal/diffbench)
-* [Benchmark scripts on the adaptive banding algorithm (https://github.com/ocxtal/adaptivebandbench)](https://github.com/ocxtal/adaptivebandbench)
-* [Older version of the library (libsea: https://bitbucket.org/suzukihajime/libsea/)](https://bitbucket.org/suzukihajime/libsea/).
+* Benchmark scripts and alternative implementations [https://github.com/ocxtal/diffbench](https://github.com/ocxtal/diffbench)
+* Benchmark scripts on the adaptive banding algorithm [https://github.com/ocxtal/adaptivebandbench](https://github.com/ocxtal/adaptivebandbench)
+* Older version of the library [libsea: https://bitbucket.org/suzukihajime/libsea/](https://bitbucket.org/suzukihajime/libsea/).
 
 
 ## License
