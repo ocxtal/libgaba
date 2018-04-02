@@ -43,7 +43,7 @@
  * called with a pair of cigar operation (c) and its length (len).
  * void *fp is an opaque pointer to the context of the printer.
  */
-typedef int (*gaba_printer_t)(void *, uint64_t, char);	/* moved to gaba.h */
+typedef int (*gaba_printer_t)(void *, uint64_t, char);	/* moved from gaba.h */
 
 
 /* macros */
