@@ -2,7 +2,8 @@ CC = gcc
 AR = ar
 GIT = git
 ARCHFLAGS = -march=native
-CFLAGS = -O3 -Wall -Wno-unused-function -Wno-unused-label -std=c99 -pipe
+BIT = 4
+CFLAGS = -O3 -Wall -Wno-unused-function -Wno-unused-label -std=c99 -pipe -DBIT=$(BIT)
 TARGET = libgaba.a
 
 all: native example unittest bench
