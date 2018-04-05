@@ -3237,6 +3237,7 @@ void trace_init(
 	/* clear array */
 	self->w.l.path[0] = 0x01<<self->w.l.ofs;
 	self->w.l.path[1] = 0;
+	self->w.l.path[2] = 0;								/* make sure the memory is "initialized" so that not warned by valgrind */
 	return;
 }
 
