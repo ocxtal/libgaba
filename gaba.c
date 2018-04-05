@@ -817,8 +817,8 @@ struct gaba_dir_s {
 #define _gap_e(_p, _l)				( -1 * ((_l) > 0) * (_p)->gi - (_p)->ge * (_l) )
 #define _gap_f(_p, _l)				( -1 * ((_l) > 0) * (_p)->gi - (_p)->ge * (_l) )
 #else /* MODEL == COMBINED */
-#define _gap_h(_p, _l)				( MAX2(-1 * ((_l) > 0) * (_p)->gi - (_p)->ge * (_l), -1 * (_p)->gfa * (_l)) )
-#define _gap_v(_p, _l)				( MAX2(-1 * ((_l) > 0) * (_p)->gi - (_p)->ge * (_l), -1 * (_p)->gfb * (_l)) )
+#define _gap_h(_p, _l)				( MAX2(-1 * ((_l) > 0) * (_p)->gi - (_p)->ge * (_l), -1 * (_p)->gfb * (_l)) )
+#define _gap_v(_p, _l)				( MAX2(-1 * ((_l) > 0) * (_p)->gi - (_p)->ge * (_l), -1 * (_p)->gfa * (_l)) )
 #define _gap_e(_p, _l)				( -1 * ((_l) > 0) * (_p)->gi - (_p)->ge * (_l) )
 #define _gap_f(_p, _l)				( -1 * ((_l) > 0) * (_p)->gi - (_p)->ge * (_l) )
 #endif
@@ -1557,22 +1557,22 @@ struct gaba_joint_tail_s *fill_create_tail(
 #else /* MODEL == COMBINED */
 #define _fill_body() { \
 	register nvec_t t = _match_n(_loadu_n(aptr), _loadu_n(bptr)); \
-	register nvec_t di = _add_n(dv, _load_gfv(self->scv)); \
-	register nvec_t dd = _sub_n(_load_gfh(self->scv), dh); \
+	register nvec_t dfh = _add_n(dv, _load_gfh(self->scv)); \
+	register nvec_t dfv = _sub_n(_load_gfv(self->scv), dh); \
 	_print_n(_sub_n(_zero_n(), dh)); _print_n(dv); _print_n(de); _print_n(df); \
-	_print_n(dd); _print_n(di); \
+	_print_n(dfv); _print_n(dfh); \
 	_print_n(_loadu_n(aptr)); _print_n(_loadu_n(bptr)); \
 	register nvec_t s = _max_n(de, df); \
 	t = _shuf_n(_load_sb(self->scv), t); _print_n(t); \
-	s = _max_n(s, di); \
-	t = _max_n(t, dd); \
+	s = _max_n(s, dfh); \
+	t = _max_n(t, dfv); \
 	t = _max_n(t, s); \
 	_print_n(t); \
-	uint64_t mask_gfa = _mask_u64(_mask_n(_eq_n(t, di))), mask_gh = _mask_u64(_mask_n(_eq_n(t, de))); \
-	uint64_t mask_gfb = _mask_u64(_mask_n(_eq_n(t, dd))), mask_gv = _mask_u64(_mask_n(_eq_n(t, df))); \
-	debug("mask_gfa(%lx), mask_gh(%lx), mask_gfb(%lx), mask_gv(%lx)", mask_gfa, mask_gh, mask_gfb, mask_gv); \
-	ptr->h.all = mask_gfa | mask_gh; mask_gh &= ~mask_gfa; \
-	ptr->v.all = mask_gfb | mask_gv; mask_gv &= ~mask_gfb; \
+	uint64_t mask_gfh = _mask_u64(_mask_n(_eq_n(t, dfh))), mask_gh = _mask_u64(_mask_n(_eq_n(t, de))); \
+	uint64_t mask_gfv = _mask_u64(_mask_n(_eq_n(t, dfv))), mask_gv = _mask_u64(_mask_n(_eq_n(t, df))); \
+	debug("mask_gfh(%lx), mask_gh(%lx), mask_gfv(%lx), mask_gv(%lx)", mask_gfh, mask_gh, mask_gfv, mask_gv); \
+	ptr->h.all = mask_gfh | mask_gh; mask_gh &= ~mask_gfh; \
+	ptr->v.all = mask_gfv | mask_gv; mask_gv &= ~mask_gfv; \
 	/* update de and dh */ \
 	de = _add_n(de, _load_adjh(self->scv)); \
 	nvec_t te = _max_n(de, t); \
@@ -3546,7 +3546,7 @@ struct gaba_score_vec_s gaba_init_score_vector(
 	#endif
 	_store_sb(sc, _add_v16i8(scv, _set_v16i8(-2 * (ge + gi))));
 
-	/* gap penalties */
+	/* gap penalties; adj, ofs, gfh, gfv */
 	#if MODEL == LINEAR
 		_store_adjh(sc, 0, ge + gi, 0, 0);
 		_store_adjv(sc, 0, ge + gi, 0, 0);
@@ -3559,10 +3559,10 @@ struct gaba_score_vec_s gaba_init_score_vector(
 		_store_ofsv(sc, -gi, ge + gi, 0, 0);
 	#else	/* COMBINED */
 		int8_t gfa = -p->gfa, gfb = -p->gfb;	/* convert to negative values */
-		_store_adjh(sc, -gi, ge + gi, -(ge + gi) + gfa, -(ge + gi) + gfb);
-		_store_adjv(sc, -gi, ge + gi, -(ge + gi) + gfa, -(ge + gi) + gfb);
-		_store_ofsh(sc, -gi, ge + gi, -(ge + gi) + gfa, -(ge + gi) + gfb);
-		_store_ofsv(sc, -gi, ge + gi, -(ge + gi) + gfa, -(ge + gi) + gfb);
+		_store_adjh(sc, -gi, ge + gi, -(ge + gi) + gfb, -(ge + gi) + gfa);
+		_store_adjv(sc, -gi, ge + gi, -(ge + gi) + gfb, -(ge + gi) + gfa);
+		_store_ofsh(sc, -gi, ge + gi, -(ge + gi) + gfb, -(ge + gi) + gfa);
+		_store_ofsv(sc, -gi, ge + gi, -(ge + gi) + gfb, -(ge + gi) + gfa);
 	#endif
 	return(sc);
 }
@@ -4455,11 +4455,11 @@ struct unittest_naive_result_s unittest_naive(
 
 	mat[s(0, 0)] = mat[e(0, 0)] = mat[f(0, 0)] = 0;
 	for(uint64_t i = 1; i < alen+1; i++) {
-		mat[s(i, 0)] = mat[e(i, 0)] = MAX3(min, gi + (int64_t)i * ge, (int64_t)i * gfa);
+		mat[s(i, 0)] = mat[e(i, 0)] = MAX3(min, gi + (int64_t)i * ge, (int64_t)i * gfb);
 		mat[f(i, 0)] = min;
 	}
 	for(uint64_t j = 1; j < blen+1; j++) {
-		mat[s(0, j)] = mat[f(0, j)] = MAX3(min, gi + (int64_t)j * ge, (int64_t)j * gfb);
+		mat[s(0, j)] = mat[f(0, j)] = MAX3(min, gi + (int64_t)j * ge, (int64_t)j * gfa);
 		mat[e(0, j)] = min;
 	}
 
@@ -4475,8 +4475,8 @@ struct unittest_naive_result_s unittest_naive(
 			);
 			int64_t score = mat[s(i, j)] = MAX4(min,
 				mat[s(i - 1, j - 1)] + m(i, j),
-				MAX2(score_e, mat[s(i - 1, j)] + gfa),
-				MAX2(score_f, mat[s(i, j - 1)] + gfb)
+				MAX2(score_e, mat[s(i - 1, j)] + gfb),
+				MAX2(score_f, mat[s(i, j - 1)] + gfa)
 			);
 			if(score > max.score
 			|| (score == max.score && (i + j) < (max.apos + max.bpos))) {
@@ -4504,7 +4504,7 @@ struct unittest_naive_result_s unittest_naive(
 	int64_t path_index = max.apos + max.bpos + 1;
 	while(curr.apos > 0 || curr.bpos > 0) {
 		/* M > I > D > X */
-		if(curr.bpos > 1 && mat[s(curr.apos, curr.bpos)] == mat[s(curr.apos, curr.bpos - 1)] + gfb) {
+		if(curr.bpos > 1 && mat[s(curr.apos, curr.bpos)] == mat[s(curr.apos, curr.bpos - 1)] + gfa) {
 			unittest_naive_test_section(&w, curr, 0, 1);
 			curr.bpos--;
 			result.path[--path_index] = 'D';
@@ -4518,7 +4518,7 @@ struct unittest_naive_result_s unittest_naive(
 			unittest_naive_test_section(&w, curr, 0, 1);
 			curr.bpos--;
 			result.path[--path_index] = 'D';
-		} else if(curr.apos > 1 && mat[s(curr.apos, curr.bpos)] == mat[s(curr.apos - 1, curr.bpos)] + gfa) {
+		} else if(curr.apos > 1 && mat[s(curr.apos, curr.bpos)] == mat[s(curr.apos - 1, curr.bpos)] + gfb) {
 			unittest_naive_test_section(&w, curr, 1, 0);
 			curr.apos--;
 			result.path[--path_index] = 'R';
