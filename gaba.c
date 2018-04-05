@@ -3993,7 +3993,7 @@ void _export(gaba_dp_clean)(
 #if UNITTEST == 1
 
 #define UNITTEST_SEQ_MARGIN			( 8 )			/* add margin to avoid warnings in the glibc strlen */
-#define UNITTEST_GABA_HEAD_MARGIN	( 0 )
+#define UNITTEST_GABA_HEAD_MARGIN	( 64 )
 #define UNITTEST_GABA_TAIL_MARGIN	( 64 )
 
 #include <string.h>
@@ -4890,7 +4890,7 @@ struct gaba_section_s *unittest_build_section_forward(char const *const *p, uint
 {
 	struct gaba_section_s *s = calloc(UNITTEST_MAX_SEQ_CNT + 1, sizeof(struct gaba_section_s));
 
-	uint64_t len = pos + UNITTEST_GABA_HEAD_MARGIN + UNITTEST_GABA_TAIL_MARGIN;
+	uint64_t len = pos + UNITTEST_GABA_HEAD_MARGIN + UNITTEST_GABA_TAIL_MARGIN + _W;
 	for(char const *const *q = p; *q != NULL; q++) { len += strlen(*q) + 1; }
 	char *a = calloc(1, len); a += pos + UNITTEST_GABA_HEAD_MARGIN;
 	uint64_t i = 0;
@@ -4915,7 +4915,7 @@ struct gaba_section_s *unittest_build_section_reverse(char const *const *p, uint
 {
 	struct gaba_section_s *s = calloc(UNITTEST_MAX_SEQ_CNT + 1, sizeof(struct gaba_section_s));
 
-	uint64_t len = pos + UNITTEST_GABA_HEAD_MARGIN + UNITTEST_GABA_TAIL_MARGIN;
+	uint64_t len = pos + UNITTEST_GABA_HEAD_MARGIN + UNITTEST_GABA_TAIL_MARGIN + _W;
 	for(char const *const *q = p; *q != NULL; q++) { len += strlen(*q) + 1; }
 	char *a = calloc(1, len); a += UNITTEST_GABA_HEAD_MARGIN;
 	uint64_t i = 0;
