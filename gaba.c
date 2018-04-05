@@ -1683,20 +1683,23 @@ struct gaba_joint_tail_s *fill_create_tail(
 }
 #endif /* MODEL */
 
-#ifdef DEBUG
+#if defined(DEBUG) || defined(DEBUG_OVERFLOW)
 #define _check_overflow(_delta, _drop) { \
-	int8_t b[_W], d[_W], flag = 0; int16_t adj[_W], m1[_W], m2[_W]; \
+	int8_t b[_W], d[_W], flag = 0; int16_t ovf[_W], udf[_W], m1[_W], m2[_W]; \
 	_storeu_n(b, _delta); _storeu_n(d, _drop); \
-	wvec_t adjv = _and_w(_set_w(0x0100), _cvt_n_w(_andn_n(_add_n(drop, delta), _and_n(drop, delta)))); \
-	_storeu_w(adj, adjv); _storeu_w(m1, md); _storeu_w(m2, _add_w(md, adjv)); \
-	for(uint64_t i = 0; i < _W - 1; i++) { if(b[i + 1] > b[i] + 128) { flag = 1; } if(b[i + 1] < b[i] - 128) { flag = 1; } } \
-	for(uint64_t i = 0; i < _W - 1; i++) { if(m2[i + 1] > m2[i] + 128) { flag = 2; } if(m2[i + 1] < m2[i] - 128) { flag = 2; } } \
-	if(flag == 2) { \
+	wvec_t ov = _and_w(_set_w(0x0100), _cvt_n_w(_andn_n(_add_n(drop, delta), _and_n(drop, delta)))); \
+	wvec_t uv = _and_w(_set_w(0x0100), _cvt_n_w(_or_n(drop, delta))); \
+	_storeu_w(ovf, ov); _storeu_w(udf, uv); _storeu_w(m1, md); _storeu_w(m2, _add_w(md, _add_w(ov, uv))); \
+	for(uint64_t i = 0; i < _W - 1; i++) { if(b[i + 1] > b[i] + 128) { flag |= 1; } if(b[i + 1] < b[i] - 128) { flag |= 1; } } \
+	for(uint64_t i = 0; i < _W - 1; i++) { if(m2[i + 1] > m2[i] + 128) { flag |= 2; } if(m2[i + 1] < m2[i] - 128) { flag |= 2; } } \
+	if(flag != 0) { \
+		fprintf(stderr, "overflow detected, flag(%x)\n", flag); \
 		fprintf(stderr, "delta("); for(uint64_t i = 0; i < _W - 1; i++) { fprintf(stderr, "%04d, ", b[i]); } fprintf(stderr, ")\n"); \
 		fprintf(stderr, " drop("); for(uint64_t i = 0; i < _W - 1; i++) { fprintf(stderr, "%04d, ", d[i]); } fprintf(stderr, ")\n"); \
 		fprintf(stderr, "   md("); for(uint64_t i = 0; i < _W - 1; i++) { fprintf(stderr, "%04d, ", self->w.r.md.delta[i]); } fprintf(stderr, ")\n"); \
 		fprintf(stderr, "   m1("); for(uint64_t i = 0; i < _W - 1; i++) { fprintf(stderr, "%04d, ", m1[i]); } fprintf(stderr, ")\n"); \
-		fprintf(stderr, "  adj("); for(uint64_t i = 0; i < _W - 1; i++) { fprintf(stderr, "%04d, ", adj[i]); } fprintf(stderr, ")\n"); \
+		fprintf(stderr, "  ovf("); for(uint64_t i = 0; i < _W - 1; i++) { fprintf(stderr, "%04d, ", ovf[i]); } fprintf(stderr, ")\n"); \
+		fprintf(stderr, "  udf("); for(uint64_t i = 0; i < _W - 1; i++) { fprintf(stderr, "%04d, ", udf[i]); } fprintf(stderr, ")\n"); \
 		fprintf(stderr, "   m2("); for(uint64_t i = 0; i < _W - 1; i++) { fprintf(stderr, "%04d, ", m2[i]); } fprintf(stderr, ")\n"); \
 		fprintf(stderr, "  sum("); for(uint64_t i = 0; i < _W - 1; i++) { fprintf(stderr, "%04d, ", (int8_t)(b[i] + d[i])); } fprintf(stderr, ")\n"); \
 		fprintf(stderr, " mask("); for(uint64_t i = 0; i < _W - 1; i++) { fprintf(stderr, "%c,    ", (int8_t)(~(b[i] + d[i]) & b[i]) < 0 ? '1' : '0'); } fprintf(stderr, ")\n"); \
@@ -1735,7 +1738,7 @@ struct gaba_joint_tail_s *fill_create_tail(
 	/* rescue overflow */ \
 	md = _add_w(md, _and_w(_set_w(0x0100), _cvt_n_w(_andn_n(_add_n(drop, delta), _and_n(drop, delta))))); \
 	/* rescue underflow */ \
-	/*md = _add_w(md, _and_w(_set_w(0x0100), _cvt_n_w(_or_n(_sub_n(delta, drop), drop)))); cofs += 0x0100; */ \
+	md = _add_w(md, _and_w(_set_w(0x0100), _cvt_n_w(_or_n(delta, drop)))); cofs += 0x0100; \
 	md = _add_w(md, _set_w(-cofs));		/* fixup offset adjustment */ \
 	_store_w(&self->w.r.md, md); \
 }
