@@ -3541,7 +3541,7 @@ int64_t gaba_init_check_score(
 	if(_min_match(p) >= 0) { return(-1); }
 	if(_min_match(p) < -7) { return(-1); }
 	if(_min_match(p) < -2 * (p->gi + p->ge)) { return(-1); }
-	if(p->gfa != 0 && p->gfb != 0 && _min_match(p) < -1 * (p->gfa + p->gfb)) { return(-1); }
+	if(p->gfa != 0 && p->gfb != 0 && _min_match(p) <= -1 * (p->gfa + p->gfb)) { return(-1); }
 	if(p->ge <= 0) { return(-1); }
 	if(p->gi < 0) { return(-1); }
 	if(p->gfa < 0 || (p->gfa != 0 && p->gfa <= p->ge)) { return(-1); }
@@ -4038,7 +4038,7 @@ static struct gaba_params_s const *unittest_default_params[8] = {
 #else
 static struct gaba_params_s const *unittest_default_params[8] = {
 	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(2, 3, 5, 1), .gfa = 2, .gfb = 2),
-	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(2, 4, 5, 1), .gfa = 2, .gfb = 2),
+	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(2, 4, 5, 1), .gfa = 3, .gfb = 3),
 	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(2, 3, 5, 1), .gfa = 4, .gfb = 2),
 	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(2, 3, 5, 1), .gfa = 2, .gfb = 4),
 	GABA_PARAMS(.xdrop = 100, GABA_SCORE_SIMPLE(4, 5, 8, 2), .gfa = 3, .gfb = 3),
