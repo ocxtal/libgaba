@@ -1,4 +1,4 @@
-#define UNSAFE_FETCH
+
 /**
  * @file gaba.c
  *
@@ -3993,7 +3993,7 @@ void _export(gaba_dp_clean)(
 #if UNITTEST == 1
 
 #define UNITTEST_SEQ_MARGIN			( 8 )			/* add margin to avoid warnings in the glibc strlen */
-#define UNITTEST_GABA_HEAD_MARGIN	( 64 )
+#define UNITTEST_GABA_HEAD_MARGIN	( 0 )
 #define UNITTEST_GABA_TAIL_MARGIN	( 64 )
 
 #include <string.h>
@@ -4096,7 +4096,7 @@ unittest()
  * internal tests
  */
 /* fetchers */
-unittest( .name = "fetcher" ) {
+unittest( .name = "fetch" ) {
 	struct gaba_dp_context_s dp = { 0 };		/* clear all */
 	uint64_t lens[] = { 0, 1, 2, 12, 13, 23, 24, 25, 31, 32, 33, 40, 41, 47, 48, 49, 62, 63, 64 };
 	uint64_t ofss[] = { 0, 1, 2, 7, 8, 9, 12, 15, 16, 17, 31, 32, 33, 45, 47, 48 };
