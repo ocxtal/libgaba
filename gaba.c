@@ -1121,8 +1121,8 @@ void fill_fetch_core(
 
 	/* fetch seq b */
 	nvec_t b = _loadu_n(_rd_bufb(self, bcnt, _W));		/* unaligned */
-	_store_n(_rd_bufb(self, 0, _W), b);					/* always aligned */
 	fill_fetch_seq_b(self, self->w.r.btptr - self->w.r.brem, blen);		/* will invade bufa */
+	_store_n(_rd_bufb(self, 0, _W), b);					/* always aligned */
 
 	_print_n(a); _print_n(b);
 	return;
