@@ -73,7 +73,7 @@ struct gaba_params_s {
 	int8_t score_matrix[16];	/** score matrix (substitution matrix) max must not exceed 7 */
 	int8_t gi;					/** gap open penalty (0 for the linear-gap penalty; positive integer) */
 	int8_t ge;					/** gap extension penalty (positive integer) */
-	int8_t gfa, gfb;			/** linear-gap extension penalty for short indels (combined-gap penalty; gf > ge) */
+	int8_t gfa, gfb;			/** linear-gap extension penalty for short indels (combined-gap penalty; gf > ge). gfa for gaps on sequence A, gfb for seq. B. */
 
 	/** score parameters */
 	int8_t xdrop;				/** X-drop threshold, positive, less than 128 */
