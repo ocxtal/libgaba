@@ -8,7 +8,10 @@
  * @date 2016/1/11
  * @license Apache v2
  */
+// #define DEBUG
 // #define DEBUG_MEM
+// #define DEBUG_OVERFLOW
+// #define DEBUG_ALL
 /*
  * debug print configuration: -DDEBUG to enable debug print, -DDEBUG_ALL to print all the vectors, arrays, and bitmasks
  * NOTE: dumping all the vectors sometimes raises SEGV due to a stack shortage. use `ulimit -s 65536' to avoid it.
@@ -34,6 +37,7 @@
 #include <stdint.h>				/* uint32_t, uint64_t, ... */
 #include <stddef.h>				/* offsetof */
 #include <string.h>				/* memset, memcpy */
+#include <inttypes.h>
 #include "gaba.h"
 #include "gaba_parse.h"
 #include "log.h"
@@ -4101,7 +4105,7 @@ unittest()
  */
 /* fetchers */
 unittest( .name = "fetch" ) {
-	struct gaba_dp_context_s dp = { 0 };		/* clear all */
+	struct gaba_dp_context_s dp = { { 0 } };		/* clear all */
 	uint64_t lens[] = { 0, 1, 2, 12, 13, 23, 24, 25, 31, 32, 33, 40, 41, 47, 48, 49, 62, 63, 64 };
 	uint64_t ofss[] = { 0, 1, 2, 7, 8, 9, 12, 15, 16, 17, 31, 32, 33, 45, 47, 48 };
 	uint8_t const c[72] = {

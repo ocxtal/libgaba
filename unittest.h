@@ -76,7 +76,7 @@
 /* static assertion macros */
 #define ut_sa_cat_intl(x, y)	x##y
 #define ut_sa_cat(x, y)			ut_sa_cat_intl(x, y)
-#define ut_static_assert(expr)	typedef char ut_sa_cat(_st, __LINE__)[(expr) ? 1 : -1]
+#define ut_static_assert(expr)	typedef char ut_sa_cat(ut_st, __LINE__)[(expr) ? 1 : -1]
 
 /**
  * basic vectors (utkv_*)
