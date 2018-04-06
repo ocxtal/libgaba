@@ -5188,6 +5188,7 @@ void unittest_test_pair(
 	for(uint64_t i = 0; i < nr.scnt && nr.sec[i].bid == 0; i++) { nr.sec[i].bpos += s->bpos; }
 
 	/* fill-in sections */
+	if(rand() % 100 == 0) { _export(gaba_dp_flush)(dp); }
 	struct gaba_fill_s const *m = unittest_dp_extend(dp, s);
 
 	assert(m != NULL);
