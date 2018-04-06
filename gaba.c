@@ -4073,6 +4073,7 @@ void unittest_clean_context(void *gctx)
 	struct unittest_context_s *c = (struct unittest_context_s *)gctx;
 	_export(gaba_dp_clean)(c->dp);
 	_export(gaba_clean)(c->ctx);
+	free(c);
 	return;
 }
 
