@@ -8,7 +8,10 @@
  * @date 2016/1/11
  * @license Apache v2
  */
+// #define DEBUG
 // #define DEBUG_MEM
+// #define DEBUG_OVERFLOW
+// #define DEBUG_ALL
 /*
  * debug print configuration: -DDEBUG to enable debug print, -DDEBUG_ALL to print all the vectors, arrays, and bitmasks
  * NOTE: dumping all the vectors sometimes raises SEGV due to a stack shortage. use `ulimit -s 65536' to avoid it.
