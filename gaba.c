@@ -37,6 +37,7 @@
 #include <stdint.h>				/* uint32_t, uint64_t, ... */
 #include <stddef.h>				/* offsetof */
 #include <string.h>				/* memset, memcpy */
+#include <inttypes.h>
 #include "gaba.h"
 #include "gaba_parse.h"
 #include "log.h"
