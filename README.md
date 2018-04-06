@@ -11,18 +11,15 @@ Typing `make` will build an all-in-one archive `libgaba.a`. The library is inten
 
 ### Example Source
 
-Include two headers: `gaba_wrap.h` and `gaba_parse.h`. The former defines basic functions and types, and the latter defines several format conversion functions. `make example` will compile and link the following example code.
+Include a header: `gaba.h`. `make example` will compile the following example code and link it with `libgaba.a`.
 
 ```
-// #include "gaba.h"			/* single target configuration: gcc example.c gaba.c -DMODEL=AFFINE -DBW=64 */
-#include "gaba_wrap.h"			/* all-in-one configuration; make example or make CC=gcc && gcc example.c libgaba.a */
-#include "gaba_parse.h"			/* parser: contains gaba_dp_print_cigar_forward and so on */
-
+#include "gaba.h"										/* just include gaba.h */
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
-/* typedef int (*gaba_printer_t)(void *, uint64_t, char); defined in gaba_parse.h */
+/* typedef int (*gaba_printer_t)(void *, uint64_t, char) */
 int printer(void *fp, uint64_t len, char c)
 {
 	return(fprintf((FILE *)fp, "%ld%c", len, c));
@@ -103,7 +100,7 @@ The library supports the following three gap penalty functions:
 * affine:   g(k) =     gi + ge * k          where gi > 0,      ge > 0
 * combined: g(k) = min(gi + ge * k, gf * k) where gi > 0, gf > ge > 0
 
-In the all-in-one configuration (built by `make` and libgaba.a being linked to your code; your code must be compiled with `gaba_wrap.h`), the actual alignment functions (fill-in and traceback) are automatically fetched in the init function and each `gaba_dp_fill_root`, `gaba_dp_fill`, and `gaba_dp_trace` function will dispatch the proper binary for the gap penalty model. Setting gi = gfa = gfb = 0 will fetch the linear-gap penalty model, gfa = gfb = 0 will fetch the affine-gap, otherwise the combined gap penalty model is selected. In the single configuration mode (`gaba.h` must be used instead of `gaba_wrap.h`), the `gaba_init` function does not create dispatcher for the fill and trace functions.
+The init function `gaba_init` determines which score model fits the most to the given parameter set and construct a dispatcher for fill-in and traceback functions: `gaba_dp_fill_root`, `gaba_dp_fill`, and `gaba_dp_trace`. The functions will internally call the actual function from the dispatcher table, which is optimized for the score parameter. Setting gi = gfa = gfb = 0 will fetch the linear-gap penalty model, gfa = gfb = 0 will fetch the affine-gap, otherwise the combined gap penalty model is selected.
 
 ### Input sequences
 
