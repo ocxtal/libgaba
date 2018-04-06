@@ -23,7 +23,7 @@
  */
 #if defined(_GABA_WRAP_H_INCLUDED) && !defined(_GABA_EXPORT_LEVEL)
 /* included from gaba_wrap.h */
-#  define _GABA_EXPORT_LEVEL		static inline
+#  define _GABA_EXPORT_LEVEL		static
 #else
 /* single, linked to an object compiled without -DSUFFIX */
 #  define _GABA_EXPORT_LEVEL
@@ -31,11 +31,11 @@
 
 /* do not bare wrapper functions by default */
 #if !defined(_GABA_PARSE_EXPORT_LEVEL)
-#  define _GABA_PARSE_EXPORT_LEVEL	static inline
+#  define _GABA_PARSE_EXPORT_LEVEL
 #endif
 
 #if !defined(_GABA_WRAP_EXPORT_LEVEL)
-#  define _GABA_WRAP_EXPORT_LEVEL	static inline		/* hidden by default */
+#  define _GABA_WRAP_EXPORT_LEVEL
 #endif
 
 /**

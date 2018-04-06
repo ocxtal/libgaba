@@ -38,6 +38,8 @@
 #include <stddef.h>				/* offsetof */
 #include <string.h>				/* memset, memcpy */
 #include <inttypes.h>
+
+#define _GABA_PARSE_EXPORT_LEVEL	static inline
 #include "gaba.h"
 #include "gaba_parse.h"
 #include "log.h"
