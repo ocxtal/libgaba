@@ -21,12 +21,16 @@
 /**
  * @macro GABA_EXPORT_LEVEL
  */
-#ifdef _GABA_WRAP_H_INCLUDED
+#if defined(_GABA_WRAP_H_INCLUDED) && !defined(_GABA_EXPORT_LEVEL)
 /* included from gaba_wrap.h */
-#  define GABA_EXPORT_LEVEL		static inline
+#  define _GABA_EXPORT_LEVEL		static inline
 #else
 /* single, linked to an object compiled without -DSUFFIX */
-#  define GABA_EXPORT_LEVEL
+#  define _GABA_EXPORT_LEVEL
+#endif
+
+#if !defined(_GABA_PARSE_EXPORT_LEVEL)
+#  define _GABA_PARSE_EXPORT_LEVEL	static inline
 #endif
 
 /**
@@ -233,14 +237,14 @@ typedef struct gaba_score_s gaba_score_t;
  * @fn gaba_init
  * @brief (API) gaba_init new API
  */
-GABA_EXPORT_LEVEL
+_GABA_EXPORT_LEVEL
 gaba_t *gaba_init(gaba_params_t const *params);
 
 /**
  * @fn gaba_clean
  * @brief (API) clean up the alignment context structure.
  */
-GABA_EXPORT_LEVEL
+_GABA_EXPORT_LEVEL
 void gaba_clean(gaba_t *ctx);
 
 /**
@@ -249,28 +253,28 @@ void gaba_clean(gaba_t *ctx);
  * with local memory arena and working buffers. alim and blim are respectively
  * the tails of sequence arrays.
  */
-GABA_EXPORT_LEVEL
+_GABA_EXPORT_LEVEL
 gaba_dp_t *gaba_dp_init(gaba_t const *ctx);
 
 /**
  * @fn gaba_dp_flush
  * @brief flush stack (flush all if NULL) 
  */
-GABA_EXPORT_LEVEL
+_GABA_EXPORT_LEVEL
 void gaba_dp_flush(
 	gaba_dp_t *dp);
 
 /**
  * @fn gaba_dp_save_stack
  */
-GABA_EXPORT_LEVEL
+_GABA_EXPORT_LEVEL
 gaba_stack_t const *gaba_dp_save_stack(
 	gaba_dp_t *dp);
 
 /**
  * @fn gaba_dp_flush_stack
  */
-GABA_EXPORT_LEVEL
+_GABA_EXPORT_LEVEL
 void gaba_dp_flush_stack(
 	gaba_dp_t *dp,
 	gaba_stack_t const *stack);
@@ -278,14 +282,14 @@ void gaba_dp_flush_stack(
 /**
  * @fn gaba_dp_clean
  */
-GABA_EXPORT_LEVEL
+_GABA_EXPORT_LEVEL
 void gaba_dp_clean(
 	gaba_dp_t *dp);
 
 /**
  * @fn gaba_dp_fill_root
  */
-GABA_EXPORT_LEVEL
+_GABA_EXPORT_LEVEL
 gaba_fill_t *gaba_dp_fill_root(
 	gaba_dp_t *dp,
 	gaba_section_t const *a,
@@ -298,7 +302,7 @@ gaba_fill_t *gaba_dp_fill_root(
  * @fn gaba_dp_fill
  * @brief fill dp matrix inside section pairs
  */
-GABA_EXPORT_LEVEL
+_GABA_EXPORT_LEVEL
 gaba_fill_t *gaba_dp_fill(
 	gaba_dp_t *dp,
 	gaba_fill_t const *prev_sec,
@@ -312,7 +316,7 @@ gaba_fill_t *gaba_dp_fill(
  * and qofs are the q-distance of the two fill objects.
  */
 #define MAX_MERGE_COUNT				( 14 )
-GABA_EXPORT_LEVEL
+_GABA_EXPORT_LEVEL
 gaba_fill_t *gaba_dp_merge(
 	gaba_dp_t *dp,
 	gaba_fill_t const *const *sec,
@@ -322,7 +326,7 @@ gaba_fill_t *gaba_dp_merge(
 /**
  * @fn gaba_dp_search_max
  */
-GABA_EXPORT_LEVEL
+_GABA_EXPORT_LEVEL
 gaba_pos_pair_t *gaba_dp_search_max(
 	gaba_dp_t *dp,
 	gaba_fill_t const *sec);
@@ -331,7 +335,7 @@ gaba_pos_pair_t *gaba_dp_search_max(
  * @fn gaba_dp_trace
  * @brief generate alignment result string, alloc->malloc and alloc->free must not be NULL if alloc is not NULL.
  */
-GABA_EXPORT_LEVEL
+_GABA_EXPORT_LEVEL
 gaba_alignment_t *gaba_dp_trace(
 	gaba_dp_t *dp,
 	gaba_fill_t const *tail,
@@ -340,7 +344,7 @@ gaba_alignment_t *gaba_dp_trace(
 /**
  * @fn gaba_dp_res_free
  */
-GABA_EXPORT_LEVEL
+_GABA_EXPORT_LEVEL
 void gaba_dp_res_free(
 	gaba_dp_t *dp,
 	gaba_alignment_t *aln);
@@ -349,13 +353,26 @@ void gaba_dp_res_free(
  * @fn gaba_dp_calc_score
  * @brief calculate score, match count, mismatch count, and gap counts for the section
  */
-GABA_EXPORT_LEVEL
+_GABA_EXPORT_LEVEL
 gaba_score_t *gaba_dp_calc_score(
 	gaba_dp_t *dp,
 	uint32_t const *path,
 	gaba_path_section_t const *s,
 	gaba_section_t const *a,
 	gaba_section_t const *b);
+
+/**
+ * parser functions: the actual implementations are in gaba_parse.h
+ */
+typedef int (*gaba_printer_t)(void *, uint64_t, char);
+_GABA_PARSE_EXPORT_LEVEL
+uint64_t gaba_print_cigar_forward(gaba_printer_t printer, void *fp, uint32_t const *path, uint64_t offset, uint64_t len);
+_GABA_PARSE_EXPORT_LEVEL
+uint64_t gaba_print_cigar_reverse(gaba_printer_t printer, void *fp, uint32_t const *path, uint64_t offset, uint64_t len);
+_GABA_PARSE_EXPORT_LEVEL
+uint64_t gaba_dump_cigar_forward(char *buf, uint64_t buf_size, uint32_t const *path, uint64_t offset, uint64_t len);
+_GABA_PARSE_EXPORT_LEVEL
+uint64_t gaba_dump_cigar_reverse(char *buf, uint64_t buf_size, uint32_t const *path, uint64_t offset, uint64_t len);
 
 #endif  /* #ifndef _GABA_H_INCLUDED */
 

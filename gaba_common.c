@@ -9,9 +9,12 @@
  * @license Apache v2
  */
 
-#include "gaba.h"
-#include "arch/arch.h"
+#define _GABA_EXPORT_LEVEL				/* export them all */
+#define _GABA_WRAP_EXPORT_LEVEL			/* export them all */
 #define _GABA_PARSE_EXPORT_LEVEL		/* export them all */
+// #include "gaba.h"
+#include "gaba_wrap.h"
+#include "arch/arch.h"
 #include "gaba_parse.h"
 
 /**

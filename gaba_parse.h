@@ -1,4 +1,4 @@
-#define TEMP		0
+
 /**
  * @file gaba_parse.h
  *
