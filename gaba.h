@@ -29,8 +29,13 @@
 #  define _GABA_EXPORT_LEVEL
 #endif
 
+/* do not bare wrapper functions by default */
 #if !defined(_GABA_PARSE_EXPORT_LEVEL)
 #  define _GABA_PARSE_EXPORT_LEVEL	static inline
+#endif
+
+#if !defined(_GABA_WRAP_EXPORT_LEVEL)
+#  define _GABA_WRAP_EXPORT_LEVEL	static inline		/* hidden by default */
 #endif
 
 /**
@@ -364,15 +369,80 @@ gaba_score_t *gaba_dp_calc_score(
 /**
  * parser functions: the actual implementations are in gaba_parse.h
  */
+#ifndef _GABA_PRINTER_T_DEFINED
+#define _GABA_PRINTER_T_DEFINED
 typedef int (*gaba_printer_t)(void *, uint64_t, char);
+#endif
+
 _GABA_PARSE_EXPORT_LEVEL
-uint64_t gaba_print_cigar_forward(gaba_printer_t printer, void *fp, uint32_t const *path, uint64_t offset, uint64_t len);
+uint64_t gaba_print_cigar_forward(
+	gaba_printer_t printer,
+	void *fp,
+	uint32_t const *path,
+	uint64_t offset,
+	uint64_t len);
+
 _GABA_PARSE_EXPORT_LEVEL
-uint64_t gaba_print_cigar_reverse(gaba_printer_t printer, void *fp, uint32_t const *path, uint64_t offset, uint64_t len);
+uint64_t gaba_print_cigar_reverse(
+	gaba_printer_t printer,
+	void *fp,
+	uint32_t const *path,
+	uint64_t offset,
+	uint64_t len);
+
 _GABA_PARSE_EXPORT_LEVEL
-uint64_t gaba_dump_cigar_forward(char *buf, uint64_t buf_size, uint32_t const *path, uint64_t offset, uint64_t len);
+uint64_t gaba_dump_cigar_forward(
+	char *buf,
+	uint64_t buf_size,
+	uint32_t const *path,
+	uint64_t offset,
+	uint64_t len);
+
 _GABA_PARSE_EXPORT_LEVEL
-uint64_t gaba_dump_cigar_reverse(char *buf, uint64_t buf_size, uint32_t const *path, uint64_t offset, uint64_t len);
+uint64_t gaba_dump_cigar_reverse(
+	char *buf,
+	uint64_t buf_size,
+	uint32_t const *path,
+	uint64_t offset,
+	uint64_t len);
+
+_GABA_PARSE_EXPORT_LEVEL
+uint64_t gaba_dump_seq_forward(
+	char *buf,
+	uint64_t buf_size,
+	uint32_t conf,				/* { SEQ_A, SEQ_B } x { SEQ_FW, SEQ_RV } */
+	uint32_t const *path,
+	uint64_t offset,
+	uint64_t len,
+	uint8_t const *seq,			/* a->seq[s->alen] when SEQ_RV */
+	char gap);					/* gap char, '-' */
+
+_GABA_PARSE_EXPORT_LEVEL
+uint64_t gaba_dump_seq_forward(
+	char *buf,
+	uint64_t buf_size,
+	uint32_t conf,				/* { SEQ_A, SEQ_B } x { SEQ_FW, SEQ_RV } */
+	uint32_t const *path,
+	uint64_t offset,
+	uint64_t len,
+	uint8_t const *seq,			/* a->seq[s->alen] when SEQ_RV */
+	char gap);					/* gap char, '-' */
+
+_GABA_PARSE_EXPORT_LEVEL
+uint64_t gaba_dump_seq_ref(
+	char *buf,
+	uint64_t buf_size,
+	uint32_t const *path,
+	gaba_path_section_t const *s,
+	gaba_section_t const *a);
+
+_GABA_PARSE_EXPORT_LEVEL
+uint64_t gaba_dump_seq_ref(
+	char *buf,
+	uint64_t buf_size,
+	uint32_t const *path,
+	gaba_path_section_t const *s,
+	gaba_section_t const *a);
 
 #endif  /* #ifndef _GABA_H_INCLUDED */
 

@@ -31,6 +31,11 @@
 
 #ifndef _GABA_PARSE_H_INCLUDED
 #define _GABA_PARSE_H_INCLUDED
+
+#ifndef _GABA_PARSE_EXPORT_LEVEL
+#  define _GABA_PARSE_EXPORT_LEVEL		static inline	/* hidden by default */
+#endif
+
 #include <stdint.h>				/* uint32_t, uint64_t, ... */
 #include <stddef.h>				/* ptrdiff_t */
 #include "gaba.h"
@@ -43,14 +48,12 @@
  * called with a pair of cigar operation (c) and its length (len).
  * void *fp is an opaque pointer to the context of the printer.
  */
+#ifndef _GABA_PRINTER_T_DEFINED
+#define _GABA_PRINTER_T_DEFINED
 typedef int (*gaba_printer_t)(void *, uint64_t, char);	/* moved from gaba.h */
-
-
-/* macros */
-#ifndef _GABA_PARSE_EXPORT_LEVEL
-#  define _GABA_PARSE_EXPORT_LEVEL		static inline	/* hidden */
 #endif
 
+/* macros */
 #define _gaba_parse_min2(_x, _y)		( (_x) < (_y) ? (_x) : (_y) )
 #define _gaba_parse_ptr(_p)				( (uint64_t const *)((uint64_t)(_p) & ~(sizeof(uint64_t) - 1)) )
 #define _gaba_parse_ofs(_p)				( ((uint64_t)(_p) & sizeof(uint32_t)) ? 32 : 0 )

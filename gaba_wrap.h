@@ -15,7 +15,7 @@
 #define _GABA_WRAP_H_INCLUDED
 
 #if !defined(_GABA_WRAP_EXPORT_LEVEL)
-#  define _GABA_WRAP_EXPORT_LEVEL	static inline
+#  define _GABA_WRAP_EXPORT_LEVEL	static inline		/* hidden by default */
 #endif
 
 /* combined gap penalty is not implemented yet */
