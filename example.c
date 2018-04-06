@@ -2,18 +2,15 @@
 /**
  * @file example.c
  */
-
-// #include "gaba.h"			/* single target configuration: gcc example.c gaba.c -DMODEL=AFFINE -DBW=64 */
-#include "gaba_wrap.h"			/* multiple target configuration: gcc example.c libgaba.a */
-#include "gaba_parse.h"			/* parser: contains gaba_dp_print_cigar_forward and so on */
-
+#include "gaba.h"										/* just include gaba.h */
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <inttypes.h>
 
 int printer(void *fp, uint64_t len, char c)
 {
-	return(fprintf((FILE *)fp, "%ld%c", len, c));
+	return(fprintf((FILE *)fp, "%" PRIu64 "%c", len, c));
 }
 
 int main(int argc, char *argv[]) {
@@ -58,7 +55,7 @@ int main(int argc, char *argv[]) {
 		NULL											/* custom allocator: see struct gaba_alloc_s in gaba.h */
 	);
 
-	printf("score(%ld), path length(%lu)\n", r->score, r->plen);
+	printf("score(%" PRId64 "), path length(%" PRIu64 ")\n", r->score, r->plen);
 	gaba_print_cigar_forward(
 		printer, (void *)stdout,						/* printer */
 		r->path,										/* bit-encoded path array */
