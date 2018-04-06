@@ -4105,7 +4105,7 @@ unittest()
  */
 /* fetchers */
 unittest( .name = "fetch" ) {
-	struct gaba_dp_context_s dp = { 0 };		/* clear all */
+	struct gaba_dp_context_s dp = { { 0 } };		/* clear all */
 	uint64_t lens[] = { 0, 1, 2, 12, 13, 23, 24, 25, 31, 32, 33, 40, 41, 47, 48, 49, 62, 63, 64 };
 	uint64_t ofss[] = { 0, 1, 2, 7, 8, 9, 12, 15, 16, 17, 31, 32, 33, 45, 47, 48 };
 	uint8_t const c[72] = {
