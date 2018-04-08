@@ -369,11 +369,23 @@ gaba_score_t *gaba_dp_calc_score(
 /**
  * parser functions: the actual implementations are in gaba_parse.h
  */
+
+/**
+ * @type gaba_printer_t
+ * @brief printer for print functions. simplest one to dump a CIGAR operation can be the following:
+ *
+ * int printer(FILE *fp, uint64_t len, char c) { return(fprintf(fp, "%c%lu", c, len)); }
+ */
 #ifndef _GABA_PRINTER_T_DEFINED
 #define _GABA_PRINTER_T_DEFINED
 typedef int (*gaba_printer_t)(void *, uint64_t, char);
 #endif
 
+/**
+ * @fn gaba_print_cigar_forward, gaba_print_cigar_reverse
+ * @brief dump CIGAR string (4M1I5M1D...) for a range specified by [offset, offset + len) on the path,
+ * the range can be retireved from segment by [seg[i].ppos, gaba_plen(&seg[i])).
+ */
 _GABA_PARSE_EXPORT_LEVEL
 uint64_t gaba_print_cigar_forward(
 	gaba_printer_t printer,
@@ -381,7 +393,6 @@ uint64_t gaba_print_cigar_forward(
 	uint32_t const *path,
 	uint64_t offset,
 	uint64_t len);
-
 _GABA_PARSE_EXPORT_LEVEL
 uint64_t gaba_print_cigar_reverse(
 	gaba_printer_t printer,
@@ -390,6 +401,10 @@ uint64_t gaba_print_cigar_reverse(
 	uint64_t offset,
 	uint64_t len);
 
+/**
+ * @fn gaba_dump_cigar_forward, gaba_dump_cigar_reverse
+ * @brief dump to memory. see print functions for the details.
+ */
 _GABA_PARSE_EXPORT_LEVEL
 uint64_t gaba_dump_cigar_forward(
 	char *buf,
@@ -397,7 +412,6 @@ uint64_t gaba_dump_cigar_forward(
 	uint32_t const *path,
 	uint64_t offset,
 	uint64_t len);
-
 _GABA_PARSE_EXPORT_LEVEL
 uint64_t gaba_dump_cigar_reverse(
 	char *buf,
@@ -406,6 +420,10 @@ uint64_t gaba_dump_cigar_reverse(
 	uint64_t offset,
 	uint64_t len);
 
+/**
+ * @fn gaba_dump_seq_forward, gaba_dump_seq_reverse
+ * @brief dump sequence in ASCII format (ACACTGG...) with gaps.
+ */
 _GABA_PARSE_EXPORT_LEVEL
 uint64_t gaba_dump_seq_forward(
 	char *buf,
@@ -416,9 +434,8 @@ uint64_t gaba_dump_seq_forward(
 	uint64_t len,
 	uint8_t const *seq,			/* a->seq[s->alen] when SEQ_RV */
 	char gap);					/* gap char, '-' */
-
 _GABA_PARSE_EXPORT_LEVEL
-uint64_t gaba_dump_seq_forward(
+uint64_t gaba_dump_seq_reverse(
 	char *buf,
 	uint64_t buf_size,
 	uint32_t conf,				/* { SEQ_A, SEQ_B } x { SEQ_FW, SEQ_RV } */
@@ -428,6 +445,10 @@ uint64_t gaba_dump_seq_forward(
 	uint8_t const *seq,			/* a->seq[s->alen] when SEQ_RV */
 	char gap);					/* gap char, '-' */
 
+/**
+ * @fn gaba_dump_seq_ref, gaba_dump_seq_query
+ * @brief calling the pair dumps MAF-styled two column-aligned strings.
+ */
 _GABA_PARSE_EXPORT_LEVEL
 uint64_t gaba_dump_seq_ref(
 	char *buf,
@@ -435,9 +456,8 @@ uint64_t gaba_dump_seq_ref(
 	uint32_t const *path,
 	gaba_path_section_t const *s,
 	gaba_section_t const *a);
-
 _GABA_PARSE_EXPORT_LEVEL
-uint64_t gaba_dump_seq_ref(
+uint64_t gaba_dump_seq_query(
 	char *buf,
 	uint64_t buf_size,
 	uint32_t const *path,
