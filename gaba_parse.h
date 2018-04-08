@@ -398,8 +398,8 @@ uint64_t gaba_dump_seq_reverse(
 	uint64_t buf_size,
 	uint32_t conf,				/* { SEQ_A, SEQ_B } x { SEQ_FW, SEQ_RV } */
 	uint32_t const *path,
-	uint32_t offset,
-	uint32_t len,
+	uint64_t offset,
+	uint64_t len,
 	uint8_t const *seq,			/* a->seq[s->alen] when SEQ_RV */
 	char gap)					/* gap char, '-' */
 {
@@ -450,6 +450,7 @@ uint64_t gaba_dump_seq_reverse(
 
 /**
  * @fn gaba_dump_seq_ref, gaba_dump_seq_query
+ * @brief dump_seq_ref for sequence A, dump_seq_query for sequence B
  */
 _GABA_PARSE_EXPORT_LEVEL
 uint64_t gaba_dump_seq_ref(
@@ -479,7 +480,7 @@ uint64_t gaba_dump_seq_query(
 		buf, buf_size,
 		GABA_SEQ_B | (b->base < GABA_EOU ? GABA_SEQ_FW : GABA_SEQ_RV),
 		path, s->ppos, gaba_plen(s),
-		b->base < GABA_EOU ? &b->base[s->apos] : gaba_mirror(&b->base[s->apos], 0),
+		b->base < GABA_EOU ? &b->base[s->bpos] : gaba_mirror(&b->base[s->bpos], 0),
 		'-'
 	));
 }
