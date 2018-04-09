@@ -154,30 +154,31 @@ typedef struct v16i16_s {
 )
 
 /* debug print */
-// #ifdef _LOG_H_INCLUDED
+#ifdef DEBUG
 #define _print_v16i16(a) { \
+	int16_t _tmp[16]; v16i16_t _tmpv = (a); _storeu_v16i16(_tmp, _tmpv); \
 	debug("(v16i16_t) %s(%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d)", \
 		#a, \
-		_ext_v16i16(a, 15), \
-		_ext_v16i16(a, 14), \
-		_ext_v16i16(a, 13), \
-		_ext_v16i16(a, 12), \
-		_ext_v16i16(a, 11), \
-		_ext_v16i16(a, 10), \
-		_ext_v16i16(a, 9), \
-		_ext_v16i16(a, 8), \
-		_ext_v16i16(a, 7), \
-		_ext_v16i16(a, 6), \
-		_ext_v16i16(a, 5), \
-		_ext_v16i16(a, 4), \
-		_ext_v16i16(a, 3), \
-		_ext_v16i16(a, 2), \
-		_ext_v16i16(a, 1), \
-		_ext_v16i16(a, 0)); \
+		_tmp[15], \
+		_tmp[14], \
+		_tmp[13], \
+		_tmp[12], \
+		_tmp[11], \
+		_tmp[10], \
+		_tmp[9], \
+		_tmp[8], \
+		_tmp[7], \
+		_tmp[6], \
+		_tmp[5], \
+		_tmp[4], \
+		_tmp[3], \
+		_tmp[2], \
+		_tmp[1], \
+		_tmp[0]); \
 }
-// #else
-// #define _print_v16i16(x)		;
-// #endif
+#else
+#define _print_v16i16(x)		;
+#endif
 
 #endif /* _V16I16_H_INCLUDED */
 /**
