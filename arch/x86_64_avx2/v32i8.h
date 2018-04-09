@@ -166,47 +166,48 @@ typedef struct v32i8_s {
 )
 
 /* debug print */
-// #ifdef _LOG_H_INCLUDED
+#ifdef DEBUG
 #define _print_v32i8(a) { \
+	int8_t _tmp[32]; v32i8_t _tmpv = (a); _storeu_v32i8(_tmp, _tmpv); \
 	debug("(v32i8_t) %s(%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, " \
 				 "%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d)", \
 		#a, \
-		_ext_v32i8(a, 31), \
-		_ext_v32i8(a, 30), \
-		_ext_v32i8(a, 29), \
-		_ext_v32i8(a, 28), \
-		_ext_v32i8(a, 27), \
-		_ext_v32i8(a, 26), \
-		_ext_v32i8(a, 25), \
-		_ext_v32i8(a, 24), \
-		_ext_v32i8(a, 23), \
-		_ext_v32i8(a, 22), \
-		_ext_v32i8(a, 21), \
-		_ext_v32i8(a, 20), \
-		_ext_v32i8(a, 19), \
-		_ext_v32i8(a, 18), \
-		_ext_v32i8(a, 17), \
-		_ext_v32i8(a, 16), \
-		_ext_v32i8(a, 15), \
-		_ext_v32i8(a, 14), \
-		_ext_v32i8(a, 13), \
-		_ext_v32i8(a, 12), \
-		_ext_v32i8(a, 11), \
-		_ext_v32i8(a, 10), \
-		_ext_v32i8(a, 9), \
-		_ext_v32i8(a, 8), \
-		_ext_v32i8(a, 7), \
-		_ext_v32i8(a, 6), \
-		_ext_v32i8(a, 5), \
-		_ext_v32i8(a, 4), \
-		_ext_v32i8(a, 3), \
-		_ext_v32i8(a, 2), \
-		_ext_v32i8(a, 1), \
-		_ext_v32i8(a, 0)); \
+		_tmp[31], \
+		_tmp[30], \
+		_tmp[29], \
+		_tmp[28], \
+		_tmp[27], \
+		_tmp[26], \
+		_tmp[25], \
+		_tmp[24], \
+		_tmp[23], \
+		_tmp[22], \
+		_tmp[21], \
+		_tmp[20], \
+		_tmp[19], \
+		_tmp[18], \
+		_tmp[17], \
+		_tmp[16], \
+		_tmp[15], \
+		_tmp[14], \
+		_tmp[13], \
+		_tmp[12], \
+		_tmp[11], \
+		_tmp[10], \
+		_tmp[9], \
+		_tmp[8], \
+		_tmp[7], \
+		_tmp[6], \
+		_tmp[5], \
+		_tmp[4], \
+		_tmp[3], \
+		_tmp[2], \
+		_tmp[1], \
+		_tmp[0]); \
 }
-// #else
-// #define _print_v32i8(x)		;
-// #endif
+#else
+#define _print_v32i8(x)		;
+#endif
 
 #endif /* _V32I8_H_INCLUDED */
 /**

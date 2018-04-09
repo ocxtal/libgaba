@@ -190,81 +190,82 @@ typedef struct v64i16_s {
 )
 
 /* debug print */
-// #ifdef _LOG_H_INCLUDED
+#ifdef DEBUG
 #define _print_v64i16(a) { \
+	int16_t _tmp[64]; v64i16_t _tmpv = (a); _storeu_v64i16(_tmp, _tmpv); \
 	debug("(v64i16_t) %s(%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, " \
 			"%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, " \
 			"%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, " \
 			"%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d)", \
 		#a, \
-		_ext_v64i16(a, 32 + 31), \
-		_ext_v64i16(a, 32 + 30), \
-		_ext_v64i16(a, 32 + 29), \
-		_ext_v64i16(a, 32 + 28), \
-		_ext_v64i16(a, 32 + 27), \
-		_ext_v64i16(a, 32 + 26), \
-		_ext_v64i16(a, 32 + 25), \
-		_ext_v64i16(a, 32 + 24), \
-		_ext_v64i16(a, 32 + 23), \
-		_ext_v64i16(a, 32 + 22), \
-		_ext_v64i16(a, 32 + 21), \
-		_ext_v64i16(a, 32 + 20), \
-		_ext_v64i16(a, 32 + 19), \
-		_ext_v64i16(a, 32 + 18), \
-		_ext_v64i16(a, 32 + 17), \
-		_ext_v64i16(a, 32 + 16), \
-		_ext_v64i16(a, 32 + 15), \
-		_ext_v64i16(a, 32 + 14), \
-		_ext_v64i16(a, 32 + 13), \
-		_ext_v64i16(a, 32 + 12), \
-		_ext_v64i16(a, 32 + 11), \
-		_ext_v64i16(a, 32 + 10), \
-		_ext_v64i16(a, 32 + 9), \
-		_ext_v64i16(a, 32 + 8), \
-		_ext_v64i16(a, 32 + 7), \
-		_ext_v64i16(a, 32 + 6), \
-		_ext_v64i16(a, 32 + 5), \
-		_ext_v64i16(a, 32 + 4), \
-		_ext_v64i16(a, 32 + 3), \
-		_ext_v64i16(a, 32 + 2), \
-		_ext_v64i16(a, 32 + 1), \
-		_ext_v64i16(a, 32 + 0), \
-		_ext_v64i16(a, 31), \
-		_ext_v64i16(a, 30), \
-		_ext_v64i16(a, 29), \
-		_ext_v64i16(a, 28), \
-		_ext_v64i16(a, 27), \
-		_ext_v64i16(a, 26), \
-		_ext_v64i16(a, 25), \
-		_ext_v64i16(a, 24), \
-		_ext_v64i16(a, 23), \
-		_ext_v64i16(a, 22), \
-		_ext_v64i16(a, 21), \
-		_ext_v64i16(a, 20), \
-		_ext_v64i16(a, 19), \
-		_ext_v64i16(a, 18), \
-		_ext_v64i16(a, 17), \
-		_ext_v64i16(a, 16), \
-		_ext_v64i16(a, 15), \
-		_ext_v64i16(a, 14), \
-		_ext_v64i16(a, 13), \
-		_ext_v64i16(a, 12), \
-		_ext_v64i16(a, 11), \
-		_ext_v64i16(a, 10), \
-		_ext_v64i16(a, 9), \
-		_ext_v64i16(a, 8), \
-		_ext_v64i16(a, 7), \
-		_ext_v64i16(a, 6), \
-		_ext_v64i16(a, 5), \
-		_ext_v64i16(a, 4), \
-		_ext_v64i16(a, 3), \
-		_ext_v64i16(a, 2), \
-		_ext_v64i16(a, 1), \
-		_ext_v64i16(a, 0)); \
+		_tmp[32 + 31], \
+		_tmp[32 + 30], \
+		_tmp[32 + 29], \
+		_tmp[32 + 28], \
+		_tmp[32 + 27], \
+		_tmp[32 + 26], \
+		_tmp[32 + 25], \
+		_tmp[32 + 24], \
+		_tmp[32 + 23], \
+		_tmp[32 + 22], \
+		_tmp[32 + 21], \
+		_tmp[32 + 20], \
+		_tmp[32 + 19], \
+		_tmp[32 + 18], \
+		_tmp[32 + 17], \
+		_tmp[32 + 16], \
+		_tmp[32 + 15], \
+		_tmp[32 + 14], \
+		_tmp[32 + 13], \
+		_tmp[32 + 12], \
+		_tmp[32 + 11], \
+		_tmp[32 + 10], \
+		_tmp[32 + 9], \
+		_tmp[32 + 8], \
+		_tmp[32 + 7], \
+		_tmp[32 + 6], \
+		_tmp[32 + 5], \
+		_tmp[32 + 4], \
+		_tmp[32 + 3], \
+		_tmp[32 + 2], \
+		_tmp[32 + 1], \
+		_tmp[32 + 0], \
+		_tmp[31], \
+		_tmp[30], \
+		_tmp[29], \
+		_tmp[28], \
+		_tmp[27], \
+		_tmp[26], \
+		_tmp[25], \
+		_tmp[24], \
+		_tmp[23], \
+		_tmp[22], \
+		_tmp[21], \
+		_tmp[20], \
+		_tmp[19], \
+		_tmp[18], \
+		_tmp[17], \
+		_tmp[16], \
+		_tmp[15], \
+		_tmp[14], \
+		_tmp[13], \
+		_tmp[12], \
+		_tmp[11], \
+		_tmp[10], \
+		_tmp[9], \
+		_tmp[8], \
+		_tmp[7], \
+		_tmp[6], \
+		_tmp[5], \
+		_tmp[4], \
+		_tmp[3], \
+		_tmp[2], \
+		_tmp[1], \
+		_tmp[0]); \
 }
-// #else
-// #define _print_v64i16(x)	;
-// #endif
+#else
+#define _print_v64i16(x)	;
+#endif
 
 #endif /* _V64I16_H_INCLUDED */
 /**
