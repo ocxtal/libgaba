@@ -4028,36 +4028,36 @@ struct unittest_context_s {
  */
 #if MODEL == LINEAR
 static struct gaba_params_s const *unittest_default_params[8] = {
-	GABA_PARAMS(.xdrop = 50, GABA_SCORE_SIMPLE(2, 3, 0, 6)),
-	GABA_PARAMS(.xdrop = 50, GABA_SCORE_SIMPLE(1, 2, 0, 1)),
-	GABA_PARAMS(.xdrop = 50, GABA_SCORE_SIMPLE(2, 4, 0, 3)),
-	GABA_PARAMS(.xdrop = 50, GABA_SCORE_SIMPLE(2, 6, 0, 3)),
-	GABA_PARAMS(.xdrop = 50, GABA_SCORE_SIMPLE(4, 5, 0, 8)),
-	GABA_PARAMS(.xdrop = 50, GABA_SCORE_SIMPLE(4, 7, 0, 8)),
-	GABA_PARAMS(.xdrop = 50, GABA_SCORE_SIMPLE(5, 3, 0, 8)),
-	GABA_PARAMS(.xdrop = 50, GABA_SCORE_SIMPLE(5, 7, 0, 5))
+	GABA_PARAMS(.xdrop = 80, GABA_SCORE_SIMPLE(2, 3, 0, 6)),
+	GABA_PARAMS(.xdrop = 80, GABA_SCORE_SIMPLE(1, 2, 0, 1)),
+	GABA_PARAMS(.xdrop = 80, GABA_SCORE_SIMPLE(2, 4, 0, 3)),
+	GABA_PARAMS(.xdrop = 80, GABA_SCORE_SIMPLE(2, 6, 0, 3)),
+	GABA_PARAMS(.xdrop = 80, GABA_SCORE_SIMPLE(4, 5, 0, 8)),
+	GABA_PARAMS(.xdrop = 80, GABA_SCORE_SIMPLE(4, 7, 0, 8)),
+	GABA_PARAMS(.xdrop = 80, GABA_SCORE_SIMPLE(5, 3, 0, 8)),
+	GABA_PARAMS(.xdrop = 80, GABA_SCORE_SIMPLE(5, 7, 0, 5))
 };
 #elif MODEL == AFFINE
 static struct gaba_params_s const *unittest_default_params[8] = {
-	GABA_PARAMS(.xdrop = 50, GABA_SCORE_SIMPLE(2, 3, 5, 1)),
-	GABA_PARAMS(.xdrop = 50, GABA_SCORE_SIMPLE(1, 2, 2, 1)),
-	GABA_PARAMS(.xdrop = 50, GABA_SCORE_SIMPLE(1, 3, 2, 1)),
-	GABA_PARAMS(.xdrop = 50, GABA_SCORE_SIMPLE(2, 6, 3, 1)),
-	GABA_PARAMS(.xdrop = 50, GABA_SCORE_SIMPLE(4, 5, 8, 2)),
-	GABA_PARAMS(.xdrop = 50, GABA_SCORE_SIMPLE(6, 7, 5, 3)),
-	GABA_PARAMS(.xdrop = 50, GABA_SCORE_SIMPLE(5, 3, 8, 2)),
-	GABA_PARAMS(.xdrop = 50, GABA_SCORE_SIMPLE(5, 7, 10, 2))
+	GABA_PARAMS(.xdrop = 80, GABA_SCORE_SIMPLE(2, 3, 5, 1)),
+	GABA_PARAMS(.xdrop = 80, GABA_SCORE_SIMPLE(1, 2, 2, 1)),
+	GABA_PARAMS(.xdrop = 80, GABA_SCORE_SIMPLE(1, 3, 2, 1)),
+	GABA_PARAMS(.xdrop = 80, GABA_SCORE_SIMPLE(2, 6, 3, 1)),
+	GABA_PARAMS(.xdrop = 80, GABA_SCORE_SIMPLE(4, 5, 8, 2)),
+	GABA_PARAMS(.xdrop = 80, GABA_SCORE_SIMPLE(6, 7, 5, 3)),
+	GABA_PARAMS(.xdrop = 80, GABA_SCORE_SIMPLE(5, 3, 8, 2)),
+	GABA_PARAMS(.xdrop = 80, GABA_SCORE_SIMPLE(5, 7, 10, 2))
 };
 #else
 static struct gaba_params_s const *unittest_default_params[8] = {
-	GABA_PARAMS(.xdrop = 50, GABA_SCORE_SIMPLE(2, 3, 5, 1), .gfa = 2, .gfb = 2),
-	GABA_PARAMS(.xdrop = 50, GABA_SCORE_SIMPLE(2, 4, 5, 1), .gfa = 3, .gfb = 3),
-	GABA_PARAMS(.xdrop = 50, GABA_SCORE_SIMPLE(2, 3, 5, 1), .gfa = 4, .gfb = 2),
-	GABA_PARAMS(.xdrop = 50, GABA_SCORE_SIMPLE(2, 3, 5, 1), .gfa = 2, .gfb = 4),
-	GABA_PARAMS(.xdrop = 50, GABA_SCORE_SIMPLE(4, 5, 8, 2), .gfa = 3, .gfb = 3),
-	GABA_PARAMS(.xdrop = 50, GABA_SCORE_SIMPLE(6, 7, 5, 3), .gfa = 4, .gfb = 4),
-	GABA_PARAMS(.xdrop = 50, GABA_SCORE_SIMPLE(5, 3, 5, 2), .gfa = 3, .gfb = 3),
-	GABA_PARAMS(.xdrop = 50, GABA_SCORE_SIMPLE(5, 7, 10, 2), .gfa = 4, .gfb = 4)
+	GABA_PARAMS(.xdrop = 80, GABA_SCORE_SIMPLE(2, 3, 5, 1), .gfa = 2, .gfb = 2),
+	GABA_PARAMS(.xdrop = 80, GABA_SCORE_SIMPLE(2, 4, 5, 1), .gfa = 3, .gfb = 3),
+	GABA_PARAMS(.xdrop = 80, GABA_SCORE_SIMPLE(2, 3, 5, 1), .gfa = 4, .gfb = 2),
+	GABA_PARAMS(.xdrop = 80, GABA_SCORE_SIMPLE(2, 3, 5, 1), .gfa = 2, .gfb = 4),
+	GABA_PARAMS(.xdrop = 80, GABA_SCORE_SIMPLE(4, 5, 8, 2), .gfa = 3, .gfb = 3),
+	GABA_PARAMS(.xdrop = 80, GABA_SCORE_SIMPLE(6, 7, 5, 3), .gfa = 4, .gfb = 4),
+	GABA_PARAMS(.xdrop = 80, GABA_SCORE_SIMPLE(5, 3, 5, 2), .gfa = 3, .gfb = 3),
+	GABA_PARAMS(.xdrop = 80, GABA_SCORE_SIMPLE(5, 7, 10, 2), .gfa = 4, .gfb = 4)
 };
 #endif
 static
