@@ -424,6 +424,42 @@ uint64_t gaba_dump_cigar_reverse(
 	uint64_t len);
 
 /**
+ * @fn gaba_dump_xcigar_forward, gaba_dump_xcigar_reverse
+ */
+_GABA_PARSE_EXPORT_LEVEL
+uint64_t gaba_print_xcigar_forward(
+	gaba_printer_t printer,
+	void *fp,
+	uint32_t const *path,
+	gaba_path_section_t const *s,
+	gaba_section_t const *a,
+	gaba_section_t const *b);
+_GABA_PARSE_EXPORT_LEVEL
+uint64_t gaba_print_xcigar_reverse(
+	gaba_printer_t printer,
+	void *fp,
+	uint32_t const *path,
+	gaba_path_section_t const *s,
+	gaba_section_t const *a,
+	gaba_section_t const *b);
+_GABA_PARSE_EXPORT_LEVEL
+uint64_t gaba_dump_xcigar_forward(
+	char *buf,
+	uint64_t buf_size,
+	uint32_t const *path,
+	gaba_path_section_t const *s,
+	gaba_section_t const *a,
+	gaba_section_t const *b);
+_GABA_PARSE_EXPORT_LEVEL
+uint64_t gaba_dump_xcigar_reverse(
+	char *buf,
+	uint64_t buf_size,
+	uint32_t const *path,
+	gaba_path_section_t const *s,
+	gaba_section_t const *a,
+	gaba_section_t const *b);
+
+/**
  * @fn gaba_dump_seq_forward, gaba_dump_seq_reverse
  * @brief dump sequence in ASCII format (ACACTGG...) with gaps.
  */
