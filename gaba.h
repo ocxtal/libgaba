@@ -203,7 +203,7 @@ typedef struct gaba_segment_s gaba_path_section_t;
  */
 struct gaba_alignment_s {
 	/* reserved for internal use */
-	void *reserved1[2];
+	void *reserved[2];
 
 	int64_t score;				/** score */
 	double identity;			/** estimated percent identity over the entire alignment, match_count / (match_count + mismatch_count) */
@@ -234,7 +234,10 @@ struct gaba_score_s {
 	/* short-gap counts */
 	uint32_t afgcnt, bfgcnt;
 	uint32_t aficnt, bficnt;
-	uint64_t _reserved;
+
+	/* when the section starts with a gap, adj is set gap open penalty for the contiguous gap region */
+	int32_t adj;
+	uint32_t reserved;
 };
 typedef struct gaba_score_s gaba_score_t;
 
