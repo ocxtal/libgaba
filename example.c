@@ -55,7 +55,7 @@ int main(int argc, char *argv[]) {
 		NULL											/* custom allocator: see struct gaba_alloc_s in gaba.h */
 	);
 
-	printf("score(%" PRId64 "), path length(%" PRIu64 ")\n", r->score, r->plen);
+	printf("score(%" PRId64 "), path length(%" PRIu32 ")\n", r->score, r->plen);
 	gaba_print_cigar_forward(
 		printer, (void *)stdout,						/* printer */
 		r->path,										/* bit-encoded path array */

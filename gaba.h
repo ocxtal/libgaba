@@ -213,7 +213,7 @@ struct gaba_alignment_s {
 	uint32_t slen;				/* segment length */
 	struct gaba_segment_s const *seg;
 
-	uint64_t plen;				/* path length */
+	uint32_t plen, padding;		/* path length (FIXME: uint64_t is better) */
 	uint32_t path[];
 };
 typedef struct gaba_alignment_s gaba_alignment_t;

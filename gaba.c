@@ -452,7 +452,7 @@ struct gaba_aln_intl_s {
 	uint32_t dcnt;						/** (4) unused in the loop */
 	uint32_t slen;						/** (4) section length (counter) */
 	struct gaba_segment_s *seg;			/** (8) section ptr */
-	uint64_t plen;						/** (8) path length (psum; save) */
+	uint32_t plen, padding;				/** (8) path length (psum; save) */
 };
 
 _static_assert(sizeof(struct gaba_alignment_s) == sizeof(struct gaba_aln_intl_s));
@@ -3240,6 +3240,7 @@ void trace_init(
 	self->w.l.a.slen = 0;
 	self->w.l.a.seg = sn + (struct gaba_segment_s *)(self->w.l.aln->path + _roundup(pn, 8)),
 	self->w.l.a.plen = plen;							/* save path length */
+	self->w.l.a.padding = 0x40000000;
 
 	/* store block and coordinates */
 	self->w.l.ofs = plen & (32 - 1);
