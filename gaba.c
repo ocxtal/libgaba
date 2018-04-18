@@ -3476,8 +3476,8 @@ struct gaba_score_s *_export(gaba_dp_calc_score)(
 	uint8_t const *ap = a->base < GABA_EOU ? &a->base[s->apos] : gaba_mirror(&a->base[s->apos], 0);
 	uint8_t const *bp = b->base < GABA_EOU ? &b->base[s->bpos] : gaba_mirror(&b->base[s->bpos], 0);
 	_parser_init_fw(path, s->ppos, gaba_plen(s));
-	uint64_t harr = gaba_parse_u64(p, lim - ridx - 2);
 
+	uint64_t harr = gaba_parse_u64(p, lim - ridx - 2);
 	int32_t gcnt = 0xb3000000<<(harr & 0x07) & 0x80000000;	/* == 0 when the last element is M */
 	switch(((a->base >= GABA_EOU)<<1) | (b->base >= GABA_EOU)) {
 		case 0x00: _parser_loop_fw(_del_f, _ins_f, _match_ff, _match_end); break;
