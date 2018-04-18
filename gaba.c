@@ -3476,8 +3476,9 @@ struct gaba_score_s *_export(gaba_dp_calc_score)(
 	uint8_t const *ap = a->base < GABA_EOU ? &a->base[s->apos] : gaba_mirror(&a->base[s->apos], 0);
 	uint8_t const *bp = b->base < GABA_EOU ? &b->base[s->bpos] : gaba_mirror(&b->base[s->bpos], 0);
 	_parser_init_fw(path, s->ppos, gaba_plen(s));
+	uint64_t harr = gaba_parse_u64(p, lim - ridx - 2);
 
-	int32_t gcnt = (gaba_parse_u64(p, lim - ridx - 32) & 0xc0000000) ^ 0x40000000;	/* == 0 when the last element is M */
+	int32_t gcnt = 0xb3000000<<(harr & 0x07) & 0x80000000;	/* == 0 when the last element is M */
 	switch(((a->base >= GABA_EOU)<<1) | (b->base >= GABA_EOU)) {
 		case 0x00: _parser_loop_fw(_del_f, _ins_f, _match_ff, _match_end); break;
 		case 0x01: _parser_loop_fw(_del_f, _ins_r, _match_fr, _match_end); break;
@@ -3515,19 +3516,12 @@ struct gaba_score_s *_export(gaba_dp_calc_score)(
 		if((uint32_t)(gcnt + 128) > 256) { return(sc); }	/* gap continues from the previous segment */
 
 		/* compensate gap region */
-		uint64_t tarr = gaba_parse_u64(p, lim), tmask = -(tarr & 0x01);		/* ramaining gap length */
-		uint64_t tglen = tzcnt(tarr ^ tmask) + tmask, sglen = gcnt < 0 ? -gcnt : gcnt;
+		uint64_t dir = gcnt < 0 ? 1 : 0, sglen = gcnt < 0 ? -gcnt : gcnt;
+		uint64_t tarr = gaba_parse_u64(p, lim), tglen = tzcnt(tarr ^ (-dir)) - dir;	/* ramaining gap length */
 
 		/* split path by segments */
-		uint64_t dir = gcnt < 0 ? 1 : 0;
 		int32_t adj = _gap(self, dir, tglen + sglen) - _gap(self, dir, sglen);
-		/*
-		fprintf(stderr, "tglen(%lu), sglen(%lu), tarr(%lx), gcnt(%d), adj(%ld, %ld, %ld), dir(%lu), sec(%u, %u, %u, %lu)\n",
-			tglen, sglen, tarr, gcnt,
-			_gap(self, dir, tglen + sglen), _gap(self, dir, sglen), _gap(self, dir, tglen + sglen) - _gap(self, dir, sglen),
-			dir, (&s->aid)[dir], (&s->apos)[dir], (&s->alen)[dir], s->ppos);
-		*/
-		while(tglen > 0) { s++; uint64_t glen = MIN2(tglen, (&s->alen)[dir]); tglen -= glen; adj -= _gap(self, dir, glen); }
+		while(tglen > 0) { uint64_t glen = (&(++s)->alen)[dir]; glen = MIN2(glen, tglen); tglen -= glen; adj -= _gap(self, dir, glen); }
 		sc->adj = adj;
 	#endif
 	return(sc);
@@ -4104,7 +4098,7 @@ void *unittest_build_context(void *params)
 {
 	/* build context */
 	struct unittest_context_s *c = malloc(sizeof(struct unittest_context_s));
-	c->params = unittest_default_params[5 /*rand() % 8*/];
+	c->params = unittest_default_params[rand() % 8];
 	c->ctx = _export(gaba_init)(c->params);
 	c->dp = _export(gaba_dp_init)(c->ctx);
 
@@ -5573,6 +5567,7 @@ unittest( .name = "base", .params = &unittest_default_params[5] )
 		{ .a = { "AGGTCACCTGCACCCTTGC", "CCTATAGCAGCCATACTCGGTTTACATATAGAGGCCGTGGCTTGTTTGAGCTCAT" }, .b = { "AGGTCAACTGCACCCTTGA", "GAGTATAGAGCCATACTAGGTTTACATATAAGGCCGTTGGTCTTGTTTGAGCTCAT" } },
 		{ .a = { "TATGCCT", "CTGTTATTGGTCACACTA" }, .b = { "TATGCA", "ATGTTATTGGGTCACACTA" } },
 		{ .a = { "ATAGTCAACAACTGAGCAGAGCATATTATCCAACGTGT", "TTTAGCCAGCGTATTTAGGACTCC" }, .b = { "ATAGTCAATAATCTGACCGGAGTCATATTATATCCAACGTGG", "GAGGCGCCAGCGTATTTAGGAATTCC" } },
+		{ .a = { "CTAAACTCTTGTTTT", "CCTCATCTCACCACCCACGATCGGAACAAAGCCCGGATCGT" }, .b = { "CTAAACTCTAGTAA", "CCTCATTCAACCACCCCGCGTCGAACAAGACCGGATCGT" } },
 
 		/* fails for affine-16 due to the bandwidth shotage */
 #if 0
