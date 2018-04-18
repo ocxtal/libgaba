@@ -302,21 +302,15 @@ uint64_t gaba_dump_cigar_reverse(
 	uint64_t offset,
 	uint64_t len)
 {
-	#define _del(_c)	{ if(_c) { b += gaba_parse_dump_num(b, _c, 'D'); } }
-	#define _ins(_c)	{ if(_c) { b += gaba_parse_dump_num(b, _c, 'I'); } }
-	#define _match(_c)	{ if(_c) { b += gaba_parse_dump_num(b, _c, 'M'); } }
-	#define _nop(_c)	{ (void)(_c); }
+	#define _cigar_init_rv()			char *b = buf;
+	#define _cigar_term_rv()			({ *b = '\0'; b - buf; })
+	#define _cigar_dump_rv(_c, _e)		{ if(_c) { b += gaba_parse_dump_num(b, _c, _e); } }
 
-	char *b = buf;
-	_parser_init_rv(path, offset, len);
-	_parser_loop_rv(_del, _ins, _nop, _match);
-	*b = '\0';
-	return(b - buf);
+	return(_cigar_core_rv());
 
-	#undef _del
-	#undef _ins
-	#undef _match
-	#undef _nop
+	#undef _cigar_init_rv
+	#undef _cigar_term_rv
+	#undef _cigar_dump_rv
 }
 
 /**
