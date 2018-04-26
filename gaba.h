@@ -133,11 +133,11 @@ struct gaba_section_s {
 	uint8_t const *base;		/** (8) pointer to the head of the sequence */
 };
 typedef struct gaba_section_s gaba_section_t;
-#define gaba_build_section(_id, _base, _len) ( \
+#define gaba_build_section(_id, _len, _base) ( \
 	(struct gaba_section_s){ \
 		.id = (_id), \
-		.base = (uint8_t const *)(_base), \
-		.len = (_len) \
+ 		.len = (_len), \
+ 		.base = (uint8_t const *)(_base) \
 	} \
 )
 /**

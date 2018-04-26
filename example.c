@@ -23,9 +23,9 @@ int main(int argc, char *argv[]) {
 	char const *b = "\x01\x08\x01\x02\x01\x08";			/* 4-bit encoded "ATACAT" */
 	char const t[64] = { 0 };							/* tail array */
 
-	struct gaba_section_s asec = gaba_build_section(0, a, strlen(a));
-	struct gaba_section_s bsec = gaba_build_section(2, b, strlen(b));
-	struct gaba_section_s tail = gaba_build_section(4, t, 64);
+	struct gaba_section_s asec = gaba_build_section(0, strlen(a), a);
+	struct gaba_section_s bsec = gaba_build_section(2, strlen(b), b);
+	struct gaba_section_s tail = gaba_build_section(4, 64, t);
 
 	/* create thread-local object */
 	gaba_dp_t *dp = gaba_dp_init(ctx);					/* dp[0] holds a 64-cell-wide context */
