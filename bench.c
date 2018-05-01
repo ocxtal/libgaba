@@ -184,8 +184,8 @@ int main(int argc, char *argv[])
 	gaba_t *ctx = gaba_init(GABA_PARAMS(
 		.xdrop = 100,
 		GABA_SCORE_SIMPLE(2, 3, 5, 1)));
-	struct gaba_section_s asec = gaba_build_section(0, strlen(a), (uint8_t const *)a);
-	struct gaba_section_s bsec = gaba_build_section(2, strlen(b), (uint8_t const *)b);
+	struct gaba_section_s asec = gaba_build_section(0, (uint8_t const *)a, strlen(a));
+	struct gaba_section_s bsec = gaba_build_section(2, (uint8_t const *)b, strlen(b));
 
 	bench_init(fill);
 	bench_init(trace);

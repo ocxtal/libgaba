@@ -216,7 +216,7 @@ _static_assert(sizeof(void *) == 8);
 
 /** check size of structs declared in gaba.h */
 _static_assert(sizeof(struct gaba_params_s) == 40);
-//_static_assert(sizeof(struct gaba_section_s) == 16);
+_static_assert(sizeof(struct gaba_section_s) == 16);
 _static_assert(sizeof(struct gaba_fill_s) == 64);
 _static_assert(sizeof(struct gaba_segment_s) == 32);
 _static_assert(sizeof(struct gaba_alignment_s) == 64);
@@ -4910,16 +4910,16 @@ struct gaba_section_s *unittest_build_section_forward(char const *const *p, uint
 	uint64_t i = 0;
 	while(p[i] != NULL) {
 		if(i == 0) {
-			s[i] = gaba_build_section(i * 2, strlen(p[i]) + pos, a - pos);
+			s[i] = gaba_build_section(i * 2, a - pos, strlen(p[i]) + pos);
 		} else {
-			s[i] = gaba_build_section(i * 2, strlen(p[i]), a);
+			s[i] = gaba_build_section(i * 2, a, strlen(p[i]));
 		}
 		for(char const *r = p[i]; *r != '\0'; r++) {
 			*a++ = unittest_encode_base_forward(*r);
 		}
 		i++; *a++ = '\0';
 	}
-	s[i] = gaba_build_section(i * 2, _W, a);
+	s[i] = gaba_build_section(i * 2, a, _W);
 	memset(a, N, _W);
 	return(s);
 }
@@ -4935,9 +4935,9 @@ struct gaba_section_s *unittest_build_section_reverse(char const *const *p, uint
 	uint64_t i = 0;
 	while(p[i] != NULL) {
 		if(i == 0) {
-			s[i] = gaba_build_section(i * 2 + 1, strlen(p[i]) + pos, gaba_mirror(a, strlen(p[i]) + pos));
+			s[i] = gaba_build_section(i * 2 + 1, gaba_mirror(a, strlen(p[i]) + pos), strlen(p[i]) + pos);
 		} else {
-			s[i] = gaba_build_section(i * 2 + 1, strlen(p[i]), gaba_mirror(a, strlen(p[i])));
+			s[i] = gaba_build_section(i * 2 + 1, gaba_mirror(a, strlen(p[i])), strlen(p[i]));
 		}
 		debug("a(%p, %p)", a, s[i].base);
 		for(char const *r = p[i] + strlen(p[i]); r > p[i]; r--) {
@@ -4947,7 +4947,7 @@ struct gaba_section_s *unittest_build_section_reverse(char const *const *p, uint
 		if(i == 0) { a += pos; }
 		i++; *a++ = '\0';
 	}
-	s[i] = gaba_build_section(i * 2 + 1, _W, gaba_mirror(a, _W));
+	s[i] = gaba_build_section(i * 2 + 1, gaba_mirror(a, _W), _W);
 	memset(a, N, _W);
 	return(s);
 }
